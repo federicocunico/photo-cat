@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>photo-cat — Identità</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#1B1B1C}
+a{color:#6AAEF5}a:hover{color:#9CCBFA}
+</style>
+</helmet>
+<div style="min-height: 960px; display: flex; flex-direction: column; background: #1B1B1C; color: #E8E8EA; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 14px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 16px; background: #232325; border-bottom: 1px solid #3A3A3E">
+<div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3l3 7M21 12l-7 3M12 21l-3-7M3 12l7-3"></path></svg><span>photo-cat</span></div>
+<label style="flex: 1 1 280px; max-width: 520px; display: flex; align-items: center; gap: 8px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; padding: 0 10px; min-height: 34px; color: #A9A9AE"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input type="search" aria-label="Ricerca globale" placeholder="Cerca file, persone, luoghi, tag…" style="flex: 1; background: transparent; border: 0; color: #E8E8EA; font: inherit; outline: none"></label>
+</header>
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+<nav aria-label="Moduli" style="flex: 1 1 180px; max-width: 220px; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: #232325; border-right: 1px solid #3A3A3E; box-sizing: border-box">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="11"><a href="{{n.href}}" style="{{n.style}}">{{n.label}}</a></sc-for>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-wrap: wrap">
+<section style="flex: 999 1 480px; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Identità</h1>
+<span style="color: #A9A9AE">14 identità · 3 gruppi</span>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px">
+<button style="min-height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">Importa…</button>
+<button style="min-height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">Esporta…</button>
+<button style="min-height: 36px; padding: 0 14px; border-radius: 6px; border: 0; background: #3B8EEA; color: #0B1726; font: inherit; font-weight: 700">+ Nuova identità</button>
+</div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 6px; background: #233449; color: #C9DCF2; line-height: 1.45">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="flex: none; margin-top: 2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.5"></path></svg>
+<span>Le identità appartengono all'app, non alla libreria: restano se cambi cartella dati, svuoti la libreria o importi un nuovo archivio. I volti di riferimento restano su questo computer.</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4"><button style="{{g.style}}">{{g.label}}</button></sc-for>
+</div>
+<div style="border: 1px solid #3A3A3E; border-radius: 8px; overflow-x: auto">
+<div style="min-width: 640px">
+<div style="display: grid; grid-template-columns: 52px minmax(0, 1.4fr) minmax(0, 1.2fr) 110px 120px 130px; gap: 12px; align-items: center; padding: 8px 14px; background: #232325; color: #A9A9AE; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px"><span></span><span>Nome</span><span>Alias</span><span>Gruppo</span><span>Riferimenti</span><span>In questa libreria</span></div>
+<sc-for list="{{ids}}" as="p" hint-placeholder-count="9">
+<a href="Identities.dc.html" style="{{p.row}}">
+<span style="{{p.avatar}}">{{p.initials}}</span>
+<span style="font-weight: 600">{{p.name}}</span>
+<span style="color: #A9A9AE">{{p.alias}}</span>
+<span style="color: #C9C9CE">{{p.group}}</span>
+<span style="{{p.refStyle}}">{{p.refs}}</span>
+<span style="color: #C9C9CE; font-family: 'JetBrains Mono', monospace; font-size: 13px">{{p.photos}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+</section>
+<aside aria-label="Modifica identità" style="flex: 1 1 340px; max-width: 400px; padding: 20px; background: #232325; border-left: 1px solid #3A3A3E; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 64px; height: 64px; border-radius: 50%; background: #34393A; border: 2px solid #4FC3B0; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #C9C9CE">GB</span>
+<div><div style="color: #A9A9AE; font-size: 12px">Identità · creata il 12 mar 2026</div><strong style="font-size: 20px">Giulia Bianchi</strong></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 4px; grid-column: span 2"><span style="font-weight: 600">Nome visualizzato</span><input value="Giulia Bianchi" style="min-height: 38px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; color: #E8E8EA; font: inherit; padding: 0 10px"></label>
+<label style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Nome breve (per i file)</span><input value="Giulia" style="min-height: 38px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; color: #E8E8EA; font: inherit; padding: 0 10px"></label>
+<label style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Gruppo</span><select style="min-height: 38px; background: #2C2C2F; border: 1px solid #3A3A3E; border-radius: 6px; color: #E8E8EA; font: inherit; padding: 0 8px"><option>Famiglia</option><option>Amici</option><option>Lavoro</option></select></label>
+<label style="display: flex; flex-direction: column; gap: 4px; grid-column: span 2"><span style="font-weight: 600">Alias</span><input value="Giuli, G. Bianchi" style="min-height: 38px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; color: #E8E8EA; font: inherit; padding: 0 10px"></label>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><h2 style="margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: #A9A9AE">Volti di riferimento (8)</h2><button style="min-height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">+ Aggiungi</button></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{refs}}" as="r" hint-placeholder-count="8"><span style="{{r.style}}"></span></sc-for>
+</div>
+<span style="color: #A9A9AE; font-size: 12px; line-height: 1.45">Volti scelti da foto di anni diversi migliorano il riconoscimento. Aggiungi dalla libreria o da un file.</span>
+<label style="display: flex; flex-direction: column; gap: 6px"><span style="display: flex; justify-content: space-between"><span style="font-weight: 600">Somiglianza minima</span><span style="font-family: 'JetBrains Mono', monospace; color: #C9C9CE">0.62</span></span><input type="range" min="0" max="100" value="62" aria-label="Somiglianza minima" style="accent-color: #3B8EEA"></label>
+<div style="padding: 10px 12px; border-radius: 6px; background: #1E3A36; color: #BFE8E0; line-height: 1.45">In questa libreria: collegata al gruppo di volti <strong>“Giulia”</strong> · 412 foto. <a href="People.dc.html" style="color: #BFE8E0">Apri in Persone</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto">
+<button style="min-height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">Unisci con…</button>
+<button style="min-height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid #6B3A30; background: transparent; color: #F2A38F; font: inherit">Elimina identità…</button>
+</div>
+</aside>
+</main>
+</div>
+<footer style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; padding: 6px 16px; background: #232325; border-top: 1px solid #3A3A3E; font-size: 12px; color: #A9A9AE">
+<span>Archivio dell'app: app.db (cartella di configurazione, fuori dalla cartella dati)</span><span>2 identità senza volti di riferimento</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+renderVals() {
+const navItems = [['Libreria', 'Main.dc.html'], ['Sequenza', 'Sequence.dc.html'], ['Cataloghi', 'Catalogs.dc.html'], ['Tag', 'Tags.dc.html'], ['Persone', 'People.dc.html'], ['Identità', 'Identities.dc.html', true], ['Importa', 'Import.dc.html'], ['Job', 'Jobs.dc.html'], ['Modelli AI', 'Models.dc.html'], ['Esporta e organizza', 'Organize.dc.html'], ['Impostazioni', 'Onboarding.dc.html']];
+const base = 'display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; ';
+const tones = ['#3A3534', '#34393A', '#383638', '#33373D', '#36332F'];
+const ids = [['Giulia Bianchi', 'Giuli, G. Bianchi', 'Famiglia', 8, '412', true], ['Luca Bianchi', 'Luchino', 'Famiglia', 6, '388'], ['Rita Rossi', 'Nonna Rita', 'Famiglia', 5, '140'], ['Anna Verdi', '—', 'Amici', 4, '251'], ['Paolo Neri', '—', 'Amici', 3, '197'], ['Marco Russo', 'Marco R.', 'Lavoro', 2, '96'], ['Sofia Galli', '—', 'Amici', 1, '85'], ['Elena Conti', '—', 'Lavoro', 0, 'non collegata'], ['Davide Fontana', '—', 'Amici', 0, 'non collegata']];
+const groups = [['Tutte (14)', true], ['Famiglia (5)'], ['Amici (6)'], ['Lavoro (3)']];
+return {
+nav: navItems.map((n, i) => ({ label: n[0], href: n[1], style: base + (n[2] ? 'background: #2C2C2F; color: #FFFFFF; font-weight: 600' : 'color: #C9C9CE') + (i === navItems.length - 1 ? '; margin-top: auto' : '') })),
+groups: groups.map((g) => ({ label: g[0], style: 'min-height: 34px; padding: 0 12px; border-radius: 999px; font: inherit; color: #E8E8EA; ' + (g[1] ? 'background: #233449; border: 1px solid #3B8EEA' : 'background: #232325; border: 1px solid #3A3A3E') })),
+ids: ids.map((p, i) => ({
+name: p[0], alias: p[1], group: p[2], photos: p[4],
+initials: p[0].split(' ').map((w) => w[0]).join(''),
+refs: p[3] ? p[3] + ' volti' : 'nessuno',
+refStyle: p[3] ? 'color: #C9C9CE' : 'color: #E0B252',
+avatar: 'width: 36px; height: 36px; border-radius: 50%; background: ' + tones[i % tones.length] + '; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #C9C9CE',
+row: 'display: grid; grid-template-columns: 52px minmax(0, 1.4fr) minmax(0, 1.2fr) 110px 120px 130px; gap: 12px; align-items: center; padding: 6px 14px; min-height: 48px; border-top: 1px solid #2C2C2F; text-decoration: none; color: #E8E8EA; ' + (p[5] ? 'background: #1E3047' : '')
+})),
+refs: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ style: 'aspect-ratio: 1 / 1; border-radius: 6px; background: ' + tones[i % tones.length] + '; border: 1px solid #3A3A3E' }))
+};
+}
+}
+</script>
+</body>
+</html>
