@@ -7,7 +7,7 @@ Ordine per milestone verticali (vedi design.md, Risks): ogni gruppo lascia l'app
 - [x] 1.1 Creare il workspace Cargo con i crate `pc-core`, `pc-store`, `pc-diag`, `pc-governor`, `pc-jobs`, `pc-ingest`, `pc-models`, `pc-ai`, `pc-organize` e verificare che `cargo build --workspace` passi
 - [x] 1.2 Inizializzare `app/src-tauri` (Tauri 2) e `app/ui` (React + TS + Vite) e verificare che `cargo tauri dev` apra una finestra vuota su Windows
 - [x] 1.3 Configurare lint e formattazione (`rustfmt`, `clippy -D warnings`, ESLint, Prettier, `tsc --noEmit`) e verificare che girino puliti
-- [ ] 1.4 Aggiungere CI veloce (GitHub Actions) nel repository `federicocunico/photo-cat`: compilazione EXE/setup Windows con cache, test eseguiti prevalentemente in locale, e verificare una pipeline verde
+- [x] 1.4 Aggiungere CI veloce (GitHub Actions) nel repository `federicocunico/photo-cat`: compilazione EXE/setup Windows con cache, test eseguiti prevalentemente in locale, e verificare una pipeline verde
 - [x] 1.5 Scrivere `README.md` con prerequisiti (Rust, Node, WebView2) e comandi di sviluppo, verificando che i comandi documentati funzionino da un clone pulito
 
 ## 2. Core, configurazione e diagnostica

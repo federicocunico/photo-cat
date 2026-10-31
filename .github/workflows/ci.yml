@@ -23,12 +23,12 @@ jobs:
   windows-setup:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-release
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -36,7 +36,7 @@ jobs:
       - run: npm ci --prefix app/ui
       - name: Compila setup NSIS
         run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: photo-cat-setup
           path: target/release/bundle/nsis/*-setup.exe

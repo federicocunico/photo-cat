@@ -21,7 +21,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verifica che il tag corrisponda alla versione dell'app
         shell: pwsh
         run: |
@@ -37,7 +37,7 @@ jobs:
         with:
           shared-key: windows-release
           save-if: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -54,7 +54,7 @@ jobs:
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
           "$hash  $($exe.Name)" | Out-File -Encoding ascii "dist/$($exe.Name).sha256"
           Get-Content "dist/$($exe.Name).sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: release-assets
           path: dist/*
@@ -67,7 +67,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: release-assets
           path: dist
