@@ -46,4 +46,4 @@ release:
 	git tag -a v$(VERSION) -m "photo-cat v$(VERSION)"
 	git push origin HEAD
 	git push origin v$(VERSION)
-	@echo "Tag v$(VERSION) pubblicato: la release sarà su https://github.com/federicocunico/photo-cat/releases"
+	@echo "Tag v$(VERSION) pubblicato. Release in preparazione: https://github.com/federicocunico/photo-cat/releases"

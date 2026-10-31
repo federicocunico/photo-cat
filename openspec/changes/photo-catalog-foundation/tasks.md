@@ -127,7 +127,7 @@ Ordine per milestone verticali (vedi design.md, Risks): ogni gruppo lascia l'app
 - [ ] 14.2 Verificare l'esecuzione offline completa con modelli già presenti (nessuna richiesta di rete durante l'analisi, controllo con monitor di rete)
 - [ ] 14.3 Configurare il bundle Tauri (NSIS/MSI con onnxruntime incluso) e verificare installazione e primo avvio in Windows Sandbox pulita
 - [ ] 14.4 Eseguire `openspec validate photo-catalog-foundation --strict` e verificare che ogni requisito delle spec sia coperto da almeno un test o una verifica manuale documentata
-- [ ] 14.5 Creare la pipeline di rilascio automatico su GitHub: su tag di versione `v*` compilare il setup Windows, creare la GitHub Release e allegare l'installer EXE con checksum; verificare la creazione e gli asset della release
+- [x] 14.5 Creare la pipeline di rilascio automatico su GitHub: su tag di versione `v*` compilare il setup Windows, creare la GitHub Release e allegare l'installer EXE con checksum; verificare la creazione e gli asset della release
 
 ## Workflow follow-up
 

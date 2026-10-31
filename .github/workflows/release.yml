@@ -52,7 +52,8 @@ jobs:
           $exe = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           Copy-Item $exe.FullName dist/
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Out-File -Encoding ascii "dist/$($exe.Name).sha256"
+          # Fine riga LF: il file resta verificabile con `sha256sum -c` anche fuori da Windows.
+          [IO.File]::WriteAllText("$PWD/dist/$($exe.Name).sha256", "$hash  $($exe.Name)`n")
           Get-Content "dist/$($exe.Name).sha256"
       - uses: actions/upload-artifact@v5
         with:
