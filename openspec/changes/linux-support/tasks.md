@@ -4,16 +4,16 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 1. Avvio robusto del runtime ONNX
 
-- [ ] 1.1 Completare `probe_library` (design §1) con un commento che rimandi al deadlock di `ort` rc.12, e aggiungere unit test in `pc-models` che, con un file non caricabile (per esempio un file di testo rinominato `.so`/`.dll`) e con un file inesistente, verificano che `init` restituisca `ModelUnavailable` entro un timeout invece di bloccarsi. Verifica: `cargo test -p pc-models` passa.
-- [ ] 1.2 Correggere l'errore clippy preesistente `unnecessary_sort_by` in `app/src-tauri/src/commands.rs:61` e verificare che `cargo clippy --workspace --all-targets -- -D warnings` passi su Linux.
+- [x] 1.1 Completare `probe_library` (design §1) con un commento che rimandi al deadlock di `ort` rc.12, e aggiungere unit test in `pc-models` che, con un file non caricabile (per esempio un file di testo rinominato `.so`/`.dll`) e con un file inesistente, verificano che `init` restituisca `ModelUnavailable` entro un timeout invece di bloccarsi. Verifica: `cargo test -p pc-models` passa.
+- [x] 1.2 Correggere l'errore clippy preesistente `unnecessary_sort_by` in `app/src-tauri/src/commands.rs:61` e verificare che `cargo clippy --workspace --all-targets -- -D warnings` passi su Linux.
 
 ## 2. Librerie native per piattaforma
 
-- [ ] 2.1 Introdurre il modulo che restituisce cartella asset (`win-x64`/`linux-x64`) e nome file del runtime ONNX per piattaforma (design §2), con unit test sui valori per la piattaforma corrente. Verifica: `cargo test -p pc-core` (o il crate scelto) passa.
-- [ ] 2.2 Usare il modulo in `models::asset_paths` (rinominando `runtime_dll` in `runtime_lib`), in `runtime::dev_dll_path` (rinominato `dev_runtime_path`) e nei test `model-tests`. Verifica: `grep -rn "win-x64/onnxruntime.dll" crates app/src-tauri/src` non trova più occorrenze nel codice Rust.
-- [ ] 2.3 Aggiungere `assets/runtime/linux-x64/libonnxruntime.so` da `onnxruntime-linux-x64-1.24.4.tgz` ufficiale, con licenze in `assets/licenses/` e una riga in `assets/README.md` (fonte, versione, licenza). Verifica: `sha256sum` del file corrisponde a quello estratto dal tgz e il README elenca il file.
-- [ ] 2.4 Abilitare `model-tests` su Linux, togliendo `windows` dal `cfg` dove il test non dipende da DirectML, e verificare che `cargo test -p pc-models -p pc-ai --features model-tests` carichi il runtime Linux e superi il self-test su CPU.
-- [ ] 2.5 Verificare con `make dev` su questa macchina (Ubuntu, Wayland) che la finestra si apra senza variabili d'ambiente, che la schermata Modelli AI mostri i modelli verificati e che come provider sia disponibile solo la CPU, senza DirectML né CoreML.
+- [x] 2.1 Introdurre il modulo che restituisce cartella asset (`win-x64`/`linux-x64`) e nome file del runtime ONNX per piattaforma (design §2), con unit test sui valori per la piattaforma corrente. Verifica: `cargo test -p pc-core` (o il crate scelto) passa.
+- [x] 2.2 Usare il modulo in `models::asset_paths` (rinominando `runtime_dll` in `runtime_lib`), in `runtime::dev_dll_path` (rinominato `dev_runtime_path`) e nei test `model-tests`. Verifica: `grep -rn "win-x64/onnxruntime.dll" crates app/src-tauri/src` non trova più occorrenze nel codice Rust.
+- [x] 2.3 Aggiungere `assets/runtime/linux-x64/libonnxruntime.so` da `onnxruntime-linux-x64-1.24.4.tgz` ufficiale, con licenze in `assets/licenses/` e una riga in `assets/README.md` (fonte, versione, licenza). Verifica: `sha256sum` del file corrisponde a quello estratto dal tgz e il README elenca il file.
+- [x] 2.4 Abilitare `model-tests` su Linux, togliendo `windows` dal `cfg` dove il test non dipende da DirectML, e verificare che `cargo test -p pc-models -p pc-ai --features model-tests` carichi il runtime Linux e superi il self-test su CPU.
+- [x] 2.5 Verificare con `make dev` su questa macchina (Ubuntu, Wayland) che la finestra si apra senza variabili d'ambiente, che la schermata Modelli AI mostri i modelli verificati e che come provider sia disponibile solo la CPU, senza DirectML né CoreML.
 
 ## 3. HEIC su Linux
 

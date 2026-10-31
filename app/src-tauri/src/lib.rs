@@ -189,8 +189,8 @@ pub fn run() {
             // Modelli AI: runtime ONNX, modelli installati (ripristinati dagli asset o scaricati), pool.
             let assets = models::asset_paths(&models::assets_dir(&handle));
             #[cfg(all(feature = "heif", windows))]
-            pc_ingest::heif::set_library_path(assets.runtime_dll.with_file_name("heif.dll"));
-            let onnx_runtime = match pc_models::runtime::init(&assets.runtime_dll) {
+            pc_ingest::heif::set_library_path(assets.runtime_lib.with_file_name("heif.dll"));
+            let onnx_runtime = match pc_models::runtime::init(&assets.runtime_lib) {
                 Ok(v) => Some(v),
                 Err(e) => {
                     tracing::error!(

@@ -25,11 +25,15 @@ Un errore nel caricamento del runtime ONNX (file mancante, non caricabile, corro
 - **THEN** le analisi AI sono disattivate e il messaggio indica la versione trovata e quella minima richiesta
 
 ### Requirement: Provider di esecuzione su Linux
-Su Linux il sistema SHALL eseguire le analisi su CPU. I provider GPU SHALL essere offerti solo se il runtime distribuito li include e sono utilizzabili sulla macchina; i provider di altre piattaforme (DirectML, CoreML) non SHALL essere proposti.
+Su Linux il sistema SHALL eseguire le analisi su CPU. Un provider GPU SHALL essere selezionabile solo se il runtime distribuito lo include ed è utilizzabile sulla macchina; gli altri SHALL restare visibili ma non selezionabili, ciascuno con il motivo indicato nella propria voce (solo su un'altra piattaforma, non incluso nel runtime, runtime non caricato).
 
 #### Scenario: Scelta del provider su Linux
 - **WHEN** l'utente apre la scelta del provider di esecuzione su Linux senza GPU supportate
-- **THEN** è disponibile solo la CPU e non compaiono DirectML né CoreML
+- **THEN** sono selezionabili solo Automatico e CPU, e le voci DirectML e CoreML sono disattivate e indicano che sono disponibili solo su Windows e su macOS
+
+#### Scenario: Runtime non caricato
+- **WHEN** ONNX Runtime non è caricato
+- **THEN** le voci dei provider GPU sono disattivate e indicano che il runtime non è caricato, e i self-test dei modelli ONNX vengono rimandati senza registrare un esito fallito
 
 #### Scenario: Preferenza GPU importata da Windows
 - **WHEN** la configurazione indica DirectML come provider preferito e l'app gira su Linux

@@ -216,6 +216,12 @@ export const en: Messages = {
     profile: "Resource profile",
     profiles: { light: "Light", balanced: "Balanced", performance: "Performance" },
     fileFilter: "Model",
+    unavailable: {
+      other_platform: "only on {{platform}}",
+      not_in_runtime: "not included in this version",
+      runtime_missing: "ONNX Runtime not loaded",
+      platforms: { direct_ml: "Windows", cuda: "Windows and Linux", core_ml: "macOS" },
+    },
     providerHint:
       "If the GPU fails to initialize, analysis continues on CPU and the reason is logged in Diagnostics.",
     models: "Models",

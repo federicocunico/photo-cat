@@ -4,6 +4,7 @@
 pub mod config;
 pub mod error;
 pub mod paths;
+pub mod platform;
 
 pub use config::Config;
 pub use error::{AppError, AppResult, ErrorCode};

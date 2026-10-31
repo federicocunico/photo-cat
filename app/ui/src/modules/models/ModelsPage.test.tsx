@@ -39,6 +39,7 @@ beforeEach(() => {
     },
     budget: { budgetMb: 3768, limitedBy: "profile" },
     providers: ["cpu", "direct_ml"],
+    unavailableProviders: [],
     onnxRuntime: "ORT 1.24",
     executionProvider: "auto",
     resourceProfile: "balanced",
@@ -113,6 +114,26 @@ describe("Modelli AI e sistema", () => {
     expect(commandsMock.setResourceProfile).toHaveBeenCalledWith("light");
     expect(screen.getByRole("option", { name: "CUDA (GPU NVIDIA)" })).toBeDisabled();
     expect(screen.getByRole("option", { name: "CoreML (Apple)" })).toBeDisabled();
+  });
+
+  it("spiega nella voce del menu perché un provider è disattivato", async () => {
+    commandsMock.systemInfo.mockResolvedValue({
+      ...(await commandsMock.systemInfo()),
+      providers: ["cpu"],
+      unavailableProviders: [
+        { provider: "direct_ml", reason: "other_platform" },
+        { provider: "cuda", reason: "not_in_runtime" },
+        { provider: "core_ml", reason: "other_platform" },
+      ],
+    });
+    renderPage();
+    expect(
+      await screen.findByRole("option", { name: "DirectML (GPU) — solo su Windows" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("option", { name: "CUDA (GPU NVIDIA) — non incluso in questa versione" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("option", { name: "CoreML (Apple) — solo su macOS" })).toBeDisabled();
   });
 
   it("mostra stati mancanti, aggiornamenti e test falliti con azioni coerenti", async () => {

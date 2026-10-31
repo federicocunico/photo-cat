@@ -299,15 +299,20 @@ export function ModelsPage() {
             >
               <option value="auto">{t("models.providerOptions.auto")}</option>
               <option value="cpu">{t("models.providerOptions.cpu")}</option>
-              <option value="direct_ml" disabled={!info.data?.providers.includes("direct_ml")}>
-                {t("models.providerOptions.direct_ml")}
-              </option>
-              <option value="cuda" disabled={!info.data?.providers.includes("cuda")}>
-                {t("models.providerOptions.cuda")}
-              </option>
-              <option value="core_ml" disabled={!info.data?.providers.includes("core_ml")}>
-                {t("models.providerOptions.core_ml")}
-              </option>
+              {(["direct_ml", "cuda", "core_ml"] as const).map((p) => {
+                const reason = info.data?.unavailableProviders.find(
+                  (u) => u.provider === p,
+                )?.reason;
+                return (
+                  <option key={p} value={p} disabled={!info.data?.providers.includes(p)}>
+                    {t(`models.providerOptions.${p}`)}
+                    {reason &&
+                      ` — ${t(`models.unavailable.${reason}`, {
+                        platform: t(`models.unavailable.platforms.${p}`),
+                      })}`}
+                  </option>
+                );
+              })}
             </select>
           </label>
           <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>

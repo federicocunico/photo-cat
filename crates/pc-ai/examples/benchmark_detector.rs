@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         PathBuf::from(std::env::args().nth(2).expect("percorso ONNX RT-DETR"))
     };
-    runtime::init(&runtime::dev_dll_path())?;
+    runtime::init(&runtime::dev_runtime_path())?;
     let probe = SysinfoProbe::default();
     let baseline = probe.snapshot().process_mb;
     let (mut session, _) = runtime::load(

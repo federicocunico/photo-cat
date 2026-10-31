@@ -49,3 +49,17 @@ fn native_decoder_handles_heic_and_releases_memory_without_touching_source() {
         .unwrap();
     assert_eq!(small.code, ErrorCode::InsufficientMemory);
 }
+
+#[cfg(feature = "heif")]
+#[test]
+fn missing_decoder_library_reports_unsupported_format() {
+    let error = pc_ingest::heif::decode_with_library(
+        &fixture(),
+        std::path::Path::new("percorso/inesistente/libheif.so.1"),
+        32,
+        &MemoryGovernor::new(64),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.code, ErrorCode::UnsupportedFormat);
+}

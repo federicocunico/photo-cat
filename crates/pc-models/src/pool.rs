@@ -177,14 +177,14 @@ impl ModelPool {
     }
 }
 
-#[cfg(all(test, feature = "model-tests", windows))]
+#[cfg(all(test, feature = "model-tests"))]
 mod tests {
     use super::*;
     use crate::manifest::Manifest;
     use pc_governor::FakeProbe;
 
     fn pool(budget: u64) -> (ModelPool, tempfile::TempDir) {
-        runtime::init(&runtime::dev_dll_path()).unwrap();
+        runtime::init(&runtime::dev_runtime_path()).unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let store = Arc::new(ModelStore::new(
             Manifest::builtin(),

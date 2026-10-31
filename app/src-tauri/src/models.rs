@@ -6,7 +6,7 @@ use pc_ai::models_job;
 use pc_core::config::{ExecutionProvider, ResourceProfile};
 use pc_core::{AppError, AppResult, ErrorCode};
 use pc_governor::{Budget, SystemSnapshot};
-use pc_models::runtime::{self, Provider};
+use pc_models::runtime::{self, Provider, UnavailableProvider};
 use pc_models::store::ModelStatus;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -28,7 +28,7 @@ pub fn assets_dir(app: &AppHandle) -> PathBuf {
 pub struct AssetPaths {
     pub models: PathBuf,
     pub selftest: PathBuf,
-    pub runtime_dll: PathBuf,
+    pub runtime_lib: PathBuf,
 }
 
 pub fn asset_paths(root: &Path) -> AssetPaths {
@@ -36,13 +36,18 @@ pub fn asset_paths(root: &Path) -> AssetPaths {
         AssetPaths {
             models: root.join("models"),
             selftest: root.join("selftest"),
-            runtime_dll: root.join("runtime/win-x64/onnxruntime.dll"),
+            runtime_lib: root
+                .join("runtime")
+                .join(pc_core::platform::asset_dir().unwrap_or("non-distribuito"))
+                .join(pc_core::platform::onnxruntime_file()),
         }
     } else {
         AssetPaths {
             models: root.join("models"),
             selftest: root.join("selftest"),
-            runtime_dll: root.join("runtime/onnxruntime.dll"),
+            runtime_lib: root
+                .join("runtime")
+                .join(pc_core::platform::onnxruntime_file()),
         }
     }
 }
@@ -57,6 +62,8 @@ pub struct SystemInfo {
     pub system: SystemSnapshot,
     pub budget: Budget,
     pub providers: Vec<Provider>,
+    /// Provider GPU non utilizzabili e perché, per spiegarlo accanto alla scelta.
+    pub unavailable_providers: Vec<UnavailableProvider>,
     pub onnx_runtime: Option<String>,
     pub execution_provider: ExecutionProvider,
     pub resource_profile: ResourceProfile,
@@ -72,6 +79,7 @@ pub fn system_info(state: State<'_, AppState>) -> SystemInfo {
         system,
         budget,
         providers: runtime::available_providers(),
+        unavailable_providers: runtime::unavailable_providers(),
         onnx_runtime: state.onnx_runtime.clone(),
         execution_provider: cfg.ai.execution_provider,
         resource_profile: cfg.resources.profile,
