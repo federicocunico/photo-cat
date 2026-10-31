@@ -44,3 +44,19 @@ it("opens a cluster, renames it and sends a persistent refusal", async () => {
     }),
   );
 });
+it("shows the photo count per person and labels unnamed clusters", async () => {
+  commandsMock.listPeople.mockResolvedValue([
+    { id: 1, name: "Alice", photos: 20, faces: 23, cover: null },
+    { id: 7, name: null, photos: 1, faces: 1, cover: null },
+  ] as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PeoplePage />
+    </QueryClientProvider>,
+  );
+  const alice = (await screen.findByText("Alice")).closest("button")!;
+  expect(alice).toHaveTextContent("20 foto");
+  const unnamed = screen.getByText(/senza nome/i).closest("button")!;
+  expect(unnamed).toHaveTextContent("1 foto");
+  expect(unnamed).not.toHaveTextContent("null");
+});

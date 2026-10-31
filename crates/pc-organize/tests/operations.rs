@@ -358,3 +358,304 @@ fn preflight_decision_with_and_without_symlink_privilege() {
     assert_eq!(allowed.reason, None);
     assert!(decide(Method::Copy, &LinkProbe::default()).available);
 }
+/// Arricchisce un elemento del fixture con tutti i dati esportabili.
+fn enrich(db: &Store, id: i64) {
+    use pc_store::model::{DateSource, Location, LocationSource, MediaDates, TechInfo};
+    db.write(move |c| {
+        repo::meta::set_tech(
+            c,
+            id,
+            &TechInfo {
+                format: Some("JPEG".into()),
+                width: Some(4000),
+                height: Some(3000),
+                dpi_x: Some(300.0),
+                dpi_y: Some(240.0),
+                bit_depth: Some(8),
+                ..Default::default()
+            },
+        )?;
+        repo::meta::set_dates(
+            c,
+            id,
+            &MediaDates {
+                captured_at: Some("2023-07-14 10:22:01".into()),
+                captured_source: Some(DateSource::ExifOriginal),
+                modified_at: Some("2023-07-15 08:00:00".into()),
+            },
+        )?;
+        repo::meta::set_location(
+            c,
+            id,
+            &Location {
+                name: Some("Firenze".into()),
+                country: Some("IT".into()),
+                lat: Some(43.77),
+                lon: Some(11.25),
+                source: LocationSource::Gps,
+            },
+        )?;
+        let groups: Vec<String> = ["subject", "location", "environment"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let label = |group: &str, value: &str, score: f64| pc_store::analysis::AutoLabel {
+            group: group.into(),
+            value: value.into(),
+            score,
+        };
+        pc_store::analysis::classification(
+            c,
+            id,
+            &groups,
+            &[
+                label("subject", "ritratto", 0.87),
+                label("location", "interno", 0.66),
+                label("environment", "urbano", 0.55),
+            ],
+            &[0.01; 512],
+            "clip:1",
+            1,
+        )?;
+        pc_store::analysis::people(c, id, &[[0.1, 0.1, 0.3, 0.3, 0.9]], "yolox")?;
+        let mut embedding = vec![0.0; 128];
+        embedding[0] = 1.0;
+        pc_store::people::save_faces(
+            c,
+            id,
+            &[pc_store::people::DetectedFace {
+                bbox: [0.1, 0.1, 0.2, 0.2],
+                quality: 0.99,
+                embedding,
+            }],
+            "sface",
+            "yunet+sface",
+            0.363,
+        )?;
+        let giulia = pc_store::people::create_person(c, Some("Giulia"))?;
+        let face = pc_store::people::records(c, Some(id))?[0].id;
+        pc_store::people::assign(c, &[face], giulia)?;
+        let catalog = repo::catalog::create(
+            c,
+            "Ritratti 2023",
+            pc_store::model::CatalogKind::Manual,
+            None,
+        )?;
+        repo::catalog::add_items(c, catalog, &[id])?;
+        Ok(())
+    })
+    .unwrap();
+}
+fn ends_with_file(path: &serde_json::Value, folder: &str) -> bool {
+    path.as_str().unwrap().ends_with(&format!(
+        "{folder}{}IMG_0001.JPG",
+        std::path::MAIN_SEPARATOR
+    ))
+}
+#[test]
+fn library_export_has_every_required_column_with_default_fields() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = fixture(tmp.path());
+    enrich(&db, 1);
+    let fields: Vec<String> = export::FIELDS.iter().map(|f| f.to_string()).collect();
+    // Colonne richieste dal requisito, con i nomi usati dall'export.
+    let required = [
+        "path",
+        "name",
+        "format",
+        "width",
+        "height",
+        "dpi_x",
+        "dpi_y",
+        "bit_depth",
+        "size",
+        "captured_at",
+        "mtime",
+        "location",
+        "location_source",
+        "people_present",
+        "people_count",
+        "people",
+        "subject",
+        "location_type",
+        "tags",
+        "catalogs",
+    ];
+    let csv = export::Options {
+        scope: Scope::Library,
+        destination: tmp.path().join("tutto.csv"),
+        format: export::Format::Csv,
+        separator: ';',
+        bom: false,
+        fields: fields.clone(),
+    };
+    assert_eq!(
+        run(
+            &db,
+            export::JOB_KIND,
+            serde_json::to_value(&csv).unwrap(),
+            false
+        )
+        .state,
+        JobState::Completed
+    );
+    let text = std::fs::read_to_string(&csv.destination).unwrap();
+    let header: Vec<&str> = text.lines().next().unwrap().split(';').collect();
+    for f in required {
+        assert!(header.contains(&f), "colonna {f} mancante in {header:?}");
+    }
+    assert_eq!(text.lines().count(), 3, "una riga per file della libreria");
+
+    let json = export::Options {
+        destination: tmp.path().join("tutto.json"),
+        format: export::Format::Json,
+        ..csv
+    };
+    assert_eq!(
+        run(
+            &db,
+            export::JOB_KIND,
+            serde_json::to_value(&json).unwrap(),
+            false
+        )
+        .state,
+        JobState::Completed
+    );
+    let doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&json.destination).unwrap()).unwrap();
+    let records = doc["records"].as_array().unwrap();
+    assert_eq!(records.len(), 2);
+    let r = records
+        .iter()
+        .find(|r| ends_with_file(&r["path"], "1"))
+        .unwrap();
+    for f in required {
+        assert!(!r[f].is_null(), "campo {f} vuoto: {r}");
+    }
+    assert_eq!(r["name"], "IMG_0001.JPG");
+    assert_eq!(
+        (r["width"].as_u64(), r["height"].as_u64()),
+        (Some(4000), Some(3000))
+    );
+    assert_eq!(
+        (r["dpi_x"].as_f64(), r["dpi_y"].as_f64()),
+        (Some(300.0), Some(240.0))
+    );
+    assert_eq!(r["bit_depth"], 8);
+    assert_eq!(r["size"], 7);
+    assert_eq!(r["captured_at"], "2023-07-14 10:22:01");
+    assert_eq!(r["location"], "Firenze");
+    assert_eq!(r["location_source"], "gps");
+    assert_eq!(r["people_present"], true);
+    assert_eq!(r["people_count"], 1);
+    assert_eq!(r["people"], serde_json::json!(["Giulia"]));
+    assert_eq!(r["subject"], serde_json::json!(["ritratto"]));
+    assert_eq!(r["location_type"], serde_json::json!(["interno"]));
+    assert_eq!(r["catalogs"], serde_json::json!(["Ritratti 2023"]));
+    assert_eq!(r["tags"].as_array().unwrap().len(), 2);
+}
+#[test]
+fn catalog_scope_exports_only_catalog_files_and_selected_fields_with_confidence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = fixture(tmp.path());
+    enrich(&db, 2);
+    let catalog: i64 = db
+        .read(|c| {
+            Ok(c.query_row(
+                "SELECT id FROM catalog WHERE name = 'Ritratti 2023'",
+                [],
+                |r| r.get(0),
+            )?)
+        })
+        .unwrap();
+    let opts = export::Options {
+        scope: Scope::Catalog { id: catalog },
+        destination: tmp.path().join("ritratti.json"),
+        format: export::Format::Json,
+        separator: ',',
+        bom: false,
+        fields: vec![
+            "path".into(),
+            "captured_at".into(),
+            "people".into(),
+            "labels".into(),
+        ],
+    };
+    assert_eq!(
+        run(
+            &db,
+            export::JOB_KIND,
+            serde_json::to_value(&opts).unwrap(),
+            false
+        )
+        .state,
+        JobState::Completed
+    );
+    let doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&opts.destination).unwrap()).unwrap();
+    let records = doc["records"].as_array().unwrap();
+    assert_eq!(records.len(), 1, "solo i file del catalogo");
+    let r = records[0].as_object().unwrap();
+    let mut keys: Vec<&str> = r.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(keys, vec!["captured_at", "labels", "path", "people"]);
+    assert!(ends_with_file(&r["path"], "2"));
+    assert_eq!(r["people"], serde_json::json!(["Giulia"]));
+    // Confidenza delle catalogazioni AI inclusa.
+    let subject = r["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["group"] == "subject")
+        .unwrap();
+    assert_eq!(subject["value"], "ritratto");
+    assert!((subject["score"].as_f64().unwrap() - 0.87).abs() < 1e-9);
+    assert_eq!(subject["origin"], "auto");
+}
+#[test]
+fn preview_by_place_then_year_builds_place_year_folders() {
+    use pc_store::model::{Location, LocationSource, MediaDates};
+    let tmp = tempfile::tempdir().unwrap();
+    let db = fixture(tmp.path());
+    db.write(|c| {
+        let place = |name: &str| Location {
+            name: Some(name.into()),
+            country: Some("IT".into()),
+            lat: None,
+            lon: None,
+            source: LocationSource::Manual,
+        };
+        repo::meta::set_location(c, 1, &place("Firenze"))?;
+        repo::meta::set_dates(
+            c,
+            1,
+            &MediaDates {
+                captured_at: Some("2023-07-14 10:22:01".into()),
+                ..Default::default()
+            },
+        )?;
+        // Il secondo file ha un luogo ma nessuna data.
+        repo::meta::set_location(c, 2, &place("Roma"))?;
+        Ok(())
+    })
+    .unwrap();
+    let opts = organize::Options {
+        scope: Scope::Library,
+        destination: tmp.path().join("Organizzate"),
+        levels: vec!["place".into(), "year".into()],
+        method: Method::Copy,
+    };
+    let preview = organize::preview(&db, &opts).unwrap();
+    assert_eq!(preview.files, 2);
+    assert_eq!(preview.conflicts, 0);
+    let mut relative: Vec<_> = preview.entries.iter().map(|e| e.relative.clone()).collect();
+    relative.sort();
+    assert_eq!(
+        relative,
+        vec![
+            Path::new("Firenze").join("2023").join("IMG_0001.JPG"),
+            Path::new("Roma").join("Senza anno").join("IMG_0001.JPG"),
+        ]
+    );
+    assert!(!opts.destination.exists(), "l'anteprima non crea nulla");
+}

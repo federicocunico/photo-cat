@@ -91,6 +91,68 @@ impl AiDeps {
             self.verified(Role::FaceEmbedding)?,
         ])
     }
+
+    /// Modelli pronti che entrano nel budget di memoria. Una fase il cui modello (o gruppo di
+    /// modelli caricati insieme) supera il budget viene disattivata con un avviso
+    /// `INSUFFICIENT_MEMORY`; le altre fasi e l'import proseguono.
+    pub fn runnable_models(&self) -> RunnableModels {
+        let (clip, persons) = self.ready_models();
+        let faces = self.ready_faces();
+        let mut over_budget = false;
+        let mut fits = |phase: &str, sets: Vec<Vec<String>>| {
+            let need = sets
+                .iter()
+                .map(|s| {
+                    s.iter()
+                        .map(|id| self.resources.pool.estimate_mb(id))
+                        .sum::<u64>()
+                })
+                .max()
+                .unwrap_or(0);
+            let budget = self.resources.governor.snapshot().budget_mb;
+            if need <= budget {
+                return true;
+            }
+            over_budget = true;
+            tracing::warn!(
+                code = ErrorCode::InsufficientMemory.as_str(),
+                phase,
+                detail = format!("servono ~{need} MB, budget {budget} MB").as_str(),
+                "memoria insufficiente per la fase AI: fase disattivata"
+            );
+            false
+        };
+        // CLIP: encoder di testo (concetti) e di immagine sono caricati uno alla volta.
+        let clip = clip.filter(|id| {
+            let text = self.verified(Role::ClassificationText).unwrap_or_default();
+            fits(PHASE_CLIP, vec![vec![id.clone()], vec![text]])
+        });
+        let persons = persons.filter(|id| fits(PHASE_PERSONS, vec![vec![id.clone()]]));
+        // Volti: rilevamento ed embedding restano caricati insieme nella stessa passata.
+        let faces = faces.filter(|ids| fits(PHASE_FACES, vec![ids.clone()]));
+        RunnableModels {
+            clip,
+            persons,
+            faces,
+            over_budget,
+        }
+    }
+}
+
+/// Esito di [`AiDeps::runnable_models`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunnableModels {
+    pub clip: Option<String>,
+    pub persons: Option<String>,
+    pub faces: Option<Vec<String>>,
+    /// Almeno una fase pronta è stata disattivata per memoria insufficiente.
+    pub over_budget: bool,
+}
+
+impl RunnableModels {
+    pub fn is_empty(&self) -> bool {
+        self.clip.is_none() && self.persons.is_none() && self.faces.is_none()
+    }
 }
 
 pub fn import_factory(deps: AiDeps) -> pc_ingest::import::StageFactory {
@@ -112,15 +174,20 @@ pub fn import_stages(deps: &AiDeps, source_id: i64) -> StagePlan {
     plan.stages.push(Arc::new(GeoStage {
         gazetteer: deps.gazetteer(),
     }));
-    let (clip, persons) = deps.ready_models();
-    let faces = deps.ready_faces();
+    let runnable = deps.runnable_models();
+    let RunnableModels {
+        clip,
+        persons,
+        faces,
+        ..
+    } = &runnable;
     let ids: Vec<&str> = clip
         .iter()
         .chain(persons.iter())
         .chain(faces.iter().flatten())
         .map(String::as_str)
         .collect();
-    if ids.is_empty() && !deps.config.read().ai.auto_download_models {
+    if ids.is_empty() && (runnable.over_budget || !deps.config.read().ai.auto_download_models) {
         tracing::info!(source_id, "modelli AI non pronti: import senza analisi");
         return plan;
     }
@@ -261,8 +328,24 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             };
             let ids = target_ids(&deps.store, &params)?;
-            let (clip, persons) = deps.ready_models();
-            let faces = deps.ready_faces();
+            let runnable = deps.runnable_models();
+            if runnable.is_empty() && runnable.over_budget {
+                // Requisiti minimi: nessuna fase AI entra nel budget, il job termina senza analisi.
+                for p in [PHASE_CLIP, PHASE_PERSONS, PHASE_FACES, PHASE_CLUSTER] {
+                    ctx.progress.phase(p).set_total(0);
+                    ctx.progress.phase(p).finish();
+                }
+                return Ok(RunSummary {
+                    cancelled: false,
+                    failed: 0,
+                });
+            }
+            let RunnableModels {
+                clip,
+                persons,
+                faces,
+                ..
+            } = runnable;
             if clip.is_none() && persons.is_none() && faces.is_none() {
                 return Err(AppError::new(
                     ErrorCode::ModelUnavailable,
@@ -468,4 +551,38 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
             }
         }),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reanalysis_of_a_selection_targets_only_the_selected_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        store
+            .write(|c| {
+                for i in 1..=5 {
+                    repo::media::upsert(
+                        c,
+                        &pc_store::model::NewMedia {
+                            path: format!("IMG_{i}.jpg"),
+                            name: format!("IMG_{i}.jpg"),
+                            ext: "jpg".into(),
+                            ..Default::default()
+                        },
+                    )?;
+                }
+                c.execute("UPDATE media_item SET thumb = 'miniatura'", [])?;
+                Ok(())
+            })
+            .unwrap();
+        // Parametri del comando "Rianalizza" su una selezione.
+        let ids = target_ids(&store, &serde_json::json!({ "ids": [2, 4] })).unwrap();
+        assert_eq!(ids, vec![2, 4]);
+        // Senza selezione: tutta la libreria.
+        let all = target_ids(&store, &serde_json::json!({})).unwrap();
+        assert_eq!(all, vec![1, 2, 3, 4, 5]);
+    }
 }

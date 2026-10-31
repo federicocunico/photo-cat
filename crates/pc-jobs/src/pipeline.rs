@@ -444,6 +444,45 @@ mod tests {
     }
 
     #[test]
+    fn next_stage_starts_before_the_source_has_finished() {
+        // La sorgente emette il primo elemento e poi attende un segnale dallo stadio
+        // successivo: termina solo se le fasi procedono sovrapposte.
+        let progress = JobProgress::new(&specs());
+        let (tx, rx) = std::sync::mpsc::channel::<u64>();
+        let tx = Mutex::new(Some(tx));
+        let overlapped = Arc::new(Mutex::new(None));
+        let seen = overlapped.clone();
+        let summary = Pipeline::<u64>::new(1, progress.clone(), JobControl::new())
+            .source("scan", move |e| {
+                e.emit(0);
+                *seen.lock() = Some(rx.recv_timeout(Duration::from_secs(10)).is_ok());
+                for i in 1..100 {
+                    e.emit(i);
+                }
+                Ok(())
+            })
+            .stage("meta", 1, move |x, _| {
+                if *x == 0 {
+                    if let Some(tx) = tx.lock().take() {
+                        tx.send(*x).unwrap();
+                    }
+                }
+                StageOutcome::Continue
+            })
+            .stage("ai", 1, |_, _| StageOutcome::Continue)
+            .stage("write", 1, |_, _| StageOutcome::Continue)
+            .run()
+            .unwrap();
+        assert_eq!(
+            *overlapped.lock(),
+            Some(true),
+            "lo stadio \"meta\" non ha elaborato il primo elemento mentre la scansione era in corso"
+        );
+        assert!(!summary.cancelled);
+        assert_eq!(progress.phase("write").done(), 100);
+    }
+
+    #[test]
     fn failures_and_skips_are_counted_and_do_not_stop_the_job() {
         let progress = JobProgress::new(&specs());
         let summary = Pipeline::<u64>::new(2, progress.clone(), JobControl::new())

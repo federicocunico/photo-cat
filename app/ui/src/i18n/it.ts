@@ -182,6 +182,11 @@ export const it = {
       placeSources: { gps: "GPS EXIF", directory: "Nome cartella", manual: "Manuale" },
       bits: "{{n}} bit per canale",
       dpi: "{{x}} × {{y}} DPI",
+      edit: "Correzioni",
+      group: "Campo da correggere",
+      value: "Nuovo valore",
+      tag: "Nuovo tag",
+      catalog: "Catalogo",
     },
   },
   models: {

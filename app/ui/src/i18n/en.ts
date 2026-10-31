@@ -183,6 +183,11 @@ export const en: Messages = {
       placeSources: { gps: "GPS EXIF", directory: "Folder name", manual: "Manual" },
       bits: "{{n}} bits per channel",
       dpi: "{{x}} × {{y}} DPI",
+      edit: "Corrections",
+      group: "Field to correct",
+      value: "New value",
+      tag: "New tag",
+      catalog: "Catalog",
     },
   },
   models: {

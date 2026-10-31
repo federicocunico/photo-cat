@@ -296,3 +296,105 @@ fn usable_faces_are_filtered_embedded_and_saved() {
         3
     );
 }
+
+#[test]
+fn disabled_face_recognition_saves_no_faces_but_still_counts_people() {
+    use parking_lot::RwLock;
+    use pc_ai::analyze::{self, AiDeps};
+    use pc_jobs::manager::{JobManager, JobSnapshot, ProgressSink};
+    use pc_models::{pool::ModelPool, store::ModelStore, Manifest};
+    use std::sync::Arc;
+    struct Sink;
+    impl ProgressSink for Sink {
+        fn on_progress(&self, _: &JobSnapshot) {}
+    }
+    runtime::init(&runtime::dev_dll_path()).unwrap();
+    // Riconoscimento disattivato nella configurazione e nella policy (come all'avvio dell'app),
+    // e solo nella policy (disattivazione durante l'esecuzione).
+    for config_enabled in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let photo = tmp.path().join("gruppo.jpg");
+        std::fs::copy(asset("selftest/group_4_people.jpg"), &photo).unwrap();
+        let db = pc_store::Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let path = photo.display().to_string();
+        db.write(move |c| {
+            let id = pc_store::repo::media::upsert(
+                c,
+                &pc_store::model::NewMedia {
+                    path,
+                    name: "gruppo.jpg".into(),
+                    ext: "jpg".into(),
+                    ..Default::default()
+                },
+            )?;
+            pc_store::repo::media::set_thumb(c, id, "miniatura")
+        })
+        .unwrap();
+        let mut manifest = Manifest::builtin();
+        manifest
+            .entries
+            .retain(|e| ["yolox-tiny", "yunet", "sface"].contains(&e.id.as_str()));
+        let models = Arc::new(ModelStore::new(
+            manifest,
+            tmp.path().join("models"),
+            Some(asset("models")),
+        ));
+        models.restore(
+            &models.check_all(),
+            None,
+            &std::sync::atomic::AtomicBool::new(false),
+        );
+        let gov = pc_governor::MemoryGovernor::new(1024);
+        let pool = Arc::new(ModelPool::new(
+            models.clone(),
+            gov.clone(),
+            Arc::new(pc_governor::FakeProbe::new(8192, 6000, 8)),
+            SessionOptions {
+                preferred: ExecutionProvider::Cpu,
+                intra_threads: 4,
+                ..Default::default()
+            },
+        ));
+        let mut config = pc_core::Config::default();
+        config.ai.faces_enabled = config_enabled;
+        let deps = AiDeps {
+            resources: pc_ai::stages::AiResources {
+                models,
+                pool,
+                governor: gov.clone(),
+            },
+            store: db.clone(),
+            gazetteer: Arc::default(),
+            config: Arc::new(RwLock::new(config)),
+            face_policy: Arc::new(pc_ai::face_policy::FacePolicy::new(false)),
+            analysis_lock: Arc::default(),
+        };
+        let jobs = JobManager::new(db.clone(), gov, 1, Arc::new(Sink));
+        jobs.register(
+            analyze::JOB_KIND,
+            Arc::new(move |p| analyze::plan(deps.clone(), p)),
+        );
+        let id = jobs
+            .submit(analyze::JOB_KIND, serde_json::json!({ "ids": [1] }))
+            .unwrap();
+        assert!(jobs.wait_idle(std::time::Duration::from_secs(120)));
+        let s = jobs.snapshot(id).unwrap();
+        assert_eq!(s.state, pc_jobs::JobState::Completed, "{s:?}");
+        let count = |sql: &str| -> i64 {
+            let sql = sql.to_string();
+            db.read(move |c| Ok(c.query_row(&sql, [], |r| r.get(0))?))
+                .unwrap()
+        };
+        assert_eq!(count("SELECT count(*) FROM face"), 0, "{config_enabled}");
+        assert_eq!(count("SELECT count(*) FROM person"), 0);
+        assert_eq!(
+            count("SELECT count(*) FROM analysis_version WHERE stage = 'faces'"),
+            0
+        );
+        assert_eq!(
+            count("SELECT count FROM media_people WHERE media_id = 1"),
+            4,
+            "le persone vengono contate anche senza riconoscimento volti"
+        );
+    }
+}

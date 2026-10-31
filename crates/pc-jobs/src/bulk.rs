@@ -163,4 +163,136 @@ mod tests {
         })
         .unwrap();
     }
+
+    fn manager(db: &Store) -> JobManager {
+        let jobs = JobManager::new(
+            db.clone(),
+            pc_governor::MemoryGovernor::new(256),
+            1,
+            Arc::new(Sink),
+        );
+        let st = db.clone();
+        jobs.register(JOB_KIND, Arc::new(move |p| plan(st.clone(), p)));
+        jobs
+    }
+
+    fn run(jobs: &JobManager, params: serde_json::Value) -> crate::JobSnapshot {
+        let id = jobs.submit(JOB_KIND, params).unwrap();
+        assert!(jobs.wait_idle(Duration::from_secs(30)));
+        jobs.snapshots().into_iter().find(|s| s.id == id).unwrap()
+    }
+
+    fn media(c: &rusqlite::Connection, path: &str) -> StoreResult<i64> {
+        repo::media::upsert(
+            c,
+            &pc_store::model::NewMedia {
+                path: path.into(),
+                name: path.into(),
+                ext: "jpg".into(),
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn assign_person_applies_only_to_faces_of_selection() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let person = db
+            .write(|c| {
+                for (i, axis) in [(1, 0), (2, 1), (3, 2)] {
+                    let id = media(c, &format!("volti{i}.jpg"))?;
+                    let mut embedding = vec![0.0; 128];
+                    embedding[axis] = 1.0;
+                    people::save_faces(
+                        c,
+                        id,
+                        &[people::DetectedFace {
+                            bbox: [0.1, 0.1, 0.3, 0.3],
+                            quality: 0.99,
+                            embedding,
+                        }],
+                        "sface",
+                        "yunet+sface",
+                        0.363,
+                    )?;
+                }
+                people::create_person(c, Some("Giulia"))
+            })
+            .unwrap();
+        let jobs = manager(&db);
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids":[1,2],"operation":{"action":"assign_person","person":person}}),
+        );
+        assert_eq!(s.state, crate::JobState::Completed, "{s:?}");
+        let faces = db.read(|c| people::records(c, None)).unwrap();
+        let assigned: Vec<(i64, Option<i64>)> =
+            faces.iter().map(|f| (f.media_id, f.person_id)).collect();
+        assert_eq!(
+            assigned,
+            vec![(1, Some(person)), (2, Some(person)), (3, None)]
+        );
+        // Assegnazione persistita: resta dopo la riapertura del catalogo.
+        drop(jobs);
+        drop(db);
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let again = db.read(|c| people::records(c, None)).unwrap();
+        assert_eq!(again[0].person_id, Some(person));
+        assert_eq!(again[1].person_id, Some(person));
+    }
+
+    #[test]
+    fn remove_from_library_needs_confirmation_and_keeps_originals_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("Foto");
+        std::fs::create_dir_all(&root).unwrap();
+        let files: Vec<std::path::PathBuf> = (0..4usize)
+            .map(|i| {
+                let p = root.join(format!("IMG_{i}.jpg"));
+                std::fs::write(&p, vec![i as u8; 1000 + i]).unwrap();
+                p
+            })
+            .collect();
+        let fingerprint = |p: &std::path::PathBuf| {
+            (
+                std::fs::read(p).unwrap(),
+                std::fs::metadata(p).unwrap().modified().unwrap(),
+            )
+        };
+        let before: Vec<_> = files.iter().map(fingerprint).collect();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let paths: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+        let ids = db
+            .write(move |c| {
+                paths
+                    .iter()
+                    .map(|p| media(c, p))
+                    .collect::<StoreResult<Vec<_>>>()
+            })
+            .unwrap();
+        let jobs = manager(&db);
+        let op = serde_json::json!({"action":"remove_library"});
+        // Senza conferma il job non parte.
+        let err = jobs
+            .submit(
+                JOB_KIND,
+                serde_json::json!({"ids":&ids[..3],"operation":op}),
+            )
+            .unwrap_err();
+        assert_eq!(err.code, pc_core::ErrorCode::InvalidInput);
+        assert_eq!(db.read(repo::media::count).unwrap(), 4);
+
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids":&ids[..3],"operation":op,"confirmed":true}),
+        );
+        assert_eq!(s.state, crate::JobState::Completed, "{s:?}");
+        assert_eq!(db.read(repo::media::count).unwrap(), 1);
+        let kept = ids[3];
+        assert!(db.read(move |c| repo::media::get(c, kept)).is_ok());
+        // Gli originali restano sul disco, identici (contenuto e data di modifica).
+        let after: Vec<_> = files.iter().map(fingerprint).collect();
+        assert_eq!(before, after);
+    }
 }

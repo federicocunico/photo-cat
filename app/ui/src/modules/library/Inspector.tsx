@@ -1,9 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri } from "../../lib/ipc";
+import { commands, isTauri, type BulkAction, type LabelView } from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
+import { useLive } from "../../store/live";
 import { thumbUrl } from "./thumbUrl";
 
 function Grid2({ children }: { children: ReactNode }) {
@@ -27,6 +28,133 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
       <span className="muted">{label}</span>
       <span>{value ?? "—"}</span>
     </>
+  );
+}
+
+const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
+
+/** Correzioni sul file ispezionato: catalogazione, tag e cataloghi (operazioni bulk su un solo id). */
+function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const taxonomy = useQuery({
+    queryKey: ["taxonomy"],
+    queryFn: commands.getTaxonomy,
+    enabled: isTauri(),
+  });
+  const catalogs = useQuery({
+    queryKey: ["catalogs"],
+    queryFn: commands.listCatalogs,
+    enabled: isTauri(),
+  });
+  const groups = taxonomy.data?.groups ?? [];
+  const [group, setGroup] = useState("subject");
+  const current = labels.find((l) => l.group === group)?.value ?? "";
+  const [value, setValue] = useState(current);
+  const [tag, setTag] = useState("");
+  const [catalog, setCatalog] = useState("");
+  const [job, setJob] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const result = useLive((s) => (job === null ? undefined : s.jobs[job]));
+  useEffect(() => setValue(current), [current]);
+  useEffect(() => {
+    if (result && FINAL.includes(result.state)) {
+      void qc.invalidateQueries({ queryKey: ["media-detail", id] });
+      void qc.invalidateQueries({ queryKey: ["library"] });
+      void qc.invalidateQueries({ queryKey: ["catalogs"] });
+    }
+  }, [result, qc, id]);
+  const apply = async (operation: BulkAction) => {
+    setError("");
+    try {
+      setJob(await commands.startBulk([id], operation, false));
+    } catch (e) {
+      setError((e as { detail?: string }).detail ?? String(e));
+    }
+  };
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <h3 className="section-title">{t("library.inspector.edit")}</h3>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <select
+          className="field"
+          aria-label={t("library.inspector.group")}
+          value={group}
+          onChange={(e) => setGroup(e.target.value)}
+        >
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="field"
+          aria-label={t("library.inspector.value")}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        >
+          <option value="">—</option>
+          {groups
+            .find((g) => g.id === group)
+            ?.categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+        </select>
+        <button
+          className="btn"
+          disabled={value === current}
+          onClick={() => void apply({ action: "set_label", group, value: value || null })}
+        >
+          {t("bulk.actions.set_label")}
+        </button>
+      </div>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <input
+          className="field"
+          aria-label={t("library.inspector.tag")}
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+        />
+        <button
+          className="btn"
+          disabled={!tag.trim()}
+          onClick={() => {
+            void apply({ action: "add_tag", name: tag.trim() });
+            setTag("");
+          }}
+        >
+          {t("bulk.actions.add_tag")}
+        </button>
+      </div>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <select
+          className="field"
+          aria-label={t("library.inspector.catalog")}
+          value={catalog}
+          onChange={(e) => setCatalog(e.target.value)}
+        >
+          <option value="">{t("catalogs.title")}</option>
+          {catalogs.data
+            ?.filter((c) => c.catalog.kind === "manual")
+            .map(({ catalog: c }) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </select>
+        <button
+          className="btn"
+          disabled={!catalog}
+          onClick={() => void apply({ action: "add_catalog", catalog: Number(catalog) })}
+        >
+          {t("bulk.actions.add_catalog")}
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </section>
   );
 }
 
@@ -193,6 +321,7 @@ export function Inspector() {
           </span>
         )}
       </section>
+      <Edits key={d.item.id} id={d.item.id} labels={d.labels} />
     </div>
   );
 }

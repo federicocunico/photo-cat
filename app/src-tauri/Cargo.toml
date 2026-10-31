@@ -10,6 +10,8 @@ description = "photo-cat: catalogazione locale di fotografie"
 [features]
 default = ["heif"]
 heif = ["pc-ingest/heif"]
+# Abilita gli aiuti di `dev.rs` in una build release (solo per le prove end-to-end, mai negli installer).
+e2e = []
 
 [lib]
 name = "photo_cat_lib"
