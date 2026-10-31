@@ -25,18 +25,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-build
         with:
-          shared-key: windows-release
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/ui/package-lock.json
-      - run: npm ci --prefix app/ui
+          cache-key: windows-release
       - name: Compila setup NSIS
         run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
+      # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
       - uses: actions/upload-artifact@v5
         with:
           name: photo-cat-setup
@@ -49,23 +43,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - name: Dipendenze di sistema
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-build
         with:
+          cache-key: linux
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: linux
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/ui/package-lock.json
-      - run: npm ci --prefix app/ui
       # Il crate photo-cat incorpora il frontend compilato: serve prima di clippy e test.
       - run: npm --prefix app/ui run build
       - run: cargo fmt --all -- --check
@@ -73,6 +54,7 @@ jobs:
       - run: cargo test --workspace
       - name: Pacchetti .deb e .tar.gz
         run: scripts/package-linux.sh
+      # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
       - uses: actions/upload-artifact@v5
         with:
           name: photo-cat-linux

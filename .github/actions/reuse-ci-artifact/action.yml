@@ -1,0 +1,53 @@
+name: Riuso artefatto CI
+description: >-
+  Scarica un artefatto dalla run di ci.yml del push dello stesso commit, attendendo che
+  finisca (`make release` invia branch e tag insieme: le due run partono in parallelo).
+  Se la run manca, fallisce o l'artefatto è scaduto, `reused` vale false e il job compila.
+
+inputs:
+  name:
+    description: nome dell'artefatto in ci.yml
+    required: true
+  path:
+    description: cartella in cui estrarlo
+    required: true
+  token:
+    description: token con permesso actions:read
+    required: true
+
+outputs:
+  reused:
+    description: '"true" se l''artefatto è stato scaricato'
+    value: ${{ steps.reuse.outputs.reused }}
+
+runs:
+  using: composite
+  steps:
+    - id: reuse
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ github.repository }}
+        NAME: ${{ inputs.name }}
+        DEST: ${{ inputs.path }}
+      run: |
+        reused=false
+        run_id=""
+        # La run del push può comparire qualche secondo dopo quella del tag.
+        for _ in 1 2 3 4 5 6; do
+          run_id=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --event push \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          [ -n "$run_id" ] && break
+          sleep 10
+        done
+        if [ -z "$run_id" ]; then
+          echo "Nessuna run CI per $GITHUB_SHA: si compila."
+        elif ! gh run watch "$run_id" --exit-status --interval 30 > /dev/null; then
+          echo "Run CI $run_id non riuscita: si compila."
+        elif gh run download "$run_id" --name "$NAME" --dir "$DEST"; then
+          echo "Riuso dell'artefatto $NAME dalla run CI $run_id."
+          reused=true
+        else
+          echo "Artefatto $NAME della run $run_id non disponibile (scaduto?): si compila."
+        fi
+        echo "reused=$reused" >> "$GITHUB_OUTPUT"
