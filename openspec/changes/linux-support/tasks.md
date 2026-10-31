@@ -28,11 +28,11 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 5. Build e archivio Linux
 
-- [ ] 5.1 Creare `app/src-tauri/tauri.linux.conf.json` con `bundle.targets: ["deb"]` e risorse `linux-x64` mappate su `runtime/` (design §3), e verificare che `npm --prefix app/ui run tauri -- build --bundles deb` produca lo staging `bundle/deb/*/data/usr/{bin,lib/photo-cat}` con `runtime/libonnxruntime.so` e `models/`.
-- [ ] 5.2 Scrivere `scripts/package-linux.sh`, che raccoglie in `target/release/dist/` il `.deb` e l'archivio `photo-cat-<versione>-linux-x64.tar.gz` ricavato dallo staging, ciascuno con il proprio `.sha256` con fine riga LF (design §5). Verifica: `sha256sum -c` passa su entrambi e l'eseguibile estratto dall'archivio in una cartella temporanea si avvia e trova le risorse (schermata Modelli AI con i modelli verificati).
+- [x] 5.1 Creare `app/src-tauri/tauri.linux.conf.json` con `bundle.targets: ["deb"]` e risorse `linux-x64` mappate su `runtime/` (design §3), e verificare che `npm --prefix app/ui run tauri -- build --bundles deb` produca lo staging `bundle/deb/*/data/usr/{bin,lib/photo-cat}` con `runtime/libonnxruntime.so` e `models/`.
+- [x] 5.2 Scrivere `scripts/package-linux.sh`, che raccoglie in `target/release/dist/` il `.deb` e l'archivio `photo-cat-<versione>-linux-x64.tar.gz` ricavato dallo staging, ciascuno con il proprio `.sha256` con fine riga LF (design §5). Verifica: `sha256sum -c` passa su entrambi e l'eseguibile estratto dall'archivio in una cartella temporanea si avvia e trova le risorse (schermata Modelli AI con i modelli verificati).
 - [ ] 5.3 Verificare il `.deb`: `dpkg-deb -I` mostra le dipendenze (WebKitGTK 4.1 ed eventualmente `libheif1`, design §5). Dopo `sudo apt install ./photo-cat_<versione>_amd64.deb` su questa macchina, photo-cat compare nel menu delle applicazioni, si avvia da lì con i modelli verificati e `sudo apt remove photo-cat` lo rimuove senza toccare `~/.local/share/photo-cat`.
-- [ ] 5.4 Aggiornare il `Makefile`: `make build` su Linux chiama `scripts/package-linux.sh`, su Windows resta NSIS, e `help` descrive entrambi. Verifica: `make build` su Linux produce `.deb`, archivio e checksum in `target/release/dist/`.
-- [ ] 5.5 Aggiornare `README.md` con i prerequisiti Linux per compilare (pacchetti apt di design §6), l'installazione del `.deb`, l'uso dell'archivio con le dipendenze da installare a mano (`libwebkit2gtk-4.1-0`, opzionale `libheif1`). Verifica: i comandi documentati funzionano da un clone pulito su questa macchina.
+- [x] 5.4 Aggiornare il `Makefile`: `make build` su Linux chiama `scripts/package-linux.sh`, su Windows resta NSIS, e `help` descrive entrambi. Verifica: `make build` su Linux produce `.deb`, archivio e checksum in `target/release/dist/`.
+- [x] 5.5 Aggiornare `README.md` con i prerequisiti Linux per compilare (pacchetti apt di design §6), l'installazione del `.deb`, l'uso dell'archivio con le dipendenze da installare a mano (`libwebkit2gtk-4.1-0`, opzionale `libheif1`). Verifica: i comandi documentati funzionano da un clone pulito su questa macchina.
 
 ## 6. CI e release
 
