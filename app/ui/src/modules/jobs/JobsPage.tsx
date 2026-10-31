@@ -70,7 +70,18 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           </span>
         </div>
       </td>
-      <td className="mono" style={{ padding: "10px 8px" }}>
+      <td
+        className="mono"
+        style={{ padding: "10px 8px" }}
+        title={
+          !phase.totalKnown && !isSource
+            ? t("jobs.provisionalTotal", {
+                processed: fmtInt(phase.done + phase.failed),
+                total: fmtInt(phase.total),
+              })
+            : undefined
+        }
+      >
         {phaseCount(phase, isSource, t)}
       </td>
       <td className="mono" style={{ padding: "10px 8px", color: "var(--pc-text-soft)" }}>

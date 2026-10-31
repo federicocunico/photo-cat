@@ -38,6 +38,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("schermata Job", () => {
+  it("spiega nel title il totale provvisorio durante la scansione", () => {
+    render(<Harness />);
+    act(() =>
+      emit(
+        "job",
+        job({
+          id: 8,
+          phases: [
+            phase("scansione", { state: "running", done: 1204, totalKnown: false, percent: null }),
+            phase("metadati", { done: 1171, total: 1204, totalKnown: false, percent: null }),
+          ],
+        }),
+      ),
+    );
+    const meta = screen.getByTestId("phase-metadati");
+    const count = within(meta).getByText("1171 / 1204…");
+    expect(count).toHaveAttribute(
+      "title",
+      "1171 elaborati su 1204 trovati finora: il totale cresce finché la scansione non è terminata",
+    );
+    expect(
+      within(screen.getByTestId("phase-scansione")).getByText("1204 trovati"),
+    ).not.toHaveAttribute("title");
+  });
+
   it("mostra fasi, percentuali, conteggi, ETA e controlli", () => {
     render(<Harness />);
     expect(screen.getByText("Nessun job. Avvia un import per iniziare.")).toBeInTheDocument();

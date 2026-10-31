@@ -127,6 +127,7 @@ function Thumb({
       </div>
       <div
         className="mono"
+        title={item.name}
         style={{
           height: CAPTION,
           padding: "6px 8px",

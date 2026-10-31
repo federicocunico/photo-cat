@@ -29,7 +29,7 @@ function Row({
     <button
       type="button"
       aria-pressed={active}
-      title={title}
+      title={title ?? label}
       onClick={onClick}
       className={mono ? "mono" : undefined}
       style={{
@@ -87,7 +87,10 @@ function CheckList({
             checked={selected.includes(f.value)}
             onChange={() => onToggle(f.value)}
           />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span
+            title={render(f.value)}
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {render(f.value)}
           </span>
           <span className="muted" style={{ marginLeft: "auto" }}>
@@ -144,7 +147,11 @@ export function LibrarySidebar() {
             key={source.id}
             mono
             title={source.path}
-            label={source.path.split(/[\\/]/).filter(Boolean).slice(-2).join("\\")}
+            label={source.path
+              .split(/[\\/]/)
+              .filter(Boolean)
+              .slice(-2)
+              .join(source.path.includes("\\") ? "\\" : "/")}
             count={items}
             active={(filter.sourceIds ?? []).includes(source.id)}
             onClick={() =>
