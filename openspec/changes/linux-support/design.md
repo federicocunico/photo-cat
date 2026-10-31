@@ -86,4 +86,15 @@ Nessuna migrazione di dati: su Linux la cartella dati è `~/.local/share/photo-c
 ## Open Questions
 
 - ~~Versione minima di libheif~~ Risolta (task 3.2): `heif.rs` usa 14 simboli, tutti presenti nella libheif 1.21.2 di Ubuntu 26.04, dove il test di decodifica completo passa. Il più recente è `heif_image_get_plane_readonly2`, che si fa risalire alla 1.20 per via indiretta (OpenImageIO usa la variante `get_plane2` da libheif 1.20.0); il dato non è confermato dalle release notes. Minimo dichiarato: 1.20. Ne segue che Ubuntu 24.04 (1.17) e 22.04 (1.12) ricadono sui soli metadati, con il suggerimento di installazione. Non è stato verificato su una 24.04 reale.
-- Esito della verifica WebGPU: non cambia questo change, eventualmente ne apre uno nuovo.
+- ~~Esito della verifica WebGPU~~ Risolta (task 7.1, 2026-10-31). Plugin `onnxruntime-ep-webgpu` 0.5.0 (PyPI, Microsoft, dichiarato per ORT ≥ 1.24.4) caricato con `Environment::register_ep_library` di `ort` rc.12 sopra il nostro `libonnxruntime.so` 1.24.4. Funziona: espone 2 dispositivi GPU (Intel UHD 630 e Radeon WX 5100 via Vulkan), uno per sessione, scelto con `WebGpuExecutionProvider.adapterIndex`. Gli output di YuNet, YOLOX e SFace coincidono con la CPU (differenza ≤ 1e-4); CLIP int8 si scosta fino al 2% del valore massimo. È però più lento della CPU (6 core fisici) in tutti i casi, anche con l'adattatore più veloce:
+
+  | Modello (inferenza media) | CPU | WebGPU adapter 0 | WebGPU adapter 1 |
+  |---|---|---|---|
+  | YuNet 640, batch 1 | 4,3 ms | 7,4 ms | 36,2 ms |
+  | YOLOX-Tiny 416, batch 1 | 16,4 ms | 20,7 ms | 83,2 ms |
+  | SFace 112, batch 1 | 6,4 ms | 18,8 ms | 40,7 ms |
+  | CLIP vision int8, batch 1 | 25,4 ms | 56,1 ms | 206,0 ms |
+  | CLIP vision int8, batch 8 | 180 ms | 280 ms | 562 ms |
+  | CLIP vision int8, batch 32 | 709 ms | 956 ms | 1627 ms |
+
+  **Decisione:** nessun change separato per ora. Su questo hardware la GPU non porta vantaggi; i modelli sono piccoli e CLIP è quantizzato int8, caso poco adatto a WebGPU. Riconsiderare con GPU più potenti, con modelli fp16/fp32 o se si adottano modelli più grandi. L'integrazione sarebbe fattibile senza toccare il runtime: plugin da circa 16 MB accanto a `libonnxruntime.so`, più `libvulkan.so.1` di sistema.

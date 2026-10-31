@@ -22,7 +22,7 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 4. Integrazione col desktop e organizzazione file
 
-- [ ] 4.1 Far sì che `open_logs` includa il percorso della cartella nell'errore quando il comando di apertura non parte (spec `diagnostics-logging`), e verificare manualmente su Linux che "Apri cartella log" apra il file manager. Verifica aggiuntiva: il test UI esistente `DiagnosticsPage.test.tsx` continua a passare (`npm --prefix app/ui test`).
+- [x] 4.1 Far sì che `open_logs` includa il percorso della cartella nell'errore quando il comando di apertura non parte (spec `diagnostics-logging`), e verificare manualmente su Linux che "Apri cartella log" apra il file manager. Verifica aggiuntiva: il test UI esistente `DiagnosticsPage.test.tsx` continua a passare (`npm --prefix app/ui test`).
 - [x] 4.2 Trasformare `developer_mode` in `Option<bool>` e adattare `decide()` (design §7), con unit test su `decide()` per: symlink negato su Windows senza Modalità sviluppatore (`symlink_privilege`), symlink negato su Linux (`symlink_denied`, testo senza "Windows"), symlink consentito. Verifica: `cargo test -p pc-organize` passa.
 - [x] 4.3 Eseguire `make test` completo su Linux e correggere eventuali test che falliscono solo su questa piattaforma (percorsi, maiuscole/minuscole, permessi). Verifica: `make test` termina con successo.
 
@@ -42,7 +42,7 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 7. Valutazione GPU su Linux
 
-- [ ] 7.1 Verifica a tempo (al massimo una giornata) del provider WebGPU di ONNX Runtime 1.24 su questa macchina: registrazione del plugin EP tramite `ort` rc.12, esecuzione di YuNet e CLIP quantizzato, confronto dei tempi con la CPU. Consegna: esito e numeri nella sezione Open Questions di `design.md`, e, se l'esito è positivo, la proposta di un change separato. Nessuna modifica al codice di produzione.
+- [x] 7.1 Verifica a tempo (al massimo una giornata) del provider WebGPU di ONNX Runtime 1.24 su questa macchina: registrazione del plugin EP tramite `ort` rc.12, esecuzione di YuNet e CLIP quantizzato, confronto dei tempi con la CPU. Consegna: esito e numeri nella sezione Open Questions di `design.md`, e, se l'esito è positivo, la proposta di un change separato. Nessuna modifica al codice di produzione.
 
 ## 8. Verifica d'insieme
 
