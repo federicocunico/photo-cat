@@ -85,5 +85,5 @@ Nessuna migrazione di dati: su Linux la cartella dati è `~/.local/share/photo-c
 
 ## Open Questions
 
-- Versione minima di libheif effettivamente richiesta dai simboli usati: si misura durante l'implementazione e non cambia l'approccio.
+- ~~Versione minima di libheif~~ Risolta (task 3.2): `heif.rs` usa 14 simboli, tutti presenti nella libheif 1.21.2 di Ubuntu 26.04, dove il test di decodifica completo passa. Il più recente è `heif_image_get_plane_readonly2`, che si fa risalire alla 1.20 per via indiretta (OpenImageIO usa la variante `get_plane2` da libheif 1.20.0); il dato non è confermato dalle release notes. Minimo dichiarato: 1.20. Ne segue che Ubuntu 24.04 (1.17) e 22.04 (1.12) ricadono sui soli metadati, con il suggerimento di installazione. Non è stato verificato su una 24.04 reale.
 - Esito della verifica WebGPU: non cambia questo change, eventualmente ne apre uno nuovo.

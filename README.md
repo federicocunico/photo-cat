@@ -11,6 +11,7 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 - Node.js ≥ 20 e npm
 - Windows: Microsoft Edge WebView2 Runtime (preinstallato su Windows 11) e Build Tools di Visual Studio (C++)
 - Linux: `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+  - per le foto HEIC: `libheif1` ≥ 1.20 e `libheif-plugin-libde265` (senza, gli HEIC vengono importati con i soli metadati)
 - macOS: Xcode Command Line Tools
 
 ## Sviluppo

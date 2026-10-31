@@ -17,14 +17,14 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 3. HEIC su Linux
 
-- [ ] 3.1 Rendere esplicito in `pc_ingest::heif` che fuori da Windows si usa la libheif di sistema. Il messaggio di libreria assente o di simbolo mancante deve suggerire di installare `libheif1` e indicare la versione minima. Verifica: test in `crates/pc-ingest/tests/heif.rs` con `PHOTOCAT_HEIF_LIBRARY` puntato a un file inesistente, che controlla il codice `UnsupportedFormat` e il testo del suggerimento.
-- [ ] 3.2 Misurare la versione minima di libheif richiesta dai simboli usati in `heif.rs` e verificare la decodifica di un HEIC di test con la libheif di Ubuntu 24.04 (`apt install libheif1 libheif-plugin-libde265`). Annotare il risultato in Open Questions del design e nel README.
+- [x] 3.1 Rendere esplicito in `pc_ingest::heif` che fuori da Windows si usa la libheif di sistema. Il messaggio di libreria assente o di simbolo mancante deve suggerire di installare `libheif1` e indicare la versione minima. Verifica: test in `crates/pc-ingest/tests/heif.rs` con `PHOTOCAT_HEIF_LIBRARY` puntato a un file inesistente, che controlla il codice `UnsupportedFormat` e il testo del suggerimento.
+- [x] 3.2 Misurare la versione minima di libheif richiesta dai simboli usati in `heif.rs` e verificare la decodifica di un HEIC di test con la libheif di Ubuntu 24.04 (`apt install libheif1 libheif-plugin-libde265`). Annotare il risultato in Open Questions del design e nel README.
 
 ## 4. Integrazione col desktop e organizzazione file
 
 - [ ] 4.1 Far sì che `open_logs` includa il percorso della cartella nell'errore quando il comando di apertura non parte (spec `diagnostics-logging`), e verificare manualmente su Linux che "Apri cartella log" apra il file manager. Verifica aggiuntiva: il test UI esistente `DiagnosticsPage.test.tsx` continua a passare (`npm --prefix app/ui test`).
-- [ ] 4.2 Trasformare `developer_mode` in `Option<bool>` e adattare `decide()` (design §7), con unit test su `decide()` per: symlink negato su Windows senza Modalità sviluppatore (`symlink_privilege`), symlink negato su Linux (`symlink_denied`, testo senza "Windows"), symlink consentito. Verifica: `cargo test -p pc-organize` passa.
-- [ ] 4.3 Eseguire `make test` completo su Linux e correggere eventuali test che falliscono solo su questa piattaforma (percorsi, maiuscole/minuscole, permessi). Verifica: `make test` termina con successo.
+- [x] 4.2 Trasformare `developer_mode` in `Option<bool>` e adattare `decide()` (design §7), con unit test su `decide()` per: symlink negato su Windows senza Modalità sviluppatore (`symlink_privilege`), symlink negato su Linux (`symlink_denied`, testo senza "Windows"), symlink consentito. Verifica: `cargo test -p pc-organize` passa.
+- [x] 4.3 Eseguire `make test` completo su Linux e correggere eventuali test che falliscono solo su questa piattaforma (percorsi, maiuscole/minuscole, permessi). Verifica: `make test` termina con successo.
 
 ## 5. Build e archivio Linux
 

@@ -240,10 +240,11 @@ pub fn preview(store: &Store, opts: &Options) -> AppResult<Preview> {
     )
 }
 
+/// Modalità sviluppatore di Windows (`None` altrove: i symlink non dipendono da privilegi).
 #[cfg(windows)]
-fn developer_mode() -> bool {
+fn developer_mode() -> Option<bool> {
     use std::os::windows::process::CommandExt;
-    std::process::Command::new("reg.exe")
+    let enabled = std::process::Command::new("reg.exe")
         .args([
             "query",
             r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock",
@@ -253,11 +254,12 @@ fn developer_mode() -> bool {
         .creation_flags(0x08000000)
         .output()
         .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("0x1"))
-        .unwrap_or(false)
+        .unwrap_or(false);
+    Some(enabled)
 }
 #[cfg(not(windows))]
-fn developer_mode() -> bool {
-    false
+fn developer_mode() -> Option<bool> {
+    None
 }
 #[cfg(windows)]
 fn symlink(source: &Path, dest: &Path) -> std::io::Result<()> {
@@ -317,7 +319,8 @@ pub struct LinkProbe {
     pub symlink: Option<bool>,
     pub hardlink: Option<bool>,
     pub cross_volume: bool,
-    pub developer_mode: bool,
+    /// Solo su Windows: `Some(false)` spiega un symlink negato con i privilegi mancanti.
+    pub developer_mode: Option<bool>,
 }
 
 /// Decide disponibilità, alternativa e motivo leggibile a partire dalle prove.
@@ -327,7 +330,7 @@ pub fn decide(method: Method, p: &LinkProbe) -> Preflight {
         Method::Copy=>(true,None),
         Method::Symlink=>match p.symlink{
             Some(true)=>(true,None),
-            _ if !p.developer_mode=>(false,Some(("symlink_privilege","I collegamenti simbolici richiedono la Modalità sviluppatore di Windows o privilegi di amministratore."))),
+            _ if p.developer_mode == Some(false)=>(false,Some(("symlink_privilege","I collegamenti simbolici richiedono la Modalità sviluppatore di Windows o privilegi di amministratore."))),
             _=>(false,Some(("symlink_denied","Collegamenti simbolici non consentiti su questa destinazione."))),
         },
         Method::Hardlink=>if hardlink_ok{(true,None)}else if p.cross_volume{(false,Some(("cross_volume","Gli hard link richiedono che sorgenti e destinazione siano sullo stesso volume.")))}else{(false,Some(("hardlink_unsupported","Hard link non supportati su questa destinazione.")))},
@@ -352,7 +355,7 @@ pub fn decide(method: Method, p: &LinkProbe) -> Preflight {
     Preflight {
         available,
         alternative,
-        developer_mode: p.developer_mode,
+        developer_mode: p.developer_mode.unwrap_or(false),
         reason: reason.map(|(code, _)| code.to_string()),
         message,
     }
