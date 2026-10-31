@@ -32,6 +32,7 @@ pub fn init(dll: &Path) -> AppResult<String> {
                 dll.display()
             ));
         }
+        probe_library(dll)?;
         match ort::init_from(dll) {
             Ok(builder) => {
                 builder.with_name("photo-cat").commit();
@@ -44,6 +45,36 @@ pub fn init(dll: &Path) -> AppResult<String> {
     });
     res.clone()
         .map_err(|e| AppError::new(ErrorCode::ModelUnavailable, e))
+}
+
+/// Ripete i controlli di `ort::init_from` prima di chiamarlo: in ort 2.0.0-rc.12 ogni
+/// errore di caricamento costruisce un `ort::Error`, che rientra nel caricamento in corso
+/// e blocca il thread per sempre (es. una DLL Windows su Linux, o una versione troppo vecchia).
+fn probe_library(dll: &Path) -> Result<(), String> {
+    let fail = |e: &dyn std::fmt::Display| format!("{}: {e}", dll.display());
+    // SAFETY: è la stessa libreria che ort caricherà subito dopo.
+    let lib = unsafe { libloading::Library::new(dll) }.map_err(|e| fail(&e))?;
+    let get_base: libloading::Symbol<unsafe extern "C" fn() -> *const ort::sys::OrtApiBase> =
+        unsafe { lib.get(b"OrtGetApiBase") }.map_err(|e| fail(&e))?;
+    let base = unsafe { get_base() };
+    if base.is_null() {
+        return Err(fail(&"OrtGetApiBase ha restituito un puntatore nullo"));
+    }
+    let version = unsafe { std::ffi::CStr::from_ptr(((*base).GetVersionString)()) }
+        .to_string_lossy()
+        .into_owned();
+    let minor = version
+        .split('.')
+        .nth(1)
+        .and_then(|m| m.parse::<u32>().ok())
+        .unwrap_or(0);
+    if minor < ort::MINOR_VERSION {
+        return Err(fail(&format!(
+            "versione {version} non supportata, serve almeno 1.{}",
+            ort::MINOR_VERSION
+        )));
+    }
+    Ok(())
 }
 
 pub fn is_initialized() -> bool {

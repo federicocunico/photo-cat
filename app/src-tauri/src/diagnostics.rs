@@ -26,19 +26,20 @@ pub async fn export_diagnostics(state: State<'_, AppState>, destination: String)
 #[tauri::command]
 #[specta::specta]
 pub fn open_logs(state: State<'_, AppState>) -> AppResult<()> {
-    #[cfg(windows)]
-    {
-        std::process::Command::new("explorer.exe")
-            .arg(state.paths.logs())
-            .spawn()?;
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = &state;
+    let opener = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(unix) {
+        "xdg-open"
+    } else {
         return Err(AppError::invalid_input(
-            "apertura cartella disponibile su Windows",
+            "impossibile aprire la cartella dei log su questo sistema operativo",
         ));
-    }
+    };
+    std::process::Command::new(opener)
+        .arg(state.paths.logs())
+        .spawn()?;
     Ok(())
 }
 /// Seleziona solo i percorsi falliti del job/fase, senza riscan completo.

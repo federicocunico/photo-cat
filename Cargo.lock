@@ -3262,6 +3262,7 @@ name = "pc-models"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "libloading 0.9.0",
  "ndarray",
  "ort",
  "parking_lot",
