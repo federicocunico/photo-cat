@@ -37,8 +37,8 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 ## 6. CI e release
 
 - [ ] 6.1 Aggiungere a `.github/workflows/ci.yml` un job `linux` su `ubuntu-22.04` (dipendenze apt, `rust-cache` con chiave separata, fmt, clippy, `cargo test --workspace`, build dell'archivio con upload dell'artefatto) e aggiornare il commento iniziale. Verifica: pipeline verde su una PR del branch.
-- [ ] 6.2 Trasformare il job `build` di `release.yml` in una matrice Windows + Linux. Il controllo tag/versione resta sul runner Windows, e `publish` scarica gli artefatti di entrambi e li allega alla release. Verifica: `act` oppure un tag di prova su un fork o con `workflow_dispatch` produce una release, o una bozza, con EXE, `.deb`, archivio Linux e i tre `.sha256`.
-- [ ] 6.3 Allineare le delta di `specs/` a quanto implementato (nomi dei file d'archivio, dipendenze, messaggi) e verificare che `openspec validate linux-support --strict` passi.
+- [ ] 6.2 Aggiungere a `release.yml` un job `build-linux` accanto al job Windows. Il controllo tag/versione resta sul runner Windows, e `publish` scarica gli artefatti di entrambi e li allega alla release. Verifica: `act` oppure un tag di prova su un fork o con `workflow_dispatch` produce una release, o una bozza, con EXE, `.deb`, archivio Linux e i tre `.sha256`.
+- [x] 6.3 Allineare le delta di `specs/` a quanto implementato (nomi dei file d'archivio, dipendenze, messaggi) e verificare che `openspec validate linux-support --strict` passi.
 
 ## 7. Valutazione GPU su Linux
 

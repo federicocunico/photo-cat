@@ -1,7 +1,8 @@
 name: CI
 
-# Pipeline volutamente veloce: compila soltanto l'installer Windows.
-# I test (Rust, modelli reali, UI) si eseguono in locale: vedi README.
+# Pipeline veloce: installer Windows e, su Linux, controlli Rust e pacchetti.
+# Su Linux girano fmt, clippy e i test Rust (l'unica difesa contro le regressioni
+# specifiche della piattaforma); test con i modelli reali e test UI restano locali.
 
 on:
   push:
@@ -40,5 +41,41 @@ jobs:
         with:
           name: photo-cat-setup
           path: target/release/bundle/nsis/*-setup.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  linux:
+    # 22.04: glibc 2.35 e WebKitGTK 4.1, il binario gira anche su distro meno recenti.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Dipendenze di sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/ui/package-lock.json
+      - run: npm ci --prefix app/ui
+      # Il crate photo-cat incorpora il frontend compilato: serve prima di clippy e test.
+      - run: npm --prefix app/ui run build
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Pacchetti .deb e .tar.gz
+        run: scripts/package-linux.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photo-cat-linux
+          path: target/release/dist/*
           retention-days: 7
           if-no-files-found: error
