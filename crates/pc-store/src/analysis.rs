@@ -149,4 +149,57 @@ mod tests {
             0
         );
     }
+
+    #[test]
+    fn reanalysis_leaves_user_tags_unchanged_and_separate_from_ai_labels() {
+        let mut c = Connection::open_in_memory().unwrap();
+        crate::migrate::migrate(&mut c, None).unwrap();
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1)",[]).unwrap();
+        // Un tag utente con lo stesso testo di un'etichetta AI resta comunque un tag.
+        crate::bulk::add_tag(&c, "natura", &[1]).unwrap();
+        crate::bulk::add_tag(&c, "Vacanze 2023", &[1]).unwrap();
+        let groups = vec!["subject".into(), "environment".into()];
+        let run = |value: &str, model: &str, taxonomy: i64| {
+            let labels = vec![
+                AutoLabel {
+                    group: "subject".into(),
+                    value: value.into(),
+                    score: 0.9,
+                },
+                AutoLabel {
+                    group: "environment".into(),
+                    value: "montagna".into(),
+                    score: 0.8,
+                },
+            ];
+            classification(&c, 1, &groups, &labels, &[0.0; 512], model, taxonomy).unwrap();
+        };
+        run("natura", "v1", 1);
+        // Rianalisi con un modello nuovo e un risultato diverso.
+        run("ritratto", "v2", 2);
+        let detail = crate::detail::media_detail(&c, 1).unwrap();
+        assert_eq!(detail.tags, vec!["natura", "Vacanze 2023"]);
+        let labels: Vec<(String, String)> = detail
+            .labels
+            .iter()
+            .map(|l| (l.group.clone(), l.origin.clone()))
+            .collect();
+        assert_eq!(
+            labels,
+            vec![
+                ("environment".to_string(), "auto".to_string()),
+                ("subject".to_string(), "auto".to_string())
+            ]
+        );
+        assert!(detail.labels.iter().all(|l| l.value != "Vacanze 2023"));
+        assert_eq!(
+            detail
+                .labels
+                .iter()
+                .find(|l| l.group == "subject")
+                .unwrap()
+                .value,
+            "ritratto"
+        );
+    }
 }

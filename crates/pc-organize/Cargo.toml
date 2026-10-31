@@ -24,3 +24,4 @@ specta = ["dep:specta","pc-store/specta"]
 
 [dev-dependencies]
 pc-governor.workspace = true
+pc-diag.workspace = true

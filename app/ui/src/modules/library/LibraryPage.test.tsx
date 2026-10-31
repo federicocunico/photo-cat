@@ -44,6 +44,7 @@ beforeEach(() => {
       next: null,
     })),
     libraryCount: vi.fn(async () => 12),
+    getTaxonomy: vi.fn(async () => ({ version: 1, groups: [] })),
     libraryFacets: vi.fn(async () => ({
       labels: [
         [

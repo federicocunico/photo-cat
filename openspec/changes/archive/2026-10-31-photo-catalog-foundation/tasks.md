@@ -123,10 +123,10 @@ Ordine per milestone verticali (vedi design.md, Risks): ogni gruppo lascia l'app
 
 ## 14. Integrazione e rilascio
 
-- [ ] 14.1 Test end-to-end su una libreria di 10.000 foto reali in Windows Sandbox con 8 GB e sorgente reale mappata in sola lettura: import + AI + volti completati, RAM dell'app sempre entro il budget, errori per file registrati e job ripreso dopo kill; nessuna modifica, cancellazione o spostamento degli originali
+- [x] 14.1 Test end-to-end su una libreria di 10.000 foto reali in Windows Sandbox con 8 GB e sorgente reale mappata in sola lettura: import + AI + volti completati, RAM dell'app sempre entro il budget, errori per file registrati e job ripreso dopo kill; nessuna modifica, cancellazione o spostamento degli originali
 - [x] 14.2 Verificare l'esecuzione offline completa con modelli già presenti (nessuna richiesta di rete durante l'analisi, controllo con monitor di rete)
 - [x] 14.3 Configurare il bundle Tauri (NSIS/MSI con onnxruntime incluso) e verificare installazione e primo avvio in Windows Sandbox pulita
-- [ ] 14.4 Eseguire `openspec validate photo-catalog-foundation --strict` e verificare che ogni requisito delle spec sia coperto da almeno un test o una verifica manuale documentata
+- [x] 14.4 Eseguire `openspec validate photo-catalog-foundation --strict` e verificare che ogni requisito delle spec sia coperto da almeno un test o una verifica manuale documentata
 - [x] 14.5 Creare la pipeline di rilascio automatico su GitHub: su tag di versione `v*` compilare il setup Windows, creare la GitHub Release e allegare l'installer EXE con checksum; verificare la creazione e gli asset della release
 
 ## Workflow follow-up

@@ -3,7 +3,7 @@
 mod catalogs;
 mod commands;
 mod demo;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "e2e"))]
 mod dev;
 mod diagnostics;
 mod events;
@@ -338,7 +338,7 @@ pub fn run() {
                     st.check_all();
                 });
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "e2e"))]
             dev::on_startup(&store, &jobs);
 
             app.manage(AppState {

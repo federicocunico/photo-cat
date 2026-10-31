@@ -1,6 +1,7 @@
-//! Aiuti solo per lo sviluppo (compilati nelle build di debug), attivati da variabili d'ambiente:
+//! Aiuti per lo sviluppo e le prove end-to-end (build di debug o feature `e2e`), attivati da variabili d'ambiente:
 //! - `PHOTO_CAT_DEMO=1`: avvia un job dimostrativo;
-//! - `PHOTO_CAT_DEV_IMPORT=<cartella>`: aggiunge la cartella come sorgente e la importa;
+//! - `PHOTO_CAT_DEV_IMPORT=<cartella>[;<cartella>...]`: aggiunge le cartelle come sorgenti e le importa;
+//! - `PHOTO_CAT_DEV_RESUME=1`: riprende i job interrotti (prova di ripresa dopo kill) senza nuovi import;
 //! - `PHOTO_CAT_DEV_SEED=<n>`: con catalogo vuoto, inserisce `n` elementi sintetici (prove di scorrimento).
 //!
 //! Da usare con `PHOTO_CAT_DATA_DIR` per non toccare il catalogo reale.
@@ -20,8 +21,19 @@ pub fn on_startup(store: &Store, jobs: &JobManager) {
             serde_json::json!({ "items": 3000, "failEvery": 400 }),
         );
     }
-    if let Some(dir) = std::env::var_os("PHOTO_CAT_DEV_IMPORT") {
-        let path = dir.to_string_lossy().to_string();
+    if std::env::var_os("PHOTO_CAT_DEV_RESUME").is_some() {
+        let interrupted = pc_jobs::persist::recent(store, 100).unwrap_or_default();
+        for job in interrupted
+            .into_iter()
+            .filter(|j| j.state == pc_jobs::persist::JobState::Interrupted)
+        {
+            let _ = jobs.resume_interrupted(job.id);
+        }
+        return;
+    }
+    let dirs = std::env::var("PHOTO_CAT_DEV_IMPORT").unwrap_or_default();
+    for path in dirs.split(';').map(str::trim).filter(|p| !p.is_empty()) {
+        let path = path.to_string();
         let res = store.write(move |c| {
             let existing = repo::source::list(c)?.into_iter().find(|s| s.path == path);
             match existing {
