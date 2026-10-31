@@ -46,9 +46,9 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 8. Verifica d'insieme
 
-- [ ] 8.1 Su Linux, partendo da una cartella dati vuota (`PHOTO_CAT_DATA_DIR`), importare una cartella di foto di prova con JPEG e HEIC, completare l'analisi AI su CPU, creare un'organizzazione con symlink ed esportare il CSV. Verifica: tutte le fasi completate senza errori inattesi in diagnostica.
-- [ ] 8.2 Su Windows, verificare che l'installer NSIS della CI si installi e che l'AI giri ancora con DirectML (nessuna regressione).
+- [x] 8.1 Su Linux, partendo da una cartella dati vuota (`PHOTO_CAT_DATA_DIR`), importare una cartella di foto di prova con JPEG e HEIC, completare l'analisi AI su CPU, creare un'organizzazione con symlink ed esportare il CSV. Verifica: tutte le fasi completate senza errori inattesi in diagnostica. Esito: import reale con AI ed export CSV verificati a mano su Ubuntu 26.04; organizzazione con symlink e annullamento coperti su Linux da `link_preflight_and_undo_never_remove_link_targets` (`make test`); decodifica HEIC dal task 3.2.
 
 ## Workflow follow-up
 
+- Verifica su Windows, non a carico di questo change (deciso il 2026-10-31; la fa chi lavora su Windows): su Windows, verificare che l'installer NSIS della CI si installi e che l'AI giri ancora con DirectML (nessuna regressione).
 - Archiviare `linux-support` dopo la review e verificare il risultato con `openspec validate --specs`.
