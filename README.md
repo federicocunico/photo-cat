@@ -10,19 +10,20 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 - Rust stable ≥ 1.90 (`rustup`), con `rustfmt` e `clippy`
 - Node.js ≥ 20 e npm
 - Windows: Microsoft Edge WebView2 Runtime (preinstallato su Windows 11) e Build Tools di Visual Studio (C++)
-- Linux: `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+- Linux (Debian/Ubuntu): `sudo apt install build-essential libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
+  - per le foto HEIC: `libheif1` ≥ 1.20 e `libheif-plugin-libde265` (senza, gli HEIC vengono importati con i soli metadati)
 - macOS: Xcode Command Line Tools
 
 ## Sviluppo
 
-Scorciatoie (GNU Make, da cmd o Git Bash):
+Scorciatoie (GNU Make: su Windows da cmd o Git Bash, su Linux dal terminale):
 
 | Comando | Cosa fa |
 |---|---|
 | `make dev` (o `make run`) | avvio locale in debug: Vite + finestra Tauri con ricarica |
-| `make build` | test di build: setup NSIS in `target/release/bundle/nsis`, come la CI |
+| `make build` | test di build come la CI: setup NSIS in `target/release/bundle/nsis` su Windows, `.deb` e `.tar.gz` con SHA-256 in `target/release/dist` su Linux |
 | `make test` | fmt, clippy, test Rust e UI (i test non girano in CI) |
-| `make release` | crea e pubblica il tag `v<versione>` di `tauri.conf.json`: la GitHub Action pubblica la release con installer e SHA-256 |
+| `make release` | crea e pubblica il tag `v<versione>` di `tauri.conf.json`: la GitHub Action pubblica la release con installer Windows, pacchetti Linux e SHA-256 |
 
 Per una nuova versione aggiornare prima `version` in `Cargo.toml` e in `app/src-tauri/tauri.conf.json` (devono coincidere: la pipeline lo verifica).
 
@@ -43,6 +44,17 @@ cargo build --workspace
 cargo test --workspace
 ```
 
+## Installazione su Linux
+
+Le release includono, per Linux x86_64:
+
+- `photo-cat_<versione>_amd64.deb` per Debian/Ubuntu: `sudo apt install ./photo-cat_<versione>_amd64.deb` installa anche le dipendenze e aggiunge photo-cat al menu delle applicazioni (categoria Fotografia). Si rimuove con `sudo apt remove photo-cat`; i dati in `~/.local/share/photo-cat` restano.
+- `photo-cat-<versione>-linux-x64.tar.gz` per le altre distro: si estrae dove si vuole e si avvia `bin/photo-cat`. Servono WebKitGTK 4.1 e GTK 3 del sistema (su Debian/Ubuntu `libwebkit2gtk-4.1-0`) e glibc ≥ 2.35.
+
+In entrambi i casi la decodifica HEIC usa la libheif di sistema (vedi Prerequisiti). L'AI gira su CPU: il runtime ONNX per Linux è incluso.
+
+Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
+
 ## Qualità
 
 ```sh
@@ -56,7 +68,7 @@ npm --prefix app/ui test
 
 ## Modelli inclusi e verifica
 
-I modelli e il runtime ONNX per Windows sono inclusi in `assets/` e nell'installer;
+I modelli e il runtime ONNX per Windows e Linux sono inclusi in `assets/`, nell'installer e nei pacchetti;
 fonti e licenze sono documentate in [assets/README.md](assets/README.md).
 All'avvio la verifica e l'eventuale ripristino/download avvengono in background.
 La schermata **Modelli AI** permette di verificare, installare un file locale,
@@ -64,7 +76,7 @@ eseguire i self-test e scegliere provider e profilo di memoria. Il provider
 predefinito è CPU; gli acceleratori disponibili sono selezionabili e, in caso
 di errore di inizializzazione, si torna alla CPU registrando il motivo.
 
-Su Windows, per eseguire anche i test con i pesi e le immagini reali inclusi:
+Su Windows e su Linux, per eseguire anche i test con i pesi e le immagini reali inclusi:
 
 ```sh
 cargo test -p pc-models -p pc-ai --features model-tests

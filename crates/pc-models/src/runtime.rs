@@ -23,7 +23,7 @@ pub enum Provider {
 
 static INIT: OnceLock<Result<String, String>> = OnceLock::new();
 
-/// Carica `onnxruntime.dll` (una sola volta per processo). Restituisce la versione.
+/// Carica la libreria ONNX Runtime (una sola volta per processo). Restituisce la versione.
 pub fn init(dll: &Path) -> AppResult<String> {
     let res = INIT.get_or_init(|| {
         preload_vc_runtime(dll);
@@ -33,6 +33,7 @@ pub fn init(dll: &Path) -> AppResult<String> {
                 dll.display()
             ));
         }
+        probe_library(dll)?;
         match ort::init_from(dll) {
             Ok(builder) => {
                 builder.with_name("photo-cat").commit();
@@ -47,32 +48,108 @@ pub fn init(dll: &Path) -> AppResult<String> {
         .map_err(|e| AppError::new(ErrorCode::ModelUnavailable, e))
 }
 
+/// Ripete i controlli di `ort::init_from` prima di chiamarlo: in ort 2.0.0-rc.12 ogni
+/// errore di caricamento costruisce un `ort::Error`, che rientra nel caricamento in corso
+/// e blocca il thread per sempre (es. una DLL Windows su Linux, o una versione troppo vecchia).
+/// Quando si aggiorna `ort`, verificare se il deadlock è stato corretto prima di toglierla.
+fn probe_library(dll: &Path) -> Result<(), String> {
+    let fail = |e: &dyn std::fmt::Display| format!("{}: {e}", dll.display());
+    // SAFETY: è la stessa libreria che ort caricherà subito dopo.
+    let lib = unsafe { libloading::Library::new(dll) }.map_err(|e| fail(&e))?;
+    let get_base: libloading::Symbol<unsafe extern "C" fn() -> *const ort::sys::OrtApiBase> =
+        unsafe { lib.get(b"OrtGetApiBase") }.map_err(|e| fail(&e))?;
+    let base = unsafe { get_base() };
+    if base.is_null() {
+        return Err(fail(&"OrtGetApiBase ha restituito un puntatore nullo"));
+    }
+    let version = unsafe { std::ffi::CStr::from_ptr(((*base).GetVersionString)()) }
+        .to_string_lossy()
+        .into_owned();
+    let minor = version
+        .split('.')
+        .nth(1)
+        .and_then(|m| m.parse::<u32>().ok())
+        .unwrap_or(0);
+    if minor < ort::MINOR_VERSION {
+        return Err(fail(&format!(
+            "versione {version} non supportata, serve almeno 1.{}",
+            ort::MINOR_VERSION
+        )));
+    }
+    Ok(())
+}
+
 pub fn is_initialized() -> bool {
     matches!(INIT.get(), Some(Ok(_)))
 }
 
+/// Perché un provider GPU non è utilizzabile (mostrato all'utente accanto alla scelta).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum UnavailableReason {
+    /// Il provider esiste solo su un altro sistema operativo (es. DirectML fuori da Windows).
+    OtherPlatform,
+    /// Il runtime distribuito con l'app non lo include.
+    NotInRuntime,
+    /// ONNX Runtime non è caricato: nessuna analisi AI disponibile.
+    RuntimeMissing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct UnavailableProvider {
+    pub provider: Provider,
+    pub reason: UnavailableReason,
+}
+
+fn gpu_status(provider: Provider) -> Result<(), UnavailableReason> {
+    let supported = match provider {
+        Provider::DirectMl => ep::DirectML::default().supported_by_platform(),
+        Provider::Cuda => ep::CUDA::default().supported_by_platform(),
+        Provider::CoreMl => ep::CoreML::default().supported_by_platform(),
+        Provider::Cpu => return Ok(()),
+    };
+    if !supported {
+        return Err(UnavailableReason::OtherPlatform);
+    }
+    if !is_initialized() {
+        return Err(UnavailableReason::RuntimeMissing);
+    }
+    // Interroga il runtime: va chiamato solo dopo un `init` riuscito.
+    let available = match provider {
+        Provider::DirectMl => ep::DirectML::default().is_available(),
+        Provider::Cuda => ep::CUDA::default().is_available(),
+        Provider::CoreMl => ep::CoreML::default().is_available(),
+        Provider::Cpu => unreachable!(),
+    };
+    if available.unwrap_or(false) {
+        Ok(())
+    } else {
+        Err(UnavailableReason::NotInRuntime)
+    }
+}
+
+const GPU_PROVIDERS: [Provider; 3] = [Provider::DirectMl, Provider::Cuda, Provider::CoreMl];
+
 /// Provider disponibili su questa macchina (la CPU c'è sempre).
 pub fn available_providers() -> Vec<Provider> {
     let mut v = vec![Provider::Cpu];
-    if is_initialized()
-        && ep::DirectML::default().supported_by_platform()
-        && ep::DirectML::default().is_available().unwrap_or(false)
-    {
-        v.push(Provider::DirectMl);
-    }
-    if is_initialized()
-        && ep::CUDA::default().supported_by_platform()
-        && ep::CUDA::default().is_available().unwrap_or(false)
-    {
-        v.push(Provider::Cuda);
-    }
-    if is_initialized()
-        && ep::CoreML::default().supported_by_platform()
-        && ep::CoreML::default().is_available().unwrap_or(false)
-    {
-        v.push(Provider::CoreMl);
-    }
+    v.extend(GPU_PROVIDERS.into_iter().filter(|p| gpu_status(*p).is_ok()));
     v
+}
+
+/// Provider GPU non utilizzabili, con il motivo.
+pub fn unavailable_providers() -> Vec<UnavailableProvider> {
+    GPU_PROVIDERS
+        .into_iter()
+        .filter_map(|provider| {
+            gpu_status(provider)
+                .err()
+                .map(|reason| UnavailableProvider { provider, reason })
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -169,80 +246,17 @@ pub fn load(model: &Path, opts: &SessionOptions) -> AppResult<(Session, Provider
     Ok((session, Provider::Cpu))
 }
 
-/// Percorso della DLL negli asset del repository (test e sviluppo).
-pub fn dev_dll_path() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/runtime/win-x64/onnxruntime.dll")
+/// Percorso del runtime negli asset del repository per la piattaforma corrente (test e sviluppo).
+pub fn dev_runtime_path() -> std::path::PathBuf {
+    let dir = pc_core::platform::asset_dir().unwrap_or("non-distribuito");
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/runtime")
+        .join(dir)
+        .join(pc_core::platform::onnxruntime_file())
 }
 
 pub fn dev_models_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models")
-}
-
-#[cfg(all(test, feature = "model-tests", windows))]
-mod tests {
-    use super::*;
-
-    fn yunet() -> std::path::PathBuf {
-        dev_models_dir().join("yunet/face_detection_yunet_2023mar.onnx")
-    }
-
-    #[test]
-    fn loads_runtime_and_runs_on_cpu() {
-        let v = init(&dev_dll_path()).unwrap();
-        assert!(v.contains("ORT"), "{v}");
-        let providers = available_providers();
-        eprintln!("provider disponibili: {providers:?}");
-        assert!(providers.contains(&Provider::Cpu));
-        let (s, p) = load(
-            &yunet(),
-            &SessionOptions {
-                preferred: Preferred::Cpu,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        assert_eq!(p, Provider::Cpu);
-        assert!(!s.inputs().is_empty());
-    }
-
-    #[test]
-    fn auto_uses_directml_when_available() {
-        init(&dev_dll_path()).unwrap();
-        let (_s, p) = load(
-            &yunet(),
-            &SessionOptions {
-                preferred: Preferred::Auto,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let expected = available_providers()
-            .into_iter()
-            .find(|p| *p != Provider::Cpu)
-            .unwrap_or(Provider::Cpu);
-        assert_eq!(p, expected);
-    }
-
-    #[test]
-    fn gpu_failure_falls_back_to_cpu() {
-        init(&dev_dll_path()).unwrap();
-        for preferred in [Preferred::DirectMl, Preferred::Cuda, Preferred::CoreMl] {
-            let opts = SessionOptions {
-                preferred,
-                force_gpu_failure: true,
-                ..Default::default()
-            };
-            let (_s, p) = load(&yunet(), &opts).unwrap();
-            assert_eq!(p, Provider::Cpu);
-        }
-    }
-
-    #[test]
-    fn missing_model_is_an_error() {
-        init(&dev_dll_path()).unwrap();
-        let err = load(Path::new("nope.onnx"), &SessionOptions::default()).unwrap_err();
-        assert_eq!(err.code, ErrorCode::ModelUnavailable);
-    }
 }
 
 /// Runtime Visual C++ richiesto da `onnxruntime.dll`, in ordine di dipendenza.
@@ -278,3 +292,112 @@ fn preload_vc_runtime(dll: &Path) {
 
 #[cfg(not(windows))]
 fn preload_vc_runtime(_dll: &Path) {}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+
+    #[test]
+    fn providers_of_other_platforms_are_unavailable_with_reason() {
+        let other = |p| UnavailableProvider {
+            provider: p,
+            reason: UnavailableReason::OtherPlatform,
+        };
+        let list = unavailable_providers();
+        if !cfg!(windows) {
+            assert!(list.contains(&other(Provider::DirectMl)), "{list:?}");
+        }
+        if !cfg!(target_vendor = "apple") {
+            assert!(list.contains(&other(Provider::CoreMl)), "{list:?}");
+        }
+    }
+
+    #[test]
+    fn probe_rejects_file_that_is_not_a_library() {
+        let dir = tempfile::tempdir().unwrap();
+        let fake = dir.path().join("onnxruntime.dll");
+        std::fs::write(&fake, b"non sono una libreria").unwrap();
+        let err = probe_library(&fake).unwrap_err();
+        assert!(err.contains("onnxruntime.dll"), "{err}");
+    }
+}
+
+#[cfg(all(test, feature = "model-tests"))]
+mod tests {
+    use super::*;
+
+    fn yunet() -> std::path::PathBuf {
+        dev_models_dir().join("yunet/face_detection_yunet_2023mar.onnx")
+    }
+
+    #[test]
+    fn loads_runtime_and_runs_on_cpu() {
+        let v = init(&dev_runtime_path()).unwrap();
+        assert!(v.contains("ORT"), "{v}");
+        let providers = available_providers();
+        eprintln!("provider disponibili: {providers:?}");
+        assert!(providers.contains(&Provider::Cpu));
+        let (s, p) = load(
+            &yunet(),
+            &SessionOptions {
+                preferred: Preferred::Cpu,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(p, Provider::Cpu);
+        assert!(!s.inputs().is_empty());
+    }
+
+    #[test]
+    fn auto_uses_directml_when_available() {
+        init(&dev_runtime_path()).unwrap();
+        let (_s, p) = load(
+            &yunet(),
+            &SessionOptions {
+                preferred: Preferred::Auto,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let expected = available_providers()
+            .into_iter()
+            .find(|p| *p != Provider::Cpu)
+            .unwrap_or(Provider::Cpu);
+        assert_eq!(p, expected);
+    }
+
+    #[test]
+    fn gpu_failure_falls_back_to_cpu() {
+        init(&dev_runtime_path()).unwrap();
+        for preferred in [Preferred::DirectMl, Preferred::Cuda, Preferred::CoreMl] {
+            let opts = SessionOptions {
+                preferred,
+                force_gpu_failure: true,
+                ..Default::default()
+            };
+            let (_s, p) = load(&yunet(), &opts).unwrap();
+            assert_eq!(p, Provider::Cpu);
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn directml_preference_falls_back_to_cpu_outside_windows() {
+        init(&dev_runtime_path()).unwrap();
+        assert!(!available_providers().contains(&Provider::DirectMl));
+        let opts = SessionOptions {
+            preferred: Preferred::DirectMl,
+            ..Default::default()
+        };
+        let (_s, p) = load(&yunet(), &opts).unwrap();
+        assert_eq!(p, Provider::Cpu);
+    }
+
+    #[test]
+    fn missing_model_is_an_error() {
+        init(&dev_runtime_path()).unwrap();
+        let err = load(Path::new("nope.onnx"), &SessionOptions::default()).unwrap_err();
+        assert_eq!(err.code, ErrorCode::ModelUnavailable);
+    }
+}

@@ -49,6 +49,11 @@ pub enum Postprocessing {
 }
 
 impl Role {
+    /// Il modello è eseguito da ONNX Runtime (tokenizer e gazetteer no).
+    pub fn uses_onnx(self) -> bool {
+        !matches!(self, Self::Tokenizer | Self::Gazetteer)
+    }
+
     pub fn processing(self) -> (Preprocessing, Postprocessing) {
         use Postprocessing as Post;
         use Preprocessing as Pre;

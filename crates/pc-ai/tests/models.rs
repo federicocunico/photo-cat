@@ -1,6 +1,6 @@
 //! Test semantici sui modelli reali e sulle immagini di `assets/selftest`.
 //! `cargo test -p pc-ai --features model-tests`
-#![cfg(all(feature = "model-tests", windows))]
+#![cfg(feature = "model-tests")]
 
 use pc_ai::{clip, faces, persons};
 use pc_core::config::ExecutionProvider;
@@ -14,7 +14,7 @@ fn asset(rel: &str) -> PathBuf {
 }
 
 fn session(model: &str) -> ort::session::Session {
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let opts = SessionOptions {
         preferred: ExecutionProvider::Cpu,
         intra_threads: 4,
@@ -125,7 +125,7 @@ fn default_taxonomy_classifies_mountain_and_persists_embedding() {
     use pc_ai::{classify, taxonomy::Taxonomy, text_cache};
     use pc_models::{pool::ModelPool, store::ModelStore, Manifest};
     use std::sync::Arc;
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let db = pc_store::Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
     let store = Arc::new(ModelStore::new(
@@ -185,7 +185,7 @@ fn model_major_releases_each_session_before_loading_next_pass() {
     use pc_ai::schedule::{self, ModelEvent, ModelPass};
     use pc_models::{pool::ModelPool, store::ModelStore, Manifest};
     use std::sync::Arc;
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let mut manifest = Manifest::builtin();
     manifest
@@ -246,7 +246,7 @@ fn model_major_releases_each_session_before_loading_next_pass() {
 fn usable_faces_are_filtered_embedded_and_saved() {
     use pc_models::{pool::ModelPool, store::ModelStore, Manifest};
     use std::sync::Arc;
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let mut manifest = Manifest::builtin();
     manifest
@@ -308,7 +308,7 @@ fn disabled_face_recognition_saves_no_faces_but_still_counts_people() {
     impl ProgressSink for Sink {
         fn on_progress(&self, _: &JobSnapshot) {}
     }
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     // Riconoscimento disattivato nella configurazione e nella policy (come all'avvio dell'app),
     // e solo nella policy (disattivazione durante l'esecuzione).
     for config_enabled in [false, true] {

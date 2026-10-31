@@ -3,4 +3,5 @@
 assets/** -text
 *.onnx binary
 *.dll binary
+*.so binary
 *.heic binary

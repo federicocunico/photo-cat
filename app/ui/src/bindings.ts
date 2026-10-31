@@ -582,6 +582,8 @@ export type SystemInfo = {
 	system: SystemSnapshot,
 	budget: Budget,
 	providers: Provider[],
+	/**  Provider GPU non utilizzabili e perché, per spiegarlo accanto alla scelta. */
+	unavailableProviders: UnavailableProvider[],
 	onnxRuntime: string | null,
 	executionProvider: ExecutionProvider,
 	resourceProfile: ResourceProfile,
@@ -618,6 +620,20 @@ export type UiConfig = {
 	theme?: Theme,
 	language?: Language,
 };
+
+export type UnavailableProvider = {
+	provider: Provider,
+	reason: UnavailableReason,
+};
+
+/**  Perché un provider GPU non è utilizzabile (mostrato all'utente accanto alla scelta). */
+export type UnavailableReason = 
+/**  Il provider esiste solo su un altro sistema operativo (es. DirectML fuori da Windows). */
+"other_platform" | 
+/**  Il runtime distribuito con l'app non lo include. */
+"not_in_runtime" | 
+/**  ONNX Runtime non è caricato: nessuna analisi AI disponibile. */
+"runtime_missing";
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
 

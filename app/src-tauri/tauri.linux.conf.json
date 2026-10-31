@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["deb"],
+    "category": "Photography",
+    "longDescription": "Gestore desktop per catalogare fotografie con AI eseguita interamente in locale: libreria unica, cataloghi tematici, riconoscimento di soggetti, persone e luoghi, organizzazione in cartelle senza toccare gli originali.",
+    "resources": {
+      "../../assets/runtime/win-x64/": null,
+      "../../assets/native-sources/": null,
+      "../../assets/runtime/linux-x64/": "runtime/"
+    },
+    "linux": {
+      "deb": {
+        "section": "graphics",
+        "recommends": ["libheif1 (>= 1.20)", "libheif-plugin-libde265"]
+      }
+    }
+  }
+}

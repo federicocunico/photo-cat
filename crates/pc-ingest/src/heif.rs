@@ -59,6 +59,21 @@ mod native {
             PathBuf::from("libheif.so.1")
         }
     }
+    /// Versione minima della libheif di sistema: `heif_image_get_plane_readonly2` è della 1.20.
+    pub const MIN_SYSTEM_VERSION: &str = "1.20";
+
+    /// Fuori da Windows libheif non è distribuita con l'app: si suggerisce come installarla.
+    fn with_install_hint(detail: String) -> String {
+        if cfg!(windows) {
+            detail
+        } else {
+            format!(
+                "{detail}. Per le foto HEIC installare libheif {MIN_SYSTEM_VERSION} o successiva \
+                 con il decoder HEVC (su Debian/Ubuntu: libheif1 e libheif-plugin-libde265)"
+            )
+        }
+    }
+
     #[repr(C)]
     struct Error {
         code: i32,
@@ -77,10 +92,12 @@ mod native {
                     .to_string_lossy()
                     .into_owned()
             };
-            let code = match self.code {
-                3 | 4 => ErrorCode::UnsupportedFormat,
-                6 => ErrorCode::InsufficientMemory,
-                _ => ErrorCode::DecodeFailed,
+            let (code, detail) = match self.code {
+                3 => (ErrorCode::UnsupportedFormat, detail),
+                // Anche "nessun plugin di decodifica": su Linux manca il plugin HEVC di sistema.
+                4 => (ErrorCode::UnsupportedFormat, with_install_hint(detail)),
+                6 => (ErrorCode::InsufficientMemory, detail),
+                _ => (ErrorCode::DecodeFailed, detail),
             };
             Err(AppError::new(code, detail))
         }
@@ -168,10 +185,11 @@ mod native {
             let bad = |e: libloading::Error| {
                 AppError::new(
                     ErrorCode::UnsupportedFormat,
-                    format!("libheif non disponibile: {e}"),
+                    with_install_hint(format!("libheif non disponibile: {e}")),
                 )
             };
-            // I simboli appartengono alla C API della versione libheif distribuita con l'app.
+            // C API di libheif: su Windows la versione distribuita (1.23.7), altrove quella di
+            // sistema, almeno MIN_SYSTEM_VERSION.
             unsafe {
                 let dependency = path
                     .parent()
@@ -392,4 +410,6 @@ mod native {
     }
 }
 #[cfg(feature = "heif")]
-pub use native::{decode, decode_with_library, dimensions, library_path, set_library_path};
+pub use native::{
+    decode, decode_with_library, dimensions, library_path, set_library_path, MIN_SYSTEM_VERSION,
+};

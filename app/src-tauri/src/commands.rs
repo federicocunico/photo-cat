@@ -58,7 +58,7 @@ pub fn get_resources(state: State<'_, AppState>) -> ResourceSnapshot {
 #[specta::specta]
 pub fn list_jobs(state: State<'_, AppState>) -> Vec<JobSnapshot> {
     let mut jobs = state.jobs.snapshots();
-    jobs.sort_by(|a, b| b.id.cmp(&a.id));
+    jobs.sort_by_key(|j| std::cmp::Reverse(j.id));
     jobs
 }
 

@@ -98,15 +98,19 @@ fn decode_jpeg_reader<R: std::io::Read>(
             .map(|g| DynamicImage::ImageLuma8(g).to_rgb8()),
         jpeg_decoder::PixelFormat::L16 => {
             let v: Vec<u16> = pixels
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_be_bytes(*c))
                 .collect();
             image::ImageBuffer::<image::Luma<u16>, _>::from_raw(ow, oh, v)
                 .map(|g| DynamicImage::ImageLuma16(g).to_rgb8())
         }
         jpeg_decoder::PixelFormat::CMYK32 => {
             let rgb: Vec<u8> = pixels
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .flat_map(|p| {
                     // I JPEG CMYK di Adobe sono invertiti.
                     let k = 255 - u32::from(p[3]);

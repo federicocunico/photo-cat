@@ -38,7 +38,8 @@ function phaseCount(phase: PhaseSnapshot, isSource: boolean, t: TFunction) {
   const processed = phase.done + phase.failed;
   if (phase.totalKnown) return `${fmtInt(processed)} / ${fmtInt(phase.total)}`;
   if (isSource) return t("jobs.indeterminate", { n: fmtInt(phase.done) });
-  return `${fmtInt(processed)} / ${fmtInt(phase.total)}…`;
+  // Totale provvisorio: lo spinner accanto indica che la scansione sta ancora contando.
+  return `${fmtInt(processed)} / ${fmtInt(phase.total)}`;
 }
 
 export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: boolean }) {
@@ -70,8 +71,19 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           </span>
         </div>
       </td>
-      <td className="mono" style={{ padding: "10px 8px" }}>
+      <td className="mono" style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
         {phaseCount(phase, isSource, t)}
+        {!phase.totalKnown && !isSource && (
+          <Icon.Spinner
+            size={12}
+            className="spin"
+            data-testid="provisional-total"
+            role="img"
+            aria-hidden={false}
+            aria-label={t("jobs.provisionalTotal")}
+            style={{ marginLeft: 6, verticalAlign: -1, color: "var(--pc-text-soft)" }}
+          />
+        )}
       </td>
       <td className="mono" style={{ padding: "10px 8px", color: "var(--pc-text-soft)" }}>
         {phase.rate != null ? t("jobs.rate", { rate: fmtDec(phase.rate, 1) }) : "—"}

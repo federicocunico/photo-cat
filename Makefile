@@ -1,13 +1,15 @@
 # Comandi rapidi di photo-cat (GNU Make; su Windows funziona sia da cmd che da Git Bash).
 #   make dev       avvio locale in debug (Vite + app con ricarica)
-#   make build     test di build: installer NSIS come la CI
+#   make build     test di build come la CI: setup NSIS su Windows, .deb e .tar.gz su Linux
 #   make test      test completi in locale (Rust + UI)
 #   make release   tag v<versione> e push: la GitHub Action crea la release
 
 ifeq ($(OS),Windows_NT)
 NPM := npm.cmd
+BUILD_HELP := setup NSIS in target/release/bundle/nsis
 else
 NPM := npm
+BUILD_HELP := .deb e .tar.gz in target/release/dist
 endif
 UI := app/ui
 VERSION := $(shell node -p "require('./app/src-tauri/tauri.conf.json').version")
@@ -16,7 +18,7 @@ VERSION := $(shell node -p "require('./app/src-tauri/tauri.conf.json').version")
 
 help:
 	@echo "make dev | run   - avvio locale (debug)"
-	@echo "make build       - test di build: setup NSIS in target/release/bundle/nsis"
+	@echo "make build       - test di build: $(BUILD_HELP)"
 	@echo "make test        - fmt, clippy, test Rust e UI"
 	@echo "make release     - crea e pubblica il tag v$(VERSION) (release automatica su GitHub)"
 
@@ -34,7 +36,11 @@ dev: install
 run: dev
 
 build: install
+ifeq ($(OS),Windows_NT)
 	$(NPM) --prefix $(UI) run tauri -- build --bundles nsis
+else
+	scripts/package-linux.sh
+endif
 
 test: install
 	cargo fmt --all -- --check

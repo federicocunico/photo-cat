@@ -10,7 +10,7 @@ fn main() {
         Some("cpu") => ExecutionProvider::Cpu,
         _ => ExecutionProvider::Auto,
     };
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
     let manifest = Manifest::builtin();
     let models = assets.join("models");

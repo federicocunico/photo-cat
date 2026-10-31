@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use pc_core::config::ExecutionProvider;
 use pc_core::{AppError, AppResult, ErrorCode};
 use pc_jobs::{JobPlan, PhaseSpec, RunSummary};
-use pc_models::runtime::SessionOptions;
+use pc_models::runtime::{self, SessionOptions};
 use pc_models::store::{self, ModelStore};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -113,6 +113,20 @@ pub fn plan(deps: ModelsDeps, params: &serde_json::Value) -> AppResult<JobPlan> 
                     );
                     continue;
                 };
+                // Senza runtime l'esito direbbe solo "runtime assente": non si registra, così il
+                // modello resta da testare e non appare "Test fallito" quando il runtime torna.
+                if entry.role.uses_onnx() && !runtime::is_initialized() {
+                    phase.inc_failed(1);
+                    summary.failed += 1;
+                    tracing::warn!(
+                        code = "MODEL_UNAVAILABLE",
+                        job_id = ctx.job_id,
+                        phase = PHASE_SELFTEST,
+                        model = id.as_str(),
+                        "ONNX Runtime non disponibile: self-test rimandato"
+                    );
+                    continue;
+                }
                 // Il self-test carica sessioni temporanee: anche queste consumano il budget.
                 let cost = entry.memory_mb.saturating_add(64);
                 let Some(_resident) = ctx
@@ -206,5 +220,42 @@ mod tests {
         let snapshot = jobs.snapshot(id).unwrap();
         assert_eq!(snapshot.state, JobState::CompletedWithErrors);
         assert_eq!(snapshot.failed, 1);
+    }
+
+    #[test]
+    fn without_runtime_onnx_self_test_is_postponed_not_recorded() {
+        // In questo binario di test il runtime ONNX non viene mai inizializzato.
+        assert!(!runtime::is_initialized());
+        let tmp = tempfile::tempdir().unwrap();
+        let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/models");
+        let model_store = Arc::new(ModelStore::new(
+            pc_models::Manifest::builtin(),
+            tmp.path().join("models"),
+            Some(bundle),
+        ));
+        let deps = ModelsDeps {
+            store: model_store.clone(),
+            images: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/selftest"),
+            opts: Arc::new(Mutex::new(SessionOptions::default())),
+        };
+        let db = Store::open(
+            &tmp.path().join("catalog.db"),
+            pc_store::StoreOptions::default(),
+        )
+        .unwrap();
+        let jobs = JobManager::new(db, MemoryGovernor::new(1024), 1, Arc::new(Sink));
+        jobs.register(JOB_KIND, Arc::new(move |params| plan(deps.clone(), params)));
+        let id = jobs
+            .submit(
+                JOB_KIND,
+                serde_json::json!({"ids": ["yunet"], "selfTest": ["yunet"]}),
+            )
+            .unwrap();
+        assert!(jobs.wait_idle(std::time::Duration::from_secs(30)));
+        assert_eq!(jobs.snapshot(id).unwrap().failed, 1);
+        assert!(model_store.installed_path("yunet").is_some());
+        assert!(model_store
+            .needing_self_test()
+            .contains(&"yunet".to_string()));
     }
 }

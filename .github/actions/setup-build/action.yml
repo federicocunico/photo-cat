@@ -1,0 +1,40 @@
+name: Preparazione build
+description: >-
+  Preparazione comune dei job di build (CI e release): pacchetti di sistema su Linux,
+  toolchain Rust, cache, Node e dipendenze della UI. Richiede il checkout già fatto.
+
+inputs:
+  cache-key:
+    description: shared-key di Swatinem/rust-cache (una per piattaforma, condivisa tra CI e release)
+    required: true
+  save-cache:
+    description: salva la cache Rust a fine job (la release la legge soltanto)
+    default: "true"
+  components:
+    description: componenti aggiuntivi della toolchain (es. "rustfmt, clippy")
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Dipendenze di sistema
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libxdo-dev \
+          libssl-dev libayatana-appindicator3-dev librsvg2-dev
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.components }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        save-if: ${{ inputs.save-cache }}
+    - uses: actions/setup-node@v5
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: app/ui/package-lock.json
+    - shell: bash
+      run: npm ci --prefix app/ui

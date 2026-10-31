@@ -1,5 +1,5 @@
 //! `cargo test -p pc-ai --features model-tests --test selftest`
-#![cfg(all(feature = "model-tests", windows))]
+#![cfg(feature = "model-tests")]
 
 use pc_ai::selftest::{self_test, SelfTestEnv};
 use pc_core::config::ExecutionProvider;
@@ -12,7 +12,7 @@ fn assets() -> PathBuf {
 }
 
 fn env_for(manifest: &Manifest) -> (PathBuf, impl Fn(Role) -> Option<PathBuf> + '_) {
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let models = assets().join("models");
     let m2 = models.clone();
     (models, move |r: Role| {
@@ -86,7 +86,7 @@ fn bundled_models_restore_and_self_test_as_a_background_job() {
         fn on_progress(&self, _: &JobSnapshot) {}
     }
 
-    runtime::init(&runtime::dev_dll_path()).unwrap();
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let store = Arc::new(ModelStore::new(
         Manifest::builtin(),

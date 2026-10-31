@@ -88,6 +88,7 @@ export const it = {
     pressureStates: { normal: "Normale", pressure: "Pressione", critical: "Critica" },
     phaseState: { pending: "In attesa", running: "In corso", done: "Completata" },
     indeterminate: "{{n}} trovati",
+    provisionalTotal: "totale ancora in conteggio",
     col: {
       phase: "Fase",
       progress: "Progresso",
@@ -220,6 +221,12 @@ export const it = {
     profile: "Profilo risorse",
     profiles: { light: "Leggero", balanced: "Bilanciato", performance: "Prestazioni" },
     fileFilter: "Modello",
+    unavailable: {
+      other_platform: "solo su {{platform}}",
+      not_in_runtime: "non incluso in questa versione",
+      runtime_missing: "ONNX Runtime non caricato",
+      platforms: { direct_ml: "Windows", cuda: "Windows e Linux", core_ml: "macOS" },
+    },
     providerHint:
       "Se la GPU non si inizializza, le analisi proseguono su CPU e il motivo è registrato in Diagnostica.",
     models: "Modelli",

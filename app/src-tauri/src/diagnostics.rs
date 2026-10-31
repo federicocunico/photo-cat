@@ -26,18 +26,42 @@ pub async fn export_diagnostics(state: State<'_, AppState>, destination: String)
 #[tauri::command]
 #[specta::specta]
 pub fn open_logs(state: State<'_, AppState>) -> AppResult<()> {
-    #[cfg(windows)]
-    {
-        std::process::Command::new("explorer.exe")
-            .arg(state.paths.logs())
-            .spawn()?;
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = &state;
-        return Err(AppError::invalid_input(
-            "apertura cartella disponibile su Windows",
-        ));
+    let dir = state.paths.logs();
+    let unavailable = |why: String| {
+        AppError::new(
+            pc_core::ErrorCode::Io,
+            format!(
+                "Impossibile aprire la cartella dei log ({why}). Si trova in: {}",
+                dir.display()
+            ),
+        )
+    };
+    let opener = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(unix) {
+        "xdg-open"
+    } else {
+        return Err(unavailable("sistema operativo non supportato".into()));
+    };
+    let mut child = std::process::Command::new(opener)
+        .arg(&dir)
+        .spawn()
+        .map_err(|e| unavailable(format!("{opener}: {e}")))?;
+    // explorer.exe esce con codice 1 anche quando apre la cartella: si controlla solo altrove.
+    // L'attesa avviene fuori dal thread del comando e un fallimento finisce in diagnostica.
+    if !cfg!(windows) {
+        std::thread::spawn(move || match child.wait() {
+            Ok(status) if !status.success() => tracing::warn!(
+                code = "IO",
+                path = %dir.display(),
+                ?status,
+                "{opener} non ha aperto la cartella dei log: nessun file manager associato?"
+            ),
+            Err(e) => tracing::warn!(code = "IO", detail = %e, "attesa di {opener} fallita"),
+            Ok(_) => {}
+        });
     }
     Ok(())
 }

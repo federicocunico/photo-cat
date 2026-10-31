@@ -1,7 +1,9 @@
 name: Release
 
-# Su tag `v<versione>` compila il setup Windows e pubblica una GitHub Release
-# con l'installer EXE e il relativo checksum SHA-256.
+# Su tag `v<versione>` pubblica una GitHub Release con il setup Windows, i pacchetti
+# Linux (.deb e .tar.gz) e i relativi checksum SHA-256. I pacchetti vengono presi dalla
+# run CI del push dello stesso commit (stesso comando di build); si compila solo se
+# quella run manca, fallisce o i suoi artefatti sono scaduti.
 
 on:
   push:
@@ -13,6 +15,8 @@ concurrency:
 
 permissions:
   contents: read
+  # Lettura delle run e degli artefatti di ci.yml (actions/reuse-ci-artifact).
+  actions: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,18 +36,19 @@ jobs:
             Write-Error "Tag v$tag diverso dalla versione dell'app (tauri.conf.json $conf, Cargo.toml $cargo)"
             exit 1
           }
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - id: reuse
+        uses: ./.github/actions/reuse-ci-artifact
         with:
-          shared-key: windows-release
-          save-if: false
-      - uses: actions/setup-node@v5
+          name: photo-cat-setup
+          path: target/release/bundle/nsis
+          token: ${{ github.token }}
+      - if: steps.reuse.outputs.reused != 'true'
+        uses: ./.github/actions/setup-build
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/ui/package-lock.json
-      - run: npm ci --prefix app/ui
+          cache-key: windows-release
+          save-cache: "false"
       - name: Compila setup NSIS
+        if: steps.reuse.outputs.reused != 'true'
         run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
       - name: Checksum SHA-256
         shell: pwsh
@@ -61,8 +66,34 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  build-linux:
+    # Il controllo tag/versione è nel job Windows: publish attende entrambi.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      # L'artefatto CI contiene già .deb, .tar.gz e i loro .sha256.
+      - id: reuse
+        uses: ./.github/actions/reuse-ci-artifact
+        with:
+          name: photo-cat-linux
+          path: target/release/dist
+          token: ${{ github.token }}
+      - if: steps.reuse.outputs.reused != 'true'
+        uses: ./.github/actions/setup-build
+        with:
+          cache-key: linux
+          save-cache: "false"
+      - name: Pacchetti .deb e .tar.gz
+        if: steps.reuse.outputs.reused != 'true'
+        run: scripts/package-linux.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-assets-linux
+          path: target/release/dist/*
+          if-no-files-found: error
+
   publish:
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     # Unico job con permesso di scrittura: solo per creare la release.
     permissions:
@@ -70,7 +101,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v5
         with:
-          name: release-assets
+          pattern: release-assets*
+          merge-multiple: true
           path: dist
       - name: Crea GitHub Release
         env:

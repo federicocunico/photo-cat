@@ -306,7 +306,7 @@ fn preflight_decision_with_and_without_symlink_privilege() {
             symlink: Some(false),
             hardlink: Some(true),
             cross_volume: false,
-            developer_mode: false,
+            developer_mode: Some(false),
         },
     );
     assert!(!denied.available);
@@ -324,7 +324,7 @@ fn preflight_decision_with_and_without_symlink_privilege() {
             symlink: Some(true),
             hardlink: Some(true),
             cross_volume: false,
-            developer_mode: true,
+            developer_mode: Some(true),
         },
     );
     assert!(allowed.available);
@@ -337,7 +337,7 @@ fn preflight_decision_with_and_without_symlink_privilege() {
             symlink: Some(false),
             hardlink: Some(false),
             cross_volume: true,
-            developer_mode: false,
+            developer_mode: Some(false),
         },
     );
     assert_eq!(other.alternative, Method::Copy);
@@ -348,7 +348,7 @@ fn preflight_decision_with_and_without_symlink_privilege() {
             symlink: None,
             hardlink: Some(false),
             cross_volume: true,
-            developer_mode: true,
+            developer_mode: Some(true),
         },
     );
     assert!(!cross.available);
@@ -357,6 +357,20 @@ fn preflight_decision_with_and_without_symlink_privilege() {
     assert_eq!(cross.reason.as_deref(), Some("cross_volume"));
     assert_eq!(allowed.reason, None);
     assert!(decide(Method::Copy, &LinkProbe::default()).available);
+    // Fuori da Windows (nessuna Modalità sviluppatore): il motivo riguarda la destinazione.
+    let unix = decide(
+        Method::Symlink,
+        &LinkProbe {
+            symlink: Some(false),
+            hardlink: Some(false),
+            cross_volume: false,
+            developer_mode: None,
+        },
+    );
+    assert!(!unix.available);
+    assert_eq!(unix.reason.as_deref(), Some("symlink_denied"));
+    assert!(!unix.message.contains("Windows"), "{}", unix.message);
+    assert_eq!(unix.alternative, Method::Copy);
 }
 /// Arricchisce un elemento del fixture con tutti i dati esportabili.
 fn enrich(db: &Store, id: i64) {

@@ -18,10 +18,18 @@ fn without_decoder_heic_keeps_metadata_and_reports_unsupported_decode() {
     assert_eq!(error.code, ErrorCode::UnsupportedFormat);
 }
 
-#[cfg(all(feature = "heif", windows))]
+#[cfg(feature = "heif")]
 #[test]
 fn native_decoder_handles_heic_and_releases_memory_without_touching_source() {
     let p = fixture();
+    // Fuori da Windows si usa la libheif di sistema: se non è installata il test non ha senso.
+    if !cfg!(windows) {
+        if let Err(e) = pc_ingest::heif::dimensions(&p) {
+            assert!(e.detail.contains("libheif non disponibile"), "{}", e.detail);
+            eprintln!("libheif di sistema assente, test saltato: {}", e.detail);
+            return;
+        }
+    }
     let original = std::fs::read(&p).unwrap();
     let mtime = std::fs::metadata(&p).unwrap().modified().unwrap();
     let gov = MemoryGovernor::new(64);
@@ -48,4 +56,26 @@ fn native_decoder_handles_heic_and_releases_memory_without_touching_source() {
         .err()
         .unwrap();
     assert_eq!(small.code, ErrorCode::InsufficientMemory);
+}
+
+#[cfg(feature = "heif")]
+#[test]
+fn missing_decoder_library_reports_unsupported_format() {
+    let error = pc_ingest::heif::decode_with_library(
+        &fixture(),
+        std::path::Path::new("percorso/inesistente/libheif.so.1"),
+        32,
+        &MemoryGovernor::new(64),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.code, ErrorCode::UnsupportedFormat);
+    if !cfg!(windows) {
+        assert!(
+            error.detail.contains("libheif-plugin-libde265"),
+            "{}",
+            error.detail
+        );
+        assert!(error.detail.contains(pc_ingest::heif::MIN_SYSTEM_VERSION));
+    }
 }

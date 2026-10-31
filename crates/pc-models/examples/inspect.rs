@@ -1,6 +1,6 @@
 //! Stampa ingressi e uscite dei modelli del manifest: `cargo run -p pc-models --example inspect`
 fn main() {
-    pc_models::runtime::init(&pc_models::runtime::dev_dll_path()).unwrap();
+    pc_models::runtime::init(&pc_models::runtime::dev_runtime_path()).unwrap();
     let dir = pc_models::runtime::dev_models_dir();
     for e in pc_models::Manifest::builtin().entries {
         if !e.file.ends_with(".onnx") {

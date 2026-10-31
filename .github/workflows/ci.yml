@@ -1,7 +1,8 @@
 name: CI
 
-# Pipeline volutamente veloce: compila soltanto l'installer Windows.
-# I test (Rust, modelli reali, UI) si eseguono in locale: vedi README.
+# Pipeline veloce: installer Windows e, su Linux, controlli Rust e pacchetti.
+# Su Linux girano fmt, clippy e i test Rust (l'unica difesa contro le regressioni
+# specifiche della piattaforma); test con i modelli reali e test UI restano locali.
 
 on:
   push:
@@ -24,21 +25,39 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-build
         with:
-          shared-key: windows-release
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/ui/package-lock.json
-      - run: npm ci --prefix app/ui
+          cache-key: windows-release
       - name: Compila setup NSIS
         run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
+      # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
       - uses: actions/upload-artifact@v5
         with:
           name: photo-cat-setup
           path: target/release/bundle/nsis/*-setup.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  linux:
+    # 22.04: glibc 2.35 e WebKitGTK 4.1, il binario gira anche su distro meno recenti.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-key: linux
+          components: rustfmt, clippy
+      # Il crate photo-cat incorpora il frontend compilato: serve prima di clippy e test.
+      - run: npm --prefix app/ui run build
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Pacchetti .deb e .tar.gz
+        run: scripts/package-linux.sh
+      # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photo-cat-linux
+          path: target/release/dist/*
           retention-days: 7
           if-no-files-found: error

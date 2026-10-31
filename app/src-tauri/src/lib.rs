@@ -200,14 +200,14 @@ pub fn run() {
             // Modelli AI: runtime ONNX, modelli installati (ripristinati dagli asset o scaricati), pool.
             let assets = models::asset_paths(&models::assets_dir(&handle));
             #[cfg(all(feature = "heif", windows))]
-            pc_ingest::heif::set_library_path(assets.runtime_dll.with_file_name("heif.dll"));
+            pc_ingest::heif::set_library_path(assets.runtime_lib.with_file_name("heif.dll"));
             // Il caricamento avviene su un thread a parte: se la libreria non risponde (dipendenze
             // di sistema anomale) l'app si apre comunque, con l'analisi AI disattivata.
             let runtime_load = {
-                let dll = assets.runtime_dll.clone();
+                let lib = assets.runtime_lib.clone();
                 let (tx, rx) = std::sync::mpsc::channel();
                 std::thread::spawn(move || {
-                    let _ = tx.send(pc_models::runtime::init(&dll));
+                    let _ = tx.send(pc_models::runtime::init(&lib));
                 });
                 rx.recv_timeout(std::time::Duration::from_secs(30))
                     .unwrap_or_else(|_| {

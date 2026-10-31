@@ -10,6 +10,7 @@ Modelli, runtime e dati sono versionati nel repository (ogni file < 100 MB, limi
 | `models/sface/face_recognition_sface_2021dec.onnx` | [OpenCV Zoo · SFace](https://huggingface.co/opencv/face_recognition_sface) | Apache-2.0 |
 | `models/geo/cities15000.tsv` | Derivato da GeoNames `cities15000.zip` + nomi italiani da `alternateNamesV2.zip` (scaricati il 2026-10-30) | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), © GeoNames |
 | `runtime/win-x64/onnxruntime.dll`, `onnxruntime_providers_shared.dll` | NuGet `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 | MIT (`licenses/onnxruntime-*`) |
+| `runtime/linux-x64/libonnxruntime.so` | `libonnxruntime.so.1.24.4` dal pacchetto ufficiale [`onnxruntime-linux-x64-1.24.4.tgz`](https://github.com/microsoft/onnxruntime/releases/tag/v1.24.4) (solo CPU), SHA-256 `d132535d051344ff5c64c9c200004150559049a81ed330eb4422c1962fb6b7e4` | MIT (`licenses/onnxruntime-*`) |
 | `runtime/win-x64/DirectML.dll` | NuGet `Microsoft.AI.DirectML` 1.15.4 | Microsoft DirectML (`licenses/DirectML-*`), ridistribuibile all'interno di applicazioni |
 | `runtime/win-x64/heif.dll`, `libde265.dll` | libheif 1.23.7 + libde265 1.1.3, compilazione con solo decoder HEVC | LGPL-3.0, licenze e istruzioni in `licenses/HEIF-BUILD.md`; sorgenti corrispondenti in `native-sources/` |
 | `runtime/win-x64/vcruntime140*.dll`, `msvcp140*.dll` | Visual Studio 2022, `VC\Redist\MSVC\14.44.35112\x64\Microsoft.VC143.CRT` | Microsoft Visual C++ Runtime, "Distributable Code" (`licenses/VCRedist-NOTICE.md`) |
