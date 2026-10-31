@@ -1,0 +1,240 @@
+/* Stili di base di photo-cat. I colori vengono dai token in src/theme/tokens.ts. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--pc-bg);
+  color: var(--pc-text);
+  font-family: var(--pc-font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--pc-accent-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--pc-accent-text);
+  outline-offset: 1px;
+}
+
+.mono {
+  font-family: var(--pc-font-mono);
+}
+
+.muted {
+  color: var(--pc-text-secondary);
+}
+
+.section-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pc-text-secondary);
+  font-weight: 600;
+}
+
+/* Pulsanti */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--pc-border);
+  background: var(--pc-raised);
+  color: var(--pc-text);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--pc-text-secondary);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--pc-accent);
+  border-color: var(--pc-accent);
+  color: var(--pc-on-accent);
+  font-weight: 600;
+}
+.btn-ghost {
+  background: transparent;
+}
+.btn-danger {
+  background: transparent;
+  border-color: var(--pc-danger-border);
+  color: var(--pc-danger);
+}
+.icon-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--pc-accent-soft-bg);
+  color: var(--pc-accent-soft-text);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-height: 32px;
+  border-radius: 999px;
+  background: var(--pc-raised);
+  border: 1px solid var(--pc-border);
+  color: var(--pc-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.field {
+  background: var(--pc-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+select.field {
+  background: var(--pc-raised);
+}
+
+/* Barre di avanzamento */
+.bar {
+  height: 4px;
+  background: var(--pc-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--pc-accent);
+  transition: width 0.2s linear;
+}
+.bar.indeterminate > span {
+  width: 30% !important;
+  animation: pc-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes pc-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* Separatore trascinabile tra pannelli */
+.resizer {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.resizer:hover,
+.resizer:focus-visible {
+  background: var(--pc-accent);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--pc-text-secondary);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pc-border);
+  position: sticky;
+  top: 0;
+  background: var(--pc-panel);
+}
+.table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pc-raised);
+  vertical-align: top;
+}
+.table tr[aria-selected="true"] td {
+  background: var(--pc-selection-bg);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pc-border);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+.feature-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 20px;
+}
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--pc-panel);
+  color: var(--pc-text);
+  border: 1px solid var(--pc-border);
+  border-radius: 8px;
+}
+.feature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}

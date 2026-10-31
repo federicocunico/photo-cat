@@ -1,0 +1,26 @@
+[package]
+name = "pc-organize"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+pc-core.workspace = true
+pc-store.workspace = true
+pc-jobs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+specta = { workspace = true, optional = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+blake3 = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[features]
+specta = ["dep:specta","pc-store/specta"]
+
+[dev-dependencies]
+pc-governor.workspace = true

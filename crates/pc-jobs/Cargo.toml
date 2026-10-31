@@ -1,0 +1,27 @@
+[package]
+name = "pc-jobs"
+description = "Motore dei job a fasi di photo-cat: pipeline, progresso, pausa/annulla, ripresa"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+specta = ["dep:specta", "pc-core/specta", "pc-store/specta", "pc-governor/specta"]
+
+[dependencies]
+specta = { workspace = true, optional = true }
+pc-core.workspace = true
+pc-store.workspace = true
+pc-governor.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+pc-diag.workspace = true
+tempfile.workspace = true

@@ -1,0 +1,6 @@
+# Gli asset sono verificati con SHA-256 (assets/models/manifest.json): nessuna
+# conversione di fine riga, altrimenti un checkout Windows ne cambierebbe l'hash.
+assets/** -text
+*.onnx binary
+*.dll binary
+*.heic binary

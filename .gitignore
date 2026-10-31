@@ -1,0 +1,6 @@
+/target
+node_modules/
+/app/ui/dist
+/app/src-tauri/gen
+*.part
+.DS_Store

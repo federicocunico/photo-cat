@@ -1,0 +1,36 @@
+[package]
+name = "pc-ai"
+description = "Catalogazione AI di photo-cat: CLIP, persone, volti, geolocalizzazione"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+specta = ["dep:specta"]
+# Test semantici sui modelli reali (assets/models, assets/selftest).
+model-tests = []
+
+[dependencies]
+specta = { workspace = true, optional = true }
+pc-core.workspace = true
+pc-models.workspace = true
+pc-store.workspace = true
+pc-governor.workspace = true
+pc-jobs.workspace = true
+pc-ingest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot = "0.12"
+hnsw_rs = "0.3.5"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+ndarray = "0.17"
+ort = { version = "=2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray", "std", "api-24"] }
+tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile.workspace = true

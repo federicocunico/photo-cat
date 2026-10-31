@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pc-core",
+    "crates/pc-store",
+    "crates/pc-diag",
+    "crates/pc-governor",
+    "crates/pc-jobs",
+    "crates/pc-ingest",
+    "crates/pc-models",
+    "crates/pc-ai",
+    "crates/pc-organize",
+    "app/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+authors = ["photo-cat contributors"]
+
+[workspace.dependencies]
+pc-core = { path = "crates/pc-core" }
+pc-store = { path = "crates/pc-store" }
+pc-diag = { path = "crates/pc-diag" }
+pc-governor = { path = "crates/pc-governor" }
+pc-jobs = { path = "crates/pc-jobs" }
+pc-ingest = { path = "crates/pc-ingest" }
+pc-models = { path = "crates/pc-models" }
+pc-ai = { path = "crates/pc-ai" }
+pc-organize = { path = "crates/pc-organize" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tempfile = "3"
+specta = { version = "=2.0.0-rc.26", features = ["derive", "serde_json", "chrono"] }
+
+[profile.dev.package."*"]
+opt-level = 2

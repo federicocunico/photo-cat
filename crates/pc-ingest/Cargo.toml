@@ -1,0 +1,41 @@
+[package]
+name = "pc-ingest"
+description = "Ingestione di photo-cat: sorgenti, scansione, metadati, EXIF, hash, miniature, monitoraggio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+specta = ["dep:specta"]
+heif = ["dep:libloading"]
+
+[dependencies]
+specta = { workspace = true, optional = true }
+pc-core.workspace = true
+pc-store.workspace = true
+pc-governor.workspace = true
+pc-jobs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp", "bmp", "gif"] }
+jpeg-decoder = "0.3"
+kamadak-exif = "0.6"
+blake3 = "1"
+walkdir = "2"
+globset = "0.4"
+chrono = { version = "0.4", features = ["clock"] }
+notify = "6"
+notify-debouncer-mini = "0.4"
+parking_lot = "0.12"
+libloading = { version = "0.8", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+walkdir = "2"
+blake3 = "1"
+tempfile.workspace = true
+pc-diag.workspace = true

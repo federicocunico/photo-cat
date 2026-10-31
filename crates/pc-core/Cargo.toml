@@ -1,0 +1,22 @@
+[package]
+name = "pc-core"
+description = "Tipi di dominio, errori con codici e configurazione di photo-cat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+specta = ["dep:specta"]
+
+[dependencies]
+specta = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml = "0.8"
+directories = "5"
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,44 @@
+name: CI
+
+# Pipeline volutamente veloce: compila soltanto l'installer Windows.
+# I test (Rust, modelli reali, UI) si eseguono in locale: vedi README.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows-setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/ui/package-lock.json
+      - run: npm ci --prefix app/ui
+      - name: Compila setup NSIS
+        run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: photo-cat-setup
+          path: target/release/bundle/nsis/*-setup.exe
+          retention-days: 7
+          if-no-files-found: error

@@ -1,0 +1,27 @@
+[package]
+name = "pc-store"
+description = "Persistenza SQLite di photo-cat: schema, migrazioni, writer unico, query"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+specta = ["dep:specta", "pc-core/specta", "pc-diag/specta"]
+
+[dependencies]
+specta = { workspace = true, optional = true }
+pc-core.workspace = true
+pc-diag.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+rusqlite = { version = "0.32", features = ["bundled", "functions"] }
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+[dev-dependencies]
+tempfile.workspace = true
