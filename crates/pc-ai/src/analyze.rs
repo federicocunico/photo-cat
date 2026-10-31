@@ -192,9 +192,18 @@ fn target_ids(store: &Store, params: &serde_json::Value) -> AppResult<Vec<MediaI
 
 /// Decodifica ridotta e orientata per l'analisi.
 fn load_image(deps: &AiDeps, id: MediaId) -> AppResult<Decoded> {
-    let (item, tech) = deps
-        .store
-        .read(|c| Ok((repo::media::get(c, id)?, repo::meta::tech(c, id)?)))?;
+    load_oriented(&deps.store, &deps.resources.governor, id, ANALYSIS_SIZE)
+}
+
+/// Immagine orientata come la vede l'analisi, con lato lungo `max_side` (i box dei volti sono
+/// normalizzati su questa immagine).
+pub fn load_oriented(
+    store: &Store,
+    governor: &pc_governor::MemoryGovernor,
+    id: MediaId,
+    max_side: u32,
+) -> AppResult<Decoded> {
+    let (item, tech) = store.read(|c| Ok((repo::media::get(c, id)?, repo::meta::tech(c, id)?)))?;
     if item.status != MediaStatus::Ok {
         return Err(AppError::new(
             ErrorCode::NotFound,
@@ -204,8 +213,8 @@ fn load_image(deps: &AiDeps, id: MediaId) -> AppResult<Decoded> {
     let mut d = decode_reduced(
         std::path::Path::new(&item.path),
         &item.ext,
-        ANALYSIS_SIZE,
-        &deps.resources.governor,
+        max_side,
+        governor,
     )?;
     let native = matches!(item.ext.to_ascii_lowercase().as_str(), "heic" | "heif");
     let oriented = apply_orientation(
@@ -216,7 +225,7 @@ fn load_image(deps: &AiDeps, id: MediaId) -> AppResult<Decoded> {
             tech.as_ref().and_then(|t| t.orientation)
         },
     );
-    d.image = fit(&oriented, ANALYSIS_SIZE);
+    d.image = fit(&oriented, max_side);
     drop(oriented);
     d.source_size = tech
         .and_then(|t| Some((t.width?, t.height?)))

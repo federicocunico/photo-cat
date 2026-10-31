@@ -22,6 +22,7 @@ pc-jobs.workspace = true
 pc-ingest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+blake3 = "1"
 thiserror.workspace = true
 tracing.workspace = true
 parking_lot = "0.12"

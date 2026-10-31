@@ -66,6 +66,10 @@ impl AppPaths {
     pub fn config_file(&self) -> PathBuf {
         self.root.join("config.toml")
     }
+    /// Cache dei ritagli dei volti (dati biometrici: cancellata con "Elimina dati volti").
+    pub fn face_crops(&self) -> PathBuf {
+        self.root.join("faces")
+    }
     pub fn backups(&self) -> PathBuf {
         self.root.join("backups")
     }

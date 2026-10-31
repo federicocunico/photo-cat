@@ -26,6 +26,7 @@ static INIT: OnceLock<Result<String, String>> = OnceLock::new();
 /// Carica la libreria ONNX Runtime (una sola volta per processo). Restituisce la versione.
 pub fn init(dll: &Path) -> AppResult<String> {
     let res = INIT.get_or_init(|| {
+        preload_vc_runtime(dll);
         if !dll.is_file() {
             return Err(format!(
                 "libreria ONNX Runtime non trovata: {}",
@@ -257,6 +258,40 @@ pub fn dev_runtime_path() -> std::path::PathBuf {
 pub fn dev_models_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models")
 }
+
+/// Runtime Visual C++ richiesto da `onnxruntime.dll`, in ordine di dipendenza.
+pub const VC_RUNTIME: &[&str] = &[
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+    "msvcp140.dll",
+    "msvcp140_1.dll",
+];
+
+/// Carica le DLL del runtime Visual C++ distribuite accanto a `onnxruntime.dll` (Windows
+/// senza Visual C++ Redistributable, es. Windows Sandbox o installazioni pulite): una volta
+/// caricate nel processo, le dipendenze di ONNX Runtime si risolvono su queste copie.
+/// Se il sistema ha già il runtime, Windows usa comunque quello caricato per primo per nome.
+#[cfg(windows)]
+fn preload_vc_runtime(dll: &Path) {
+    let Some(dir) = dll.parent() else { return };
+    for name in VC_RUNTIME {
+        let path = dir.join(name);
+        if !path.is_file() {
+            continue;
+        }
+        // SAFETY: librerie di sistema Microsoft senza codice di inizializzazione dell'app;
+        // restano caricate per tutta la vita del processo (come farebbe il loader).
+        match unsafe { libloading::Library::new(&path) } {
+            Ok(lib) => std::mem::forget(lib),
+            Err(e) => {
+                tracing::warn!(path = %path.display(), detail = %e, "runtime Visual C++ non caricato")
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn preload_vc_runtime(_dll: &Path) {}
 
 #[cfg(test)]
 mod probe_tests {
