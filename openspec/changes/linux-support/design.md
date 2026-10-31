@@ -54,6 +54,14 @@ Le dipendenze del `.deb` le calcola Tauri (WebKitGTK 4.1, GTK 3). `bundle.linux.
 ### 6. CI e release su `ubuntu-22.04`
 `ubuntu-22.04` ha glibc 2.35 e WebKitGTK 4.1, quindi il binario gira anche su distro meno recenti rispetto a una build su 24.04. I pacchetti di sistema sono quelli documentati da Tauri 2: `libwebkit2gtk-4.1-dev`, `build-essential`, `libxdo-dev`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`. Il job CI Linux esegue `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace` (senza `model-tests`) e la build dell'archivio, con `rust-cache` a chiave separata da quella Windows. Rispetto al principio "test prevalentemente in locale", fanno eccezione i soli test Rust su Linux: sono veloci e sono l'unica protezione contro le regressioni specifiche della piattaforma. Nella release si aggiunge un job `build-linux` accanto al job Windows `build`, che resta invariato (i passi sono troppo diversi per una matrice leggibile); il controllo tag/versione resta nel job Windows, e `publish` attende entrambi e unisce gli artefatti `release-assets*`.
 
+### 6b. Meno lavoro duplicato tra CI e release, a parità di comportamento
+`make release` invia insieme `main` e il tag: la CI del push e la release compilano lo stesso commit. La cache Rust è già condivisa (stessa `shared-key`), ma restano doppi la compilazione dei crate del workspace e l'impacchettamento. Due interventi, senza cambiare cosa produce ciascun evento:
+
+- **Riuso degli artefatti.** La release cerca la run di `ci.yml` per lo stesso commit (evento `push`), la attende con `gh run watch` e ne scarica gli artefatti (`photo-cat-setup`, `photo-cat-linux`), che sono prodotti con lo stesso comando. Se la run manca, fallisce o gli artefatti sono scaduti (7 giorni), si ricompila come prima. Servono il permesso `actions: read` e nomi d'artefatto stabili.
+- **Azione composita** per la preparazione comune dei quattro job, così che le due pipeline non possano divergere.
+
+*Alternativa scartata:* un solo workflow in cui il push su `main` non produce più l'installer. Toglierebbe più lavoro, ma cambia il comportamento: i push diretti su `main` non avrebbero più l'installer come artefatto.
+
 ### 7. Messaggi e diagnosi specifici della piattaforma
 - **Collegamenti.** `developer_mode` passa da `bool` a `Option<bool>` (`None` fuori da Windows). `decide()` usa `symlink_privilege` solo se il valore è `Some(false)`; negli altri casi usa `symlink_denied`, che già descrive la destinazione. Il campo esposto alla UI resta compatibile: si serializza `false` quando il valore è `None`.
 - **Cartella dei log.** `open_logs` sceglie `explorer.exe`, `open` o `xdg-open` (già nel working tree). Se il comando non parte, l'errore restituito contiene il percorso della cartella, come richiesto dalla spec.

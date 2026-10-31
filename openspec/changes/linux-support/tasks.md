@@ -36,9 +36,11 @@ Il branch `feat/linux-support` contiene già, non committate, la prima versione 
 
 ## 6. CI e release
 
-- [ ] 6.1 Aggiungere a `.github/workflows/ci.yml` un job `linux` su `ubuntu-22.04` (dipendenze apt, `rust-cache` con chiave separata, fmt, clippy, `cargo test --workspace`, build dell'archivio con upload dell'artefatto) e aggiornare il commento iniziale. Verifica: pipeline verde su una PR del branch.
+- [x] 6.1 Aggiungere a `.github/workflows/ci.yml` un job `linux` su `ubuntu-22.04` (dipendenze apt, `rust-cache` con chiave separata, fmt, clippy, `cargo test --workspace`, build dell'archivio con upload dell'artefatto) e aggiornare il commento iniziale. Verifica: pipeline verde su una PR del branch.
 - [ ] 6.2 Aggiungere a `release.yml` un job `build-linux` accanto al job Windows. Il controllo tag/versione resta sul runner Windows, e `publish` scarica gli artefatti di entrambi e li allega alla release. Verifica: `act` oppure un tag di prova su un fork o con `workflow_dispatch` produce una release, o una bozza, con EXE, `.deb`, archivio Linux e i tre `.sha256`.
 - [x] 6.3 Allineare le delta di `specs/` a quanto implementato (nomi dei file d'archivio, dipendenze, messaggi) e verificare che `openspec validate linux-support --strict` passi.
+- [ ] 6.4 Estrarre la preparazione comune dei job di build (toolchain Rust, `rust-cache`, Node, `npm ci`, pacchetti apt solo su Linux) in un'azione composita `.github/actions/setup-build`, usata dai job Windows e Linux di `ci.yml` e `release.yml`, senza cambiare cosa produce ciascun job. Verifica: run CI verde su entrambi i sistemi con gli stessi artefatti di prima.
+- [ ] 6.5 Nella release, riusare i pacchetti della run CI del push su `main` per lo stesso commit (attesa con `gh run watch`, download degli artefatti, checksum calcolati nella release), ricompilando solo se la run manca, è fallita o gli artefatti sono scaduti (design §6). Verifica: con il tag di prova del task 6.2 la release contiene gli stessi file e il log mostra il riuso; una seconda prova senza run CI disponibile ricompila.
 
 ## 7. Valutazione GPU su Linux
 
