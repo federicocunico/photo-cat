@@ -20,7 +20,12 @@ help:
 	@echo "make test        - fmt, clippy, test Rust e UI"
 	@echo "make release     - crea e pubblica il tag v$(VERSION) (release automatica su GitHub)"
 
-install:
+# Reinstalla le dipendenze UI solo se package-lock.json è cambiato (npm aggiorna lo stamp).
+DEPS := $(UI)/node_modules/.package-lock.json
+
+install: $(DEPS)
+
+$(DEPS): $(UI)/package-lock.json
 	$(NPM) ci --prefix $(UI)
 
 dev: install

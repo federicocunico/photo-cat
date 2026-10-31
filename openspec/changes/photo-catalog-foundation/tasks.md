@@ -97,7 +97,7 @@ Ordine per milestone verticali (vedi design.md, Risks): ogni gruppo lascia l'app
 - [x] 10.3 Implementare assegnazione online alle persone con nome (rispettando i rifiuti) e clustering a fine job (Chinese Whispers su kNN/ANN con vincoli cannot-link); unit test su embedding sintetici con correzioni
 - [x] 10.4 Implementare le operazioni utente: rinomina, unisci, separa, "non è questa persona", rimuovi volto; test che le correzioni sopravvivono al ri-clustering
 - [x] 10.5 Implementare disattivazione del riconoscimento (conteggio persone mantenuto) ed "Elimina tutti i dati dei volti" con VACUUM; test che non restano volti/embedding/ritagli
-- [ ] 10.6 Implementare la schermata Persone (mockup "Persone") con cluster, dettaglio e correzioni; test di componente e verifica manuale su una libreria di prova
+- [x] 10.6 Implementare la schermata Persone (mockup "Persone") con cluster, dettaglio e correzioni; test di componente e verifica manuale su una libreria di prova
 
 ## 11. Cataloghi e operazioni bulk
 
@@ -116,16 +116,16 @@ Ordine per milestone verticali (vedi design.md, Risks): ogni gruppo lascia l'app
 
 ## 13. Primo avvio, impostazioni e pacchetto diagnostico
 
-- [ ] 13.1 Implementare l'onboarding (mockup "Primo avvio"): benvenuto → verifica sistema → download modelli → prima sorgente, con passi rimandabili; verifica manuale su profilo utente pulito
+- [x] 13.1 Implementare l'onboarding (mockup "Primo avvio"): benvenuto → verifica sistema → download modelli → prima sorgente, con passi rimandabili; verifica manuale su profilo utente pulito
 - [x] 13.2 Implementare la schermata Impostazioni (non presente nei mockup: seguire lo stile della schermata "Modelli AI e sistema") (profilo/limite RAM, provider, soglie, tassonomia, volti on/off, livello log, tema, lingua, percorso dati); test che il cambio profilo modifica il budget dei job successivi
 - [x] 13.3 Implementare "Esporta pacchetto diagnostica" (zip con lista di inclusione esplicita), "Apri cartella log" e "Riprova file falliti"; test che lo zip non contiene immagini né dati volti
-- [ ] 13.4 Implementare l'avviso di chiusura anomala al riavvio con collegamento alla diagnostica; verifica manuale con panic forzato in build di debug
+- [x] 13.4 Implementare l'avviso di chiusura anomala al riavvio con collegamento alla diagnostica; verifica manuale con panic forzato in build di debug
 
 ## 14. Integrazione e rilascio
 
 - [ ] 14.1 Test end-to-end su una libreria di 10.000 foto reali in Windows Sandbox con 8 GB e sorgente reale mappata in sola lettura: import + AI + volti completati, RAM dell'app sempre entro il budget, errori per file registrati e job ripreso dopo kill; nessuna modifica, cancellazione o spostamento degli originali
-- [ ] 14.2 Verificare l'esecuzione offline completa con modelli già presenti (nessuna richiesta di rete durante l'analisi, controllo con monitor di rete)
-- [ ] 14.3 Configurare il bundle Tauri (NSIS/MSI con onnxruntime incluso) e verificare installazione e primo avvio in Windows Sandbox pulita
+- [x] 14.2 Verificare l'esecuzione offline completa con modelli già presenti (nessuna richiesta di rete durante l'analisi, controllo con monitor di rete)
+- [x] 14.3 Configurare il bundle Tauri (NSIS/MSI con onnxruntime incluso) e verificare installazione e primo avvio in Windows Sandbox pulita
 - [ ] 14.4 Eseguire `openspec validate photo-catalog-foundation --strict` e verificare che ogni requisito delle spec sia coperto da almeno un test o una verifica manuale documentata
 - [x] 14.5 Creare la pipeline di rilascio automatico su GitHub: su tag di versione `v*` compilare il setup Windows, creare la GitHub Release e allegare l'installer EXE con checksum; verificare la creazione e gli asset della release
 

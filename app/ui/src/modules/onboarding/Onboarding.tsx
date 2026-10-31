@@ -141,7 +141,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             </button>
           )}
           {step < 3 ? (
-            <button className="btn" onClick={() => setStep((s) => s + 1)}>
+            <button className="btn btn-primary" onClick={() => setStep((s) => s + 1)}>
               {t("onboarding.next")}
             </button>
           ) : (
@@ -149,9 +149,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               {t("onboarding.later")}
             </button>
           )}
-          <button className="btn" disabled={busy} onClick={() => void run(finish)}>
-            {t("onboarding.skip")}
-          </button>
+          {/* La verifica del sistema è l'unico passo che non si può rimandare. */}
+          {step !== 1 && (
+            <button className="btn" disabled={busy} onClick={() => void run(finish)}>
+              {t("onboarding.skip")}
+            </button>
+          )}
         </div>
       </section>
     </div>

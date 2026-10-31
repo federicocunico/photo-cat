@@ -13,6 +13,8 @@ mod organize;
 mod people;
 mod settings;
 mod state;
+#[cfg(windows)]
+mod webview_runtime;
 
 use parking_lot::{Mutex, RwLock};
 use pc_ai::models_job::{self, ModelsDeps};
@@ -151,6 +153,14 @@ pub fn run() {
         );
     }
 
+    #[cfg(windows)]
+    if let Some(dir) = webview_runtime::ensure() {
+        tracing::warn!(
+            folder = %dir.display(),
+            "runtime WebView2 non trovato tramite il registro: uso la cartella installata più recente"
+        );
+    }
+
     let builder = bindings();
     #[cfg(debug_assertions)]
     export_bindings(&builder, &bindings_path());
@@ -158,6 +168,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol("thumb", library::thumb_protocol)
+        .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -190,7 +201,23 @@ pub fn run() {
             let assets = models::asset_paths(&models::assets_dir(&handle));
             #[cfg(all(feature = "heif", windows))]
             pc_ingest::heif::set_library_path(assets.runtime_dll.with_file_name("heif.dll"));
-            let onnx_runtime = match pc_models::runtime::init(&assets.runtime_dll) {
+            // Il caricamento avviene su un thread a parte: se la libreria non risponde (dipendenze
+            // di sistema anomale) l'app si apre comunque, con l'analisi AI disattivata.
+            let runtime_load = {
+                let dll = assets.runtime_dll.clone();
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let _ = tx.send(pc_models::runtime::init(&dll));
+                });
+                rx.recv_timeout(std::time::Duration::from_secs(30))
+                    .unwrap_or_else(|_| {
+                        Err(pc_core::AppError::new(
+                            pc_core::ErrorCode::ModelUnavailable,
+                            "ONNX Runtime non ha risposto entro 30 s",
+                        ))
+                    })
+            };
+            let onnx_runtime = match runtime_load {
                 Ok(v) => Some(v),
                 Err(e) => {
                     tracing::error!(

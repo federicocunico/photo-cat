@@ -2,23 +2,45 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Correction, type FaceView } from "../../lib/ipc";
-import { thumbUrl } from "../library/thumbUrl";
+import { faceUrl, thumbUrl } from "../library/thumbUrl";
 
 export function FaceCrop({ face }: { face: FaceView }) {
   const [x, y, w, h] = face.bbox.map((v) => v ?? 0);
+  const [failed, setFailed] = useState(false);
+  const src = faceUrl(face.id);
   return (
     <span
       style={{
         display: "block",
+        position: "relative",
+        overflow: "hidden",
         width: 112,
         height: 112,
         backgroundColor: "var(--pc-panel)",
+        // Segnaposto immediato dalla miniatura; il ritaglio ad alta risoluzione lo copre appena pronto.
         backgroundImage: face.thumb ? `url("${thumbUrl(face.thumb)}")` : undefined,
         backgroundSize: `${100 / Math.max(w, 0.01)}% ${100 / Math.max(h, 0.01)}%`,
         backgroundPosition: `${(100 * x) / Math.max(1 - w, 0.01)}% ${(100 * y) / Math.max(1 - h, 0.01)}%`,
         borderRadius: 6,
       }}
-    />
+    >
+      {src && !failed && (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      )}
+    </span>
   );
 }
 export function PeoplePage() {

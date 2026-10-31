@@ -12,6 +12,7 @@ Modelli, runtime e dati sono versionati nel repository (ogni file < 100 MB, limi
 | `runtime/win-x64/onnxruntime.dll`, `onnxruntime_providers_shared.dll` | NuGet `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 | MIT (`licenses/onnxruntime-*`) |
 | `runtime/win-x64/DirectML.dll` | NuGet `Microsoft.AI.DirectML` 1.15.4 | Microsoft DirectML (`licenses/DirectML-*`), ridistribuibile all'interno di applicazioni |
 | `runtime/win-x64/heif.dll`, `libde265.dll` | libheif 1.23.7 + libde265 1.1.3, compilazione con solo decoder HEVC | LGPL-3.0, licenze e istruzioni in `licenses/HEIF-BUILD.md`; sorgenti corrispondenti in `native-sources/` |
+| `runtime/win-x64/vcruntime140*.dll`, `msvcp140*.dll` | Visual Studio 2022, `VC\Redist\MSVC\14.44.35112\x64\Microsoft.VC143.CRT` | Microsoft Visual C++ Runtime, "Distributable Code" (`licenses/VCRedist-NOTICE.md`) |
 
 ## Formato di `geo/cities15000.tsv`
 

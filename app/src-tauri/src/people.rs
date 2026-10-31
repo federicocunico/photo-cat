@@ -74,11 +74,59 @@ pub async fn purge_faces(state: State<'_, AppState>) -> AppResult<()> {
     cfg.ai.faces_enabled = false;
     state.save_config(cfg)?;
     let db = state.store.clone();
+    let crops = state.paths.face_crops();
     tauri::async_runtime::spawn_blocking(move || {
         db.write(people::clear)?;
+        // Anche i ritagli in cache sono dati dei volti.
+        match std::fs::remove_dir_all(&crops) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+            _ => {}
+        }
         db.vacuum()?;
         Ok::<_, pc_core::AppError>(())
     })
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// `face://<id>`: ritaglio del volto generato dall'originale (vedi `pc_ai::face_crop`),
+/// fuori dal thread della UI.
+pub fn face_protocol(
+    ctx: tauri::UriSchemeContext<'_, tauri::Wry>,
+    request: tauri::http::Request<Vec<u8>>,
+    responder: tauri::UriSchemeResponder,
+) {
+    use tauri::Manager;
+    let handle = ctx.app_handle().clone();
+    let id = request
+        .uri()
+        .path()
+        .trim_start_matches('/')
+        .parse::<i64>()
+        .ok();
+    if id.is_none() {
+        tracing::warn!(uri = %request.uri(), "richiesta ritaglio volto non valida");
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = (|| {
+            let state = handle.try_state::<AppState>()?;
+            let dir = state.paths.face_crops();
+            pc_ai::face_crop::jpeg(&state.store, &state.governor, &dir, id?)
+                .inspect_err(
+                    |e| tracing::warn!(face_id = id, detail = %e, "ritaglio volto non disponibile"),
+                )
+                .ok()
+        })();
+        let response = match bytes {
+            Some(bytes) => tauri::http::Response::builder()
+                .header("Content-Type", "image/jpeg")
+                .header("Cache-Control", "max-age=3600")
+                .header("Access-Control-Allow-Origin", "*")
+                .body(bytes),
+            None => tauri::http::Response::builder()
+                .status(404)
+                .body(Vec::new()),
+        };
+        responder.respond(response.expect("risposta ritaglio volto"));
+    });
 }

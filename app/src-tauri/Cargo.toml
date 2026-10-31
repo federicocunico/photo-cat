@@ -38,3 +38,11 @@ tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
 parking_lot = "0.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+[target.'cfg(windows)'.dependencies]
+# Stesse versioni usate da Tauri/wry: servono solo per verificare il runtime WebView2 all'avvio.
+webview2-com = "0.39.1"
+windows-core = "0.62.2"
+
+[dev-dependencies]
+tempfile.workspace = true
