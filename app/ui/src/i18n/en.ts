@@ -89,8 +89,7 @@ export const en: Messages = {
     pressureStates: { normal: "Normal", pressure: "Pressure", critical: "Critical" },
     phaseState: { pending: "Pending", running: "Running", done: "Done" },
     indeterminate: "{{n}} found",
-    provisionalTotal:
-      "{{processed}} processed out of {{total}} found so far: the total grows until the scan finishes",
+    provisionalTotal: "total still being counted",
     col: {
       phase: "Phase",
       progress: "Progress",

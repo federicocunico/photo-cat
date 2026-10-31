@@ -88,8 +88,7 @@ export const it = {
     pressureStates: { normal: "Normale", pressure: "Pressione", critical: "Critica" },
     phaseState: { pending: "In attesa", running: "In corso", done: "Completata" },
     indeterminate: "{{n}} trovati",
-    provisionalTotal:
-      "{{processed}} elaborati su {{total}} trovati finora: il totale cresce finché la scansione non è terminata",
+    provisionalTotal: "totale ancora in conteggio",
     col: {
       phase: "Fase",
       progress: "Progresso",

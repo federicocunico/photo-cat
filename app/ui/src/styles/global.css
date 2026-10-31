@@ -157,6 +157,21 @@ select.field {
   }
 }
 
+/* Attività in corso (es. totale ancora in conteggio) */
+.spin {
+  animation: pc-spin 0.9s linear infinite;
+}
+@keyframes pc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
 /* Separatore trascinabile tra pannelli */
 .resizer {
   flex: 0 0 5px;

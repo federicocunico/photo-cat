@@ -38,7 +38,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("schermata Job", () => {
-  it("spiega nel title il totale provvisorio durante la scansione", () => {
+  it("indica con uno spinner il totale provvisorio durante la scansione", () => {
     render(<Harness />);
     act(() =>
       emit(
@@ -53,14 +53,14 @@ describe("schermata Job", () => {
       ),
     );
     const meta = screen.getByTestId("phase-metadati");
-    const count = within(meta).getByText("1171 / 1204…");
-    expect(count).toHaveAttribute(
-      "title",
-      "1171 elaborati su 1204 trovati finora: il totale cresce finché la scansione non è terminata",
-    );
+    const count = within(meta).getByText("1171 / 1204");
+    expect(within(count).getByTestId("provisional-total")).toHaveClass("spin");
     expect(
-      within(screen.getByTestId("phase-scansione")).getByText("1204 trovati"),
-    ).not.toHaveAttribute("title");
+      within(count).getByRole("img", { name: "totale ancora in conteggio" }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("phase-scansione")).queryByTestId("provisional-total"),
+    ).not.toBeInTheDocument();
   });
 
   it("mostra fasi, percentuali, conteggi, ETA e controlli", () => {
