@@ -49,8 +49,10 @@ pub fn vector(bytes: &[u8]) -> StoreResult<Vec<f32>> {
         return Err(StoreError::Invalid("embedding volto non valido".into()));
     }
     let v: Vec<_> = bytes
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes(b.try_into().expect("quattro byte")))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
         .collect();
     if v.iter().any(|x| !x.is_finite()) {
         return Err(StoreError::Invalid("embedding volto non finito".into()));
