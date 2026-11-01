@@ -56,6 +56,19 @@ In entrambi i casi la decodifica HEIC usa la libheif di sistema (vedi Prerequisi
 
 Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
 
+## Aggiornare e tornare a una versione precedente
+
+All'avvio la nuova versione aggiorna il catalogo (`catalog.db`) se è di una versione precedente. Prima di farlo ne salva una copia in `backups/` dentro la cartella dati (`catalog-v<schema>-<data>.db`), insieme a una copia della configurazione (`config-v<schema>-<data>.toml`). L'archivio dell'app (`app.db`, identità e set di tag) è nuovo dalla 0.2.0 e viene creato al primo avvio; le persone con nome del catalogo diventano identità.
+
+Una versione precedente non apre un catalogo aggiornato: lo segnala e non lo modifica. Non legge nemmeno la configurazione nuova, quindi usa i valori predefiniti, compresa la cartella dati. Per tornare a una versione precedente:
+
+1. chiudere photo-cat;
+2. nella cartella dati, sostituire `catalog.db` con la copia `catalog-v…db` più recente di `backups/`, rinominandola in `catalog.db`;
+3. sostituire `config.toml` con la copia `config-v…toml` più recente;
+4. installare la versione precedente.
+
+Le modifiche fatte dopo l'aggiornamento non sono nella copia. Le voci di catalogazione manuali (senza descrizione) non sono supportate dalle versioni precedenti alla 0.2.0 (vedi "Voci di catalogazione").
+
 ## Qualità
 
 ```sh

@@ -19,7 +19,9 @@ impl AppPaths {
 
     fn resolve(env_dir: Option<std::ffi::OsString>) -> AppResult<Self> {
         if let Some(dir) = env_dir.filter(|d| !d.is_empty()) {
-            return Ok(Self::at(dir));
+            // Anche le installazioni portabili seguono il percorso dati scelto
+            // nelle impostazioni; l'archivio dell'app resta in `<radice>/app/`.
+            return Self::at(dir).configured();
         }
         let dirs = directories::ProjectDirs::from("com", "photocat", "photo-cat")
             .ok_or_else(|| AppError::internal("impossibile determinare la directory utente"))?;
@@ -168,6 +170,22 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let p = AppPaths::resolve(Some(tmp.path().as_os_str().to_owned())).unwrap();
         assert!(p.app_store().starts_with(tmp.path()));
+        assert_eq!(p.app_store(), tmp.path().join("app").join("app.db"));
+    }
+
+    #[test]
+    fn env_data_dir_follows_the_configured_data_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let other = tmp.path().join("altra");
+        let cfg = crate::Config {
+            data_dir: Some(other.clone()),
+            ..Default::default()
+        };
+        cfg.save(&tmp.path().join("config.toml")).unwrap();
+        let p = AppPaths::resolve(Some(tmp.path().as_os_str().to_owned())).unwrap();
+        assert_eq!(p.root(), other);
+        assert_eq!(p.database(), other.join("catalog.db"));
+        // Identità e set di tag restano nell'archivio dell'app della radice.
         assert_eq!(p.app_store(), tmp.path().join("app").join("app.db"));
     }
 }

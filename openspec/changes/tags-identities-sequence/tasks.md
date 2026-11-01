@@ -54,8 +54,8 @@ Riferimento visivo: `mockups/Tags.html`, `mockups/Identities.html`, `mockups/Seq
 
 ## 8. Integrazione
 
-- [ ] 8.1 Prova manuale end-to-end con foto reali di almeno due dispositivi (fotocamera e telefono, almeno uno con fuso dichiarato) e alcune foto senza data: importazione, correzione con allineamento, tagging da tastiera con set esclusivo, collegamento di un'identità, export con tutte le opzioni. Verifica: nomi e ordine nel risultato corrispondono alla sequenza vista in app; `manifest.csv` si apre in un foglio di calcolo; nessun originale modificato (hash invariati).
-- [ ] 8.2 Prova di persistenza delle identità e dei set: cambiare `data_dir` verso una libreria vuota e importare foto delle stesse persone. Verifica: identità e set presenti, volti riconosciuti e collegati senza nominarli di nuovo.
+- [x] 8.1 Prova manuale end-to-end con foto reali di almeno due dispositivi (fotocamera e telefono, almeno uno con fuso dichiarato) e alcune foto senza data: importazione, correzione con allineamento, tagging da tastiera con set esclusivo, collegamento di un'identità, export con tutte le opzioni. Verifica: nomi e ordine nel risultato corrispondono alla sequenza vista in app; `manifest.csv` si apre in un foglio di calcolo; nessun originale modificato (hash invariati).
+- [x] 8.2 Prova di persistenza delle identità e dei set: cambiare `data_dir` verso una libreria vuota e importare foto delle stesse persone. Verifica: identità e set presenti, volti riconosciuti e collegati senza nominarli di nuovo.
 - [x] 8.3 Aggiornare `README.md` (nuovi moduli, posizione di `app.db`, dati biometrici) e verificare la build Linux e Windows con `make build`. Verifica: `make build` termina con successo su entrambe le piattaforme o in CI.
 
 ## Workflow follow-up

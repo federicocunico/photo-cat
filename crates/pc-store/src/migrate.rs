@@ -313,9 +313,13 @@ mod tests {
             tmp.path().join("config.toml"),
             tmp.path().join("backups"),
         );
-        std::fs::write(&cfg, "[ui]
+        std::fs::write(
+            &cfg,
+            "[ui]
 theme = \"light\"
-").unwrap();
+",
+        )
+        .unwrap();
         // Nessun catalogo (primo avvio): niente copia.
         assert_eq!(backup_config_before_migration(&db, &cfg, &bk), None);
         // Catalogo della versione precedente (v0.1.0 = schema 4).
@@ -323,8 +327,15 @@ theme = \"light\"
         migrate_to(&mut conn, 4);
         drop(conn);
         let copy = backup_config_before_migration(&db, &cfg, &bk).expect("copia");
-        assert!(copy.file_name().unwrap().to_string_lossy().starts_with("config-v4-"));
-        assert_eq!(std::fs::read_to_string(&copy).unwrap(), std::fs::read_to_string(&cfg).unwrap());
+        assert!(copy
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("config-v4-"));
+        assert_eq!(
+            std::fs::read_to_string(&copy).unwrap(),
+            std::fs::read_to_string(&cfg).unwrap()
+        );
         // Catalogo già aggiornato: niente copia.
         let mut conn = Connection::open(&db).unwrap();
         migrate(&mut conn, None).unwrap();

@@ -29,7 +29,7 @@
 ## 4. Verifica d'insieme
 
 - [x] 4.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
-- [ ] 4.2 Prova sull'app reale: creare una voce dall'Inspector e una dalla barra bulk su una selezione, creare il gruppo "Evento", rinominare e poi eliminare una voce, e verificare che la schermata Modelli/analisi non indichi file da rianalizzare. Poi aggiungere una descrizione e verificare che lo indichi. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
+- [x] 4.2 Prova sull'app reale: creare una voce dall'Inspector e una dalla barra bulk su una selezione, creare il gruppo "Evento", rinominare e poi eliminare una voce, e verificare che la schermata Modelli/analisi non indichi file da rianalizzare. Poi aggiungere una descrizione e verificare che lo indichi. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
 - [x] 4.3 Aggiornare il `README.md` (voci manuali e automatiche, quando serve la rianalisi) e la nota di rollback nelle note di rilascio; allineare le delta e verificare che `openspec validate catalog-entries-inline --strict` passi.
 
 ## Workflow follow-up
