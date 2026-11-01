@@ -23,6 +23,7 @@ Scorciatoie (GNU Make: su Windows da cmd o Git Bash, su Linux dal terminale):
 | `make dev` (o `make run`) | avvio locale in debug: Vite + finestra Tauri con ricarica |
 | `make build` | test di build come la CI: setup NSIS in `target/release/bundle/nsis` su Windows, `.deb` e `.tar.gz` con SHA-256 in `target/release/dist` su Linux |
 | `make test` | fmt, clippy, test Rust e UI (i test non girano in CI) |
+| `make test-linux` | da Windows o macOS, con Docker: ripete in un container Ubuntu 22.04 i passi della CI Linux (build UI, fmt, clippy, test Rust, `.deb` e `.tar.gz`) sullo stato corrente del repository, file nuovi compresi se in stage; `SKIP_PACKAGE=1` salta i pacchetti |
 | `make release` | crea e pubblica il tag `v<versione>` di `tauri.conf.json`: la GitHub Action pubblica la release con installer Windows, pacchetti Linux e SHA-256 |
 
 Per una nuova versione aggiornare prima `version` in `Cargo.toml` e in `app/src-tauri/tauri.conf.json` (devono coincidere: la pipeline lo verifica).

@@ -30,3 +30,12 @@ schema: spec-driven
 #     archive:
 #       guidance:
 #         - Summarize the archive outcome before finishing
+
+operations:
+  apply:
+    guidance:
+      - >-
+        Before declaring a change verified or merging it, run the Linux CI steps.
+        On a Linux host run them directly (make test); on Windows or macOS run
+        make test-linux (scripts/test-linux-docker.sh, needs Docker), after staging
+        new files, and fix every failure it reports.
