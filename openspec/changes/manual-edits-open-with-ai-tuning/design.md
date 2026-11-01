@@ -104,6 +104,18 @@ La lista dei dispositivi resta conservativa per non scartare luoghi veri; il con
 - **Grid**: `onDoubleClick` → `open_with(focused, config.ui.double_click)`; `onContextMenu` → menu React (non menu nativo, per coerenza di stile e testabilità) con focus trap, tasto Menu/Maiusc+F10.
 - **Settings**: sezione "Soglie AI" (slider + campo numerico per persone, volti, somiglianza; tabella gruppi/categorie con soglia ereditata mostrata in grigio), box anteprima, "Ripristina predefiniti"; sezione "Applicazioni esterne" (aggiungi con file picker di `tauri-plugin-dialog`, già presente; argomenti; scelta del doppio clic); campo "Cartelle da ignorare per il luogo".
 
+### 10. Scelte fatte in implementazione
+- **Pavimento nella versione**: il pavimento è il suffisso `|floor=<valore>` di `analysis_version.model_ver` (stadi `persons` e `faces`). `pending` e `stale_count` considerano uguali `<modello>` e `<modello>|floor=…`: le librerie esistenti non diventano "da rianalizzare". Senza suffisso il minimo è la vecchia costante (0,4 / 0,8).
+- **Rianalisi sotto il pavimento**: il comando `reanalyze_below_floor` toglie la versione dello stadio ai soli file salvati con un minimo più alto della soglia in vigore e li passa al job di analisi (il normale "Rianalizza" salterebbe file già aggiornati).
+- **Cache dei concetti testuali**: è valida finché non cambiano prompt e categorie attive (`Taxonomy::prompt_signature`); versione, etichette e soglie non la invalidano, così il retune CLIP non carica l'encoder di testo.
+- **Retune CLIP**: rivaluta tutti i media con embedding del modello immagine corrente, a blocchi di 500, saltando quelli già marcati con la versione corrente della tassonomia (ripresa). Nessuna scrittura degli embedding.
+- **Volti sotto soglia**: restano salvati; quelli con persona automatica la perdono e non entrano nei nodi del clustering. Le assegnazioni manuali restano.
+- **Rinomina del luogo**: cambia solo nome e fonte (`manual`); coordinate e paese di ogni foto restano.
+- **Nomi di dispositivo**: dalla lista del §6 sono esclusi "fuji" e "olympus" (possono essere luoghi, es. "Monte Fuji"); per quelle fotocamere vale il confronto con la marca EXIF. Una cartella è scartata se una sua parola è un nome di dispositivo (es. "altra Nikon", "iPhone di Giulia").
+- **Filtro per cartella**: intervallo sull'indice univoco di `media_item.path` (`path >= <cartella>\` e `path < <cartella>]`); su Windows l'intervallo va dalla forma maiuscola a quella minuscola del prefisso, seguito da un confronto `NOCASE` esatto.
+- **`tauri-plugin-opener`**: usato solo dal backend (comando `open_with`), quindi nessun permesso nuovo per la webview e nessuna voce in `capabilities` o nei `tauri*.conf.json`. Su Linux "Mostra nella cartella" passa da `org.freedesktop.FileManager1` (gestito dal plugin).
+- **Impostazioni**: le soglie dei gruppi si modificano solo nella sezione "Soglie AI" (tolte dall'editor della tassonomia); "Applica soglie" salva configurazione e tassonomia e avvia il retune. Un unico pulsante "Salva" per le altre impostazioni.
+
 ## Risks / Trade-offs
 
 - [Conflitti di merge con `tags-identities-sequence` (Inspector, BulkBar, Settings, i18n, `config.rs`)] → nessuna migrazione di schema; modifiche UI in componenti separati (`PlaceEditor`, `ThresholdsSection`, `ExternalAppsSection`, `GridContextMenu`) montati con poche righe nei file condivisi; chiavi i18n sotto namespace nuovi (`place.*`, `thresholds.*`, `externalApps.*`).

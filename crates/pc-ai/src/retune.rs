@@ -205,6 +205,23 @@ pub fn preview(
     })
 }
 
+/// File da rianalizzare perché salvati con un minimo più alto delle soglie
+/// `t`: il loro stadio viene marcato "da rianalizzare" e se ne restituiscono
+/// gli id, da passare al job di analisi.
+pub fn prepare_reanalysis(store: &Store, t: &AiThresholds) -> AppResult<Vec<i64>> {
+    let t = *t;
+    Ok(store.write(move |c| {
+        let persons = analysis::below_floor(c, "persons", t.person_detection, LEGACY_PERSON_FLOOR)?;
+        let faces = analysis::below_floor(c, "faces", t.face_detection, LEGACY_FACE_FLOOR)?;
+        analysis::forget(c, &persons, "persons")?;
+        analysis::forget(c, &faces, "faces")?;
+        let mut ids: Vec<i64> = persons.into_iter().chain(faces).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        Ok(ids)
+    })?)
+}
+
 /// Esito di [`apply`] per fase (stessi conteggi dell'anteprima).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Applied {

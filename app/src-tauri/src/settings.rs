@@ -98,6 +98,25 @@ pub async fn save_taxonomy(
     Ok(())
 }
 
+/// Rianalisi dei file salvati con un minimo più alto delle soglie in vigore
+/// (scenario "Soglia sotto il minimo salvato"). Restituisce l'id del job, o
+/// `None` se non ci sono file da rianalizzare.
+#[tauri::command]
+#[specta::specta]
+pub async fn reanalyze_below_floor(state: State<'_, AppState>) -> AppResult<Option<i64>> {
+    let (db, t) = (state.store.clone(), state.config.read().ai.thresholds);
+    let ids = tauri::async_runtime::spawn_blocking(move || retune::prepare_reanalysis(&db, &t))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))??;
+    if ids.is_empty() {
+        return Ok(None);
+    }
+    state
+        .jobs
+        .submit(pc_ai::analyze::JOB_KIND, serde_json::json!({ "ids": ids }))
+        .map(Some)
+}
+
 /// Effetto di nuove soglie (e, se indicata, di una tassonomia con soglie
 /// diverse) calcolato dai risultati salvati, senza scrivere.
 #[tauri::command]

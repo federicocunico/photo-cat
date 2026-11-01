@@ -151,6 +151,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             settings::get_taxonomy,
             settings::save_taxonomy,
             settings::preview_thresholds,
+            settings::reanalyze_below_floor,
             places::suggest_places,
             places::rename_place,
             places::recompute_places,

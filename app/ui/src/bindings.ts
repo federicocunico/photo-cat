@@ -141,6 +141,12 @@ export const commands = {
 	 *  diverse) calcolato dai risultati salvati, senza scrivere.
 	 */
 	previewThresholds: (thresholds: AiThresholds, taxonomy: Taxonomy | null) => __TAURI_INVOKE<ThresholdImpact>("preview_thresholds", { thresholds, taxonomy }),
+	/**
+	 *  Rianalisi dei file salvati con un minimo più alto delle soglie in vigore
+	 *  (scenario "Soglia sotto il minimo salvato"). Restituisce l'id del job, o
+	 *  `None` se non ci sono file da rianalizzare.
+	 */
+	reanalyzeBelowFloor: () => __TAURI_INVOKE<number | null>("reanalyze_below_floor"),
 	suggestPlaces: (prefix: string) => __TAURI_INVOKE<PlaceSuggestion[]>("suggest_places", { prefix }),
 	/**  Rinomina un luogo per tutte le foto che lo hanno (annullabile). */
 	renamePlace: (from: string, to: string) => __TAURI_INVOKE<BulkOutcome>("rename_place", { from, to }),

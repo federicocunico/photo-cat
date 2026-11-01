@@ -251,3 +251,24 @@ fn threshold_below_saved_floor_reports_files_to_reanalyse() {
     let impact = retune::preview(&db, None, &current, &lower, &JobControl::new()).unwrap();
     assert_eq!(impact.reanalysis_faces, 2);
 }
+
+#[test]
+fn reanalysis_below_floor_marks_only_affected_files_as_stale() {
+    let (_t, db, _) = library();
+    db.write(|c| {
+        analysis::version(c, 1, "faces", "det+sface", None)?;
+        analysis::version(c, 2, "faces", &analysis::with_floor("det+sface", 0.6), None)?;
+        analysis::version(c, 3, "persons", "yolox", None)
+    })
+    .unwrap();
+    let t = AiThresholds {
+        face_detection: 0.7,
+        ..Default::default()
+    };
+    // Persone a 0,4 (= minimo storico): nessuna rianalisi; volti: solo la foto 1.
+    assert_eq!(retune::prepare_reanalysis(&db, &t).unwrap(), vec![1]);
+    let pending = db
+        .read(|c| analysis::pending(c, &[1, 2], "faces", "det+sface", None))
+        .unwrap();
+    assert_eq!(pending, vec![1], "la foto 1 torna nel job di analisi");
+}

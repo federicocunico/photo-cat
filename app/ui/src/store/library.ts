@@ -20,6 +20,7 @@ export const emptyFilter = (): LibraryFilter => ({
   status: null,
   duplicatesOnly: false,
   rule: null,
+  folder: null,
 });
 
 interface LibraryState {
@@ -31,6 +32,9 @@ interface LibraryState {
   /** Ultimo elemento cliccato (ancora per Shift+clic) e mostrato nell'ispettore. */
   focused: number | null;
   scrollTop: number;
+  /** Il filtro per cartella include le sottocartelle. */
+  folderRecursive: boolean;
+  setFolderRecursive: (v: boolean) => void;
   setFilter: (f: Partial<LibraryFilter>) => void;
   resetFilter: () => void;
   setSort: (s: SortKey) => void;
@@ -50,6 +54,14 @@ export const useLibrary = create<LibraryState>()(
       selected: [],
       focused: null,
       scrollTop: 0,
+      folderRecursive: true,
+      setFolderRecursive: (folderRecursive) =>
+        set((s) => ({
+          folderRecursive,
+          filter: s.filter.folder
+            ? { ...s.filter, folder: { ...s.filter.folder, recursive: folderRecursive } }
+            : s.filter,
+        })),
       setFilter: (f) => set((s) => ({ filter: { ...s.filter, ...f }, scrollTop: 0 })),
       resetFilter: () => set({ filter: emptyFilter(), scrollTop: 0 }),
       setSort: (sort) => set({ sort, scrollTop: 0 }),
@@ -61,7 +73,11 @@ export const useLibrary = create<LibraryState>()(
     {
       name: "photo-cat.library",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ sort: s.sort, thumbSize: s.thumbSize }),
+      partialize: (s) => ({
+        sort: s.sort,
+        thumbSize: s.thumbSize,
+        folderRecursive: s.folderRecursive,
+      }),
     },
   ),
 );

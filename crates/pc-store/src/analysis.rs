@@ -153,6 +153,16 @@ pub fn recount_people(c: &Connection, threshold: f32, write: bool) -> StoreResul
     Ok(changed)
 }
 
+/// Rende "da rianalizzare" lo stadio `stage` dei media indicati (i risultati
+/// restano finché la rianalisi non li sostituisce).
+pub fn forget(c: &Connection, ids: &[i64], stage: &str) -> StoreResult<()> {
+    let mut q = c.prepare_cached("DELETE FROM analysis_version WHERE media_id=?1 AND stage=?2")?;
+    for id in ids {
+        q.execute(params![id, stage])?;
+    }
+    Ok(())
+}
+
 /// Media (presenti) il cui risultato `stage` è stato salvato con un minimo più
 /// alto di `threshold`: per loro abbassare la soglia richiede una rianalisi.
 /// `legacy_floor` è il minimo dei risultati salvati senza pavimento.
