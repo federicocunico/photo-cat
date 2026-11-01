@@ -51,6 +51,45 @@ pub fn migrate(
     Ok(backup)
 }
 
+/// Versione di schema di un catalogo esistente, senza modificarlo (`None` se
+/// il file non esiste o non è leggibile).
+pub fn catalog_version(path: &Path) -> Option<i64> {
+    if !path.is_file() {
+        return None;
+    }
+    let conn =
+        Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    current_version(&conn).ok()
+}
+
+/// Prima di migrare un catalogo di una versione precedente, copia anche la
+/// configurazione accanto al backup del catalogo: le versioni precedenti
+/// rifiutano i campi nuovi di `config.toml`, quindi per tornare indietro
+/// servono entrambe le copie. Restituisce il percorso della copia.
+pub fn backup_config_before_migration(
+    catalog: &Path,
+    config: &Path,
+    dir: &Path,
+) -> Option<PathBuf> {
+    let version = catalog_version(catalog)?;
+    if version == 0 || version >= SCHEMA_VERSION || !config.is_file() {
+        return None;
+    }
+    std::fs::create_dir_all(dir).ok()?;
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let path = dir.join(format!("config-v{version}-{stamp}.toml"));
+    match std::fs::copy(config, &path) {
+        Ok(_) => {
+            tracing::info!(path = %path.display(), "backup della configurazione prima della migrazione");
+            Some(path)
+        }
+        Err(e) => {
+            tracing::warn!(detail = %e, "backup della configurazione non riuscito");
+            None
+        }
+    }
+}
+
 fn backup(conn: &Connection, dir: &Path, version: i64) -> Result<PathBuf, StoreError> {
     std::fs::create_dir_all(dir).map_err(|e| StoreError::Schema(e.to_string()))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
@@ -264,6 +303,44 @@ mod tests {
         }
         // Idempotente.
         migrate(&mut conn, None).unwrap();
+    }
+
+    #[test]
+    fn config_is_copied_only_before_migrating_an_older_catalog() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (db, cfg, bk) = (
+            tmp.path().join("catalog.db"),
+            tmp.path().join("config.toml"),
+            tmp.path().join("backups"),
+        );
+        std::fs::write(
+            &cfg,
+            "[ui]
+theme = \"light\"
+",
+        )
+        .unwrap();
+        // Nessun catalogo (primo avvio): niente copia.
+        assert_eq!(backup_config_before_migration(&db, &cfg, &bk), None);
+        // Catalogo della versione precedente (v0.1.0 = schema 4).
+        let mut conn = Connection::open(&db).unwrap();
+        migrate_to(&mut conn, 4);
+        drop(conn);
+        let copy = backup_config_before_migration(&db, &cfg, &bk).expect("copia");
+        assert!(copy
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("config-v4-"));
+        assert_eq!(
+            std::fs::read_to_string(&copy).unwrap(),
+            std::fs::read_to_string(&cfg).unwrap()
+        );
+        // Catalogo già aggiornato: niente copia.
+        let mut conn = Connection::open(&db).unwrap();
+        migrate(&mut conn, None).unwrap();
+        drop(conn);
+        assert_eq!(backup_config_before_migration(&db, &cfg, &bk), None);
     }
 
     #[test]

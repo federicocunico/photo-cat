@@ -380,9 +380,12 @@ fn device_or_ignored(seg: &str, hints: &PlaceHints) -> bool {
         .find_map(|m| model.strip_prefix(m.as_str()))
         .unwrap_or(&model)
         .to_string();
-    [make, make_word, model, model_only]
-        .iter()
-        .any(|v| !v.is_empty() && *v == seg)
+    // Marca abbreviata come nome di cartella: `Fuji` per `FUJIFILM`.
+    let make_prefix = seg.len() >= 4 && make.len() > seg.len() && make.starts_with(&seg);
+    make_prefix
+        || [make, make_word, model, model_only]
+            .iter()
+            .any(|v| !v.is_empty() && *v == seg)
 }
 
 /// Luogo dedotto dal percorso: il segmento più profondo che corrisponde a una
@@ -548,6 +551,12 @@ mod tests {
             place_from_path(p, Some(&g), &fuji).as_deref(),
             Some("Monte Fuji"),
             "\"Fuji\" non è un nome di dispositivo"
+        );
+        let p = Path::new(r"D:\Foto\Viaggio Giappone\Fuji\DSCF1.JPG");
+        assert_eq!(
+            place_from_path(p, Some(&g), &fuji).as_deref(),
+            Some("Viaggio Giappone"),
+            "cartella con la marca abbreviata"
         );
         // Scenario "Nome di cartella ignorato dall'utente".
         let ignored = vec!["Selezionate".to_string()];

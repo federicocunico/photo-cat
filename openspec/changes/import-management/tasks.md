@@ -36,7 +36,7 @@
 ## 5. Verifica d'insieme
 
 - [x] 5.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
-- [ ] 5.2 Prova sull'app reale: importare per errore una cartella e rimuoverla durante l'import (controllare cache delle miniature e file originali); riorganizzare una cartella (aggiunte, spostamenti, cancellazioni, un file ritoccato) e aggiornarla controllando il riepilogo; spostare una cartella su un altro percorso e ricollegarla; rimuovere i mancanti. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
+- [x] 5.2 Prova sull'app reale: importare per errore una cartella e rimuoverla durante l'import (controllare cache delle miniature e file originali); riorganizzare una cartella (aggiunte, spostamenti, cancellazioni, un file ritoccato) e aggiornarla controllando il riepilogo; spostare una cartella su un altro percorso e ricollegarla; rimuovere i mancanti. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
 - [x] 5.3 Aggiornare il `README.md` (gestione delle importazioni: aggiornare, ricollegare, rimuovere), allineare le delta e verificare che `openspec validate import-management --strict` passi.
 
 ## Workflow follow-up

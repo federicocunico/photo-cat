@@ -3417,7 +3417,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pc-ai"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "hnsw_rs",
@@ -3444,7 +3444,7 @@ dependencies = [
 
 [[package]]
 name = "pc-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "directories",
  "serde",
@@ -3457,7 +3457,7 @@ dependencies = [
 
 [[package]]
 name = "pc-diag"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "parking_lot",
@@ -3474,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "pc-governor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "parking_lot",
  "pc-core",
@@ -3489,7 +3489,7 @@ dependencies = [
 
 [[package]]
 name = "pc-ingest"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "chrono",
@@ -3518,7 +3518,7 @@ dependencies = [
 
 [[package]]
 name = "pc-jobs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "parking_lot",
@@ -3536,7 +3536,7 @@ dependencies = [
 
 [[package]]
 name = "pc-models"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hex",
  "libloading 0.9.0",
@@ -3558,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "pc-organize"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "chrono",
@@ -3583,7 +3583,7 @@ dependencies = [
 
 [[package]]
 name = "pc-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3680,7 +3680,7 @@ dependencies = [
 
 [[package]]
 name = "photo-cat"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono-tz",

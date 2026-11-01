@@ -418,6 +418,13 @@ fn removal_during_import_cancels_it_first() {
     );
     let used = e.store.read(sources::referenced_thumbs).unwrap();
     assert!(used.is_empty());
+    // Nemmeno le miniature dei file in lavorazione al momento dell'annullamento.
+    let left = walkdir::WalkDir::new(e.tmp.path().join("thumbs"))
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|x| x.file_type().is_file())
+        .count();
+    assert_eq!(left, 0, "miniature rimaste nella cache");
     assert_eq!(fingerprint(&e.root), before, "originali intatti");
 }
 

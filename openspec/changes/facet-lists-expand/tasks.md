@@ -27,7 +27,7 @@
 ## 4. Verifica d'insieme
 
 - [x] 4.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
-- [ ] 4.2 Prova sull'app reale con una libreria con centinaia di luoghi: espansione sul posto, ricerca, pannello flottante dei luoghi e dei tag aperti insieme mentre si selezionano foto, selezione di più luoghi, riapertura dopo un riavvio nella stessa posizione. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
+- [x] 4.2 Prova sull'app reale con una libreria con centinaia di luoghi: espansione sul posto, ricerca, pannello flottante dei luoghi e dei tag aperti insieme mentre si selezionano foto, selezione di più luoghi, riapertura dopo un riavvio nella stessa posizione. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
 - [x] 4.3 Allineare le delta di `specs/` a quanto implementato e verificare che `openspec validate facet-lists-expand --strict` passi.
 
 ## Workflow follow-up

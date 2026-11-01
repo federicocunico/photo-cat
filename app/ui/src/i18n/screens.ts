@@ -159,7 +159,7 @@ export const screens = {
       pathHint: "Il nuovo percorso è usato dal prossimo avvio.",
       taxonomy: "Tassonomia",
       taxonomyHint:
-        "Categorie e frasi usate da CLIP; modificandole, le foto vengono segnate da rianalizzare.",
+        "Voci di catalogazione. Con una descrizione in inglese l'analisi automatica le assegna da sola; senza descrizione sono manuali. Solo descrizioni, voci automatiche e soglie fanno ricalcolare le catalogazioni automatiche.",
       groupThreshold: "Soglia del gruppo",
       enabled: "Attiva",
       prompts: "Frasi",
@@ -275,7 +275,7 @@ export const screens = {
       pathHint: "The new path is used from the next start.",
       taxonomy: "Taxonomy",
       taxonomyHint:
-        "Categories and phrases used by CLIP; changing them marks photos for reanalysis.",
+        "Cataloguing entries. With an English description automatic analysis assigns them; without one they are manual. Only descriptions, automatic entries and thresholds trigger a recompute of automatic cataloguing.",
       groupThreshold: "Group threshold",
       enabled: "Enabled",
       prompts: "Phrases",

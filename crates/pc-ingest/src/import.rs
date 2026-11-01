@@ -178,6 +178,7 @@ fn stage_thumbnail(
     keep_decoded: bool,
     item: &mut ImportItem,
     ctx: &StageCtx,
+    track: &Mutex<UpdateTracker>,
 ) -> StageOutcome {
     let Some(key) = item.content_hash.clone() else {
         return StageOutcome::Continue;
@@ -235,6 +236,7 @@ fn stage_thumbnail(
         if let Err(e) = deps.thumbs.store(&key, &fit(&oriented, THUMB_SIZE)) {
             return StageOutcome::ContinueWithError(e);
         }
+        track.lock().written_thumbs.push(key.clone());
     }
     item.thumb_key = Some(key);
     if keep_decoded {
@@ -256,6 +258,9 @@ pub struct UpdateTracker {
     pub summary: UpdateSummary,
     /// Miniature del contenuto precedente dei file modificati.
     pub stale_thumbs: Vec<String>,
+    /// Miniature scritte da questo import: quelle che nessun elemento usa alla
+    /// fine (file annullati o falliti dopo la miniatura) vengono cancellate.
+    pub written_thumbs: Vec<String>,
 }
 
 /// Fase scrittura: un'unica operazione (in coda al writer) per tutti i dati del file.
@@ -459,7 +464,7 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
     let (d_meta, d_thumb, d_write) = (deps.clone(), deps.clone(), deps.clone());
     let partial = only_paths.is_some();
     let track: Arc<Mutex<UpdateTracker>> = Arc::default();
-    let (t_meta, t_write) = (track.clone(), track.clone());
+    let (t_meta, t_thumb, t_write) = (track.clone(), track.clone(), track.clone());
 
     let mut pipeline = Pipeline::<ImportItem>::new(job_id, ctx.progress, ctx.control.clone())
         .key(|i| i.path_str())
@@ -518,7 +523,7 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
             out
         })
         .stage(PHASE_THUMB, deps.decode_workers.max(1), move |item, ctx| {
-            stage_thumbnail(&d_thumb, keep_decoded, item, ctx)
+            stage_thumbnail(&d_thumb, keep_decoded, item, ctx, &t_thumb)
         });
     for stage in &deps.extra_stages {
         let s = stage.clone();
@@ -540,7 +545,9 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
     }
     deps.store.flush()?;
     let tracker = std::mem::take(&mut *track.lock());
-    remove_stale_thumbs(&deps, tracker.stale_thumbs);
+    let mut unused = tracker.stale_thumbs;
+    unused.extend(tracker.written_thumbs);
+    remove_stale_thumbs(&deps, unused);
     if !summary.cancelled && !partial {
         let mut s = tracker.summary;
         s.source_id = source_id;
