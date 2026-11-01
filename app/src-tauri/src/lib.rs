@@ -246,6 +246,12 @@ pub fn run() {
             builder.mount_events(app);
             let handle = app.handle().clone();
 
+            // Prima della migrazione di un catalogo precedente: copia anche config.toml.
+            pc_store::migrate::backup_config_before_migration(
+                &paths.database(),
+                &paths.config_file(),
+                &paths.backups(),
+            );
             let store = Store::open(
                 &paths.database(),
                 StoreOptions {
