@@ -2,7 +2,29 @@
 // Uso: vi.mock("../lib/ipc", () => ipcMockModule()) con percorso relativo al test.
 
 import { vi } from "vitest";
-import type { ErrorRecord, JobSnapshot, LogLine, ModelStatus, ResourceSnapshot } from "../bindings";
+import type {
+  ErrorRecord,
+  JobSnapshot,
+  LogLine,
+  ModelStatus,
+  RenameOutcome,
+  IdentitiesView,
+  RefFaceView,
+  AddReferenceOutcome,
+  IdentitySuggestion,
+  SequenceScope,
+  SequenceOverview,
+  SequenceCursor,
+  SequencePage,
+  ClockPreview,
+  Alignment,
+  ExportDefaults,
+  ExportPreflight,
+  NamePreviewResult,
+  SequenceExportOptions,
+  ResourceSnapshot,
+  TagOverview,
+} from "../bindings";
 
 type Cb<T> = (p: T) => void;
 
@@ -65,6 +87,89 @@ export const commandsMock = {
   startBulk: vi.fn(async () => 1),
   undoBulk: vi.fn(async () => null),
   lastBulkUndo: vi.fn(async () => null),
+  tagOverview: vi.fn(async (): Promise<TagOverview> => ({
+    tags: [],
+    sets: [],
+    activeSet: null,
+    palette: [],
+  })),
+  renameTag: vi.fn(async (): Promise<RenameOutcome> => ({ outcome: "renamed" })),
+  mergeTag: vi.fn(async () => ({ changed: 0, requested: 0 })),
+  deleteTag: vi.fn(async () => ({ changed: 0, requested: 0 })),
+  setTagColor: vi.fn(async () => null),
+  saveTagSet: vi.fn(async () => 1),
+  duplicateTagSet: vi.fn(async () => 2),
+  deleteTagSet: vi.fn(async () => null),
+  reorderTagSets: vi.fn(async () => null),
+  addTagToSet: vi.fn(async () => 1),
+  removeTagFromSet: vi.fn(async () => null),
+  setActiveTagSet: vi.fn(async () => null),
+  setTagSetExportKeywords: vi.fn(async () => null),
+  setTagSetExclusive: vi.fn(async (): Promise<number[]> => []),
+  tagSetConflicts: vi.fn(async (): Promise<number[]> => []),
+  listIdentities: vi.fn<(q: string | null) => Promise<IdentitiesView>>(async () => ({
+    identities: [],
+    groups: [],
+    storePath: "",
+    defaultThreshold: 0.363,
+  })),
+  saveIdentity: vi.fn(async () => "uid-1"),
+  deleteIdentity: vi.fn(async () => null),
+  mergeIdentities: vi.fn(async () => null),
+  identityFaces: vi.fn(async (): Promise<RefFaceView[]> => []),
+  identityFaceImage: vi.fn(async () => "data:image/png;base64,"),
+  removeIdentityFace: vi.fn(async () => null),
+  addIdentityReferenceFile: vi.fn(async (): Promise<AddReferenceOutcome> => ({
+    outcome: "added",
+    id: 1,
+  })),
+  addIdentityReferenceFace: vi.fn(async () => 1),
+  linkPersonIdentity: vi.fn(async (person: number) => person),
+  suggestIdentities: vi.fn<(person: number, q: string) => Promise<IdentitySuggestion[]>>(
+    async () => [],
+  ),
+  exportIdentities: vi.fn(async () => null),
+  previewIdentityImport: vi.fn(),
+  sequenceOverview: vi.fn<(scope: SequenceScope) => Promise<SequenceOverview>>(async () => ({
+    sessions: [],
+    groups: [],
+    undated: [],
+    suggestions: [],
+    total: 0,
+    gapMin: 120,
+  })),
+  sequencePage: vi.fn<
+    (scope: SequenceScope, after: SequenceCursor | null, limit: number) => Promise<SequencePage>
+  >(async () => ({ items: [], next: null })),
+  sequenceSessionIds: vi.fn<(scope: SequenceScope, session: number) => Promise<number[]>>(
+    async () => [],
+  ),
+  sequenceIds: vi.fn<(scope: SequenceScope) => Promise<number[]>>(async () => []),
+  setSessionGap: vi.fn(async () => null),
+  setGroupDisplay: vi.fn(async () => 1),
+  setGroupShift: vi.fn(async () => 1),
+  previewGroupClock: vi.fn<
+    (
+      group: number,
+      tz: string | null,
+      offset: number | null,
+      shift: number,
+    ) => Promise<ClockPreview[]>
+  >(async () => []),
+  proposeAlignment: vi.fn<(reference: number, other: number) => Promise<Alignment>>(),
+  placeUndated: vi.fn(async () => 0),
+  ignoreTzSuggestion: vi.fn(async () => null),
+  listTimezones: vi.fn(async () => ["Europe/Rome"]),
+  sequenceExportDefaults: vi.fn(async (): Promise<ExportDefaults> => ({
+    template: "{seq:04d}_{date}_{time}_{tag}",
+    tagSet: 2,
+  })),
+  sequenceExportPreview: vi.fn<
+    (options: SequenceExportOptions, limit: number) => Promise<NamePreviewResult>
+  >(async () => ({ names: [], errors: [] })),
+  sequenceExportPreflight: vi.fn<(options: SequenceExportOptions) => Promise<ExportPreflight>>(),
+  startSequenceExport: vi.fn(async () => 77),
+  importIdentities: vi.fn(),
   exportFields: vi.fn(async () => ["path", "tags", "people"]),
   startExport: vi.fn(async () => 1),
   organizePreview: vi.fn(),

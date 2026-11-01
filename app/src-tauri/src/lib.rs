@@ -7,12 +7,16 @@ mod demo;
 mod dev;
 mod diagnostics;
 mod events;
+mod identities;
 mod library;
 mod models;
 mod organize;
 mod people;
+mod sequence;
 mod settings;
 mod state;
+mod tags;
+mod timeline;
 #[cfg(windows)]
 mod webview_runtime;
 
@@ -29,7 +33,7 @@ use pc_models::runtime::SessionOptions;
 use pc_models::store::ModelStore;
 use pc_models::Manifest;
 use pc_store::errorlog::DbErrorSink;
-use pc_store::{Store, StoreOptions};
+use pc_store::{AppStore, Store, StoreOptions};
 use state::AppState;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -88,6 +92,51 @@ pub fn bindings() -> Builder<tauri::Wry> {
             catalogs::start_bulk,
             catalogs::undo_bulk,
             catalogs::last_bulk_undo,
+            tags::tag_overview,
+            tags::rename_tag,
+            tags::merge_tag,
+            tags::delete_tag,
+            tags::set_tag_color,
+            tags::save_tag_set,
+            tags::duplicate_tag_set,
+            tags::delete_tag_set,
+            tags::reorder_tag_sets,
+            tags::add_tag_to_set,
+            tags::remove_tag_from_set,
+            tags::set_active_tag_set,
+            tags::set_tag_set_export_keywords,
+            tags::set_tag_set_exclusive,
+            tags::tag_set_conflicts,
+            identities::list_identities,
+            identities::save_identity,
+            identities::delete_identity,
+            identities::merge_identities,
+            identities::identity_faces,
+            identities::identity_face_image,
+            identities::remove_identity_face,
+            identities::add_identity_reference_file,
+            identities::add_identity_reference_face,
+            identities::link_person_identity,
+            identities::suggest_identities,
+            identities::export_identities,
+            identities::preview_identity_import,
+            identities::import_identities,
+            timeline::sequence_overview,
+            timeline::sequence_page,
+            timeline::sequence_session_ids,
+            timeline::sequence_ids,
+            timeline::set_session_gap,
+            timeline::set_group_display,
+            timeline::set_group_shift,
+            timeline::preview_group_clock,
+            timeline::propose_alignment,
+            timeline::place_undated,
+            timeline::ignore_tz_suggestion,
+            timeline::list_timezones,
+            sequence::sequence_export_defaults,
+            sequence::sequence_export_preview,
+            sequence::sequence_export_preflight,
+            sequence::start_sequence_export,
             organize::export_fields,
             organize::start_export,
             organize::organize_preview,
@@ -181,6 +230,9 @@ pub fn run() {
                     ..Default::default()
                 },
             )?;
+            let app_store = AppStore::open(&paths.app_store())?;
+            tracing::info!(path = %paths.app_store().display(), "archivio dell'app aperto");
+            identities::on_library_open(&store, &app_store);
             diagnostics
                 .hub()
                 .add_sink(Arc::new(DbErrorSink::new(store.clone())));
@@ -261,6 +313,7 @@ pub fn run() {
                 config: shared_config.clone(),
                 face_policy: face_policy.clone(),
                 analysis_lock: Arc::default(),
+                app_store: Some(app_store.clone()),
             };
 
             let jobs = JobManager::new(
@@ -280,11 +333,25 @@ pub fn run() {
                 pc_organize::organize::JOB_KIND,
                 Arc::new(move |p| pc_organize::organize::plan(organize_store.clone(), p)),
             );
+            let backfill_store = store.clone();
+            jobs.register(
+                pc_ingest::backfill::JOB_KIND,
+                Arc::new(move |p| pc_ingest::backfill::plan(backfill_store.clone(), p)),
+            );
+            let seq_store = store.clone();
+            let seq_governor = governor.clone();
+            jobs.register(
+                pc_organize::sequence::job::JOB_KIND,
+                Arc::new(move |p| {
+                    pc_organize::sequence::job::plan(seq_store.clone(), seq_governor.clone(), p)
+                }),
+            );
             let bulk_store = store.clone();
             jobs.register(
                 pc_jobs::bulk::JOB_KIND,
                 Arc::new(move |p| pc_jobs::bulk::plan(bulk_store.clone(), p)),
             );
+            let state_ai_deps = ai_deps.clone();
             let analysis_deps = ai_deps.clone();
             jobs.register(
                 pc_ai::analyze::JOB_KIND,
@@ -329,6 +396,14 @@ pub fn run() {
                 _ => {}
             }
             let ticker = jobs.start_ticker();
+            // Librerie importate prima dello schema v5: fuso, dispositivo e istante reale.
+            if let Err(e) = pc_ingest::backfill::queue_once(&store, &jobs) {
+                tracing::error!(
+                    code = e.code.as_str(),
+                    detail = e.detail.as_str(),
+                    "accodamento time_backfill"
+                );
+            }
             // Verifica dei modelli in background: la libreria resta utilizzabile.
             if config.ai.auto_download_models {
                 let _ = jobs.submit(models_job::JOB_KIND, serde_json::json!({}));
@@ -347,6 +422,8 @@ pub fn run() {
                 face_policy,
                 diagnostics,
                 store,
+                app_store,
+                ai_deps: state_ai_deps,
                 governor,
                 probe,
                 monitor: monitor.clone(),

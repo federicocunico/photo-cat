@@ -59,6 +59,26 @@ export const Icon = {
       <path d="M16 14.2c3 .2 5.5 2.4 5.5 5.8" />
     </Svg>
   ),
+  Sequence: (p: P) => (
+    <Svg {...p}>
+      <rect x="3" y="5" width="5" height="14" rx="1" />
+      <rect x="10" y="5" width="5" height="14" rx="1" />
+      <path d="M18 8l3 4-3 4" />
+    </Svg>
+  ),
+  Tags: (p: P) => (
+    <Svg {...p}>
+      <path d="M3 12V4h8l10 10-8 8z" />
+      <circle cx="7.5" cy="8.5" r="1.5" />
+    </Svg>
+  ),
+  Identities: (p: P) => (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="11" r="2.5" />
+      <path d="M5 17c.6-2 2.1-3 4-3s3.4 1 4 3M15 9h3M15 13h3" />
+    </Svg>
+  ),
   Import: (p: P) => (
     <Svg {...p}>
       <path d="M12 3v12" />

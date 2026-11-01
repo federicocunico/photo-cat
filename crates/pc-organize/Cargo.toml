@@ -18,10 +18,16 @@ specta = { workspace = true, optional = true }
 rusqlite = { version = "0.32", features = ["bundled"] }
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+pc-ingest.workspace = true
+pc-governor.workspace = true
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+jpeg-encoder = "0.6"
+kamadak-exif = "0.6"
+zip = { version = "2", default-features = false }
+sysinfo = { version = "0.32", default-features = false, features = ["disk"] }
 
 [features]
 specta = ["dep:specta","pc-store/specta"]
 
 [dev-dependencies]
-pc-governor.workspace = true
 pc-diag.workspace = true

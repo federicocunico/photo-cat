@@ -174,6 +174,8 @@ mod native {
         plane_width: unsafe extern "C" fn(*const c_void, i32) -> i32,
         plane_height: unsafe extern "C" fn(*const c_void, i32) -> i32,
         image_free: Release,
+        profile_size: unsafe extern "C" fn(*const c_void) -> usize,
+        profile_read: unsafe extern "C" fn(*const c_void, *mut c_void) -> Error,
     }
     impl Drop for Api {
         fn drop(&mut self) {
@@ -256,6 +258,14 @@ mod native {
                         unsafe extern "C" fn(*const c_void, i32) -> i32
                     ),
                     image_free: sym!("heif_image_release", Release),
+                    profile_size: sym!(
+                        "heif_image_handle_get_raw_color_profile_size",
+                        unsafe extern "C" fn(*const c_void) -> usize
+                    ),
+                    profile_read: sym!(
+                        "heif_image_handle_get_raw_color_profile",
+                        unsafe extern "C" fn(*const c_void, *mut c_void) -> Error
+                    ),
                     _library: lib,
                     _decoder: decoder,
                 };
@@ -408,8 +418,21 @@ mod native {
     pub fn decode(path: &Path, target: u32, gov: &MemoryGovernor) -> AppResult<Decoded> {
         decode_with_library(path, &library_path(), target, gov)
     }
+    /// Profilo colore ICC dell'immagine primaria (`None` se assente o di tipo nclx).
+    pub fn icc_profile(path: &Path) -> AppResult<Option<Vec<u8>>> {
+        with_handle(path, &library_path(), |api, h| {
+            let size = unsafe { (api.profile_size)(h) };
+            if size == 0 || size > 16 * 1024 * 1024 {
+                return Ok(None);
+            }
+            let mut buf = vec![0u8; size];
+            unsafe { (api.profile_read)(h, buf.as_mut_ptr().cast()) }.check()?;
+            Ok(Some(buf))
+        })
+    }
 }
 #[cfg(feature = "heif")]
 pub use native::{
-    decode, decode_with_library, dimensions, library_path, set_library_path, MIN_SYSTEM_VERSION,
+    decode, decode_with_library, dimensions, icc_profile, library_path, set_library_path,
+    MIN_SYSTEM_VERSION,
 };

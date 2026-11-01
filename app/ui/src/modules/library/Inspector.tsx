@@ -6,6 +6,8 @@ import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
 import { thumbUrl } from "./thumbUrl";
+import { colorOf, useTagOverview } from "../tags/data";
+import { TagChip } from "../tags/TagChip";
 
 function Grid2({ children }: { children: ReactNode }) {
   return (
@@ -163,6 +165,7 @@ const fmtCaptured = (s: string | null | undefined) => (s ? fmtDateTime(s.replace
 export function Inspector() {
   const { t } = useTranslation();
   const focused = useLibrary((s) => s.focused);
+  const tags = useTagOverview();
   const detail = useQuery({
     queryKey: ["media-detail", focused],
     queryFn: () => commands.mediaDetail(focused!),
@@ -302,17 +305,7 @@ export function Inspector() {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {d.tags.map((tag) => (
-            <span
-              key={tag}
-              style={{
-                padding: "2px 10px",
-                borderRadius: 4,
-                background: "var(--pc-raised)",
-                border: "1px solid var(--pc-border)",
-              }}
-            >
-              {tag}
-            </span>
+            <TagChip key={tag} name={tag} color={colorOf(tags.data, tag)} />
           ))}
         </div>
         {d.catalogs.length > 0 && (

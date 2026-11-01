@@ -29,3 +29,22 @@ fn raf_container_extracts_preview_and_rejects_out_of_bounds_offsets() {
     std::fs::write(&file, &bytes).unwrap();
     assert!(thumb::embedded_preview(&file).is_none());
 }
+
+#[test]
+fn raf_full_decode_uses_the_embedded_jpeg() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut jpeg = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(96, 64, image::Rgb([30, 50, 80]))
+        .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+        .unwrap();
+    let jpeg = jpeg.into_inner();
+    let mut bytes = vec![0u8; 148];
+    bytes[..16].copy_from_slice(b"FUJIFILMCCD-RAW ");
+    bytes[84..88].copy_from_slice(&148u32.to_be_bytes());
+    bytes[88..92].copy_from_slice(&(jpeg.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(&jpeg);
+    let file = tmp.path().join("DSCF0001.RAF");
+    std::fs::write(&file, &bytes).unwrap();
+    let f = pc_ingest::full::decode_full(&file, "raf", &MemoryGovernor::new(64)).unwrap();
+    assert_eq!(f.dimensions(), (96, 64));
+}

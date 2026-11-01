@@ -16,6 +16,21 @@ for (const text of Object.values(files)) {
 
 // Chiavi composte a runtime (t(`prefisso.${valore}`)): valori elencati qui.
 const dynamic: Record<string, string[]> = {
+  "tags.colors": ["blue", "teal", "yellow", "coral", "purple", "gray"],
+  "seqExport.tokens": [
+    "seq",
+    "seq4",
+    "date",
+    "time",
+    "timeFull",
+    "datetime",
+    "tag",
+    "device",
+    "people",
+    "place",
+    "orig",
+  ],
+  "jobs.phases": ["orari", "preparazione", "codifica", "per_tag", "manifest", "archivi"],
   "onboarding.steps": ["0", "1", "2", "3"],
   "organize.scopes": ["library", "catalog", "selection", "filter"],
   "organize.methods": ["copy", "hardlink", "symlink"],

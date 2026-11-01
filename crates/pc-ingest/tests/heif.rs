@@ -79,3 +79,19 @@ fn missing_decoder_library_reports_unsupported_format() {
         assert!(error.detail.contains(pc_ingest::heif::MIN_SYSTEM_VERSION));
     }
 }
+
+#[cfg(feature = "heif")]
+#[test]
+fn heic_full_decode_keeps_full_size() {
+    let p = fixture();
+    if !cfg!(windows) && pc_ingest::heif::dimensions(&p).is_err() {
+        return;
+    }
+    let f = pc_ingest::full::decode_full(&p, "heic", &MemoryGovernor::new(64)).unwrap();
+    assert_eq!(f.dimensions(), (64, 64));
+    assert_eq!(f.orientation, None, "libheif applica già la rotazione");
+    // Il profilo, se c'è, è un ICC valido.
+    if let Some(icc) = &f.icc {
+        assert_eq!(&icc[36..40], b"acsp");
+    }
+}

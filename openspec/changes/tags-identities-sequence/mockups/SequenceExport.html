@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>photo-cat — Export sequenza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#1B1B1C}
+a{color:#6AAEF5}a:hover{color:#9CCBFA}
+</style>
+</head><body>
+
+<div style="min-height: 960px; display: flex; flex-direction: column; background: #1B1B1C; color: #E8E8EA; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 14px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 16px; background: #232325; border-bottom: 1px solid #3A3A3E">
+<div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px"><svg width="22" height="22" viewbox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3l3 7M21 12l-7 3M12 21l-3-7M3 12l7-3"></path></svg><span>photo-cat</span></div>
+<label style="flex: 1 1 280px; max-width: 520px; display: flex; align-items: center; gap: 8px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; padding: 0 10px; min-height: 34px; color: #A9A9AE"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input type="search" aria-label="Ricerca globale" placeholder="Cerca file, persone, luoghi, tag…" style="flex: 1; background: transparent; border: 0; color: #E8E8EA; font: inherit; outline: none"></label>
+</header>
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+<nav aria-label="Moduli" style="flex: 1 1 180px; max-width: 220px; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: #232325; border-right: 1px solid #3A3A3E; box-sizing: border-box">
+<a href="Main.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Libreria</a><a href="Sequence.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; background: #2C2C2F; color: #FFFFFF; font-weight: 600">Sequenza</a><a href="Catalogs.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Cataloghi</a><a href="Tags.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Tag</a><a href="People.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Persone</a><a href="Identities.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Identità</a><a href="Import.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Importa</a><a href="Jobs.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Job</a><a href="Models.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Modelli AI</a><a href="Organize.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE">Esporta e organizza</a><a href="Onboarding.html" style="display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; color: #C9C9CE; margin-top: auto">Impostazioni</a>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<a href="Sequence.html" style="text-decoration: none">‹ Sequenza</a>
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Esporta sequenza</h1>
+<span style="color: #A9A9AE">Viaggio USA 2026 · 912 foto in ordine di istante reale · 905 con tag del set esclusivo</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="padding: 16px; border-radius: 8px; background: #232325; border: 1px solid #3A3A3E; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Nome dei file</h2>
+<label for="pattern" style="color: #A9A9AE">Modello</label>
+<input id="pattern" value="{seq:04d}_{date}_{time}_{tag}" style="min-height: 42px; background: #1B1B1C; border: 1px solid #3B8EEA; border-radius: 6px; color: #E8E8EA; font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 0 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button title="Numero progressivo" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{seq}</button><button title="Progressivo a 4 cifre" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{seq:04d}</button><button title="AAAA-MM-GG" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{date}</button><button title="HHMM" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{time}</button><button title="HHMMSS" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{time_full}</button><button title="Data e ora" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{datetime}</button><button title="Tag del set esclusivo" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{tag}</button><button title="Dispositivo" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{device}</button><button title="Nomi brevi delle identità" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{people}</button><button title="Luogo" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{place}</button><button title="Nome originale" style="min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #C9DCF2; font-family: 'JetBrains Mono', monospace; font-size: 12px">{orig}</button>
+</div>
+<div style="border: 1px solid #2C2C2F; border-radius: 6px; overflow-x: auto">
+<div style="min-width: 520px">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; background: #1F1F21; color: #A9A9AE; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px"><span>Originale</span><span></span><span>Anteprima</span></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; border-top: 1px solid #2C2C2F; font-family: 'JetBrains Mono', monospace; font-size: 13px"><span style="color: #A9A9AE">DSCF4412.png</span><span style="color: #8E8E95">→</span><span style="color: #E8E8EA">0001_2026-08-19_1043_Paesaggi.jpg</span></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; border-top: 1px solid #2C2C2F; font-family: 'JetBrains Mono', monospace; font-size: 13px"><span style="color: #A9A9AE">IMG_8812.HEIC</span><span style="color: #8E8E95">→</span><span style="color: #E8E8EA">0002_2026-08-19_1044_Paesaggi.jpg</span></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; border-top: 1px solid #2C2C2F; font-family: 'JetBrains Mono', monospace; font-size: 13px"><span style="color: #A9A9AE">DSCF4413.png</span><span style="color: #8E8E95">→</span><span style="color: #E8E8EA">0003_2026-08-19_1044_Paesaggi.jpg</span></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; border-top: 1px solid #2C2C2F; font-family: 'JetBrains Mono', monospace; font-size: 13px"><span style="color: #A9A9AE">IMG_8815.HEIC</span><span style="color: #8E8E95">→</span><span style="color: #E8E8EA">0004_2026-08-19_1051_Persone.jpg</span></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.4fr); gap: 10px; padding: 6px 12px; border-top: 1px solid #2C2C2F; font-family: 'JetBrains Mono', monospace; font-size: 13px"><span style="color: #A9A9AE">DSCF4414.png</span><span style="color: #8E8E95">→</span><span style="color: #E0B252">0005_2026-08-19_1052.jpg</span></div>
+
+</div>
+</div>
+<span style="color: #A9A9AE; font-size: 12px">Ora nei nomi = ora locale del gruppo di sorgente dopo le correzioni. Nomi in conflitto ricevono un suffisso -2, -3.</span>
+</section>
+<section style="padding: 16px; border-radius: 8px; background: #232325; border: 1px solid #3A3A3E; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Formato e qualità</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 4px; color: #A9A9AE">Formato<select style="min-height: 38px; background: #2C2C2F; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; padding: 0 8px"><option>JPEG</option><option>Originale (copia)</option></select></label>
+<label style="display: flex; flex-direction: column; gap: 4px; color: #A9A9AE">Qualità<input value="97" style="min-height: 38px; background: #1B1B1C; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; padding: 0 10px"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; color: #A9A9AE">Crominanza<select style="min-height: 38px; background: #2C2C2F; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; padding: 0 8px"><option>4:4:4</option><option>4:2:0</option></select></label>
+</div>
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span>Verifica ogni immagine (SSIM ≥ 0.985, PSNR ≥ 42 dB) e ricodifica a qualità più alta, fino a 100, se non supera la soglia</span></label>
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span>Scrivi nei metadati: istante corretto con fuso, tag del set come parole chiave, identità presenti</span></label>
+<span style="color: #A9A9AE; font-size: 12px">Risoluzione originale e profilo colore ICC preservati; orientamento applicato ai pixel. Gli originali non vengono modificati.</span>
+</section>
+</div>
+<div style="flex: 1 1 320px; max-width: 420px; display: flex; flex-direction: column; gap: 16px">
+<section style="padding: 16px; border-radius: 8px; background: #232325; border: 1px solid #3A3A3E; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Struttura</h2>
+
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">sequenza/</span><br><span style="color: #A9A9AE; font-size: 12px">Tutte le foto rinominate in ordine</span></span></label>
+
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">per-tag/&lt;Tag&gt;/</span><br><span style="color: #A9A9AE; font-size: 12px">Stesse foto raggruppate per tag (hard link: nessuno spazio extra)</span></span></label>
+
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">manifest.csv</span><br><span style="color: #A9A9AE; font-size: 12px">Nome finale, originale, istante, tag, identità, qualità usata, SSIM/PSNR</span></span></label>
+
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">sequenza.zip</span><br><span style="color: #A9A9AE; font-size: 12px">Archivio non compresso</span></span></label>
+
+<label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin-top: 3px; width: 16px; height: 16px; accent-color: #3B8EEA"><span><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">per-tag.zip</span><br><span style="color: #A9A9AE; font-size: 12px">Archivio non compresso</span></span></label>
+
+<label style="display: flex; flex-direction: column; gap: 4px; color: #A9A9AE">Destinazione<span style="display: flex; gap: 6px"><input value="E:\Export\Viaggio USA 2026" style="flex: 1; min-width: 0; min-height: 38px; background: #1B1B1C; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; padding: 0 10px"><button style="min-height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">Sfoglia</button></span></label>
+</section>
+<section style="padding: 14px 16px; border-radius: 8px; background: #1E3A36; color: #BFE8E0; display: flex; flex-direction: column; gap: 4px">
+<strong>Verifica preliminare superata</strong>
+<span>Spazio stimato 15,4 GB (sequenza) + 15,4 GB (zip) · disponibili 212 GB su E:</span>
+<span>Hard link supportati sul volume di destinazione</span>
+</section>
+<section style="padding: 14px 16px; border-radius: 8px; background: #3A3320; color: #F0D9A6">7 foto senza tag nel set esclusivo: finiranno solo in sequenza/.</section>
+<button style="min-height: 46px; border-radius: 6px; border: 0; background: #3B8EEA; color: #0B1726; font: inherit; font-size: 16px; font-weight: 700">Avvia export (912 foto)</button>
+<span style="color: #A9A9AE; font-size: 12px; text-align: center">Eseguito come job: puoi continuare a lavorare e annullare senza lasciare file parziali.</span>
+</div>
+</div>
+</main>
+</div>
+<footer style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; padding: 6px 16px; background: #232325; border-top: 1px solid #3A3A3E; font-size: 12px; color: #A9A9AE">
+<span>Ultimo export: 28 ott 2026 · 904 foto · 3 ricodificate a qualità 99</span>
+</footer>
+</div>
+</body></html>

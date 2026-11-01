@@ -251,8 +251,8 @@ fn compile_cond(
         "name" => "m.name",
         "status" => "m.status",
         "place" => "(SELECT lo.name FROM location lo WHERE lo.media_id = m.id)",
-        "captured_at" => "d.captured_at",
-        "year" => "CAST(substr(d.captured_at, 1, 4) AS INTEGER)",
+        "captured_at" => crate::query::LOCAL_TIME_SQL,
+        "year" => crate::query::LOCAL_YEAR_SQL,
         "people_count" => {
             "COALESCE((SELECT mp.count FROM media_people mp WHERE mp.media_id = m.id), 0)"
         }

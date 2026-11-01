@@ -135,6 +135,7 @@ pub fn run(
     governor: &MemoryGovernor,
     control: &JobControl,
     policy: std::sync::Arc<crate::face_policy::FacePolicy>,
+    refs: &people::IdentityRefs,
 ) -> AppResult<()> {
     let Some(generation) = policy.token() else {
         return Ok(());
@@ -172,12 +173,15 @@ pub fn run(
             .collect();
         for f in &mut nodes {
             if !f.manual {
-                if let Some(p) = people::named_match(
+                // Lettura: un'identità non collegata non crea persone qui (lo fa il salvataggio).
+                if let Some(p) = people::named_match_refs(
                     c,
                     f.embedding.as_ref().expect("embedding"),
                     &f.model,
                     &f.rejected,
                     SAME_PERSON,
+                    refs,
+                    false,
                 )? {
                     f.person_id = Some(p);
                 }
@@ -307,7 +311,14 @@ mod tests {
         }Ok(())}).unwrap();
         let policy = std::sync::Arc::new(crate::face_policy::FacePolicy::new(true));
         let gov = MemoryGovernor::new(256);
-        run(&db, &gov, &JobControl::new(), policy.clone()).unwrap();
+        run(
+            &db,
+            &gov,
+            &JobControl::new(),
+            policy.clone(),
+            &Default::default(),
+        )
+        .unwrap();
         let (person, other, first, rejected) = db
             .write(|c| {
                 let f = people::records(c, None)?;
@@ -319,7 +330,14 @@ mod tests {
             })
             .unwrap();
         for _ in 0..2 {
-            run(&db, &gov, &JobControl::new(), policy.clone()).unwrap();
+            run(
+                &db,
+                &gov,
+                &JobControl::new(),
+                policy.clone(),
+                &Default::default(),
+            )
+            .unwrap();
         }
         db.read(|c| {
             let f = people::records(c, None)?;

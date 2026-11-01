@@ -53,3 +53,6 @@ export const fmtDateTime = (d: string | number | Date) =>
 
 export const fmtTime = (d: string | number | Date) =>
   new Intl.DateTimeFormat(locale(), { timeStyle: "medium" }).format(new Date(d));
+
+export const fmtDate = (d: string | number | Date) =>
+  new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(new Date(d));

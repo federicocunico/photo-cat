@@ -14,6 +14,8 @@ pub struct City {
     pub lat: f64,
     pub lon: f64,
     pub population: u64,
+    /// Fuso IANA della città (es. `Europe/Rome`), se presente nel file.
+    pub timezone: Option<String>,
 }
 
 /// K-d tree su coordinate cartesiane della sfera: gestisce anche poli e antimeridiano.
@@ -102,7 +104,8 @@ pub fn fold(s: &str) -> String {
 }
 
 impl Gazetteer {
-    /// Formato: `id · nome · nome italiano · lat · lon · paese · admin1 · popolazione` (TSV).
+    /// Formato: `id · nome · nome italiano · lat · lon · paese · admin1 · popolazione · fuso IANA`
+    /// (TSV; la colonna del fuso è facoltativa).
     pub fn load(path: &Path) -> AppResult<Self> {
         let text = std::fs::read_to_string(path)?;
         Self::parse(&text)
@@ -133,6 +136,11 @@ impl Gazetteer {
                 lat,
                 lon,
                 population: f[7].parse().unwrap_or(0),
+                timezone: f
+                    .get(8)
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string),
             });
         }
         if cities.is_empty() {
@@ -198,6 +206,13 @@ impl Gazetteer {
                 haversine_km(lat, lon, self.cities[i].lat, self.cities[i].lon),
             )
         })
+    }
+
+    /// Fuso IANA della città più vicina (senza limite di distanza: è un
+    /// suggerimento che l'utente conferma).
+    pub fn timezone_at(&self, lat: f64, lon: f64) -> Option<&str> {
+        self.nearest(lat, lon, f64::MAX)
+            .and_then(|(c, _)| c.timezone.as_deref())
     }
 
     pub fn by_name(&self, name: &str) -> Option<&City> {
@@ -274,6 +289,21 @@ mod tests {
 3166548\tSiena\tSiena\t43.31822\t11.33064\tIT\t16\t53901\n\
 4062577\tFlorence\t\t34.79981\t-87.67725\tUS\tAL\t40026\n\
 3169070\tRome\tRoma\t41.89193\t12.51133\tIT\t07\t2318895\n";
+
+    #[test]
+    fn timezone_of_nearest_city_from_shipped_file() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/models/geo/cities15000.tsv");
+        let g = Gazetteer::load(&path).unwrap();
+        // Firenze, piazza del Duomo.
+        assert_eq!(g.timezone_at(43.7731, 11.2560), Some("Europe/Rome"));
+        // Moab (Utah), sotto i 15.000 abitanti: vale la città più vicina.
+        assert_eq!(g.timezone_at(38.5733, -109.5498), Some("America/Denver"));
+        assert_eq!(g.timezone_at(f64::NAN, 0.0), None);
+        // File senza la colonna del fuso: nessun fuso, ma la città si trova.
+        let old = Gazetteer::parse(SAMPLE).unwrap();
+        assert_eq!(old.timezone_at(43.77, 11.25), None);
+    }
 
     #[test]
     fn nearest_city_with_italian_name() {

@@ -8,6 +8,9 @@ export const it = {
   modules: {
     library: "Libreria",
     catalogs: "Cataloghi",
+    tags: "Tag",
+    sequence: "Sequenza",
+    identities: "Identità",
     people: "Persone",
     import: "Importa",
     jobs: "Job",
@@ -74,6 +77,12 @@ export const it = {
       verifica: "Verifica modelli",
       download: "Download",
       self_test: "Self-test",
+      orari: "Orari e fusi",
+      preparazione: "Verifica preliminare",
+      codifica: "Codifica",
+      per_tag: "Cartelle per tag",
+      manifest: "Manifest",
+      archivi: "Archivi zip",
     },
     states: {
       queued: "In coda",

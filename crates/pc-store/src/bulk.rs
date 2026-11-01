@@ -48,6 +48,43 @@ pub enum UndoAction {
         ids: Vec<MediaId>,
         previous: Vec<LabelRow>,
     },
+    /// Tag rinominato: si torna al nome precedente.
+    TagRenamed {
+        tag_id: i64,
+        from: String,
+        to: String,
+    },
+    /// Tag sorgente unito nel tag di destinazione ed eliminato.
+    TagMerged {
+        source_id: i64,
+        source_name: String,
+        target_id: i64,
+        /// File che avevano il tag sorgente.
+        source_ids: Vec<MediaId>,
+        /// File che hanno ricevuto il tag di destinazione con l'unione.
+        added: Vec<MediaId>,
+    },
+    /// Tag eliminato con le sue assegnazioni.
+    TagDeleted {
+        tag_id: i64,
+        name: String,
+        ids: Vec<MediaId>,
+    },
+    /// Stato precedente di `app.db` (set e colori dei tag): `pc-store` non lo
+    /// interpreta, lo restituisce a chi annulla con [`undo_last_collect`].
+    AppStore {
+        payload: serde_json::Value,
+    },
+    /// Correzioni di un gruppo di sorgente prima della modifica.
+    GroupClock {
+        group: i64,
+        previous: crate::timeline::GroupClock,
+    },
+    /// Collocazione manuale precedente di una foto senza data (`None` = nessuna).
+    Placement {
+        media_id: MediaId,
+        previous: Option<(i64, Option<i32>)>,
+    },
 }
 
 thread_local! { static GROUPING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -93,7 +130,7 @@ pub struct BulkOutcome {
     pub requested: usize,
 }
 
-fn record(c: &Connection, description: &str, action: &UndoAction) -> StoreResult<()> {
+pub(crate) fn record(c: &Connection, description: &str, action: &UndoAction) -> StoreResult<()> {
     c.execute(
         "INSERT INTO undo_log(ts, description, payload) VALUES (?1, ?2, ?3)",
         params![now_ms(), description, serde_json::to_string(action)?],
@@ -111,31 +148,206 @@ fn refresh_all(c: &Connection, ids: &[MediaId]) -> StoreResult<()> {
     ids.iter().try_for_each(|id| fts::refresh(c, *id))
 }
 
-pub fn add_tag(c: &Connection, name: &str, ids: &[MediaId]) -> StoreResult<BulkOutcome> {
+/// Aggiunge un tag. `exclusive_siblings` sono gli altri tag del set esclusivo
+/// a cui appartiene `name`: vengono tolti dagli stessi file nella stessa
+/// operazione annullabile.
+pub fn add_tag(
+    c: &Connection,
+    name: &str,
+    ids: &[MediaId],
+    exclusive_siblings: &[String],
+) -> StoreResult<BulkOutcome> {
     let tag_id = tag::ensure(c, name)?;
+    let mut actions = Vec::new();
+    let mut touched: Vec<MediaId> = Vec::new();
+    for sibling in exclusive_siblings {
+        let Some(sib_id) = tag_id_of(c, sibling)? else {
+            continue;
+        };
+        if sib_id == tag_id {
+            continue;
+        }
+        let removed = tag::remove(c, sib_id, ids)?;
+        if !removed.is_empty() {
+            touched.extend(&removed);
+            actions.push(UndoAction::TagsRemoved {
+                tag_id: sib_id,
+                ids: removed,
+            });
+        }
+    }
     let added = tag::add(c, tag_id, ids)?;
-    refresh_all(c, &added)?;
-    record(
-        c,
-        &format!("Aggiungi tag \"{name}\""),
-        &UndoAction::TagsAdded {
-            tag_id,
-            ids: added.clone(),
-        },
-    )?;
+    touched.extend(&added);
+    touched.sort_unstable();
+    touched.dedup();
+    refresh_all(c, &touched)?;
+    let changed = touched.len();
+    let add_action = UndoAction::TagsAdded { tag_id, ids: added };
+    let action = if actions.is_empty() {
+        add_action
+    } else {
+        actions.push(add_action);
+        UndoAction::Group { actions }
+    };
+    record(c, &format!("Aggiungi tag \"{name}\""), &action)?;
     Ok(BulkOutcome {
-        changed: added.len(),
+        changed,
         requested: ids.len(),
     })
 }
 
-pub fn remove_tag(c: &Connection, name: &str, ids: &[MediaId]) -> StoreResult<BulkOutcome> {
-    let Some(tag_id) = c
-        .query_row("SELECT id FROM tag WHERE name = ?1", [name], |r| {
+fn tag_id_of(c: &Connection, name: &str) -> StoreResult<Option<i64>> {
+    Ok(
+        c.query_row("SELECT id FROM tag WHERE name = ?1", [name.trim()], |r| {
             r.get::<_, i64>(0)
         })
-        .optional()?
-    else {
+        .optional()?,
+    )
+}
+
+fn tag_row(c: &Connection, name: &str) -> StoreResult<(i64, String)> {
+    c.query_row(
+        "SELECT id, name FROM tag WHERE name = ?1",
+        [name.trim()],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()?
+    .ok_or_else(|| StoreError::NotFound(format!("tag \"{name}\"")))
+}
+
+fn media_with_tag(c: &Connection, tag_id: i64) -> StoreResult<Vec<MediaId>> {
+    let mut st =
+        c.prepare_cached("SELECT media_id FROM media_tag WHERE tag_id = ?1 ORDER BY media_id")?;
+    let rows = st
+        .query_map([tag_id], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Registra l'azione e, se presente, lo stato precedente di `app.db` nella stessa voce.
+fn record_with_app(
+    c: &Connection,
+    description: &str,
+    action: UndoAction,
+    app: Option<serde_json::Value>,
+) -> StoreResult<()> {
+    let action = match app {
+        Some(payload) => UndoAction::Group {
+            actions: vec![action, UndoAction::AppStore { payload }],
+        },
+        None => action,
+    };
+    record(c, description, &action)
+}
+
+/// Rinomina un tag mantenendo le assegnazioni. Se esiste già un altro tag con
+/// il nuovo nome (senza maiuscole) restituisce [`StoreError::Conflict`]: va
+/// proposta l'unione. `app` è lo stato dei set da ripristinare in annullamento.
+pub fn rename_tag(
+    c: &Connection,
+    from: &str,
+    to: &str,
+    app: Option<serde_json::Value>,
+) -> StoreResult<()> {
+    let to = to.trim();
+    if to.is_empty() {
+        return Err(StoreError::Invalid("nome tag vuoto".into()));
+    }
+    let (tag_id, old) = tag_row(c, from)?;
+    if let Some(other) = tag_id_of(c, to)? {
+        if other != tag_id {
+            return Err(StoreError::Conflict(format!("tag \"{to}\" già esistente")));
+        }
+    }
+    if old == to {
+        return Ok(());
+    }
+    c.execute(
+        "UPDATE tag SET name = ?2 WHERE id = ?1",
+        params![tag_id, to],
+    )?;
+    refresh_all(c, &media_with_tag(c, tag_id)?)?;
+    record_with_app(
+        c,
+        &format!("Rinomina tag \"{old}\" in \"{to}\""),
+        UndoAction::TagRenamed {
+            tag_id,
+            from: old,
+            to: to.into(),
+        },
+        app,
+    )
+}
+
+/// Unisce `source` in `target` (creato se non esiste): i file di `source`
+/// ricevono `target` e `source` viene eliminato.
+pub fn merge_tag(
+    c: &Connection,
+    source: &str,
+    target: &str,
+    app: Option<serde_json::Value>,
+) -> StoreResult<BulkOutcome> {
+    let (source_id, source_name) = tag_row(c, source)?;
+    let target_id = tag::ensure(c, target)?;
+    if target_id == source_id {
+        return Err(StoreError::Invalid(
+            "un tag non si unisce a se stesso".into(),
+        ));
+    }
+    let target_name: String =
+        c.query_row("SELECT name FROM tag WHERE id = ?1", [target_id], |r| {
+            r.get(0)
+        })?;
+    let source_ids = media_with_tag(c, source_id)?;
+    let added = tag::add(c, target_id, &source_ids)?;
+    c.execute("DELETE FROM tag WHERE id = ?1", [source_id])?;
+    refresh_all(c, &source_ids)?;
+    let changed = added.len();
+    let requested = source_ids.len();
+    record_with_app(
+        c,
+        &format!("Unisci tag \"{source_name}\" in \"{target_name}\""),
+        UndoAction::TagMerged {
+            source_id,
+            source_name,
+            target_id,
+            source_ids,
+            added,
+        },
+        app,
+    )?;
+    Ok(BulkOutcome { changed, requested })
+}
+
+/// Elimina un tag e le sue assegnazioni (i file su disco non vengono toccati).
+pub fn delete_tag(
+    c: &Connection,
+    name: &str,
+    app: Option<serde_json::Value>,
+) -> StoreResult<BulkOutcome> {
+    let (tag_id, exact) = tag_row(c, name)?;
+    let ids = media_with_tag(c, tag_id)?;
+    c.execute("DELETE FROM tag WHERE id = ?1", [tag_id])?;
+    refresh_all(c, &ids)?;
+    let n = ids.len();
+    record_with_app(
+        c,
+        &format!("Elimina tag \"{exact}\""),
+        UndoAction::TagDeleted {
+            tag_id,
+            name: exact,
+            ids,
+        },
+        app,
+    )?;
+    Ok(BulkOutcome {
+        changed: n,
+        requested: n,
+    })
+}
+
+pub fn remove_tag(c: &Connection, name: &str, ids: &[MediaId]) -> StoreResult<BulkOutcome> {
+    let Some(tag_id) = tag_id_of(c, name)? else {
         return Ok(BulkOutcome {
             changed: 0,
             requested: ids.len(),
@@ -153,6 +365,36 @@ pub fn remove_tag(c: &Connection, name: &str, ids: &[MediaId]) -> StoreResult<Bu
     )?;
     Ok(BulkOutcome {
         changed: removed.len(),
+        requested: ids.len(),
+    })
+}
+
+/// Rimuove più tag dagli stessi file in un'unica operazione annullabile
+/// (tasto 0: i tag del set attivo). `changed` conta i file distinti modificati.
+pub fn remove_tags(c: &Connection, names: &[String], ids: &[MediaId]) -> StoreResult<BulkOutcome> {
+    let mut actions = Vec::new();
+    let mut touched: Vec<MediaId> = Vec::new();
+    for name in names {
+        let Some(tag_id) = tag_id_of(c, name)? else {
+            continue;
+        };
+        let removed = tag::remove(c, tag_id, ids)?;
+        if !removed.is_empty() {
+            touched.extend(&removed);
+            actions.push(UndoAction::TagsRemoved {
+                tag_id,
+                ids: removed,
+            });
+        }
+    }
+    touched.sort_unstable();
+    touched.dedup();
+    refresh_all(c, &touched)?;
+    if !actions.is_empty() {
+        record(c, "Rimuovi i tag del set", &UndoAction::Group { actions })?;
+    }
+    Ok(BulkOutcome {
+        changed: touched.len(),
         requested: ids.len(),
     })
 }
@@ -272,6 +514,12 @@ pub fn last_undoable(c: &Connection) -> StoreResult<Option<String>> {
 
 /// Annulla l'ultima operazione registrata; restituisce la sua descrizione.
 pub fn undo_last(c: &Connection) -> StoreResult<Option<String>> {
+    Ok(undo_last_collect(c)?.map(|(d, _)| d))
+}
+
+/// Come [`undo_last`], restituendo anche gli stati di `app.db` da ripristinare
+/// (nell'ordine in cui applicarli).
+pub fn undo_last_collect(c: &Connection) -> StoreResult<Option<(String, Vec<serde_json::Value>)>> {
     let Some((id, description, payload)) = c
         .query_row(
             "SELECT id, description, payload FROM undo_log ORDER BY id DESC LIMIT 1",
@@ -289,16 +537,58 @@ pub fn undo_last(c: &Connection) -> StoreResult<Option<String>> {
         return Ok(None);
     };
     let action: UndoAction = serde_json::from_str(&payload)?;
-    undo_action(c, action)?;
+    let mut app = Vec::new();
+    undo_action(c, action, &mut app)?;
     c.execute("DELETE FROM undo_log WHERE id = ?1", [id])?;
-    Ok(Some(description))
+    Ok(Some((description, app)))
 }
-fn undo_action(c: &Connection, action: UndoAction) -> StoreResult<()> {
+fn undo_action(
+    c: &Connection,
+    action: UndoAction,
+    app: &mut Vec<serde_json::Value>,
+) -> StoreResult<()> {
     match action {
         UndoAction::Group { actions } => {
             for action in actions.into_iter().rev() {
-                undo_action(c, action)?;
+                undo_action(c, action, app)?;
             }
+        }
+        UndoAction::AppStore { payload } => app.push(payload),
+        UndoAction::GroupClock { group, previous } => {
+            crate::timeline::set_clock(c, group, &previous, &crate::timeline::system_offset)?;
+        }
+        UndoAction::Placement { media_id, previous } => {
+            crate::timeline::set_placement(c, media_id, previous, &crate::timeline::system_offset)?;
+        }
+        UndoAction::TagRenamed { tag_id, from, .. } => {
+            c.execute(
+                "UPDATE tag SET name = ?2 WHERE id = ?1",
+                params![tag_id, from],
+            )?;
+            refresh_all(c, &media_with_tag(c, tag_id)?)?;
+        }
+        UndoAction::TagMerged {
+            source_id,
+            source_name,
+            target_id,
+            source_ids,
+            added,
+        } => {
+            c.execute(
+                "INSERT INTO tag(id, name) VALUES (?1, ?2)",
+                params![source_id, source_name],
+            )?;
+            tag::add(c, source_id, &source_ids)?;
+            tag::remove(c, target_id, &added)?;
+            refresh_all(c, &source_ids)?;
+        }
+        UndoAction::TagDeleted { tag_id, name, ids } => {
+            c.execute(
+                "INSERT INTO tag(id, name) VALUES (?1, ?2)",
+                params![tag_id, name],
+            )?;
+            tag::add(c, tag_id, &ids)?;
+            refresh_all(c, &ids)?;
         }
         UndoAction::TagsAdded { tag_id, ids } => {
             tag::remove(c, tag_id, &ids)?;
@@ -381,8 +671,8 @@ mod tests {
     #[test]
     fn undo_tag_on_200_files() {
         let (c, ids) = db_with(200);
-        add_tag(&c, "Estate", &ids[..10]).unwrap();
-        let out = add_tag(&c, "Matrimonio", &ids).unwrap();
+        add_tag(&c, "Estate", &ids[..10], &[]).unwrap();
+        let out = add_tag(&c, "Matrimonio", &ids, &[]).unwrap();
         assert_eq!(
             out,
             BulkOutcome {
@@ -403,8 +693,8 @@ mod tests {
     #[test]
     fn undo_only_reverts_actually_changed_items() {
         let (c, ids) = db_with(5);
-        add_tag(&c, "mare", &ids[..2]).unwrap();
-        add_tag(&c, "mare", &ids).unwrap(); // aggiunge solo agli altri 3
+        add_tag(&c, "mare", &ids[..2], &[]).unwrap();
+        add_tag(&c, "mare", &ids, &[]).unwrap(); // aggiunge solo agli altri 3
         undo_last(&c).unwrap();
         assert_eq!(tagged(&c, "mare"), 2);
     }
@@ -457,7 +747,7 @@ mod tests {
         let (c, ids) = db_with(1);
         assert_eq!(undo_last(&c).unwrap(), None);
         for i in 0..30 {
-            add_tag(&c, &format!("t{i}"), &ids).unwrap();
+            add_tag(&c, &format!("t{i}"), &ids, &[]).unwrap();
         }
         let n: i64 = c
             .query_row("SELECT count(*) FROM undo_log", [], |r| r.get(0))
@@ -467,5 +757,139 @@ mod tests {
             last_undoable(&c).unwrap().as_deref(),
             Some("Aggiungi tag \"t29\"")
         );
+    }
+
+    fn tag_names(c: &Connection) -> Vec<String> {
+        repo::tag::list(c)
+            .unwrap()
+            .into_iter()
+            .map(|(_, n, _)| n)
+            .collect()
+    }
+
+    #[test]
+    fn rename_keeps_assignments_and_undo_restores_name() {
+        let (c, ids) = db_with(5);
+        add_tag(&c, "Tramonto", &ids[..3], &[]).unwrap();
+        rename_tag(&c, "tramonto", "Tramonti", None).unwrap();
+        assert_eq!(tagged(&c, "Tramonti"), 3);
+        assert_eq!(tag_names(&c), vec!["Tramonti"]);
+        // La ricerca testuale segue il nuovo nome.
+        let hits: i64 = c
+            .query_row(
+                "SELECT count(*) FROM media_fts WHERE media_fts MATCH 'tags:Tramonti'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hits, 3);
+        assert_eq!(
+            undo_last(&c).unwrap().as_deref(),
+            Some("Rinomina tag \"Tramonto\" in \"Tramonti\"")
+        );
+        assert_eq!(tag_names(&c), vec!["Tramonto"]);
+        assert_eq!(tagged(&c, "Tramonto"), 3);
+    }
+
+    #[test]
+    fn rename_onto_existing_name_signals_merge() {
+        let (c, ids) = db_with(2);
+        add_tag(&c, "tramonto", &ids[..1], &[]).unwrap();
+        add_tag(&c, "Tramonti", &ids[1..], &[]).unwrap();
+        let err = rename_tag(&c, "tramonto", "TRAMONTI", None).unwrap_err();
+        assert!(matches!(err, StoreError::Conflict(_)), "{err:?}");
+        assert_eq!(tag_names(&c), vec!["Tramonti", "tramonto"]);
+        // Cambiare solo le maiuscole dello stesso tag è una rinomina.
+        rename_tag(&c, "tramonto", "Tramonto", None).unwrap();
+        assert_eq!(tag_names(&c), vec!["Tramonti", "Tramonto"]);
+    }
+
+    #[test]
+    fn merge_with_common_files_and_undo() {
+        let (c, ids) = db_with(46);
+        // "Tramonti" su 0..38, "Sunset" su 34..46: 4 in comune.
+        add_tag(&c, "Tramonti", &ids[..38], &[]).unwrap();
+        add_tag(&c, "Sunset", &ids[34..], &[]).unwrap();
+        let app = serde_json::json!({"sets":[{"set_id":2,"position":3,"tag_name":"Sunset"}]});
+        let out = merge_tag(&c, "Sunset", "Tramonti", Some(app.clone())).unwrap();
+        assert_eq!(out.changed, 8);
+        assert_eq!(out.requested, 12);
+        assert_eq!(tagged(&c, "Tramonti"), 46);
+        assert_eq!(tag_names(&c), vec!["Tramonti"]);
+        let (desc, payloads) = undo_last_collect(&c).unwrap().unwrap();
+        assert_eq!(desc, "Unisci tag \"Sunset\" in \"Tramonti\"");
+        assert_eq!(payloads, vec![app]);
+        assert_eq!(tagged(&c, "Sunset"), 12);
+        assert_eq!(tagged(&c, "Tramonti"), 38);
+    }
+
+    #[test]
+    fn delete_tag_and_undo() {
+        let (c, ids) = db_with(10);
+        add_tag(&c, "Scartate", &ids, &[]).unwrap();
+        add_tag(&c, "Altro", &ids[..2], &[]).unwrap();
+        let out = delete_tag(&c, "scartate", None).unwrap();
+        assert_eq!(out.changed, 10);
+        assert_eq!(tagged(&c, "Scartate"), 0);
+        assert_eq!(tag_names(&c), vec!["Altro"]);
+        assert_eq!(
+            undo_last(&c).unwrap().as_deref(),
+            Some("Elimina tag \"Scartate\"")
+        );
+        assert_eq!(tagged(&c, "Scartate"), 10);
+        assert_eq!(tagged(&c, "Altro"), 2);
+        assert!(matches!(
+            delete_tag(&c, "inesistente", None),
+            Err(StoreError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn exclusive_set_replaces_sibling_and_undo_restores_it() {
+        let (c, ids) = db_with(40);
+        add_tag(&c, "Paesaggi", &ids, &[]).unwrap();
+        add_tag(&c, "Fuori set", &ids[..5], &[]).unwrap();
+        let siblings = vec!["Paesaggi".to_string(), "Città".to_string()];
+        let out = add_tag(&c, "Città", &ids, &siblings).unwrap();
+        assert_eq!(out.changed, 40);
+        assert_eq!(tagged(&c, "Città"), 40);
+        assert_eq!(tagged(&c, "Paesaggi"), 0);
+        assert_eq!(tagged(&c, "Fuori set"), 5);
+        undo_last(&c).unwrap();
+        assert_eq!(tagged(&c, "Città"), 0);
+        assert_eq!(tagged(&c, "Paesaggi"), 40);
+        assert_eq!(tagged(&c, "Fuori set"), 5);
+    }
+
+    #[test]
+    fn conflicts_when_set_becomes_exclusive() {
+        let (c, ids) = db_with(10);
+        add_tag(&c, "Paesaggi", &ids[..8], &[]).unwrap();
+        add_tag(&c, "Città", &ids[2..], &[]).unwrap();
+        add_tag(&c, "Altro", &ids, &[]).unwrap();
+        let set = vec![
+            "paesaggi".to_string(),
+            "Città".to_string(),
+            "Tramonti".to_string(),
+        ];
+        // 6 file hanno sia Paesaggi sia Città; nessun tag viene rimosso.
+        assert_eq!(repo::tag::conflicts(&c, &set).unwrap(), ids[2..8].to_vec());
+        assert_eq!(tagged(&c, "Paesaggi"), 8);
+        assert!(repo::tag::conflicts(&c, &set[..1]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_tags_of_set_is_one_undo() {
+        let (c, ids) = db_with(6);
+        add_tag(&c, "A", &ids[..3], &[]).unwrap();
+        add_tag(&c, "B", &ids[2..], &[]).unwrap();
+        add_tag(&c, "Altro", &ids, &[]).unwrap();
+        let out = remove_tags(&c, &["A".into(), "B".into(), "Mai usato".into()], &ids).unwrap();
+        assert_eq!(out.changed, 6);
+        assert_eq!(tagged(&c, "A") + tagged(&c, "B"), 0);
+        assert_eq!(tagged(&c, "Altro"), 6);
+        undo_last(&c).unwrap();
+        assert_eq!(tagged(&c, "A"), 3);
+        assert_eq!(tagged(&c, "B"), 4);
     }
 }

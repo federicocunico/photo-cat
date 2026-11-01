@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>photo-cat — Sequenza</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#1B1B1C}
+a{color:#6AAEF5}a:hover{color:#9CCBFA}
+</style>
+</helmet>
+<div style="min-height: 960px; display: flex; flex-direction: column; background: #1B1B1C; color: #E8E8EA; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 14px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 16px; background: #232325; border-bottom: 1px solid #3A3A3E">
+<div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3l3 7M21 12l-7 3M12 21l-3-7M3 12l7-3"></path></svg><span>photo-cat</span></div>
+<label style="flex: 1 1 280px; max-width: 520px; display: flex; align-items: center; gap: 8px; background: #1B1B1C; border: 1px solid #3A3A3E; border-radius: 6px; padding: 0 10px; min-height: 34px; color: #A9A9AE"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><input type="search" aria-label="Ricerca globale" placeholder="Cerca file, persone, luoghi, tag…" style="flex: 1; background: transparent; border: 0; color: #E8E8EA; font: inherit; outline: none"></label>
+</header>
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+<nav aria-label="Moduli" style="flex: 1 1 180px; max-width: 220px; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: #232325; border-right: 1px solid #3A3A3E; box-sizing: border-box">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="11"><a href="{{n.href}}" style="{{n.style}}">{{n.label}}</a></sc-for>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-wrap: wrap">
+<section style="flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 20px; background: #202022; border-bottom: 1px solid #3A3A3E">
+<label style="display: flex; align-items: center; gap: 6px; color: #A9A9AE">Ambito<select style="min-height: 34px; background: #2C2C2F; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; padding: 0 8px"><option>Catalogo: Viaggio USA 2026 (912)</option></select></label>
+<span style="color: #A9A9AE">Ordine: <strong style="color: #E8E8EA">istante reale</strong></span>
+<div role="group" aria-label="Tasti rapidi del set attivo" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto">
+<span style="color: #A9A9AE">Set attivo: Viaggio USA 2026</span>
+<sc-for list="{{keys}}" as="k" hint-placeholder-count="6"><span style="{{k.style}}"><kbd style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A9A9AE">{{k.key}}</kbd>{{k.name}}</span></sc-for>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 20px 0; padding: 10px 14px; border-radius: 6px; background: #3A3320; color: #F0D9A6">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l9.5 17h-19z"></path><path d="M12 10v4M12 17v.5"></path></svg>
+<span style="flex: 1 1 360px">Fujifilm X-T5: 64 scatti dichiarano +02:00 ma il GPS degli scatti iPhone negli stessi istanti è in -07:00. L'istante resta, cambia solo l'ora locale mostrata e usata nei nomi.</span>
+<button style="min-height: 34px; padding: 0 12px; border-radius: 6px; border: 0; background: #E0B252; color: #2A1F05; font: inherit; font-weight: 700">Applica -07:00</button>
+<button style="min-height: 34px; padding: 0 12px; border-radius: 6px; border: 1px solid #5A4A26; background: transparent; color: #F0D9A6; font: inherit">Ignora</button>
+</div>
+<div style="flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 20px">
+<sc-for list="{{sessions}}" as="s" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">{{s.title}}</h2><span style="color: #A9A9AE">{{s.meta}}</span><button style="margin-left: auto; min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #3A3A3E; background: transparent; color: #C9C9CE; font: inherit">Seleziona sessione (A)</button></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px">
+<sc-for list="{{s.photos}}" as="p" hint-placeholder-count="8">
+<div style="{{p.card}}">
+<div style="{{p.thumb}}"><sc-if value="{{p.tag}}" hint-placeholder-val="{{ false }}"><span style="{{p.tagStyle}}">{{p.tag}}</span></sc-if></div>
+<div style="{{p.strip}}"></div>
+<div style="display: flex; justify-content: space-between; padding: 4px 6px; font-size: 12px"><span style="font-family: 'JetBrains Mono', monospace; color: #C9C9CE">{{p.time}}</span><span style="color: #A9A9AE">{{p.dev}}</span></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="margin: 0 20px 20px; padding: 12px 14px; border: 1px dashed #3A3A3E; border-radius: 8px; background: #1F1F21; display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<strong>Senza data (7)</strong>
+<span style="color: #A9A9AE; flex: 1 1 260px">Trascina una foto dopo quella che la precede: riceve un istante tra le due vicine e il loro fuso.</span>
+<div style="display: flex; gap: 8px"><sc-for list="{{undated}}" as="u" hint-placeholder-count="7"><span style="{{u.style}}"></span></sc-for></div>
+</div>
+</section>
+<aside aria-label="Sorgenti e orari" style="flex: 1 1 340px; max-width: 400px; padding: 20px; background: #232325; border-left: 1px solid #3A3A3E; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Sorgenti e orari</h2>
+<span style="color: #A9A9AE; font-size: 13px; line-height: 1.45">Un gruppo per dispositivo e fuso. Lo scostamento sposta l'istante (orologio avanti o indietro); l'ora locale cambia solo la visualizzazione e i nomi.</span>
+<sc-for list="{{sources}}" as="g" hint-placeholder-count="4">
+<div style="{{g.box}}">
+<div style="display: flex; align-items: center; gap: 8px"><span style="{{g.dot}}"></span><strong style="flex: 1">{{g.name}}</strong><span style="color: #A9A9AE; font-size: 12px">{{g.count}} foto</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #A9A9AE">Ora locale<select style="min-height: 34px; background: #2C2C2F; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font: inherit; font-size: 14px; padding: 0 6px"><option>{{g.tz}}</option></select></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #A9A9AE">Scostamento<input value="{{g.offset}}" style="min-height: 34px; background: #1B1B1C; color: #E8E8EA; border: 1px solid #3A3A3E; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 0 8px"></label>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A9A9AE">{{g.preview}}</span>
+</div>
+</sc-for>
+<button style="min-height: 40px; border-radius: 6px; border: 1px solid #3A3A3E; background: #2C2C2F; color: #E8E8EA; font: inherit">Allinea due foto dello stesso momento…</button>
+<div style="display: flex; gap: 8px; margin-top: auto">
+<button style="flex: 1; min-height: 40px; border-radius: 6px; border: 1px solid #3A3A3E; background: transparent; color: #C9C9CE; font: inherit">Annulla modifiche</button>
+<button style="flex: 1; min-height: 40px; border-radius: 6px; border: 0; background: #3B8EEA; color: #0B1726; font: inherit; font-weight: 700">Applica (2 gruppi)</button>
+</div>
+<a href="SequenceExport.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 6px; border: 1px solid #2F4D73; text-decoration: none">Esporta sequenza…</a>
+</aside>
+</main>
+</div>
+<footer style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; padding: 6px 16px; background: #232325; border-top: 1px solid #3A3A3E; font-size: 12px; color: #A9A9AE">
+<span>912 foto · 3 dispositivi · 14 sessioni</span><span>6 selezionate</span><span>1–5 assegna · 0 rimuove · Spazio schermo intero · Maiusc+clic intervallo</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+renderVals() {
+const navItems = [['Libreria', 'Main.dc.html'], ['Sequenza', 'Sequence.dc.html', true], ['Cataloghi', 'Catalogs.dc.html'], ['Tag', 'Tags.dc.html'], ['Persone', 'People.dc.html'], ['Identità', 'Identities.dc.html'], ['Importa', 'Import.dc.html'], ['Job', 'Jobs.dc.html'], ['Modelli AI', 'Models.dc.html'], ['Esporta e organizza', 'Organize.dc.html'], ['Impostazioni', 'Onboarding.dc.html']];
+const base = 'display: flex; align-items: center; padding: 0 12px; min-height: 40px; border-radius: 6px; text-decoration: none; ';
+const dev = { F: ['X-T5', '#4FC3B0'], I: ['iPhone', '#3B8EEA'], C: ['Altro', '#E0B252'] };
+const tagC = { Paesaggi: '#3B8EEA', 'Città': '#4FC3B0', Tramonti: '#E0B252', Persone: '#F2A38F', Cibo: '#B59CF0' };
+const tones = ['#3A3534', '#34393A', '#383638', '#33373D', '#36332F'];
+const mk = (rows, selFrom, selTo) => rows.map((r, i) => {
+const sel = i >= selFrom && i <= selTo;
+return {
+time: r[0], dev: dev[r[1]][0], tag: r[2] || '',
+card: 'border-radius: 8px; overflow: hidden; background: #232325; ' + (sel ? 'outline: 2px solid #3B8EEA' : 'outline: 1px solid #2C2C2F'),
+thumb: 'position: relative; aspect-ratio: 3 / 2; background: ' + tones[i % tones.length],
+strip: 'height: 4px; background: ' + dev[r[1]][1],
+tagStyle: 'position: absolute; left: 6px; bottom: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #0B1726; background: ' + (tagC[r[2]] || '#A9A9AE')
+};
+});
+return {
+nav: navItems.map((n, i) => ({ label: n[0], href: n[1], style: base + (n[2] ? 'background: #2C2C2F; color: #FFFFFF; font-weight: 600' : 'color: #C9C9CE') + (i === navItems.length - 1 ? '; margin-top: auto' : '') })),
+keys: [['1', 'Paesaggi'], ['2', 'Città'], ['3', 'Tramonti'], ['4', 'Persone'], ['5', 'Cibo'], ['0', 'Rimuovi']].map((k) => ({ key: k[0], name: k[1], style: 'display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border-radius: 999px; background: #2C2C2F; border: 1px solid #3A3A3E; font-size: 13px' })),
+sessions: [
+{ title: '19 ago 2026 · Moab', meta: '10:43–12:10 (-06:00) · 48 foto · X-T5 e iPhone', photos: mk([['10:43', 'F', 'Paesaggi'], ['10:44', 'I', 'Paesaggi'], ['10:44', 'F', 'Paesaggi'], ['10:51', 'I', 'Persone'], ['10:52', 'F'], ['11:02', 'F'], ['11:05', 'I'], ['11:20', 'C', 'Cibo']], 4, 7) },
+{ title: '19 ago 2026 · Arches NP', meta: '18:02–19:40 (-06:00) · 63 foto', photos: mk([['18:02', 'I', 'Città'], ['18:30', 'F', 'Tramonti'], ['18:31', 'F', 'Tramonti'], ['18:33', 'I', 'Tramonti'], ['18:47', 'F', 'Tramonti'], ['19:02', 'I'], ['19:20', 'F'], ['19:40', 'I', 'Persone']], -1, -1) }
+],
+undated: [0, 1, 2, 3, 4, 5, 6].map((i) => ({ style: 'width: 44px; height: 30px; border-radius: 4px; background: ' + tones[i % tones.length] + '; border-bottom: 3px solid #E0B252' })),
+sources: [
+['Fujifilm X-T5', 64, '+02:00 → -07:00', '+0 min', '10:43 +02:00 → 01:43 -07:00', '#4FC3B0', true],
+['Fujifilm X-T5', 310, '-06:00', '+2 min 10 s', '10:41:50 → 10:44:00', '#4FC3B0', true],
+['iPhone 17 Pro Max', 402, 'da metadati', '+0 min', 'orologio di rete: nessuna correzione', '#3B8EEA'],
+['Condivise (JPG, senza fuso)', 136, 'Europe/Rome', '+0 min', 'fuso presunto: scegli quello corretto', '#E0B252']
+].map((g) => ({ name: g[0], count: g[1], tz: g[2], offset: g[3], preview: g[4], dot: 'width: 10px; height: 10px; border-radius: 50%; background: ' + g[5], box: 'display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; background: #1F1F21; border: 1px solid ' + (g[6] ? '#2F4D73' : '#3A3A3E') }))
+};
+}
+}
+</script>
+</body>
+</html>

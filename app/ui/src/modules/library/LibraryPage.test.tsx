@@ -25,6 +25,7 @@ const item = (id: number): GridItem => ({
   status: id === 3 ? "missing" : "ok",
   faces: id === 2 ? 3 : 0,
   analyzed: id % 3 === 0,
+  tags: id === 1 ? ["Tramonti"] : [],
 });
 
 beforeEach(() => {
@@ -44,6 +45,12 @@ beforeEach(() => {
       next: null,
     })),
     libraryCount: vi.fn(async () => 12),
+    tagOverview: vi.fn(async () => ({
+      tags: [{ name: "Tramonti", count: 1, color: "yellow", sets: [] }],
+      sets: [],
+      activeSet: null,
+      palette: [],
+    })),
     getTaxonomy: vi.fn(async () => ({ version: 1, groups: [] })),
     libraryFacets: vi.fn(async () => ({
       labels: [
@@ -151,6 +158,8 @@ describe("Libreria", () => {
     expect(first.querySelector("img")).toHaveAttribute("src", "http://thumb.localhost/abcdef10000");
     expect(screen.getByTestId("thumb-3")).toHaveTextContent("Mancante");
     expect(screen.getByTestId("thumb-2")).toHaveTextContent("3");
+    // Chip colorato del tag sulla miniatura.
+    expect(screen.getByLabelText("Tag Tramonti")).toHaveAttribute("data-tag-color", "yellow");
 
     fireEvent.click(first);
     await screen.findByTestId("inspector");

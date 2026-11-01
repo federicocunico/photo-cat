@@ -32,9 +32,36 @@ pub struct AiDeps {
     pub config: Arc<RwLock<Config>>,
     pub face_policy: Arc<crate::face_policy::FacePolicy>,
     pub analysis_lock: Arc<Mutex<()>>,
+    /// Archivio dell'app con le identità (volti di riferimento); `None` nei test.
+    pub app_store: Option<pc_store::AppStore>,
 }
 
 impl AiDeps {
+    /// Aggiorna gli embedding dei riferimenti al modello corrente e li legge.
+    /// In caso di errore si prosegue senza riferimenti (il riconoscimento della
+    /// libreria funziona comunque).
+    pub fn identity_refs(&self) -> Arc<pc_store::people::IdentityRefs> {
+        let Some(app) = &self.app_store else {
+            return Arc::default();
+        };
+        let load = || -> AppResult<pc_store::people::IdentityRefs> {
+            crate::face_analysis::refresh_references(&self.resources, app)?;
+            let (emb, _) = crate::face_analysis::versions(&self.resources)?;
+            Ok(pc_store::people::IdentityRefs::load(app, &emb)?)
+        };
+        match load() {
+            Ok(r) => Arc::new(r),
+            Err(e) => {
+                tracing::warn!(
+                    code = e.code.as_str(),
+                    detail = e.detail.as_str(),
+                    "volti di riferimento delle identità non disponibili"
+                );
+                Arc::default()
+            }
+        }
+    }
+
     /// Gazetteer caricato alla prima richiesta (se il file è verificato).
     pub fn gazetteer(&self) -> Option<Arc<Gazetteer>> {
         let mut slot = self.gazetteer.lock();
@@ -237,6 +264,7 @@ pub fn import_stages(deps: &AiDeps, source_id: i64) -> StagePlan {
             min_pixels: deps.config.read().ai.face_min_size_px,
             threshold: 0.8,
             policy: deps.face_policy.clone(),
+            refs: deps.identity_refs(),
         }));
     }
     plan
@@ -414,6 +442,11 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                     })?;
                     phase.set_total(todo.len() as i64);
                     phase.start();
+                    let face_refs = if pass.phase == PHASE_FACES && !todo.is_empty() {
+                        deps.identity_refs()
+                    } else {
+                        Arc::default()
+                    };
                     for id in todo {
                         if !ctx.control.checkpoint() {
                             return Err(AppError::cancelled());
@@ -458,15 +491,17 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                                     let (emb, analysis) =
                                         crate::face_analysis::versions(&deps.resources)?;
                                     let policy = deps.face_policy.clone();
+                                    let refs = face_refs.clone();
                                     deps.store.submit(move |c| {
                                         if policy.is_current(generation) {
-                                            pc_store::people::save_faces(
+                                            pc_store::people::save_faces_with(
                                                 c,
                                                 id,
                                                 &found,
                                                 &emb,
                                                 &analysis,
                                                 crate::faces::SAME_PERSON,
+                                                &refs,
                                             )?;
                                         }
                                         Ok(())
@@ -529,11 +564,19 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 let p = ctx.progress.phase(PHASE_CLUSTER);
                 p.set_total(1);
                 p.start();
+                let refs = match &deps.app_store {
+                    Some(app) => crate::face_analysis::versions(&deps.resources)
+                        .ok()
+                        .and_then(|(emb, _)| pc_store::people::IdentityRefs::load(app, &emb).ok())
+                        .unwrap_or_default(),
+                    None => Default::default(),
+                };
                 crate::cluster::run(
                     &deps.store,
                     &deps.resources.governor,
                     &ctx.control,
                     deps.face_policy.clone(),
+                    &refs,
                 )?;
                 p.inc_done(1);
                 p.finish();

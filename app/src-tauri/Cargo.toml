@@ -12,6 +12,8 @@ default = ["heif"]
 heif = ["pc-ingest/heif"]
 # Abilita gli aiuti di `dev.rs` in una build release (solo per le prove end-to-end, mai negli installer).
 e2e = []
+# Test dei comandi con i modelli reali (`assets/models`, runtime ONNX di sviluppo).
+model-tests = []
 
 [lib]
 name = "photo_cat_lib"
@@ -40,11 +42,12 @@ tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
 parking_lot = "0.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
+base64 = "0.22"
+chrono-tz = "0.10"
+tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 # Stesse versioni usate da Tauri/wry: servono solo per verificare il runtime WebView2 all'avvio.
 webview2-com = "0.39.1"
 windows-core = "0.62.2"
 
-[dev-dependencies]
-tempfile.workspace = true

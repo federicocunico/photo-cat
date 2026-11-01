@@ -12,9 +12,16 @@ pub const JOB_THRESHOLD: usize = 200;
 pub enum BulkAction {
     AddTag {
         name: String,
+        /// Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file.
+        #[serde(default)]
+        exclusive: Vec<String>,
     },
     RemoveTag {
         name: String,
+    },
+    /// Rimuove più tag insieme (tasto 0: tutti i tag del set attivo).
+    RemoveTags {
+        names: Vec<String>,
     },
     AddCatalog {
         catalog: i64,
@@ -37,8 +44,9 @@ impl BulkAction {
     }
     fn apply(&self, c: &rusqlite::Connection, ids: &[i64]) -> StoreResult<usize> {
         Ok(match self {
-            Self::AddTag { name } => bulk::add_tag(c, name, ids)?.changed,
+            Self::AddTag { name, exclusive } => bulk::add_tag(c, name, ids, exclusive)?.changed,
             Self::RemoveTag { name } => bulk::remove_tag(c, name, ids)?.changed,
+            Self::RemoveTags { names } => bulk::remove_tags(c, names, ids)?.changed,
             Self::AddCatalog { catalog } => {
                 if repo::catalog::get(c, *catalog)?.kind != pc_store::model::CatalogKind::Manual {
                     return Err(pc_store::StoreError::Invalid(

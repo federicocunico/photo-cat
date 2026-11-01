@@ -61,6 +61,7 @@ pub fn start_bulk(
     operation: pc_jobs::bulk::BulkAction,
     confirmed: bool,
 ) -> AppResult<i64> {
+    let operation = crate::tags::with_set_rules(&state.app_store, operation)?;
     state.jobs.submit(
         pc_jobs::bulk::JOB_KIND,
         serde_json::json!({"ids":ids,"operation":operation,"confirmed":confirmed}),
@@ -69,10 +70,24 @@ pub fn start_bulk(
 #[tauri::command]
 #[specta::specta]
 pub async fn undo_bulk(state: State<'_, AppState>) -> AppResult<Option<String>> {
-    let db = state.store.clone();
-    tauri::async_runtime::spawn_blocking(move || db.write(bulk::undo_last).map_err(Into::into))
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?
+    let (db, app) = (state.store.clone(), state.app_store.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| {
+            let Some((description, payloads)) = bulk::undo_last_collect(c)? else {
+                return Ok(None);
+            };
+            // Set e colori dei tag in app.db, nella stessa scrittura del catalogo.
+            app.tx(|a| {
+                payloads
+                    .iter()
+                    .try_for_each(|p| pc_store::app_store::tags::restore(a, p))
+            })?;
+            Ok(Some(description))
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
 }
 #[tauri::command]
 #[specta::specta]
