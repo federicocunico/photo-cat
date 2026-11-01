@@ -53,7 +53,7 @@
 
 ## 8. Verifica d'insieme
 
-- [ ] 8.1 Eseguire `make test` (fmt, clippy, test Rust e UI) su Windows e Linux. Verifica: tutto verde.
+- [x] 8.1 Eseguire `make test` (fmt, clippy, test Rust e UI) su Windows e Linux. Verifica: tutto verde.
 - [ ] 8.2 Prova end-to-end sull'app reale con una cartella `Viaggio\{Telefono,D7000}`: luogo dedotto "Viaggio", rinomina e impostazione in bulk via albero cartelle con annullamento, doppio clic e "Apri con" verso un'app configurata, modifica di una soglia CLIP con anteprima e rivalutazione senza rianalisi. Verifica: tutti i passi riusciti, nessun errore nuovo in Diagnostica.
 - [x] 8.3 Allineare le delta di `specs/` a quanto implementato e verificare che `openspec validate manual-edits-open-with-ai-tuning --strict` passi.
 
