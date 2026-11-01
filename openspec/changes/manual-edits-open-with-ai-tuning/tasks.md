@@ -1,5 +1,13 @@
 # Tasks
 
+> **Note per l'agente implementatore — leggere prima di iniziare**
+>
+> - **Conflitti con `tags-identities-sequence`**: quel change modifica gli stessi file (`Inspector.tsx`, `BulkBar.tsx`, `SettingsPage.tsx`, i18n it/en, `pc-core/src/config.rs`). Prima di iniziare verificare se è già stato unito in `main`; se sì, fare il rebase di questo branch e partire da lì. Se no, tenere le modifiche nei componenti separati indicati nel design (`PlaceEditor`, `ThresholdsSection`, `ExternalAppsSection`, `GridContextMenu`), con poche righe nei file condivisi e chiavi i18n sotto namespace nuovi (`place.*`, `thresholds.*`, `externalApps.*`).
+> - **Nessuna migrazione di schema**: questo change non deve toccare `pc-store/src/migrate.rs`, perché la v5 appartiene a `tags-identities-sequence`. Se un task sembra richiederla, fermarsi e chiedere.
+> - **Nuova dipendenza**: per "Apri con" e "Mostra nella cartella" si aggiunge `tauri-plugin-opener` (design §8, task 6.1). Va registrato anche in `tauri.linux.conf.json` e nelle capability, tenendo allineata la configurazione Linux.
+> - **Nomi di dispositivo da ignorare**: la lista del design §6 è un punto di partenza conservativo. Va tarata sulle cartelle reali dell'utente che ha dato il feedback (struttura `Viaggio\{Telefono, D7000, altra Nikon}`): prima di chiudere il task 4.1 chiedere all'utente esempi dei nomi delle sue cartelle.
+> - **Soglie dell'altro change**: `tags-identities-sequence` introduce una soglia di somiglianza per singola identità. La `face_similarity` di questo change è il valore della libreria; quella per identità, quando esiste, ha la precedenza. Non implementarla qui.
+
 ## 1. Configurazione e tassonomia
 
 - [ ] 1.1 Estendere `pc-core/src/config.rs`: `AiConfig.thresholds { person_detection, face_detection, face_similarity }` (predefiniti 0,4 / 0,8 / 0,363), `AiConfig.ignored_folder_names`, `Config.external_apps: Vec<ExternalApp { id, name, path, args }>`, `UiConfig.double_click` (`system` | `none` | id app), tutti con `#[serde(default)]`; `validate()` rifiuta soglie fuori 0–1, id duplicati e `double_click` verso app inesistenti (design §2). Verifica: unit test in `config.rs` su un `config.toml` vecchio che si carica con i predefiniti, su soglia 1,5 rifiutata e su `double_click` orfano rifiutato; `cargo test -p pc-core` passa.
