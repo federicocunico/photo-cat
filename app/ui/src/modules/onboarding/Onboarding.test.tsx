@@ -50,7 +50,7 @@ it("percorre benvenuto, sistema, modelli e prima sorgente avviando l'import", as
   expect(commandsMock.addSource).toHaveBeenCalledWith(
     expect.objectContaining({ path: "D:\\Foto", recursive: true }),
   );
-  expect(commandsMock.startImport).toHaveBeenCalledWith(3);
+  expect(commandsMock.startImport).toHaveBeenCalledWith(3, null);
   expect(commandsMock.completeOnboarding).toHaveBeenCalled();
 });
 

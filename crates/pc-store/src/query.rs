@@ -50,6 +50,8 @@ pub struct LibraryFilter {
     pub rule: Option<serde_json::Value>,
     /// Cartella (con o senza sottocartelle).
     pub folder: Option<FolderFilter>,
+    /// Solo questi elementi (collegamenti dal riepilogo di un aggiornamento).
+    pub ids: Option<Vec<MediaId>>,
 }
 
 /// Filtro per cartella sul percorso dei file.
@@ -244,6 +246,10 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
     let mut parts: Vec<String> = vec!["1=1".into()];
     let mut args: Vec<Value> = Vec::new();
 
+    if let Some(ids) = &f.ids {
+        parts.push("m.id IN (SELECT value FROM json_each(?))".into());
+        args.push(Value::Text(serde_json::to_string(ids)?));
+    }
     if !f.source_ids.is_empty() {
         parts.push(format!(
             "m.source_id IN ({})",

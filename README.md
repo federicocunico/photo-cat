@@ -135,6 +135,18 @@ Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che
 
 `app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; la schermata Identità mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
 
+## Gestione delle importazioni
+
+Ogni sorgente ha un menu "…" nella barra laterale della Libreria (e gli stessi comandi nella pagina Import). Le azioni non toccano mai i file sul disco.
+
+- **Aggiorna**: rilegge la sorgente. Al termine il riepilogo "Ultimo aggiornamento" (pagina Import e schermata Job) indica i file nuovi, modificati, spostati o rinominati (riconosciuti dall'impronta del contenuto), mancanti e tornati presenti; un clic su un gruppo apre la Libreria solo su quei file. Un file con contenuto cambiato (es. ritagliato con un altro programma) riceve una nuova miniatura e torna "da analizzare": l'analisi automatica viene rifatta, mentre correzioni manuali, tag, cataloghi, luogo manuale e volti assegnati a mano restano. I volti assegnati a mano potrebbero non corrispondere più all'immagine ritoccata: vanno ricontrollati in Persone.
+- **Aggiorna cartella…**: aggiorna solo una sottocartella della sorgente (anche con ↻ accanto alla cartella nell'albero). Solo i file dentro quella cartella possono diventare mancanti.
+- **Ricollega mancanti…**: dopo aver spostato o rinominato una cartella fuori dal programma, si indica la nuova posizione. Il percorso precedente è proposto (cartella comune dei mancanti). I file si ritrovano per percorso relativo e poi per impronta del contenuto, con tutte le catalogazioni; le copie identiche ambigue restano mancanti. Se la nuova cartella non è in nessuna sorgente l'app propone di aggiungerla come sorgente o, se tutta la sorgente è stata ritrovata, di spostare lì la sorgente.
+- **Rimuovi mancanti…**: toglie dalla libreria, dopo una conferma con il numero di file, tutti i mancanti della sorgente.
+- **Rimuovi dalla libreria…**: prima della conferma mostra quante foto verranno tolte, quante hanno correzioni manuali o tag, i cataloghi manuali che perderanno foto, le persone con nome che resteranno senza foto e i job in corso sulla sorgente. Dopo la conferma i job vengono annullati, poi si cancellano dal catalogo le foto con miniature, embedding e volti; i gruppi di volti senza nome rimasti vuoti spariscono, le persone con nome restano (con 0 foto). La rimozione non si annulla: reimportando la cartella le foto tornano, ma senza correzioni manuali.
+
+Anche "Rimuovi dalla libreria" sulla selezione cancella le miniature non più usate. Al primo avvio di questa versione l'app ripulisce una sola volta, in background, le miniature rimaste da rimozioni precedenti.
+
 ## Luogo, cartelle, "Apri con" e soglie AI
 
 Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni → Percorso dati): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.

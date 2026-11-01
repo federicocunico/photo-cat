@@ -78,3 +78,15 @@ I volti assegnati manualmente a un file modificato potrebbero non corrispondere 
 ## Migration Plan
 
 Nessuna migrazione di schema. Al primo avvio dopo l'aggiornamento parte la pulizia una tantum delle miniature orfane. I risultati dei job di import precedenti non hanno il riepilogo esteso: la UI mostra i soli contatori esistenti. Rollback: revert; le miniature cancellate vengono rigenerate da un aggiornamento della sorgente.
+
+## Implementation Notes
+
+Decisioni prese durante l'implementazione, dove il design lasciava margine o il codice era diverso dal previsto:
+
+- **Riepilogo dell'aggiornamento**: la tabella `job` non ha una colonna per il risultato e il change esclude migrazioni. Il riepilogo dell'ultimo aggiornamento di ogni sorgente si salva quindi in `settings_kv` (`import.last_update.<sorgente>`, `pc_store::sources::UpdateSummary`) con l'id del job. La schermata Job lo mostra nella riga di quel job; gli import precedenti mostrano solo i contatori delle fasi. Un aggiornamento parziale (riprova dei falliti) o annullato non sostituisce il riepilogo.
+- **Classificazione**: "modificato" significa contenuto cambiato (`content_hash` diverso). Un file con sola data cambiata conta come invariato. Un mancante tornato presente conta come "tornato presente" anche se il contenuto è cambiato, e in quel caso viene comunque rianalizzato.
+- **Miniature**: sono indicizzate per impronta del contenuto e condivise tra duplicati esatti. Si cancellano solo quelle che nessun elemento usa più, anche dopo la rimozione bulk e quando un file modificato cambia miniatura. La pulizia una tantum all'avvio salta i file scritti dopo l'avvio dell'app, perché un import in corso potrebbe non averli ancora registrati.
+- **Job della sorgente**: si annullano i job `import`, `analysis` e `relink` con `sourceId` uguale e i job con `ids` tutti della sorgente. Se non si fermano entro 30 secondi la rimozione fallisce con un errore e non cancella nulla.
+- **Persone**: l'elenco delle persone include ora quelle con nome rimaste senza volti, con 0 foto (scenario "Persone coinvolte"). Le persone senza nome né identità rimaste senza volti vengono eliminate dopo ogni rimozione o rianalisi.
+- **Ricollegamento**: l'esito si salva in `settings_kv` (`import.last_relink.<sorgente>`). Se la nuova cartella è dentro un'altra sorgente, i file ritrovati passano a quella sorgente. Se è fuori da ogni sorgente restano nella sorgente originale e la UI propone due strade. "Aggiungi come sorgente" usa `add_source`, che adotta i file fuori dalla cartella della propria sorgente. "Sposta la sorgente qui" (`move_source`) compare solo se non resta alcun mancante e la cartella precedente era la radice della sorgente.
+- **Albero cartelle** (`manual-edits-open-with-ai-tuning`, già in `main`): ogni cartella ha un pulsante ↻ per "Aggiorna cartella". Il confronto dei percorsi (`sources::path_in_folder`) ignora le maiuscole su Windows come il filtro per cartella.

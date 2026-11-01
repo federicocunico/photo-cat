@@ -171,7 +171,8 @@ pub fn views(c: &Connection, person: Option<i64>) -> StoreResult<Vec<FaceView>> 
         .collect()
 }
 pub fn list(c: &Connection) -> StoreResult<Vec<PersonView>> {
-    let mut q=c.prepare("SELECT p.id,p.name,count(DISTINCT f.media_id),count(f.id),p.identity_uid FROM person p JOIN face f ON f.person_id=p.id GROUP BY p.id ORDER BY p.name IS NULL,p.name,p.id")?;
+    // Le persone con nome restano anche senza volti (es. dopo la rimozione di una sorgente).
+    let mut q=c.prepare("SELECT p.id,p.name,count(DISTINCT f.media_id),count(f.id),p.identity_uid FROM person p LEFT JOIN face f ON f.person_id=p.id GROUP BY p.id HAVING count(f.id)>0 OR p.name IS NOT NULL ORDER BY p.name IS NULL,p.name,p.id")?;
     let rows = q
         .query_map([], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))

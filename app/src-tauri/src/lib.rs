@@ -69,6 +69,13 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::update_source,
             library::remove_source,
             library::start_import,
+            library::source_removal_summary,
+            library::relink_missing,
+            library::remove_missing,
+            library::move_source,
+            library::missing_folder,
+            library::import_updates,
+            library::last_relink,
             library::library_page,
             library::library_count,
             library::library_facets,
@@ -230,6 +237,7 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            let started = std::time::SystemTime::now();
             builder.mount_events(app);
             let handle = app.handle().clone();
 
@@ -356,8 +364,10 @@ pub fn run() {
                     pc_organize::sequence::job::plan(seq_store.clone(), seq_governor.clone(), p)
                 }),
             );
+            let thumbs = ThumbCache::new(paths.thumbnails());
             let bulk_store = store.clone();
             let bulk_deps = ai_deps.clone();
+            let bulk_thumbs = thumbs.clone();
             jobs.register(
                 pc_jobs::bulk::JOB_KIND,
                 Arc::new(move |p| {
@@ -378,7 +388,11 @@ pub fn run() {
                         });
                         f(i)
                     });
-                    pc_jobs::bulk::plan_with(bulk_store.clone(), Some(r), p)
+                    let cache = bulk_thumbs.clone();
+                    let remover: pc_jobs::bulk::ThumbRemover = Arc::new(move |keys| {
+                        cache.remove(keys);
+                    });
+                    pc_jobs::bulk::plan_full(bulk_store.clone(), Some(r), Some(remover), p)
                 }),
             );
             let retune_deps = ai_deps.clone();
@@ -401,7 +415,6 @@ pub fn run() {
                 models_job::JOB_KIND,
                 Arc::new(move |p| models_job::plan(models_deps.clone(), p)),
             );
-            let thumbs = ThumbCache::new(paths.thumbnails());
             let cores = _sys.logical_cores;
             let import_deps = ImportDeps {
                 store: store.clone(),
@@ -415,6 +428,11 @@ pub fn run() {
             jobs.register(
                 import::JOB_KIND,
                 Arc::new(move |p| import::plan(import_deps.clone(), p)),
+            );
+            let relink_store = store.clone();
+            jobs.register(
+                pc_ingest::relink::JOB_KIND,
+                Arc::new(move |p| pc_ingest::relink::plan(relink_store.clone(), p)),
             );
             match jobs.recover_interrupted() {
                 Ok(rows) if !rows.is_empty() => {
@@ -484,6 +502,7 @@ pub fn run() {
                 let _ = emit_handle.emit(events::RESOURCES_TICK, &snap);
             });
             *app.state::<AppState>()._monitor_handle.lock() = Some(monitor_handle);
+            library::purge_orphan_thumbs(&handle, started);
             library::restart_watcher(&handle);
             tracing::info!("photo-cat avviato");
             Ok(())
