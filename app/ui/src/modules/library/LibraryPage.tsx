@@ -8,6 +8,7 @@ import { LibraryGrid } from "./Grid";
 import { Inspector } from "./Inspector";
 import { LibrarySidebar } from "./Sidebar";
 import { BulkBar } from "./BulkBar";
+import { FacetPanels } from "./FacetPanel";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
@@ -83,6 +84,7 @@ export function LibraryPage() {
           <Toolbar />
           <BulkBar />
           <LibraryGrid />
+          <FacetPanels />
         </>
       }
       right={<Inspector />}

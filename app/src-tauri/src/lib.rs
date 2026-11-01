@@ -80,6 +80,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::library_page,
             library::library_count,
             library::library_facets,
+            library::library_facet_values,
             library::library_ids,
             library::list_folders,
             library::media_detail,

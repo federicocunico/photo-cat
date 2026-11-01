@@ -7,12 +7,20 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { clickSelect, emptyFilter, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
+import { useFloating } from "../../store/floating";
+import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,
 }));
+
+/** Lista di un filtro con tutte le voci. */
+const list = (values: { value: string; count: number }[], total = values.length) => ({
+  values,
+  total,
+});
 
 const item = (id: number): GridItem => ({
   id,
@@ -56,17 +64,17 @@ beforeEach(() => {
       labels: [
         [
           "subject",
-          [
+          list([
             { value: "paesaggio", count: 7 },
             { value: "ritratto", count: 5 },
-          ],
+          ]),
         ],
       ],
-      places: [{ value: "Siena", count: 4 }],
-      years: [{ value: "2023", count: 12 }],
-      formats: [{ value: "jpg", count: 12 }],
-      people: [],
-      tags: [],
+      places: list([{ value: "Siena", count: 4 }]),
+      years: list([{ value: "2023", count: 12 }]),
+      formats: list([{ value: "jpg", count: 12 }]),
+      people: list([]),
+      tags: list([]),
     })),
     listSources: vi.fn(async () => [
       {
@@ -429,12 +437,12 @@ describe("voci e gruppi creati dall'utente", () => {
       ],
     } as never);
     commandsMock.libraryFacets.mockResolvedValue({
-      labels: [["evento", [{ value: "compleanno", count: 3 }]]],
-      places: [],
-      years: [],
-      formats: [],
-      people: [],
-      tags: [],
+      labels: [["evento", list([{ value: "compleanno", count: 3 }])]],
+      places: list([]),
+      years: list([]),
+      formats: list([]),
+      people: list([]),
+      tags: list([]),
     } as never);
     renderPage();
     const filters = await screen.findByRole("region", { name: "Filtri" });
@@ -446,5 +454,142 @@ describe("voci e gruppi creati dall'utente", () => {
       ]),
     );
     expect(await screen.findByRole("button", { name: "Rimuovi filtro Compleanno" })).toBeTruthy();
+  });
+});
+
+describe("elenco completo dei filtri e pannelli flottanti", () => {
+  const places = Array.from({ length: 340 }, (_, i) => ({ value: `Luogo ${i}`, count: 340 - i }));
+  const subject = [
+    { value: "ritratto", count: 9 },
+    { value: "opera_arte", count: 5 },
+    { value: "animale", count: 2 },
+  ];
+  beforeEach(() => {
+    useFloating.setState({ panels: {}, order: [] });
+    commandsMock.libraryFacets.mockResolvedValue({
+      labels: [["subject", list(subject)]],
+      places: list(places.slice(0, 50), 340),
+      years: list([{ value: "2023", count: 12 }]),
+      formats: list([]),
+      people: list([]),
+      tags: list([{ value: "mare", count: 3 }]),
+    } as never);
+    commandsMock.libraryFacetValues.mockImplementation((async (
+      _f: unknown,
+      key: { kind: string },
+      search: string | null,
+      sort: string,
+      offset: number,
+      limit: number,
+    ) => {
+      let values =
+        key.kind === "place"
+          ? places
+          : key.kind === "label"
+            ? subject
+            : [{ value: "mare", count: 3 }];
+      if (search)
+        values = values.filter((v) => v.value.toLowerCase().includes(search.toLowerCase()));
+      if (sort === "name") values = [...values].sort((a, b) => a.value.localeCompare(b.value));
+      return { values: values.slice(offset, offset + limit), total: values.length };
+    }) as never);
+  });
+  afterEach(() => i18n.changeLanguage("it"));
+
+  it("molte località: Mostra tutti (340), ricerca e scelta del luogo con meno foto", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    const showAll = await within(filters).findByRole("button", { name: "Mostra tutti (340)" });
+    expect(within(filters).getByRole("checkbox", { name: /Luogo 7\b/ })).toBeTruthy();
+    expect(within(filters).queryByRole("checkbox", { name: /Luogo 8\b/ })).toBeNull();
+    fireEvent.click(showAll);
+    const search = within(filters).getByRole("searchbox", { name: "Cerca in Luogo" });
+    fireEvent.change(search, { target: { value: "339" } });
+    await waitFor(() =>
+      expect(commandsMock.libraryFacetValues).toHaveBeenCalledWith(
+        expect.anything(),
+        { kind: "place" },
+        "339",
+        "count",
+        0,
+        100,
+      ),
+    );
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /Luogo 339/ }));
+    await waitFor(() => expect(useLibrary.getState().filter.places).toEqual(["Luogo 339"]));
+    fireEvent.click(within(filters).getByRole("button", { name: "Mostra meno" }));
+    expect(within(filters).getByRole("button", { name: "Mostra tutti (340)" })).toBeTruthy();
+  });
+
+  it("la voce selezionata resta visibile e spuntata nella lista compatta", async () => {
+    useLibrary.setState({ filter: { ...emptyFilter(), places: ["Luogo 339"] } });
+    commandsMock.libraryFacets.mockResolvedValue({
+      labels: [],
+      places: list([...places.slice(0, 50), { value: "Luogo 339", count: 1 }], 340),
+      years: list([]),
+      formats: list([]),
+      people: list([]),
+      tags: list([]),
+    } as never);
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    const chosen = await within(filters).findByRole("checkbox", { name: /Luogo 339/ });
+    expect(chosen).toBeChecked();
+  });
+
+  it("pannello dei luoghi: selezione condivisa, aggiornamento col filtro, più pannelli", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    fireEvent.click(await within(filters).findByRole("button", { name: "Apri Luogo in finestra" }));
+    const panel = await screen.findByRole("dialog", { name: "Luogo" });
+    expect(await within(panel).findByText("340 voci")).toBeTruthy();
+    fireEvent.click(await within(panel).findByRole("checkbox", { name: /Luogo 5\b/ }));
+    await waitFor(() => expect(useLibrary.getState().filter.places).toEqual(["Luogo 5"]));
+    expect(within(filters).getByRole("checkbox", { name: /Luogo 5\b/ })).toBeChecked();
+    // Il pannello segue gli altri filtri (anno dalla barra laterale).
+    fireEvent.click(within(filters).getByRole("checkbox", { name: /2023/ }));
+    await waitFor(() =>
+      expect(commandsMock.libraryFacetValues).toHaveBeenCalledWith(
+        expect.objectContaining({ dateFrom: "2023-01-01", places: ["Luogo 5"] }),
+        { kind: "place" },
+        null,
+        "count",
+        0,
+        100,
+      ),
+    );
+    // Un secondo pannello: i due restano aperti, l'ultimo cliccato in primo piano.
+    fireEvent.click(within(filters).getByRole("button", { name: "Apri Tag in finestra" }));
+    const tags = await screen.findByRole("dialog", { name: "Tag" });
+    expect(screen.getByRole("dialog", { name: "Luogo" })).toBeTruthy();
+    const z = (el: HTMLElement) => Number(el.style.zIndex);
+    expect(z(tags)).toBeGreaterThan(z(panel));
+    fireEvent.pointerDown(within(panel).getByText("340 voci"));
+    expect(z(panel)).toBeGreaterThan(z(tags));
+    fireEvent.click(within(panel).getByRole("button", { name: "Deseleziona tutto" }));
+    await waitFor(() => expect(useLibrary.getState().filter.places).toEqual([]));
+  });
+
+  it("catalogazioni in ordine alfabetico sul nome tradotto", async () => {
+    await i18n.changeLanguage("en");
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filters" });
+    fireEvent.click(
+      await within(filters).findByRole("button", { name: "Open Subject type in a window" }),
+    );
+    const panel = await screen.findByRole("dialog", { name: "Subject type" });
+    fireEvent.change(within(panel).getByRole("combobox", { name: "Sort" }), {
+      target: { value: "name" },
+    });
+    await waitFor(() => {
+      const names = within(panel)
+        .getAllByRole("checkbox")
+        .map((c) => c.closest("label")?.textContent ?? "");
+      expect(names.map((n) => n.replace(/\d+$/, ""))).toEqual([
+        "Animal",
+        "Portrait",
+        "Work of art",
+      ]);
+    });
   });
 });

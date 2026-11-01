@@ -464,73 +464,280 @@ pub struct FacetValue {
     pub count: i64,
 }
 
+/// Valori di una lista di filtro: i principali (più quelli selezionati) e il
+/// numero totale di voci.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FacetList {
+    pub values: Vec<FacetValue>,
+    pub total: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Facets {
     /// gruppo → valori
-    pub labels: Vec<(String, Vec<FacetValue>)>,
-    pub places: Vec<FacetValue>,
-    pub years: Vec<FacetValue>,
-    pub formats: Vec<FacetValue>,
-    pub people: Vec<FacetValue>,
-    pub tags: Vec<FacetValue>,
+    pub labels: Vec<(String, FacetList)>,
+    pub places: FacetList,
+    pub years: FacetList,
+    pub formats: FacetList,
+    pub people: FacetList,
+    pub tags: FacetList,
 }
 
-/// Conteggi per i filtri del pannello laterale, calcolati sui risultati correnti.
+/// Valori restituiti per lista nel riepilogo dei filtri (l'elenco completo
+/// si chiede con [`facet_values`]).
+pub const FACET_TOP: usize = 50;
+
+/// Una lista di filtro.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum FacetKey {
+    Label { group: String },
+    Place,
+    Year,
+    Format,
+    Tag,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum FacetSort {
+    /// Per numero di foto (decrescente).
+    #[default]
+    Count,
+    /// Alfabetico, senza maiuscole e accenti.
+    Name,
+}
+
+/// Una pagina dell'elenco completo dei valori di una lista.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FacetPage {
+    pub values: Vec<FacetValue>,
+    /// Voci che corrispondono alla ricerca.
+    pub total: i64,
+}
+
+impl FacetKey {
+    /// Il filtro senza la selezione di questa lista (`None` se la lista non ha
+    /// selezione): i suoi conteggi applicano tutti gli altri filtri, così le
+    /// altre voci della lista restano selezionabili.
+    fn without_own(&self, f: &LibraryFilter) -> Option<LibraryFilter> {
+        let mut g = f.clone();
+        let changed = match self {
+            Self::Label { group } => {
+                let before = g.labels.len();
+                g.labels
+                    .retain(|l| &l.group != group || l.values.is_empty());
+                g.labels.len() != before
+            }
+            Self::Place => !std::mem::take(&mut g.places).is_empty(),
+            Self::Year => g.date_from.take().is_some() | g.date_to.take().is_some(),
+            Self::Format => !std::mem::take(&mut g.formats).is_empty(),
+            Self::Tag => !std::mem::take(&mut g.tags).is_empty(),
+        };
+        changed.then_some(g)
+    }
+
+    /// Valori selezionati nel filtro per questa lista.
+    fn selected(&self, f: &LibraryFilter) -> Vec<String> {
+        match self {
+            Self::Label { group } => f
+                .labels
+                .iter()
+                .filter(|l| &l.group == group)
+                .flat_map(|l| l.values.clone())
+                .collect(),
+            Self::Place => f.places.clone(),
+            Self::Year => f
+                .date_from
+                .as_deref()
+                .and_then(|d| d.get(..4))
+                .map(|y| vec![y.to_string()])
+                .unwrap_or_default(),
+            Self::Format => f.formats.clone(),
+            Self::Tag => f.tags.clone(),
+        }
+    }
+
+    /// Query `(valore, conteggio)` sulle foto del CTE `f`, ordinate per conteggio.
+    fn select(&self) -> String {
+        match self {
+            Self::Label { .. } => "SELECT l.value, count(*) FROM label l JOIN f ON f.id = l.media_id \
+                 WHERE l.grp = ? GROUP BY l.value ORDER BY 2 DESC, 1"
+                .into(),
+            Self::Place => "SELECT lo.name, count(*) FROM location lo JOIN f ON f.id = lo.media_id \
+                 WHERE lo.name IS NOT NULL GROUP BY lo.name ORDER BY 2 DESC, 1"
+                .into(),
+            // Gli anni restano in ordine cronologico inverso.
+            Self::Year => format!(
+                "SELECT substr({LOCAL_TIME_SQL}, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
+                 WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1 DESC"
+            ),
+            Self::Format => "SELECT m.ext, count(*) FROM media_item m JOIN f ON f.id = m.id \
+                 GROUP BY m.ext ORDER BY 2 DESC, 1"
+                .into(),
+            Self::Tag => "SELECT tg.name, count(*) FROM media_tag mt JOIN f ON f.id = mt.media_id \
+                 JOIN tag tg ON tg.id = mt.tag_id GROUP BY tg.id ORDER BY 2 DESC, 1"
+                .into(),
+        }
+    }
+}
+
+/// Tutti i valori di una lista (senza limiti), con il filtro già compilato.
+fn facet_rows(c: &Connection, w: &SqlFragment, key: &FacetKey) -> StoreResult<Vec<FacetValue>> {
+    let mut args = w.args.clone();
+    if let FacetKey::Label { group } = key {
+        args.push(Value::Text(group.clone()));
+    }
+    let sql = format!(
+        "WITH f AS (SELECT m.id {FROM} WHERE {}) {}",
+        w.sql,
+        key.select()
+    );
+    let mut st = c.prepare(&sql)?;
+    let rows = st
+        .query_map(rusqlite::params_from_iter(args.iter()), |r| {
+            Ok(FacetValue {
+                value: r.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                count: r.get(1)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Valori di una lista con il filtro senza la sua selezione (si riusa il
+/// filtro di base già compilato se la lista non ha selezione).
+fn rows_for(
+    c: &Connection,
+    f: &LibraryFilter,
+    base: &SqlFragment,
+    key: &FacetKey,
+) -> StoreResult<Vec<FacetValue>> {
+    match key.without_own(f) {
+        Some(g) => facet_rows(c, &compile_filter(c, &g)?, key),
+        None => facet_rows(c, base, key),
+    }
+}
+
+/// Riepilogo di una lista: i primi [`FACET_TOP`] valori più quelli selezionati
+/// che non ne fanno parte (anche con 0 foto, per poterli deselezionare).
+fn summarize(rows: Vec<FacetValue>, selected: &[String]) -> FacetList {
+    let total = rows.len() as i64;
+    let mut values: Vec<FacetValue> = rows.iter().take(FACET_TOP).cloned().collect();
+    for s in selected {
+        if !values.iter().any(|v| &v.value == s) {
+            let count = rows
+                .iter()
+                .find(|v| &v.value == s)
+                .map(|v| v.count)
+                .unwrap_or(0);
+            values.push(FacetValue {
+                value: s.clone(),
+                count,
+            });
+        }
+    }
+    FacetList { values, total }
+}
+
+/// Conteggi per i filtri del pannello laterale. Ogni lista applica tutti i
+/// filtri tranne la propria selezione.
 pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
-    let w = compile_filter(c, f)?;
-    let base = format!("WITH f AS (SELECT m.id {FROM} WHERE {})", w.sql);
-    let run = |select: &str| -> StoreResult<Vec<(String, String, i64)>> {
-        let mut st = c.prepare(&format!("{base} {select}"))?;
+    let base = compile_filter(c, f)?;
+    let list = |key: FacetKey| -> StoreResult<FacetList> {
+        Ok(summarize(rows_for(c, f, &base, &key)?, &key.selected(f)))
+    };
+    let column = |sql: &str| -> StoreResult<Vec<(String, i64)>> {
+        let mut st = c.prepare(&format!(
+            "WITH f AS (SELECT m.id {FROM} WHERE {}) {sql}",
+            base.sql
+        ))?;
         let rows = st
-            .query_map(rusqlite::params_from_iter(w.args.iter()), |r| {
-                Ok((
-                    r.get::<_, Option<String>>(0)?.unwrap_or_default(),
-                    r.get(1)?,
-                    r.get(2)?,
-                ))
+            .query_map(rusqlite::params_from_iter(base.args.iter()), |r| {
+                Ok((r.get(0)?, r.get(1)?))
             })?
             .collect::<Result<_, _>>()?;
         Ok(rows)
     };
-    let simple = |rows: Vec<(String, String, i64)>| -> Vec<FacetValue> {
-        rows.into_iter()
-            .map(|(_, value, count)| FacetValue { value, count })
-            .collect()
-    };
     let mut out = Facets::default();
-    for (grp, value, count) in run(
-        "SELECT l.grp, l.value, count(*) FROM label l JOIN f ON f.id = l.media_id
-         GROUP BY l.grp, l.value ORDER BY l.grp, count(*) DESC",
-    )? {
-        match out.labels.last_mut() {
-            Some((g, vals)) if *g == grp => vals.push(FacetValue { value, count }),
-            _ => out.labels.push((grp, vec![FacetValue { value, count }])),
+    // Gruppi di catalogazione presenti nei risultati o con una selezione.
+    let mut groups: Vec<String> =
+        column("SELECT l.grp, count(*) FROM label l JOIN f ON f.id = l.media_id GROUP BY l.grp")?
+            .into_iter()
+            .map(|(g, _)| g)
+            .collect();
+    for l in f.labels.iter().filter(|l| !l.values.is_empty()) {
+        if !groups.contains(&l.group) {
+            groups.push(l.group.clone());
         }
     }
-    out.places = simple(run(
-        "SELECT NULL, lo.name, count(*) FROM location lo JOIN f ON f.id = lo.media_id
-         WHERE lo.name IS NOT NULL GROUP BY lo.name ORDER BY count(*) DESC LIMIT 100",
-    )?);
-    out.years = simple(run(
-        &format!(
-            "SELECT NULL, substr({LOCAL_TIME_SQL}, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id
-             WHERE d.captured_at IS NOT NULL GROUP BY 2 ORDER BY 2 DESC"
-        ),
-    )?);
-    out.formats = simple(run(
-        "SELECT NULL, m.ext, count(*) FROM media_item m JOIN f ON f.id = m.id GROUP BY m.ext ORDER BY count(*) DESC",
-    )?);
-    out.people = simple(run(
-        "SELECT NULL, p.name, count(DISTINCT fc.media_id) FROM face fc JOIN f ON f.id = fc.media_id
-         JOIN person p ON p.id = fc.person_id WHERE p.name IS NOT NULL GROUP BY p.id ORDER BY 3 DESC LIMIT 100",
-    )?);
-    out.tags = simple(run(
-        "SELECT NULL, tg.name, count(*) FROM media_tag mt JOIN f ON f.id = mt.media_id
-         JOIN tag tg ON tg.id = mt.tag_id GROUP BY tg.id ORDER BY 3 DESC LIMIT 100",
-    )?);
+    groups.sort();
+    for group in groups {
+        let values = list(FacetKey::Label {
+            group: group.clone(),
+        })?;
+        out.labels.push((group, values));
+    }
+    out.places = list(FacetKey::Place)?;
+    out.years = list(FacetKey::Year)?;
+    out.formats = list(FacetKey::Format)?;
+    out.tags = list(FacetKey::Tag)?;
+    // Persone: non mostrate nella barra laterale, con il filtro completo.
+    let people = column(
+        "SELECT p.name, count(DISTINCT fc.media_id) FROM face fc JOIN f ON f.id = fc.media_id \
+         JOIN person p ON p.id = fc.person_id WHERE p.name IS NOT NULL GROUP BY p.id ORDER BY 2 DESC, 1",
+    )?;
+    out.people = summarize(
+        people
+            .into_iter()
+            .map(|(value, count)| FacetValue { value, count })
+            .collect(),
+        &[],
+    );
     Ok(out)
+}
+
+/// Elenco completo dei valori di una lista, con ricerca (senza maiuscole e
+/// accenti), ordinamento e paginazione. Applica il filtro senza la selezione
+/// della lista stessa, come [`facets`].
+pub fn facet_values(
+    c: &Connection,
+    f: &LibraryFilter,
+    key: &FacetKey,
+    search: Option<&str>,
+    sort: FacetSort,
+    offset: u32,
+    limit: u32,
+) -> StoreResult<FacetPage> {
+    let base = compile_filter(c, f)?;
+    let mut rows = rows_for(c, f, &base, key)?;
+    if let Some(q) = search.map(str::trim).filter(|q| !q.is_empty()) {
+        let q = pc_core::text::fold(q);
+        rows.retain(|v| pc_core::text::fold(&v.value).contains(&q));
+    }
+    if sort == FacetSort::Name {
+        let mut keyed: Vec<(String, FacetValue)> = rows
+            .into_iter()
+            .map(|v| (pc_core::text::fold(&v.value), v))
+            .collect();
+        keyed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.value.cmp(&b.1.value)));
+        rows = keyed.into_iter().map(|(_, v)| v).collect();
+    }
+    let total = rows.len() as i64;
+    let values = rows
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit.clamp(1, 1000) as usize)
+        .collect();
+    Ok(FacetPage { values, total })
 }
 
 /// Tag concatenati con il separatore unità (U+001F), in ordine alfabetico.

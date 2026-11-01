@@ -148,6 +148,7 @@ fn rename_merges_and_undoes_in_one_step() {
         query::facets(c, &LibraryFilter::default())
             .unwrap()
             .places
+            .values
             .into_iter()
             .map(|f| (f.value, f.count))
             .collect()

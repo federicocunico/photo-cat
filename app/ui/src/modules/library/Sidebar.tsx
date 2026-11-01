@@ -3,13 +3,13 @@ import { useState } from "react";
 import type React from "react";
 import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type FacetValue, type LibraryFilter, type Source } from "../../lib/ipc";
+import { commands, isTauri, type FacetValue, type Source } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
-import { useLabelName } from "./labelName";
 import { updateFolder } from "../import/sourceActions";
+import { FacetList } from "./FacetList";
 
 function Row({
   label,
@@ -69,59 +69,6 @@ function Row({
         {fmtInt(count)}
       </span>
     </button>
-  );
-}
-
-function CheckList({
-  values,
-  selected,
-  onToggle,
-  render = (v) => v,
-  onRename,
-}: {
-  values: FacetValue[];
-  selected: string[];
-  onToggle: (v: string) => void;
-  render?: (v: string) => string;
-  /** Voce "Rinomina…" accanto a ogni valore. */
-  onRename?: (f: FacetValue) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      {values.slice(0, 12).map((f) => (
-        <div key={f.value} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-            <input
-              type="checkbox"
-              checked={selected.includes(f.value)}
-              onChange={() => onToggle(f.value)}
-            />
-            <span
-              title={render(f.value)}
-              style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              {render(f.value)}
-            </span>
-            <span className="muted" style={{ marginLeft: "auto" }}>
-              {fmtInt(f.count)}
-            </span>
-          </label>
-          {onRename && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: "0 4px", fontSize: 12 }}
-              title={t("place.rename")}
-              aria-label={t("place.renameOf", { name: f.value })}
-              onClick={() => onRename(f)}
-            >
-              ✎
-            </button>
-          )}
-        </div>
-      ))}
-    </>
   );
 }
 
@@ -203,7 +150,6 @@ function FolderTree({
 
 export function LibrarySidebar() {
   const { t } = useTranslation();
-  const names = useLabelName();
   const filter = useLibrary((s) => s.filter);
   const setFilter = useLibrary((s) => s.setFilter);
   const folderRecursive = useLibrary((s) => s.folderRecursive);
@@ -226,18 +172,6 @@ export function LibrarySidebar() {
     enabled: isTauri(),
     placeholderData: (prev) => prev,
   });
-  const labelSel = (grp: string) => filter.labels?.find((l) => l.group === grp)?.values ?? [];
-  const setLabel = (grp: string, values: string[]) => {
-    const others = (filter.labels ?? []).filter((l) => l.group !== grp);
-    setFilter({ labels: values.length ? [...others, { group: grp, values }] : others });
-  };
-  const years = (filter.dateFrom ?? "").slice(0, 4);
-  const setYear = (y: string) =>
-    setFilter(
-      years === y
-        ? { dateFrom: null, dateTo: null }
-        : ({ dateFrom: `${y}-01-01`, dateTo: `${y}-12-31` } as Partial<LibraryFilter>),
-    );
 
   return (
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -319,71 +253,50 @@ export function LibrarySidebar() {
         ))}
       </section>
       <section
-        style={{ display: "flex", flexDirection: "column", gap: 8 }}
+        style={{ display: "flex", flexDirection: "column", gap: 12 }}
         aria-label={t("library.filters")}
       >
         <h2 className="section-title">{t("library.filters")}</h2>
-        {(facets.data?.labels ?? []).map(([grp, values]) => (
-          <div key={grp} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontWeight: 600 }}>{names.group(grp)}</div>
-            <CheckList
-              values={values}
-              selected={labelSel(grp)}
-              onToggle={(v) => setLabel(grp, toggle(labelSel(grp), v))}
-              render={(v) => names.label(grp, v)}
-            />
-          </div>
+        {(facets.data?.labels ?? []).map(([grp, list]) => (
+          <FacetList key={grp} facetKey={{ kind: "label", group: grp }} list={list} />
         ))}
-        {(facets.data?.places.length ?? 0) > 0 && (
+        {(facets.data?.places.total ?? 0) > 0 && (
           <>
-            <div style={{ fontWeight: 600 }}>{t("library.facets.places")}</div>
-            <CheckList
-              values={facets.data!.places}
-              selected={filter.places ?? []}
-              onToggle={(v) => setFilter({ places: toggle(filter.places ?? [], v) })}
-              onRename={setRenaming}
+            <FacetList
+              facetKey={{ kind: "place" }}
+              list={facets.data!.places}
+              action={(f) => (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: "0 4px", fontSize: 12 }}
+                  title={t("place.rename")}
+                  aria-label={t("place.renameOf", { name: f.value })}
+                  onClick={() => setRenaming(f)}
+                >
+                  ✎
+                </button>
+              )}
             />
             {renaming && (
               <RenamePlaceDialog
                 key={renaming.value}
                 from={renaming.value}
                 count={renaming.count}
-                places={facets.data!.places}
+                places={facets.data!.places.values}
                 onClose={() => setRenaming(null)}
               />
             )}
           </>
         )}
-        {(facets.data?.years.length ?? 0) > 0 && (
-          <>
-            <div style={{ fontWeight: 600 }}>{t("library.facets.years")}</div>
-            <CheckList
-              values={facets.data!.years}
-              selected={years ? [years] : []}
-              onToggle={setYear}
-            />
-          </>
+        {(facets.data?.years.total ?? 0) > 0 && (
+          <FacetList facetKey={{ kind: "year" }} list={facets.data!.years} />
         )}
-        {(facets.data?.formats.length ?? 0) > 0 && (
-          <>
-            <div style={{ fontWeight: 600 }}>{t("library.facets.formats")}</div>
-            <CheckList
-              values={facets.data!.formats}
-              selected={filter.formats ?? []}
-              onToggle={(v) => setFilter({ formats: toggle(filter.formats ?? [], v) })}
-              render={(v) => v.toUpperCase()}
-            />
-          </>
+        {(facets.data?.formats.total ?? 0) > 0 && (
+          <FacetList facetKey={{ kind: "format" }} list={facets.data!.formats} />
         )}
-        {(facets.data?.tags.length ?? 0) > 0 && (
-          <>
-            <div style={{ fontWeight: 600 }}>{t("library.facets.tags")}</div>
-            <CheckList
-              values={facets.data!.tags}
-              selected={filter.tags ?? []}
-              onToggle={(v) => setFilter({ tags: toggle(filter.tags ?? [], v) })}
-            />
-          </>
+        {(facets.data?.tags.total ?? 0) > 0 && (
+          <FacetList facetKey={{ kind: "tag" }} list={facets.data!.tags} />
         )}
       </section>
     </div>

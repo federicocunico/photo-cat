@@ -63,3 +63,11 @@ Il contenuto per i filtri è `FacetPanel`: ricerca, scelta dell'ordinamento, con
 ## Migration Plan
 
 Nessuna migrazione dati. Il nuovo store persistito parte vuoto (pannelli chiusi, posizione predefinita accanto alla barra laterale). Rollback: revert del change; la chiave di `localStorage` del nuovo store resta inutilizzata.
+
+## Implementation Notes
+
+- **`fold`**: ora sta in `pc_core::text`. `pc-ai::geo` la riesporta, e le voci di catalogazione (`catalog-entries-inline`, già unito) la usano tramite `geo::fold`.
+- **Facet "per esclusione"**: `FacetKey::without_own` restituisce il filtro senza la selezione della lista, oppure `None` se la lista non ha selezione; in quel caso si riusa il filtro di base già compilato. Per gli anni la selezione è l'intervallo di date (`date_from`/`date_to`). Le persone, non mostrate nella barra laterale, restano calcolate con il filtro completo.
+- **Riepilogo**: per ogni lista al massimo `FACET_TOP = 50` valori più quelli selezionati non compresi. Questi compaiono anche con 0 foto, per poterli deselezionare quando gli altri filtri li escludono. Ogni lista porta il totale delle voci. La barra laterale ne mostra 8 e mette in cima le voci selezionate fuori dalle prime 8.
+- **Elenco completo**: `library_facet_values` raggruppa in SQL senza limiti, poi filtra, ordina e pagina in Rust. Con 100.000 foto e 5.000 tag la prima pagina e il riepilogo restano sotto 1 s in release (`tests/facets.rs`). Per le catalogazioni in ordine alfabetico la UI carica tutto il gruppo in una pagina e ordina sul nome mostrato (`useLabelName`, con le traduzioni introdotte da `catalog-entries-inline`).
+- **Pannelli flottanti**: `FloatingPanel` e lo store persistito `photo-cat.floating`. Il focus va al pannello all'apertura, quindi Esc lo chiude subito. I pannelli dei filtri sono resi da `LibraryPage` e scompaiono negli altri moduli. Il pannello dei luoghi ha anche "Rinomina…" (✎), come la lista nella barra laterale (`manual-edits-open-with-ai-tuning`).

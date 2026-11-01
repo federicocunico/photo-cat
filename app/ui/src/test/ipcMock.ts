@@ -31,6 +31,7 @@ import type {
   AiThresholds,
   Taxonomy,
   ThresholdImpact,
+  FacetValue,
   UpdateSummary,
   RelinkSummary,
 } from "../bindings";
@@ -82,6 +83,7 @@ export const commandsMock = {
   libraryPage: vi.fn(),
   libraryCount: vi.fn(),
   libraryFacets: vi.fn(),
+  libraryFacetValues: vi.fn(async () => ({ values: [] as FacetValue[], total: 0 })),
   libraryIds: vi.fn(),
   mediaDetail: vi.fn(),
   listCatalogs: vi.fn(async () => []),
