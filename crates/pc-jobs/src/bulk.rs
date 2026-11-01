@@ -3,6 +3,7 @@ use crate::{JobPlan, PhaseSpec, RunSummary};
 use pc_core::{AppError, AppResult};
 use pc_store::{bulk, people, repo, Store, StoreResult};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 pub const JOB_KIND: &str = "bulk";
 pub const JOB_THRESHOLD: usize = 200;
@@ -36,14 +37,37 @@ pub enum BulkAction {
     AssignPerson {
         person: i64,
     },
+    /// Luogo manuale (`Some`) o ripristino del luogo automatico (`None`).
+    SetPlace {
+        place: Option<bulk::PlaceInput>,
+    },
     RemoveLibrary,
 }
+
+/// Calcolo del luogo automatico per "Ripristina luogo automatico".
+pub type PlaceResolver =
+    Arc<dyn Fn(&bulk::PlaceInputs) -> Option<pc_store::model::Location> + Send + Sync>;
+
 impl BulkAction {
     pub fn destructive(&self) -> bool {
         matches!(self, Self::RemoveCatalog { .. } | Self::RemoveLibrary)
     }
-    fn apply(&self, c: &rusqlite::Connection, ids: &[i64]) -> StoreResult<usize> {
+    fn apply(
+        &self,
+        c: &rusqlite::Connection,
+        ids: &[i64],
+        resolver: Option<&PlaceResolver>,
+    ) -> StoreResult<usize> {
         Ok(match self {
+            Self::SetPlace { place } => {
+                let none = |_: &bulk::PlaceInputs| None;
+                let resolve: &dyn Fn(&bulk::PlaceInputs) -> Option<pc_store::model::Location> =
+                    match resolver {
+                        Some(r) => r.as_ref(),
+                        None => &none,
+                    };
+                bulk::set_place(c, ids, place.as_ref(), resolve)?.changed
+            }
             Self::AddTag { name, exclusive } => bulk::add_tag(c, name, ids, exclusive)?.changed,
             Self::RemoveTag { name } => bulk::remove_tag(c, name, ids)?.changed,
             Self::RemoveTags { names } => bulk::remove_tags(c, names, ids)?.changed,
@@ -72,6 +96,15 @@ impl BulkAction {
     }
 }
 pub fn plan(store: Store, params: &serde_json::Value) -> AppResult<JobPlan> {
+    plan_with(store, None, params)
+}
+
+/// Come [`plan`], con il calcolo del luogo automatico per `SetPlace`.
+pub fn plan_with(
+    store: Store,
+    resolver: Option<PlaceResolver>,
+    params: &serde_json::Value,
+) -> AppResult<JobPlan> {
     let ids: Vec<i64> = serde_json::from_value(params["ids"].clone())?;
     let action: BulkAction = serde_json::from_value(params["operation"].clone())?;
     if action.destructive() && params["confirmed"] != true {
@@ -99,7 +132,7 @@ pub fn plan(store: Store, params: &serde_json::Value) -> AppResult<JobPlan> {
                 let mut valid=Vec::new();for id in chunk {
                     match repo::media::get(c,*id){Ok(_)=>valid.push(*id),Err(e)=>{failed+=1;phase.inc_failed(1);tracing::error!(job_id=ctx.job_id,phase="modifica",path=format!("media:{id}"),code="NOT_FOUND",detail=%e,"elemento non trovato");}}
                 }
-                if !valid.is_empty(){action.apply(c,&valid)?;phase.inc_done(valid.len() as i64);}
+                if !valid.is_empty(){action.apply(c,&valid,resolver.as_ref())?;phase.inc_done(valid.len() as i64);}
             }
             phase.finish();Ok(failed)
         })).map(|failed|RunSummary{cancelled:ctx.control.is_cancelled(),failed}).map_err(Into::into)
@@ -302,5 +335,69 @@ mod tests {
         // Gli originali restano sul disco, identici (contenuto e data di modifica).
         let after: Vec<_> = files.iter().map(fingerprint).collect();
         assert_eq!(before, after);
+    }
+
+    /// Scenari "Luogo in bulk" e "Ripristino del luogo automatico".
+    #[test]
+    fn set_place_in_bulk_reports_failures_and_resets_with_resolver() {
+        use pc_store::model::{Location, LocationSource};
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let ids = db
+            .write(|c| {
+                (0..300)
+                    .map(|i| media(c, &format!("D:/Foto/Viaggio Giappone/D7000/{i}.jpg")))
+                    .collect::<StoreResult<Vec<_>>>()
+            })
+            .unwrap();
+        let jobs = JobManager::new(
+            db.clone(),
+            pc_governor::MemoryGovernor::new(256),
+            1,
+            Arc::new(Sink),
+        );
+        let st = db.clone();
+        let resolver: PlaceResolver = Arc::new(|_| {
+            Some(Location {
+                name: Some("Viaggio Giappone".into()),
+                country: None,
+                lat: None,
+                lon: None,
+                source: LocationSource::Directory,
+            })
+        });
+        jobs.register(
+            JOB_KIND,
+            Arc::new(move |p| plan_with(st.clone(), Some(resolver.clone()), p)),
+        );
+        let mut with_missing = ids.clone();
+        with_missing.push(99_999);
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids":with_missing,"operation":{"action":"set_place","place":{"name":"Giappone"}}}),
+        );
+        assert_eq!(s.failed, 1, "il file inesistente è riportato come fallito");
+        let manual = |db: &Store, name: &str, source: &str| {
+            let (name, source) = (name.to_string(), source.to_string());
+            db.read(move |c| {
+                Ok(c.query_row(
+                    "SELECT count(*) FROM location WHERE name=?1 AND source=?2",
+                    [name, source],
+                    |r| r.get::<_, i64>(0),
+                )?)
+            })
+            .unwrap()
+        };
+        assert_eq!(manual(&db, "Giappone", "manual"), 300);
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids":&ids[..10],"operation":{"action":"set_place","place":null}}),
+        );
+        assert_eq!(s.state, crate::JobState::Completed, "{s:?}");
+        assert_eq!(manual(&db, "Viaggio Giappone", "directory"), 10);
+        assert_eq!(manual(&db, "Giappone", "manual"), 290);
+        // Un solo annullamento per job.
+        db.write(bulk::undo_last).unwrap();
+        assert_eq!(manual(&db, "Giappone", "manual"), 300);
     }
 }

@@ -1,6 +1,14 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
 import { commands, isTauri, type GridItem, type Page } from "../../lib/ipc";
@@ -13,6 +21,9 @@ import {
   useLibrary,
 } from "../../store/library";
 import { thumbUrl } from "./thumbUrl";
+import { GridContextMenu } from "./GridContextMenu";
+import { useOpenWith } from "./useOpenWith";
+import { usePlaceAction } from "./usePlaceAction";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 
@@ -54,12 +65,17 @@ function Thumb({
   size,
   selected,
   onClick,
+  onDoubleClick,
+  onMenu,
   tagColor,
 }: {
   item: GridItem;
   size: number;
   selected: boolean;
   onClick: (e: MouseEvent) => void;
+  onDoubleClick?: () => void;
+  /** Menu contestuale alle coordinate indicate (clic destro, tasto Menu, Maiusc+F10). */
+  onMenu?: (x: number, y: number) => void;
   tagColor: (name: string) => string;
 }) {
   const { t } = useTranslation();
@@ -69,6 +85,18 @@ function Thumb({
     <button
       type="button"
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu?.(e.clientX, e.clientY);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          onMenu?.(r.left + 16, r.top + 16);
+        }
+      }}
       aria-pressed={selected}
       data-testid={`thumb-${item.id}`}
       title={item.name}
@@ -189,6 +217,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
   const tagInfo = useTagOverview().data;
   const tagColor = (name: string) => colorOf(tagInfo, name);
+  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[] } | null>(null);
+  const openWith = useOpenWith();
+  const place = usePlaceAction();
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const actionError = openWith.error || place.error;
 
   const pages = useInfiniteQuery({
     queryKey: ["library", filter, sort],
@@ -241,6 +274,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       shift: e.shiftKey,
     });
     setSelection(next, id);
+  };
+  // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
+  const onMenu = (id: number) => (x: number, y: number) => {
+    const ids = selected.includes(id) ? selected : [id];
+    if (!selected.includes(id)) setSelection([id], id);
+    setMenu({ x, y, ids });
   };
 
   if (pages.isSuccess && items.length === 0) {
@@ -340,6 +379,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                 size={cell}
                 selected={selected.includes(it.id)}
                 onClick={onClick(it.id)}
+                onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
+                onMenu={onMenu(it.id)}
                 tagColor={tagColor}
               />
             ))}
@@ -350,6 +391,33 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         <div className="muted" style={{ position: "sticky", bottom: 8, textAlign: "center" }}>
           <Icon.Spinner size={14} />
         </div>
+      )}
+      {actionError && (
+        <div
+          role="alert"
+          style={{
+            position: "sticky",
+            bottom: 8,
+            margin: "0 16px",
+            padding: "6px 10px",
+            borderRadius: 4,
+            background: "var(--pc-raised)",
+            border: "1px solid var(--pc-border)",
+          }}
+          onClick={openWith.clearError}
+        >
+          {actionError}
+        </div>
+      )}
+      {menu && (
+        <GridContextMenu
+          x={menu.x}
+          y={menu.y}
+          ids={menu.ids}
+          onOpen={(ids, target) => void openWith.open(ids, target)}
+          onPlace={(ids, p) => void place.apply(ids, p)}
+          onClose={closeMenu}
+        />
       )}
     </div>
   );

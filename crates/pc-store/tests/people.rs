@@ -240,3 +240,116 @@ fn link_merge_and_sync_identity_names() {
         (Some("Marco R."), None)
     );
 }
+
+fn lib_with(n: i64) -> Connection {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    for id in 1..=n {
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (?1,?2,'t','jpg',1,1,1,1)",rusqlite::params![id,format!("t{id}.jpg")]).unwrap();
+    }
+    c
+}
+
+#[test]
+fn faces_below_quality_are_kept_but_not_matched() {
+    let c = lib_with(2);
+    // Persona con nome dal primo volto.
+    people::save_faces(&c, 1, &[face(0.1, 0)], "sface", "det+sface", 0.363).unwrap();
+    let known = people::records(&c, Some(1)).unwrap()[0].id;
+    let giulia = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[known], giulia).unwrap();
+    people::rename(&c, giulia, "Giulia").unwrap();
+    // Secondo volto uguale ma con confidenza 0,7, sotto la soglia 0,8.
+    let mut low = face(0.1, 0);
+    low.quality = 0.7;
+    let m = people::FaceMatch {
+        similarity: 0.363,
+        min_quality: 0.8,
+        floor: Some(0.6),
+    };
+    people::save_faces_tuned(&c, 2, &[low], "sface", "det+sface", m, &Default::default()).unwrap();
+    let f = people::records(&c, Some(2)).unwrap();
+    assert_eq!(f.len(), 1, "il volto resta salvato");
+    assert_eq!(f[0].person_id, None, "ma non viene associato");
+    // Pavimento registrato nella versione; `pending` lo considera aggiornato.
+    let ver: String = c
+        .query_row(
+            "SELECT model_ver FROM analysis_version WHERE media_id=2 AND stage='faces'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(analysis::saved_floor(&ver), Some(0.6));
+    assert!(analysis::pending(&c, &[1, 2], "faces", "det+sface", None)
+        .unwrap()
+        .is_empty());
+    // Un volto auto sotto soglia perde la persona; quello manuale la tiene.
+    people::save_faces(&c, 2, &[face(0.1, 0)], "sface", "det+sface", 0.363).unwrap();
+    c.execute("UPDATE face SET quality=0.7", []).unwrap();
+    assert_eq!(people::unassign_low_quality(&c, 0.8, false).unwrap(), 1);
+    assert_eq!(people::unassign_low_quality(&c, 0.8, true).unwrap(), 1);
+    assert_eq!(
+        people::records(&c, Some(1)).unwrap()[0].person_id,
+        Some(giulia)
+    );
+    assert_eq!(people::records(&c, Some(2)).unwrap()[0].person_id, None);
+    assert_eq!(people::faces_below(&c, 0.8).unwrap(), 2);
+}
+
+#[test]
+fn saved_floor_tells_which_files_need_reanalysis() {
+    let c = lib_with(3);
+    // 1: salvato prima dei pavimenti (minimo 0,8); 2: pavimento 0,6; 3: non analizzato.
+    analysis::version(&c, 1, "faces", "det+sface", None).unwrap();
+    analysis::version(
+        &c,
+        2,
+        "faces",
+        &analysis::with_floor("det+sface", 0.6),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        analysis::below_floor(&c, "faces", 0.7, 0.8).unwrap(),
+        vec![1]
+    );
+    assert_eq!(
+        analysis::below_floor(&c, "faces", 0.5, 0.8).unwrap(),
+        vec![1, 2]
+    );
+    assert!(analysis::below_floor(&c, "faces", 0.8, 0.8)
+        .unwrap()
+        .is_empty());
+    // La versione con pavimento non rende il file "da rianalizzare".
+    c.execute("UPDATE media_item SET thumb='x'", []).unwrap();
+    assert_eq!(
+        analysis::stale_count(&c, "faces", "det+sface", None).unwrap(),
+        1
+    );
+    assert_eq!(
+        analysis::stale_count(&c, "faces", "det+sface2", None).unwrap(),
+        3
+    );
+}
+
+#[test]
+fn person_count_follows_threshold_without_reanalysis() {
+    let c = lib_with(1);
+    let boxes = [
+        [0.1, 0.1, 0.1, 0.1, 0.9],
+        [0.3, 0.1, 0.1, 0.1, 0.7],
+        [0.5, 0.1, 0.1, 0.1, 0.45],
+        [0.7, 0.1, 0.1, 0.1, 0.3],
+    ];
+    analysis::people_with(&c, 1, &boxes, "yolox", 0.4, Some(0.25)).unwrap();
+    let count = |c: &Connection| {
+        c.query_row("SELECT count FROM media_people", [], |r| r.get::<_, i64>(0))
+            .unwrap()
+    };
+    assert_eq!(count(&c), 3);
+    assert_eq!(analysis::recount_people(&c, 0.6, false).unwrap(), vec![1]);
+    assert_eq!(count(&c), 3, "l'anteprima non scrive");
+    analysis::recount_people(&c, 0.6, true).unwrap();
+    assert_eq!(count(&c), 2);
+    assert!(analysis::recount_people(&c, 0.6, true).unwrap().is_empty());
+}
