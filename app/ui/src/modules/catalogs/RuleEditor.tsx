@@ -1,11 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { useLabelName, useTaxonomy } from "../library/labelName";
 export type RuleNode =
   { op: "and" | "or"; rules: RuleNode[] } | { field: string; cmp: string; value: string | number };
 export const newRule = (): RuleNode => ({ field: "label.subject", cmp: "eq", value: "paesaggio" });
-const fields = [
-  "label.subject",
-  "label.location",
-  "label.environment",
+const DEFAULT_GROUPS = ["subject", "location", "environment"];
+const otherFields = [
   "tag",
   "person",
   "place",
@@ -29,6 +28,14 @@ export function RuleEditor({
   depth?: number;
 }) {
   const { t } = useTranslation();
+  const names = useLabelName();
+  const taxonomy = useTaxonomy().data;
+  // Un campo `label.<gruppo>` per ogni gruppo della tassonomia, anche quelli creati dall'utente.
+  const groups = taxonomy?.groups.map((g) => g.id) ?? DEFAULT_GROUPS;
+  const fields = [...groups.map((g) => `label.${g}`), ...otherFields];
+  const labelGroup =
+    "field" in rule && rule.field.startsWith("label.") ? rule.field.slice(6) : null;
+  const categories = taxonomy?.groups.find((g) => g.id === labelGroup)?.categories;
   if ("op" in rule)
     return (
       <fieldset style={{ border: "1px solid var(--pc-border)", padding: 12, margin: "8px 0" }}>
@@ -90,7 +97,9 @@ export function RuleEditor({
         }
       >
         {fields.map((f) => (
-          <option key={f}>{f}</option>
+          <option key={f} value={f}>
+            {f.startsWith("label.") ? names.group(f.slice(6)) : f}
+          </option>
         ))}
       </select>
       <select
@@ -107,18 +116,34 @@ export function RuleEditor({
           <option key={c}>{c}</option>
         ))}
       </select>
-      <input
-        className="field"
-        aria-label={t("catalogs.value")}
-        type={numeric.has(rule.field) ? "number" : "text"}
-        value={rule.value}
-        onChange={(e) =>
-          onChange({
-            ...rule,
-            value: numeric.has(rule.field) ? Number(e.target.value) : e.target.value,
-          })
-        }
-      />
+      {labelGroup && categories && rule.cmp !== "contains" ? (
+        <select
+          className="field"
+          aria-label={t("catalogs.value")}
+          value={String(rule.value)}
+          onChange={(e) => onChange({ ...rule, value: e.target.value })}
+        >
+          <option value="">—</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {names.label(labelGroup, c.id)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          className="field"
+          aria-label={t("catalogs.value")}
+          type={numeric.has(rule.field) ? "number" : "text"}
+          value={rule.value}
+          onChange={(e) =>
+            onChange({
+              ...rule,
+              value: numeric.has(rule.field) ? Number(e.target.value) : e.target.value,
+            })
+          }
+        />
+      )}
     </div>
   );
 }

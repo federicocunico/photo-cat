@@ -194,3 +194,39 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
     ),
   );
 });
+
+it("nuova voce dall'Inspector: Invio crea e assegna, Esc annulla, nome obbligatorio", async () => {
+  commandsMock.addCategory.mockResolvedValue({
+    group: "subject",
+    id: "barche",
+    label: "Barche",
+    created: true,
+    job: 31,
+  } as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  const value = await screen.findByLabelText("Nuovo valore");
+  await screen.findByRole("option", { name: "Nuova voce…" });
+  // Esc chiude il campo senza creare nulla.
+  fireEvent.change(value, { target: { value: "__new__" } });
+  fireEvent.keyDown(screen.getByLabelText("Nome della nuova voce"), { key: "Escape" });
+  expect(screen.queryByLabelText("Nome della nuova voce")).not.toBeInTheDocument();
+  // Nome vuoto: il campo lo segnala e nessuna voce viene creata.
+  fireEvent.change(screen.getByLabelText("Nuovo valore"), { target: { value: "__new__" } });
+  const name = screen.getByLabelText("Nome della nuova voce");
+  fireEvent.keyDown(name, { key: "Enter" });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Il nome è obbligatorio");
+  expect(commandsMock.addCategory).not.toHaveBeenCalled();
+  // Invio con un nome: creata e assegnata alla foto.
+  fireEvent.change(name, { target: { value: "Barche" } });
+  fireEvent.keyDown(name, { key: "Enter" });
+  await waitFor(() =>
+    expect(commandsMock.addCategory).toHaveBeenCalledWith("subject", "Barche", [], [7]),
+  );
+  await waitFor(() =>
+    expect(screen.queryByLabelText("Nome della nuova voce")).not.toBeInTheDocument(),
+  );
+});

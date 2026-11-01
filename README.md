@@ -135,6 +135,22 @@ Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che
 
 `app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; la schermata Identità mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
 
+## Voci di catalogazione
+
+Le catalogazioni (tipo soggetto, interno/esterno, ambiente e i gruppi aggiunti dall'utente) hanno due tipi di voci:
+
+- **automatiche**: hanno una descrizione in inglese per il riconoscimento (es. `a photo of boats`) e l'analisi CLIP le assegna da sola;
+- **manuali**: senza descrizione. L'analisi non le assegna mai; le assegna l'utente, e compaiono comunque nei filtri, nell'Inspector e nei cataloghi smart.
+
+Creare una voce:
+
+- **durante la correzione**: nell'Inspector o nell'azione bulk "Imposta catalogazione", ultima opzione "Nuova voce…". Si scrive il nome e Invio conferma (Esc annulla). La voce nasce manuale e viene assegnata subito alla foto o alla selezione; l'azione bulk si annulla con "Annulla", e la voce resta. Un nome già presente nel gruppo, anche con maiuscole o accenti diversi, riusa la voce esistente;
+- **in Impostazioni › Tassonomia**: "Aggiungi voce" in un gruppo e "Aggiungi gruppo" (es. "Evento", "Progetto"). La descrizione per il riconoscimento è facoltativa: scriverla rende la voce automatica. "Elimina" chiede conferma con il numero di foto che perdono la voce; l'eliminazione si annulla con "Annulla" nella barra bulk.
+
+**Quando serve la rianalisi.** Aggiungere, rinominare, disattivare o eliminare voci e gruppi manuali non rende nessun file "da rianalizzare". Lo fanno solo le modifiche che cambiano l'analisi automatica: descrizioni, voci automatiche attivate, disattivate o eliminate, soglie. Impostazioni lo segnala prima del salvataggio. Al salvataggio le catalogazioni automatiche vengono ricalcolate dagli embedding già salvati, senza rielaborare le immagini.
+
+**Tornare a una versione precedente.** Le versioni precedenti rifiutano le tassonomie con voci senza descrizione. Prima di installarne una vanno eliminati le voci e i gruppi manuali, oppure va aggiunta una descrizione a ogni voce manuale.
+
 ## Gestione delle importazioni
 
 Ogni sorgente ha un menu "…" nella barra laterale della Libreria (e gli stessi comandi nella pagina Import). Le azioni non toccano mai i file sul disco.

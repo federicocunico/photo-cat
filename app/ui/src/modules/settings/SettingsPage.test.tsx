@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import i18n from "../../i18n";
@@ -264,4 +264,73 @@ it("cartelle da ignorare: propone il ricalcolo dei luoghi", async () => {
   );
   expect(await screen.findByText("Luogo ricalcolato per 3 foto.")).toBeInTheDocument();
   confirm.mockRestore();
+});
+
+it("gruppo nuovo solo manuale, senza avviso di rianalisi", async () => {
+  renderSettings();
+  fireEvent.click(await screen.findByRole("button", { name: "Aggiungi gruppo" }));
+  const group = screen.getByLabelText("Nome del nuovo gruppo");
+  fireEvent.keyDown(group, { key: "Enter" });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Il nome è obbligatorio");
+  fireEvent.change(group, { target: { value: "Evento" } });
+  fireEvent.keyDown(group, { key: "Enter" });
+  // Il gruppo nuovo apre subito il campo per la prima voce.
+  const first = await screen.findByLabelText("Nome della nuova voce in Evento");
+  fireEvent.change(first, { target: { value: "Compleanno" } });
+  fireEvent.keyDown(first, { key: "Enter" });
+  const evento = screen.getByTestId("group-evento");
+  fireEvent.click(within(evento).getByRole("button", { name: "Aggiungi voce" }));
+  const second = screen.getByLabelText("Nome della nuova voce in Evento");
+  fireEvent.change(second, { target: { value: "Laurea" } });
+  fireEvent.keyDown(second, { key: "Enter" });
+  expect(within(evento).getAllByText("manuale")).toHaveLength(2);
+  expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Salva tassonomia" }));
+  await waitFor(() => expect(commandsMock.saveTaxonomy).toHaveBeenCalled());
+  const [saved, version] = commandsMock.saveTaxonomy.mock.calls[0] as unknown as [
+    { groups: { id: string; label: string; categories: { id: string; prompts: string[] }[] }[] },
+    number,
+  ];
+  expect(version).toBe(3);
+  const added = saved.groups.find((g) => g.id === "evento")!;
+  expect(added.label).toBe("Evento");
+  expect(added.categories.map((c) => [c.id, c.prompts])).toEqual([
+    ["compleanno", []],
+    ["laurea", []],
+  ]);
+});
+
+it("voce resa automatica: compare l'avviso di rianalisi", async () => {
+  renderSettings();
+  const ambiente = await screen.findByTestId("group-environment");
+  fireEvent.click(within(ambiente).getByRole("button", { name: "Aggiungi voce" }));
+  const name = screen.getByLabelText("Nome della nuova voce in Ambiente");
+  fireEvent.change(name, { target: { value: "Barche" } });
+  fireEvent.keyDown(name, { key: "Enter" });
+  expect(within(ambiente).getByText("manuale")).toBeInTheDocument();
+  expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  fireEvent.change(
+    screen.getByLabelText(
+      "Descrizione per il riconoscimento automatico (inglese, facoltativa) barche",
+    ),
+    { target: { value: "a photo of boats" } },
+  );
+  expect(screen.getByRole("note")).toHaveTextContent("cambia l'analisi automatica");
+  expect(within(ambiente).queryByText("manuale")).not.toBeInTheDocument();
+});
+
+it("eliminazione di una voce usata con il numero di foto", async () => {
+  commandsMock.categoryUsage.mockResolvedValue(25 as never);
+  commandsMock.deleteCategory.mockResolvedValue(25 as never);
+  renderSettings();
+  fireEvent.click(await screen.findByRole("button", { name: "Elimina la voce Teatro" }));
+  const ask = await screen.findByRole("alertdialog");
+  expect(ask).toHaveTextContent("Eliminare «Teatro»? 25 foto perderanno questa catalogazione.");
+  expect(commandsMock.categoryUsage).toHaveBeenCalledWith("environment", "teatro");
+  expect(commandsMock.deleteCategory).not.toHaveBeenCalled();
+  fireEvent.click(within(ask).getByRole("button", { name: "Elimina" }));
+  await waitFor(() =>
+    expect(commandsMock.deleteCategory).toHaveBeenCalledWith("environment", "teatro"),
+  );
+  expect(await screen.findByText("Voce eliminata da 25 foto")).toBeInTheDocument();
 });

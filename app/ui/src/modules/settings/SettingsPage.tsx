@@ -14,6 +14,7 @@ import { useLayout } from "../../store/layout";
 import { cleanSettings } from "./cleanSettings";
 import { ExternalAppsSection } from "./ExternalAppsSection";
 import { ThresholdsSection } from "./ThresholdsSection";
+import { TaxonomySection } from "./TaxonomySection";
 export function SettingsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -260,118 +261,12 @@ export function SettingsPage() {
         {t("people.save")}
       </button>
       {tax && (
-        <>
-          <h2>{t("settings.taxonomy")}</h2>
-          <p className="muted">{t("settings.taxonomyHint")}</p>
-          {tax.groups.map((g, gi) => (
-            <fieldset key={g.id} style={{ margin: "16px 0", border: "1px solid var(--pc-border)" }}>
-              <legend>{g.label}</legend>
-              {g.categories.map((c, ci) => (
-                <div className="feature-actions" key={c.id}>
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("settings.enabled")} ${c.label}`}
-                    checked={c.enabled}
-                    onChange={(e) =>
-                      setTax({
-                        ...tax,
-                        groups: tax.groups.map((v, i) =>
-                          i === gi
-                            ? {
-                                ...v,
-                                categories: v.categories.map((a, j) =>
-                                  j === ci ? { ...a, enabled: e.target.checked } : a,
-                                ),
-                              }
-                            : v,
-                        ),
-                      })
-                    }
-                  />
-                  <input
-                    className="field"
-                    aria-label={`${t("people.name")} ${c.id}`}
-                    value={c.label}
-                    onChange={(e) =>
-                      setTax({
-                        ...tax,
-                        groups: tax.groups.map((v, i) =>
-                          i === gi
-                            ? {
-                                ...v,
-                                categories: v.categories.map((a, j) =>
-                                  j === ci ? { ...a, label: e.target.value } : a,
-                                ),
-                              }
-                            : v,
-                        ),
-                      })
-                    }
-                  />
-                  <textarea
-                    className="field"
-                    aria-label={`${t("settings.prompts")} ${c.id}`}
-                    value={c.prompts.join("\n")}
-                    onChange={(e) =>
-                      setTax({
-                        ...tax,
-                        groups: tax.groups.map((v, i) =>
-                          i === gi
-                            ? {
-                                ...v,
-                                categories: v.categories.map((a, j) =>
-                                  j === ci ? { ...a, prompts: e.target.value.split("\n") } : a,
-                                ),
-                              }
-                            : v,
-                        ),
-                      })
-                    }
-                  />
-                </div>
-              ))}
-              <button
-                className="btn"
-                onClick={() =>
-                  setTax({
-                    ...tax,
-                    groups: tax.groups.map((v, i) =>
-                      i === gi
-                        ? {
-                            ...v,
-                            categories: [
-                              ...v.categories,
-                              {
-                                id: `custom_${Date.now()}`,
-                                label: t("settings.newCategory"),
-                                enabled: true,
-                                prompts: ["a photo of a new subject"],
-                              },
-                            ],
-                          }
-                        : v,
-                    ),
-                  })
-                }
-              >
-                {t("settings.addCategory")}
-              </button>
-            </fieldset>
-          ))}
-          <button
-            className="btn"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                await commands.saveTaxonomy(tax, taxonomy.data!.version);
-                await qc.invalidateQueries({ queryKey: ["taxonomy"] });
-                setNotice(t("settings.saved"));
-              })
-            }
-          >
-            {t("settings.saveTaxonomy")}
-          </button>
-        </>
+        <TaxonomySection
+          tax={tax}
+          setTax={setTax}
+          saved={taxonomy.data}
+          defaultThreshold={cfg.ai.confidence_threshold ?? 0.25}
+        />
       )}
     </section>
   );

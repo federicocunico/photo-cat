@@ -53,7 +53,7 @@ pub fn cached_or_compute(
             .flat_map(|g| {
                 g.categories
                     .iter()
-                    .filter(|c| c.enabled)
+                    .filter(|c| c.is_automatic())
                     .map(move |c| (&g.id, &c.id))
             })
             .collect();
@@ -72,7 +72,7 @@ pub fn cached_or_compute(
     }
     let mut concepts = Vec::new();
     for g in &taxonomy.groups {
-        for c in g.categories.iter().filter(|c| c.enabled) {
+        for c in g.categories.iter().filter(|c| c.is_automatic()) {
             let vector = encode(c)?;
             if !valid(&vector) {
                 return Err(AppError::new(
@@ -177,5 +177,56 @@ mod tests {
         db.close();
         let again = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
         cached_or_compute(&again, &taxonomy, "model2", |_| panic!("cache persistente")).unwrap();
+    }
+
+    #[test]
+    fn manual_entries_have_no_concepts_and_renames_keep_the_cache() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let mut taxonomy = Taxonomy::default();
+        taxonomy.groups[0].categories.push(Category {
+            id: "matrimonio_anna".into(),
+            label: "Matrimonio Anna".into(),
+            enabled: true,
+            prompts: vec![],
+            threshold: None,
+        });
+        let encode = |c: &Category| {
+            assert!(!c.is_manual(), "le voci manuali non si codificano");
+            let mut v = vec![0.0; clip::DIM];
+            v[c.prompts[0].len() % clip::DIM] = 1.0;
+            Ok(v)
+        };
+        let concepts = cached_or_compute(&db, &taxonomy, "m", encode).unwrap();
+        assert_eq!(concepts.len(), 28);
+        assert!(concepts.iter().all(|c| c.value != "matrimonio_anna"));
+        // Nessuna etichetta automatica per la voce manuale, qualunque immagine.
+        for i in 0..clip::DIM {
+            let mut image = vec![0.0; clip::DIM];
+            image[i] = 1.0;
+            let labels = crate::classify::labels(&image, &taxonomy, &concepts);
+            assert!(labels.iter().all(|l| l.value != "matrimonio_anna"));
+        }
+        // Rinominare (voce automatica o manuale) non invalida la cache.
+        let mut renamed = taxonomy.clone();
+        renamed.version += 1;
+        renamed.groups[0].categories[8].label = "Fiori e piante".into();
+        renamed.groups[0].categories.last_mut().unwrap().label = "Nozze di Anna".into();
+        cached_or_compute(&db, &renamed, "m", |_| panic!("rinomina: cache valida")).unwrap();
+        // Un'altra voce manuale non la invalida; un prompt nuovo sì.
+        let mut more = renamed.clone();
+        more.groups[0].categories.push(Category {
+            id: "gita".into(),
+            label: "Gita".into(),
+            enabled: true,
+            prompts: vec![],
+            threshold: None,
+        });
+        cached_or_compute(&db, &more, "m", |_| panic!("voce manuale: cache valida")).unwrap();
+        more.groups[0].categories.last_mut().unwrap().prompts = vec!["a school trip".into()];
+        assert_eq!(
+            cached_or_compute(&db, &more, "m", encode).unwrap().len(),
+            29
+        );
     }
 }

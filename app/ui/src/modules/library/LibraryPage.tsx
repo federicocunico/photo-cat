@@ -3,6 +3,7 @@ import { Panels } from "../../components/shell/Panels";
 import type { SortKey } from "../../lib/ipc";
 import { useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
+import { useLabelName } from "./labelName";
 import { LibraryGrid } from "./Grid";
 import { Inspector } from "./Inspector";
 import { LibrarySidebar } from "./Sidebar";
@@ -14,7 +15,8 @@ const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_des
 function Toolbar() {
   const { t } = useTranslation();
   const { filter, sort, setSort, thumbSize, setThumbSize, setFilter, resetFilter } = useLibrary();
-  const chips = activeChips(filter, t as never);
+  const names = useLabelName();
+  const chips = activeChips(filter, t as never, names.label);
   return (
     <div
       style={{

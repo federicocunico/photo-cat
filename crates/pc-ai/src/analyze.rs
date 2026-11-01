@@ -454,7 +454,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                             Role::PersonDetection
                         })?)
                     };
-                    let taxonomy_ver = clip_ctx.as_ref().map(|(t, _)| t.version);
+                    let taxonomy_ver = clip_ctx.as_ref().map(|(t, _)| t.analysis_version);
                     let todo = deps.store.read(|c| {
                         analysis::pending(
                             c,
@@ -495,7 +495,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                                 let r = r.remove(0);
                                 let groups: Vec<String> =
                                     tax.groups.iter().map(|g| g.id.clone()).collect();
-                                let (k, v) = (key.clone(), tax.version);
+                                let (k, v) = (key.clone(), tax.analysis_version);
                                 deps.store.submit(move |c| {
                                     analysis::classification(
                                         c,
