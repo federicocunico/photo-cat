@@ -2,6 +2,7 @@
 pub mod export;
 pub mod organize;
 pub mod paths;
+pub mod sequence;
 use pc_core::AppResult;
 use pc_store::{
     query::{self, LibraryFilter},

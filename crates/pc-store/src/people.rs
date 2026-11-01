@@ -39,6 +39,8 @@ pub struct FaceView {
 pub struct PersonView {
     pub id: i64,
     pub name: Option<String>,
+    /// Identità dell'app collegata (UUID in `app.db`).
+    pub identity_uid: Option<String>,
     pub photos: i64,
     pub faces: i64,
     pub cover: Option<FaceView>,
@@ -169,15 +171,18 @@ pub fn views(c: &Connection, person: Option<i64>) -> StoreResult<Vec<FaceView>> 
         .collect()
 }
 pub fn list(c: &Connection) -> StoreResult<Vec<PersonView>> {
-    let mut q=c.prepare("SELECT p.id,p.name,count(DISTINCT f.media_id),count(f.id) FROM person p JOIN face f ON f.person_id=p.id GROUP BY p.id ORDER BY p.name IS NULL,p.name,p.id")?;
+    let mut q=c.prepare("SELECT p.id,p.name,count(DISTINCT f.media_id),count(f.id),p.identity_uid FROM person p JOIN face f ON f.person_id=p.id GROUP BY p.id ORDER BY p.name IS NULL,p.name,p.id")?;
     let rows = q
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+        .query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(id, name, photos, faces)| {
+        .map(|(id, name, photos, faces, identity_uid)| {
             Ok(PersonView {
                 id,
                 name,
+                identity_uid,
                 photos,
                 faces,
                 cover: views(c, Some(id))?.into_iter().next(),
@@ -237,6 +242,94 @@ pub fn named_match(
     }
     Ok(best.0)
 }
+/// Riferimenti delle identità dell'app per una versione di modello, con i
+/// nomi per creare la persona collegata in una libreria che non la conosce.
+#[derive(Debug, Clone, Default)]
+pub struct IdentityRefs {
+    pub refs: Vec<crate::app_store::identities::Reference>,
+    pub names: std::collections::HashMap<String, String>,
+}
+
+impl IdentityRefs {
+    /// Riferimenti per `model_ver` letti da `app.db`.
+    pub fn load(app: &crate::AppStore, model_ver: &str) -> StoreResult<Self> {
+        app.with(|a| {
+            Ok(Self {
+                refs: crate::app_store::identities::references(a, model_ver)?,
+                names: crate::app_store::identities::list(a)?
+                    .into_iter()
+                    .map(|i| (i.uid, i.name))
+                    .collect(),
+            })
+        })
+    }
+    pub fn is_empty(&self) -> bool {
+        self.refs.is_empty()
+    }
+}
+
+/// Come [`named_match`], confrontando anche i volti di riferimento delle
+/// identità (ognuna con la propria soglia). Vince il punteggio più alto. Se
+/// vince un'identità non ancora collegata in questa libreria e `create` è vero,
+/// viene creata la persona collegata; con `create` falso (letture) il volto
+/// resta senza persona. Le esclusioni ("non è questa persona") valgono anche
+/// per l'identità collegata alla persona esclusa.
+pub fn named_match_refs(
+    c: &Connection,
+    v: &[f32],
+    model: &str,
+    rejected: &[i64],
+    threshold: f32,
+    ids: &IdentityRefs,
+    create: bool,
+) -> StoreResult<Option<i64>> {
+    let mut q=c.prepare("SELECT p.id,pc.vector FROM person p JOIN person_centroid pc ON pc.person_id=p.id WHERE p.name IS NOT NULL AND pc.model_ver=?1")?;
+    let rows = q.query_map([model], |r| {
+        Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
+    })?;
+    let mut best: (Option<i64>, f32) = (None, threshold);
+    for row in rows {
+        let (id, b) = row?;
+        if rejected.contains(&id) {
+            continue;
+        }
+        let score = cosine(v, &vector(&b)?);
+        if score >= best.1 {
+            best = (Some(id), score);
+        }
+    }
+    if ids.is_empty() {
+        return Ok(best.0);
+    }
+    let mut excluded = Vec::new();
+    for p in rejected {
+        if let Some(uid) = c
+            .query_row("SELECT identity_uid FROM person WHERE id=?1", [p], |r| {
+                r.get::<_, Option<String>>(0)
+            })
+            .optional()?
+            .flatten()
+        {
+            excluded.push(uid);
+        }
+    }
+    let Some((r, score)) = crate::app_store::identities::best_reference(&ids.refs, v, &excluded)
+    else {
+        return Ok(best.0);
+    };
+    if best.0.is_some() && score < best.1 {
+        return Ok(best.0);
+    }
+    match person_for_identity(c, &r.uid)? {
+        Some(p) => Ok(Some(p)),
+        None if create => {
+            let name = ids.names.get(&r.uid).cloned().unwrap_or_default();
+            Ok(Some(ensure_identity_person(c, &r.uid, &name)?))
+        }
+        None => Ok(best.0),
+    }
+}
+
 pub fn save_faces(
     c: &Connection,
     media: i64,
@@ -244,6 +337,27 @@ pub fn save_faces(
     embedding_model: &str,
     analysis_model: &str,
     threshold: f32,
+) -> StoreResult<()> {
+    save_faces_with(
+        c,
+        media,
+        detected,
+        embedding_model,
+        analysis_model,
+        threshold,
+        &IdentityRefs::default(),
+    )
+}
+
+/// Salva i volti rilevati e li associa a persone con nome o identità dell'app.
+pub fn save_faces_with(
+    c: &Connection,
+    media: i64,
+    detected: &[DetectedFace],
+    embedding_model: &str,
+    analysis_model: &str,
+    threshold: f32,
+    ids: &IdentityRefs,
 ) -> StoreResult<()> {
     for f in detected {
         if f.embedding.len() != 128
@@ -302,7 +416,15 @@ pub fn save_faces(
                 .find(|x| x.id == id)
                 .map(|x| x.rejected.as_slice())
                 .unwrap_or(&[]);
-            let person = named_match(c, &f.embedding, embedding_model, rejects, threshold)?;
+            let person = named_match_refs(
+                c,
+                &f.embedding,
+                embedding_model,
+                rejects,
+                threshold,
+                ids,
+                true,
+            )?;
             c.execute(
                 "UPDATE face SET person_id=?2,assigned_by='auto' WHERE id=?1",
                 params![id, person],
@@ -480,6 +602,13 @@ pub fn remove_face(c: &Connection, id: i64) -> StoreResult<()> {
     refresh_centroids(c)?;
     repo::fts::refresh(c, f.media_id)
 }
+/// "Elimina tutti i dati dei volti": volti e persone della libreria e volti di
+/// riferimento delle identità in `app.db` (le identità restano).
+pub fn clear_with_references(c: &Connection, app: &crate::AppStore) -> StoreResult<()> {
+    clear(c)?;
+    app.with(crate::app_store::identities::clear_faces)
+}
+
 pub fn clear(c: &Connection) -> StoreResult<()> {
     c.pragma_update(None, "secure_delete", true)?;
     let ids: HashSet<_> = records(c, None)?.iter().map(|f| f.media_id).collect();
@@ -489,4 +618,166 @@ pub fn clear(c: &Connection) -> StoreResult<()> {
     c.execute("DELETE FROM face_exclusion", [])?;
     c.execute("DELETE FROM analysis_version WHERE stage='faces'", [])?;
     refresh_media(c, &ids)
+}
+
+// ------------------------------------------------- collegamento con le identità
+
+/// Marcatore in `settings_kv`: persone con nome già convertite in identità.
+pub const IDENTITIES_MIGRATED: &str = "identities_migrated";
+
+/// Migrazione una tantum: ogni persona con nome viene collegata all'identità
+/// con lo stesso nome restituita da `ensure` (che la crea se manca). I
+/// centroidi non diventano riferimenti. Restituisce le persone collegate.
+pub fn migrate_to_identities(
+    c: &Connection,
+    mut ensure: impl FnMut(&str) -> StoreResult<String>,
+) -> StoreResult<usize> {
+    let done: Option<String> = c
+        .query_row(
+            "SELECT value FROM settings_kv WHERE key=?1",
+            [IDENTITIES_MIGRATED],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if done.is_some() {
+        return Ok(0);
+    }
+    let mut q = c.prepare(
+        "SELECT id,name FROM person WHERE name IS NOT NULL AND identity_uid IS NULL ORDER BY id",
+    )?;
+    let named = q
+        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    for (id, name) in &named {
+        let uid = ensure(name)?;
+        c.execute(
+            "UPDATE person SET identity_uid=?2 WHERE id=?1",
+            params![id, uid],
+        )?;
+    }
+    c.execute(
+        "INSERT INTO settings_kv(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        params![IDENTITIES_MIGRATED, now_ms().to_string()],
+    )?;
+    Ok(named.len())
+}
+
+/// Persona della libreria collegata all'identità, se esiste.
+pub fn person_for_identity(c: &Connection, uid: &str) -> StoreResult<Option<i64>> {
+    Ok(c.query_row(
+        "SELECT id FROM person WHERE identity_uid=?1 ORDER BY id LIMIT 1",
+        [uid],
+        |r| r.get(0),
+    )
+    .optional()?)
+}
+
+/// Collega (o scollega, con `None`) una persona a un'identità. Il nome della
+/// persona diventa quello dell'identità. Se un'altra persona era già collegata
+/// alla stessa identità, le due persone vengono unite.
+pub fn link_identity(
+    c: &Connection,
+    person: i64,
+    identity: Option<(&str, &str)>,
+) -> StoreResult<i64> {
+    let Some((uid, name)) = identity else {
+        if c.execute(
+            "UPDATE person SET identity_uid=NULL,name=NULL WHERE id=?1",
+            [person],
+        )? == 0
+        {
+            return Err(StoreError::NotFound("persona".into()));
+        }
+        refresh_centroids(c)?;
+        refresh_media(c, &person_media(c, person)?)?;
+        return Ok(person);
+    };
+    if let Some(other) = person_for_identity(c, uid)?.filter(|o| *o != person) {
+        merge(c, person, other)?;
+        return Ok(other);
+    }
+    if c.execute(
+        "UPDATE person SET identity_uid=?2,name=?3 WHERE id=?1",
+        params![person, uid, name],
+    )? == 0
+    {
+        return Err(StoreError::NotFound("persona".into()));
+    }
+    refresh_centroids(c)?;
+    refresh_media(c, &person_media(c, person)?)?;
+    Ok(person)
+}
+
+/// Persona collegata all'identità, creata se nella libreria non c'è ancora.
+pub fn ensure_identity_person(c: &Connection, uid: &str, name: &str) -> StoreResult<i64> {
+    if let Some(p) = person_for_identity(c, uid)? {
+        return Ok(p);
+    }
+    let id = create_person(c, Some(name))?;
+    c.execute(
+        "UPDATE person SET identity_uid=?2 WHERE id=?1",
+        params![id, uid],
+    )?;
+    Ok(id)
+}
+
+/// Riallinea i nomi delle persone collegate ai nomi delle identità
+/// (`uid` → nome); le persone collegate a identità non più esistenti vengono
+/// scollegate mantenendo il nome. Restituisce le persone modificate.
+pub fn sync_identity_names(
+    c: &Connection,
+    names: &std::collections::HashMap<String, String>,
+) -> StoreResult<usize> {
+    let mut q = c.prepare(
+        "SELECT id,identity_uid,COALESCE(name,'') FROM person WHERE identity_uid IS NOT NULL",
+    )?;
+    let rows = q
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut changed = 0;
+    let mut media = HashSet::new();
+    for (id, uid, name) in rows {
+        match names.get(&uid) {
+            Some(n) if *n == name => continue,
+            Some(n) => {
+                c.execute("UPDATE person SET name=?2 WHERE id=?1", params![id, n])?;
+            }
+            None => {
+                c.execute("UPDATE person SET identity_uid=NULL WHERE id=?1", [id])?;
+            }
+        }
+        changed += 1;
+        media.extend(person_media(c, id)?);
+    }
+    if changed > 0 {
+        refresh_media(c, &media)?;
+    }
+    Ok(changed)
+}
+
+/// Dopo l'unione di due identità: le persone collegate a `from` passano a `to`
+/// (unendo le persone se `to` era già collegata in questa libreria).
+pub fn relink_identity(c: &Connection, from: &str, to: &str, name: &str) -> StoreResult<()> {
+    if let Some(p) = person_for_identity(c, from)? {
+        link_identity(c, p, Some((to, name)))?;
+    }
+    Ok(())
+}
+
+/// Foto per identità collegata nella libreria aperta (`uid` → foto).
+pub fn identity_photos(c: &Connection) -> StoreResult<std::collections::HashMap<String, i64>> {
+    let mut q = c.prepare(
+        "SELECT p.identity_uid,count(DISTINCT f.media_id) FROM person p JOIN face f ON f.person_id=p.id
+         WHERE p.identity_uid IS NOT NULL GROUP BY p.identity_uid",
+    )?;
+    let rows = q
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
 }

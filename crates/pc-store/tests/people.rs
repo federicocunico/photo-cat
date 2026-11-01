@@ -109,3 +109,134 @@ fn clear_and_vacuum_remove_face_data_from_database_and_wal() {
     let wal = path.with_extension("db-wal");
     assert!(std::fs::metadata(wal).map(|m| m.len() == 0).unwrap_or(true));
 }
+
+fn library_with(n: i64) -> Connection {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    for i in 1..=n {
+        c.execute(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (?1,?2,?2,'jpg',1,1,1,1)",
+            rusqlite::params![i, format!("f{i}.jpg")],
+        )
+        .unwrap();
+    }
+    c
+}
+
+fn reference(app: &pc_store::AppStore, name: &str, axis: usize) -> String {
+    use pc_store::app_store::identities as ids;
+    app.with(|a| {
+        let uid = ids::create(
+            a,
+            &ids::IdentityInput {
+                name: name.into(),
+                ..Default::default()
+            },
+        )?;
+        ids::add_face(
+            a,
+            &uid,
+            b"png",
+            "sface",
+            Some(&face(0.1, axis).embedding),
+            "file:ref.jpg",
+        )?;
+        Ok(uid)
+    })
+    .unwrap()
+}
+
+#[test]
+fn reference_faces_recognise_an_unlinked_identity_in_a_new_library() {
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    let giulia = reference(&app, "Giulia", 3);
+    let refs = people::IdentityRefs::load(&app, "sface").unwrap();
+    let c = library_with(2);
+    // Nessuna persona in libreria: il volto simile al riferimento crea "Giulia" collegata.
+    people::save_faces_with(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363, &refs).unwrap();
+    let f = &people::records(&c, Some(1)).unwrap()[0];
+    let person = f.person_id.expect("persona collegata");
+    let list = people::list(&c).unwrap();
+    assert_eq!(list[0].name.as_deref(), Some("Giulia"));
+    assert_eq!(list[0].identity_uid.as_deref(), Some(giulia.as_str()));
+    // Un secondo file con Giulia va nella stessa persona, senza duplicarla.
+    people::save_faces_with(&c, 2, &[face(0.1, 3)], "sface", "det+sface", 0.363, &refs).unwrap();
+    assert_eq!(
+        people::records(&c, Some(2)).unwrap()[0].person_id,
+        Some(person)
+    );
+    assert_eq!(people::list(&c).unwrap().len(), 1);
+    // Un volto diverso resta senza persona; senza riferimenti nessuna associazione.
+    people::save_faces_with(&c, 2, &[face(0.6, 9)], "sface", "det+sface", 0.363, &refs).unwrap();
+    let fresh = people::records(&c, Some(2))
+        .unwrap()
+        .into_iter()
+        .find(|f| f.bbox[0] == 0.6)
+        .unwrap();
+    assert_eq!(fresh.person_id, None);
+    let plain = library_with(1);
+    people::save_faces(&plain, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363).unwrap();
+    assert_eq!(people::records(&plain, Some(1)).unwrap()[0].person_id, None);
+}
+
+#[test]
+fn not_this_person_is_respected_for_the_linked_identity() {
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    reference(&app, "Giulia", 3);
+    let refs = people::IdentityRefs::load(&app, "sface").unwrap();
+    let c = library_with(1);
+    people::save_faces_with(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363, &refs).unwrap();
+    let f = people::records(&c, Some(1)).unwrap().remove(0);
+    let giulia = f.person_id.unwrap();
+    people::reject(&c, f.id, giulia).unwrap();
+    // Rianalisi: il riferimento dell'identità collegata alla persona esclusa non vale.
+    people::save_faces_with(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363, &refs).unwrap();
+    let after = people::records(&c, Some(1)).unwrap().remove(0);
+    assert_eq!(after.person_id, None);
+    assert!(after.rejected.contains(&giulia));
+}
+
+#[test]
+fn purge_deletes_reference_faces_but_keeps_identities() {
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    reference(&app, "Giulia", 3);
+    let c = library_with(1);
+    people::save_faces(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363).unwrap();
+    people::clear_with_references(&c, &app).unwrap();
+    let ids = app.with(pc_store::app_store::identities::list).unwrap();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0].faces, 0);
+    assert!(people::records(&c, None).unwrap().is_empty());
+}
+
+#[test]
+fn link_merge_and_sync_identity_names() {
+    let c = library_with(2);
+    people::save_faces(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363).unwrap();
+    people::save_faces(&c, 2, &[face(0.1, 5)], "sface", "det+sface", 0.363).unwrap();
+    let a = people::create_person(&c, None).unwrap();
+    let b = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[people::records(&c, Some(1)).unwrap()[0].id], a).unwrap();
+    people::assign(&c, &[people::records(&c, Some(2)).unwrap()[0].id], b).unwrap();
+    // "Senza nome" collegato a "Marco Russo".
+    people::link_identity(&c, a, Some(("uid-m", "Marco Russo"))).unwrap();
+    assert_eq!(people::identity_photos(&c).unwrap()["uid-m"], 1);
+    // Collegare un secondo gruppo alla stessa identità unisce le persone.
+    let kept = people::link_identity(&c, b, Some(("uid-m", "Marco Russo"))).unwrap();
+    assert_eq!(kept, a);
+    assert_eq!(people::identity_photos(&c).unwrap()["uid-m"], 2);
+    // Identità rinominata mentre la libreria era chiusa: il nome si riallinea.
+    let names = std::collections::HashMap::from([("uid-m".to_string(), "Marco R.".to_string())]);
+    assert_eq!(people::sync_identity_names(&c, &names).unwrap(), 1);
+    assert_eq!(
+        people::list(&c).unwrap()[0].name.as_deref(),
+        Some("Marco R.")
+    );
+    // Identità eliminata: la persona resta con il nome ma scollegata.
+    people::sync_identity_names(&c, &Default::default()).unwrap();
+    let p = &people::list(&c).unwrap()[0];
+    assert_eq!(
+        (p.name.as_deref(), p.identity_uid.as_deref()),
+        (Some("Marco R."), None)
+    );
+}

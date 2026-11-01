@@ -52,8 +52,8 @@ fn fixture(root: &Path) -> Store {
                     ..Default::default()
                 },
             )?;
-            pc_store::bulk::add_tag(c, "Città; \"Firenze\"", &[id])?;
-            pc_store::bulk::add_tag(c, "Viaggio", &[id])?;
+            pc_store::bulk::add_tag(c, "Città; \"Firenze\"", &[id], &[])?;
+            pc_store::bulk::add_tag(c, "Viaggio", &[id], &[])?;
         }
         Ok(())
     })
@@ -396,6 +396,7 @@ fn enrich(db: &Store, id: i64) {
                 captured_at: Some("2023-07-14 10:22:01".into()),
                 captured_source: Some(DateSource::ExifOriginal),
                 modified_at: Some("2023-07-15 08:00:00".into()),
+                ..Default::default()
             },
         )?;
         repo::meta::set_location(

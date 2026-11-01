@@ -156,8 +156,8 @@ mod tests {
         crate::migrate::migrate(&mut c, None).unwrap();
         c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1)",[]).unwrap();
         // Un tag utente con lo stesso testo di un'etichetta AI resta comunque un tag.
-        crate::bulk::add_tag(&c, "natura", &[1]).unwrap();
-        crate::bulk::add_tag(&c, "Vacanze 2023", &[1]).unwrap();
+        crate::bulk::add_tag(&c, "natura", &[1], &[]).unwrap();
+        crate::bulk::add_tag(&c, "Vacanze 2023", &[1], &[]).unwrap();
         let groups = vec!["subject".into(), "environment".into()];
         let run = |value: &str, model: &str, taxonomy: i64| {
             let labels = vec![

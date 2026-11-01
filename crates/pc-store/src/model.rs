@@ -157,6 +157,12 @@ pub struct MediaDates {
     pub captured_at: Option<String>,
     pub captured_source: Option<DateSource>,
     pub modified_at: Option<String>,
+    /// Fuso dichiarato nei metadati per `captured_at`, in minuti.
+    #[serde(default)]
+    pub declared_offset_min: Option<i32>,
+    /// Dispositivo normalizzato (marca + modello).
+    #[serde(default)]
+    pub device: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

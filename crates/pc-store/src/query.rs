@@ -62,10 +62,21 @@ pub enum SortKey {
     AddedDesc,
 }
 
+/// Ora locale corretta (`AAAA-MM-GG HH:MM:SS`): istante reale più il fuso
+/// dell'ora mostrata; per i file non ancora elaborati, l'ora letta dal file.
+pub const LOCAL_TIME_SQL: &str = "COALESCE(datetime(d.instant_utc / 1000 + COALESCE(d.local_offset_min, 0) * 60, 'unixepoch'), d.captured_at)";
+
+/// Anno dell'ora locale corretta.
+pub const LOCAL_YEAR_SQL: &str = "CAST(substr(COALESCE(datetime(d.instant_utc / 1000 + COALESCE(d.local_offset_min, 0) * 60, 'unixepoch'), d.captured_at), 1, 4) AS INTEGER)";
+
+/// Chiave di ordinamento per istante reale (ms UTC); senza istante si usa
+/// l'ora letta dal file, senza data in fondo.
+const INSTANT_SORT_SQL: &str = "COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000, -9223372036854775807)";
+
 impl SortKey {
     fn expr(self) -> &'static str {
         match self {
-            Self::CapturedDesc | Self::CapturedAsc => "COALESCE(d.captured_at, '')",
+            Self::CapturedDesc | Self::CapturedAsc => INSTANT_SORT_SQL,
             Self::NameAsc => "m.name COLLATE NOCASE",
             Self::SizeDesc => "m.size",
             Self::AddedDesc => "m.added_at",
@@ -99,6 +110,8 @@ pub struct GridItem {
     pub status: MediaStatus,
     pub faces: i64,
     pub analyzed: bool,
+    /// Tag utente del file (per i chip colorati della griglia).
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -186,11 +199,11 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         args.extend(f.places.iter().map(|v| Value::Text(v.clone())));
     }
     if let Some(from) = &f.date_from {
-        parts.push("d.captured_at >= ?".into());
+        parts.push(format!("{LOCAL_TIME_SQL} >= ?"));
         args.push(Value::Text(from.clone()));
     }
     if let Some(to) = &f.date_to {
-        parts.push("d.captured_at <= ?".into());
+        parts.push(format!("{LOCAL_TIME_SQL} <= ?"));
         args.push(Value::Text(format!("{to} 99")));
     }
     if !f.formats.is_empty() {
@@ -257,7 +270,9 @@ pub fn page(
         "SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
                 (SELECT count(*) FROM face fc WHERE fc.media_id = m.id),
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
-                {key}
+                {key},
+                (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
+                 WHERE mt.media_id = m.id)
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ?",
         w.sql
     );
@@ -279,6 +294,7 @@ pub fn page(
                 status: MediaStatus::parse(&r.get::<_, String>(7)?),
                 faces: r.get(8)?,
                 analyzed: r.get(9)?,
+                tags: split_tags(r.get(11)?),
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -372,8 +388,10 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
          WHERE lo.name IS NOT NULL GROUP BY lo.name ORDER BY count(*) DESC LIMIT 100",
     )?);
     out.years = simple(run(
-        "SELECT NULL, substr(d.captured_at, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id
-         WHERE d.captured_at IS NOT NULL GROUP BY 2 ORDER BY 2 DESC",
+        &format!(
+            "SELECT NULL, substr({LOCAL_TIME_SQL}, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id
+             WHERE d.captured_at IS NOT NULL GROUP BY 2 ORDER BY 2 DESC"
+        ),
     )?);
     out.formats = simple(run(
         "SELECT NULL, m.ext, count(*) FROM media_item m JOIN f ON f.id = m.id GROUP BY m.ext ORDER BY count(*) DESC",
@@ -387,6 +405,15 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
          JOIN tag tg ON tg.id = mt.tag_id GROUP BY tg.id ORDER BY 3 DESC LIMIT 100",
     )?);
     Ok(out)
+}
+
+/// Tag concatenati con il separatore unità (U+001F), in ordine alfabetico.
+fn split_tags(joined: Option<String>) -> Vec<String> {
+    let mut tags: Vec<String> = joined
+        .map(|s| s.split(char::from(0x1f)).map(str::to_string).collect())
+        .unwrap_or_default();
+    tags.sort_by_key(|t| t.to_lowercase());
+    tags
 }
 
 fn json_to_value(v: &serde_json::Value) -> Value {

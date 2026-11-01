@@ -19,22 +19,14 @@ beforeEach(() => {
   ] as never);
 });
 afterEach(cleanup);
-it("opens a cluster, renames it and sends a persistent refusal", async () => {
+it("opens a cluster, offers the identity field and sends a persistent refusal", async () => {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <PeoplePage />
     </QueryClientProvider>,
   );
   fireEvent.click(await screen.findByText("Alice"));
-  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Giulia" } });
-  fireEvent.click(screen.getByText("Rinomina"));
-  await waitFor(() =>
-    expect(commandsMock.correctPerson).toHaveBeenCalledWith({
-      action: "rename",
-      person: 1,
-      name: "Giulia",
-    }),
-  );
+  expect(screen.getByRole("combobox", { name: "Chi è?" })).toBeInTheDocument();
   fireEvent.click(await screen.findByText("Non è questa persona"));
   await waitFor(() =>
     expect(commandsMock.correctPerson).toHaveBeenCalledWith({

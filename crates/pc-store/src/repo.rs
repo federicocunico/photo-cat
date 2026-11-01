@@ -291,18 +291,39 @@ pub mod meta {
         .optional()?)
     }
 
+    /// Salva le date lette dal file e ricalcola gruppo di sorgente e istante
+    /// reale (fuso di sistema per le foto senza fuso).
     pub fn set_dates(c: &Connection, id: MediaId, d: &MediaDates) -> StoreResult<()> {
+        set_dates_with(c, id, d, &crate::timeline::system_offset)
+    }
+
+    pub fn set_dates_with(
+        c: &Connection,
+        id: MediaId,
+        d: &MediaDates,
+        system: &crate::timeline::SystemOffset,
+    ) -> StoreResult<()> {
         c.execute(
-            "INSERT OR REPLACE INTO media_dates(media_id, captured_at, captured_source, modified_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![id, d.captured_at, d.captured_source.map(DateSource::as_str), d.modified_at],
+            "INSERT INTO media_dates(media_id, captured_at, captured_source, modified_at, declared_offset_min, device)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(media_id) DO UPDATE SET captured_at = excluded.captured_at,
+               captured_source = excluded.captured_source, modified_at = excluded.modified_at,
+               declared_offset_min = excluded.declared_offset_min, device = excluded.device",
+            params![
+                id,
+                d.captured_at,
+                d.captured_source.map(DateSource::as_str),
+                d.modified_at,
+                d.declared_offset_min,
+                d.device
+            ],
         )?;
-        Ok(())
+        crate::timeline::refresh_media(c, id, system)
     }
 
     pub fn dates(c: &Connection, id: MediaId) -> StoreResult<Option<MediaDates>> {
         Ok(c.query_row(
-            "SELECT captured_at, captured_source, modified_at FROM media_dates WHERE media_id=?1",
+            "SELECT captured_at, captured_source, modified_at, declared_offset_min, device FROM media_dates WHERE media_id=?1",
             [id],
             |r| {
                 let src: Option<String> = r.get(1)?;
@@ -310,6 +331,8 @@ pub mod meta {
                     captured_at: r.get(0)?,
                     captured_source: src.as_deref().and_then(DateSource::parse),
                     modified_at: r.get(2)?,
+                    declared_offset_min: r.get(3)?,
+                    device: r.get(4)?,
                 })
             },
         )
@@ -439,6 +462,23 @@ pub mod tag {
         )?;
         let rows = st
             .query_map([id], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
+    /// File che hanno due o più dei tag indicati (conflitti quando un set
+    /// diventa esclusivo). Confronto senza maiuscole.
+    pub fn conflicts(c: &Connection, names: &[String]) -> StoreResult<Vec<MediaId>> {
+        if names.len() < 2 {
+            return Ok(Vec::new());
+        }
+        let mut st = c.prepare(
+            "SELECT mt.media_id FROM media_tag mt JOIN tag t ON t.id = mt.tag_id
+             WHERE t.name IN (SELECT value FROM json_each(?1))
+             GROUP BY mt.media_id HAVING count(*) > 1 ORDER BY mt.media_id",
+        )?;
+        let rows = st
+            .query_map([serde_json::to_string(names)?], |r| r.get(0))?
             .collect::<Result<_, _>>()?;
         Ok(rows)
     }
@@ -721,6 +761,7 @@ mod tests {
             captured_at: Some("2023-07-14 10:22:01".into()),
             captured_source: Some(DateSource::ExifOriginal),
             modified_at: Some("2023-07-15 08:00:00".into()),
+            ..Default::default()
         };
         meta::set_dates(&c, id, &d).unwrap();
         assert_eq!(meta::dates(&c, id).unwrap().unwrap(), d);

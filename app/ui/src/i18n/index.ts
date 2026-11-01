@@ -4,13 +4,14 @@ import { en } from "./en";
 import { it } from "./it";
 import { features } from "./features";
 import { screens } from "./screens";
+import { modules } from "./modules";
 
 export type Language = "it" | "en";
 
 void i18n.use(initReactI18next).init({
   resources: {
-    it: { translation: { ...it, ...features.it, ...screens.it } },
-    en: { translation: { ...en, ...features.en, ...screens.en } },
+    it: { translation: { ...it, ...features.it, ...screens.it, ...modules.it } },
+    en: { translation: { ...en, ...features.en, ...screens.en, ...modules.en } },
   },
   lng: "it",
   fallbackLng: "it",

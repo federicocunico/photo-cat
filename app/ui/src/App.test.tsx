@@ -12,7 +12,15 @@ vi.mock("./lib/ipc", () => ipcMockModule(true));
 // Le pagine reali sono coperte dai loro test: qui interessa solo quale modulo è mostrato.
 vi.mock("./modules/library/LibraryPage", () => ({ LibraryPage: () => <p>page:library</p> }));
 vi.mock("./modules/catalogs/CatalogsPage", () => ({ CatalogsPage: () => <p>page:catalogs</p> }));
+vi.mock("./modules/tags/TagsPage", () => ({ TagsPage: () => <p>page:tags</p> }));
+vi.mock("./modules/sequence/SequencePage", () => ({
+  SequencePage: () => <p>page:sequence</p>,
+  SequenceStatus: () => null,
+}));
 vi.mock("./modules/people/PeoplePage", () => ({ PeoplePage: () => <p>page:people</p> }));
+vi.mock("./modules/identities/IdentitiesPage", () => ({
+  IdentitiesPage: () => <p>page:identities</p>,
+}));
 vi.mock("./modules/import/ImportPage", () => ({ ImportPage: () => <p>page:import</p> }));
 vi.mock("./modules/jobs/JobsPage", () => ({ JobsPage: () => <p>page:jobs</p> }));
 vi.mock("./modules/models/ModelsPage", () => ({ ModelsPage: () => <p>page:models</p> }));
@@ -51,11 +59,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("moduli di navigazione", () => {
-  it("il registro elenca i 9 moduli richiesti", () => {
+  it("il registro elenca i moduli richiesti", () => {
     expect(MODULES.map((m) => m.id)).toEqual([
       "library",
+      "sequence",
       "catalogs",
+      "tags",
       "people",
+      "identities",
       "import",
       "jobs",
       "models",
@@ -70,8 +81,11 @@ describe("moduli di navigazione", () => {
     const nav = screen.getByRole("navigation", { name: "Moduli" });
     const labels: Record<string, string> = {
       library: "Libreria",
+      sequence: "Sequenza",
       catalogs: "Cataloghi",
+      tags: "Tag",
       people: "Persone",
+      identities: "Identità",
       import: "Importa",
       jobs: "Job",
       organize: "Esporta e organizza",
@@ -79,7 +93,7 @@ describe("moduli di navigazione", () => {
       diagnostics: "Diagnostica",
       settings: "Impostazioni",
     };
-    expect(within(nav).getAllByRole("button")).toHaveLength(9);
+    expect(within(nav).getAllByRole("button")).toHaveLength(MODULES.length);
     for (const { id } of [...MODULES].reverse()) {
       const button = within(nav).getByRole("button", { name: labels[id] });
       fireEvent.click(button);

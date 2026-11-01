@@ -368,6 +368,7 @@ fn disabled_face_recognition_saves_no_faces_but_still_counts_people() {
             config: Arc::new(RwLock::new(config)),
             face_policy: Arc::new(pc_ai::face_policy::FacePolicy::new(false)),
             analysis_lock: Arc::default(),
+            app_store: None,
         };
         let jobs = JobManager::new(db.clone(), gov, 1, Arc::new(Sink));
         jobs.register(
@@ -397,4 +398,109 @@ fn disabled_face_recognition_saves_no_faces_but_still_counts_people() {
             "le persone vengono contate anche senza riconoscimento volti"
         );
     }
+}
+
+#[test]
+fn reference_from_file_offers_three_faces_and_recognises_in_new_library() {
+    use pc_models::{pool::ModelPool, store::ModelStore, Manifest};
+    use pc_store::app_store::identities as ids;
+    use std::sync::Arc;
+    runtime::init(&runtime::dev_runtime_path()).unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut manifest = Manifest::builtin();
+    manifest
+        .entries
+        .retain(|e| e.id == "yunet" || e.id == "sface");
+    let store = Arc::new(ModelStore::new(
+        manifest,
+        tmp.path().join("models"),
+        Some(asset("models")),
+    ));
+    store.restore(
+        &store.check_all(),
+        None,
+        &std::sync::atomic::AtomicBool::new(false),
+    );
+    let gov = pc_governor::MemoryGovernor::new(512);
+    let pool = Arc::new(ModelPool::new(
+        store.clone(),
+        gov.clone(),
+        Arc::new(pc_governor::FakeProbe::new(8192, 6000, 8)),
+        SessionOptions {
+            intra_threads: 4,
+            ..Default::default()
+        },
+    ));
+    let resources = pc_ai::stages::AiResources {
+        models: store,
+        pool,
+        governor: gov.clone(),
+    };
+    let file = asset("selftest/group_3_faces.jpg");
+    let before = std::fs::read(&file).unwrap();
+    let found = pc_ai::face_analysis::candidates_from_file(&resources, &gov, &file, 40).unwrap();
+    assert_eq!(found.len(), 3, "tre volti tra cui scegliere");
+    for c in &found {
+        let crop = image::load_from_memory(&c.crop_png).unwrap();
+        assert_eq!((crop.width(), crop.height()), (112, 112));
+    }
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        before,
+        "il file scelto non cambia"
+    );
+
+    // Il primo volto diventa riferimento di "Giulia"; una libreria nuova la riconosce.
+    let app = pc_store::AppStore::open(&tmp.path().join("app.db")).unwrap();
+    let chosen = found[0].clone();
+    let uid = app
+        .with(|c| {
+            let uid = ids::create(
+                c,
+                &ids::IdentityInput {
+                    name: "Giulia".into(),
+                    ..Default::default()
+                },
+            )?;
+            // Embedding di un modello precedente: va ricalcolato dal ritaglio.
+            ids::add_face(
+                c,
+                &uid,
+                &chosen.crop_png,
+                "sface-vecchio",
+                None,
+                "file:group_3_faces.jpg",
+            )?;
+            Ok(uid)
+        })
+        .unwrap();
+    assert_eq!(
+        pc_ai::face_analysis::refresh_references(&resources, &app).unwrap(),
+        1
+    );
+    let refs = pc_store::people::IdentityRefs::load(&app, &chosen.model_ver).unwrap();
+    assert_eq!(refs.refs.len(), 1);
+    let db = pc_store::Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+    let faces: Vec<pc_store::people::DetectedFace> = found
+        .iter()
+        .map(|c| pc_store::people::DetectedFace {
+            bbox: c.bbox,
+            quality: 0.99,
+            embedding: c.embedding.clone(),
+        })
+        .collect();
+    let model = chosen.model_ver.clone();
+    db.write(move |c| {
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'g.jpg','g.jpg','jpg',1,1,1,1)", [])?;
+        pc_store::people::save_faces_with(c, 1, &faces, &model, "yunet+sface", 0.363, &refs)
+    })
+    .unwrap();
+    let people = db.read(pc_store::people::list).unwrap();
+    assert_eq!(
+        people.len(),
+        1,
+        "solo Giulia, gli altri due restano senza nome"
+    );
+    assert_eq!(people[0].identity_uid.as_deref(), Some(uid.as_str()));
+    assert_eq!(people[0].name.as_deref(), Some("Giulia"));
 }

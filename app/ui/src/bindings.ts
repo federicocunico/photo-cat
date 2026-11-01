@@ -60,6 +60,70 @@ export const commands = {
 	startBulk: (ids: number[], operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { ids, operation, confirmed }),
 	undoBulk: () => __TAURI_INVOKE<string | null>("undo_bulk"),
 	lastBulkUndo: () => __TAURI_INVOKE<string | null>("last_bulk_undo"),
+	tagOverview: () => __TAURI_INVOKE<TagOverview>("tag_overview"),
+	renameTag: (from: string, to: string) => __TAURI_INVOKE<RenameOutcome>("rename_tag", { from, to }),
+	mergeTag: (source: string, target: string) => __TAURI_INVOKE<BulkOutcome>("merge_tag", { source, target }),
+	deleteTag: (name: string, confirmed: boolean) => __TAURI_INVOKE<BulkOutcome>("delete_tag", { name, confirmed }),
+	setTagColor: (name: string, color: string | null) => __TAURI_INVOKE<null>("set_tag_color", { name, color }),
+	/**  Crea (senza `id`) o aggiorna un set: nome e tag in ordine di tasto. */
+	saveTagSet: (id: number | null, name: string, tags: string[]) => __TAURI_INVOKE<number>("save_tag_set", { id, name, tags }),
+	duplicateTagSet: (id: number) => __TAURI_INVOKE<number>("duplicate_tag_set", { id }),
+	deleteTagSet: (id: number) => __TAURI_INVOKE<null>("delete_tag_set", { id }),
+	reorderTagSets: (ids: number[]) => __TAURI_INVOKE<null>("reorder_tag_sets", { ids }),
+	addTagToSet: (id: number, tag: string) => __TAURI_INVOKE<number>("add_tag_to_set", { id, tag }),
+	removeTagFromSet: (id: number, tag: string) => __TAURI_INVOKE<null>("remove_tag_from_set", { id, tag }),
+	setActiveTagSet: (id: number) => __TAURI_INVOKE<null>("set_active_tag_set", { id }),
+	setTagSetExportKeywords: (id: number, on: boolean) => __TAURI_INVOKE<null>("set_tag_set_export_keywords", { id, on }),
+	/**  Rende il set esclusivo (o no). Non rimuove tag: restituisce i file in conflitto. */
+	setTagSetExclusive: (id: number, exclusive: boolean) => __TAURI_INVOKE<number[]>("set_tag_set_exclusive", { id, exclusive }),
+	/**  File con due o più tag del set (da sistemare a mano se il set è esclusivo). */
+	tagSetConflicts: (id: number) => __TAURI_INVOKE<number[]>("tag_set_conflicts", { id }),
+	listIdentities: (query: string | null) => __TAURI_INVOKE<IdentitiesView>("list_identities", { query }),
+	/**  Crea (senza `uid`) o modifica un'identità. Un nome già usato è un errore. */
+	saveIdentity: (uid: string | null, input: IdentityInput) => __TAURI_INVOKE<string>("save_identity", { uid, input }),
+	deleteIdentity: (uid: string) => __TAURI_INVOKE<null>("delete_identity", { uid }),
+	/**  Unisce `from` in `into`: alias, volti di riferimento e collegamenti. */
+	mergeIdentities: (from: string, into: string) => __TAURI_INVOKE<null>("merge_identities", { from, into }),
+	identityFaces: (uid: string) => __TAURI_INVOKE<RefFaceView[]>("identity_faces", { uid }),
+	/**  Ritaglio di un volto di riferimento (data URL PNG). */
+	identityFaceImage: (id: number) => __TAURI_INVOKE<string>("identity_face_image", { id }),
+	removeIdentityFace: (id: number) => __TAURI_INVOKE<null>("remove_identity_face", { id }),
+	addIdentityReferenceFile: (uid: string, path: string, choice: number | null) => __TAURI_INVOKE<AddReferenceOutcome>("add_identity_reference_file", { uid, path, choice }),
+	/**  Volto della libreria come riferimento (ritaglio allineato dall'originale). */
+	addIdentityReferenceFace: (uid: string, face: number) => __TAURI_INVOKE<number>("add_identity_reference_face", { uid, face }),
+	/**
+	 *  Collega un gruppo di volti a un'identità (o lo scollega con `None`).
+	 *  Restituisce la persona risultante (diversa se le persone sono state unite).
+	 */
+	linkPersonIdentity: (person: number, uid: string | null) => __TAURI_INVOKE<number>("link_person_identity", { person, uid }),
+	suggestIdentities: (person: number, query: string) => __TAURI_INVOKE<IdentitySuggestion[]>("suggest_identities", { person, query }),
+	exportIdentities: (destination: string, includeFaces: boolean) => __TAURI_INVOKE<null>("export_identities", { destination, includeFaces }),
+	previewIdentityImport: (path: string) => __TAURI_INVOKE<ImportPreview>("preview_identity_import", { path }),
+	/**
+	 *  Importa le identità; quelle con nome già presente vengono unite solo se
+	 *  elencate in `merge`, altrimenti saltate.
+	 */
+	importIdentities: (path: string, merge: string[]) => __TAURI_INVOKE<ImportOutcome>("import_identities", { path, merge }),
+	sequenceOverview: (scope: SequenceScope) => __TAURI_INVOKE<SequenceOverview>("sequence_overview", { scope }),
+	sequencePage: (scope: SequenceScope, after: SequenceCursor | null, limit: number) => __TAURI_INVOKE<SequencePage>("sequence_page", { scope, after, limit }),
+	sequenceSessionIds: (scope: SequenceScope, session: number) => __TAURI_INVOKE<number[]>("sequence_session_ids", { scope, session }),
+	sequenceIds: (scope: SequenceScope) => __TAURI_INVOKE<number[]>("sequence_ids", { scope }),
+	setSessionGap: (minutes: number) => __TAURI_INVOKE<null>("set_session_gap", { minutes }),
+	setGroupDisplay: (group: number, tz: string | null, offsetMin: number | null) => __TAURI_INVOKE<number>("set_group_display", { group, tz, offsetMin }),
+	setGroupShift: (group: number, shiftS: number) => __TAURI_INVOKE<number>("set_group_shift", { group, shiftS }),
+	/**  Anteprima dell'ora prima e dopo una correzione del gruppo. */
+	previewGroupClock: (group: number, tz: string | null, offsetMin: number | null, shiftS: number) => __TAURI_INVOKE<ClockPreview[]>("preview_group_clock", { group, tz, offsetMin, shiftS }),
+	proposeAlignment: (reference: number, other: number) => __TAURI_INVOKE<Alignment>("propose_alignment", { reference, other }),
+	placeUndated: (media: number, after: number) => __TAURI_INVOKE<number>("place_undated", { media, after }),
+	ignoreTzSuggestion: (group: number, offsetMin: number) => __TAURI_INVOKE<null>("ignore_tz_suggestion", { group, offsetMin }),
+	/**  Nomi dei fusi IANA per il selettore dell'ora locale. */
+	listTimezones: () => __TAURI_INVOKE<string[]>("list_timezones"),
+	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
+	/**  Nomi delle prime foto mentre si scrive il modello. */
+	sequenceExportPreview: (options: SequenceExportOptions, limit: number) => __TAURI_INVOKE<NamePreviewResult>("sequence_export_preview", { options, limit }),
+	sequenceExportPreflight: (options: SequenceExportOptions) => __TAURI_INVOKE<ExportPreflight>("sequence_export_preflight", { options }),
+	/**  Avvia l'export come job annullabile e ricorda il modello usato. */
+	startSequenceExport: (options: SequenceExportOptions) => __TAURI_INVOKE<number>("start_sequence_export", { options }),
 	exportFields: () => __TAURI_INVOKE<string[]>("export_fields"),
 	startExport: (options: ExportOptions) => __TAURI_INVOKE<number>("start_export", { options }),
 	organizePreview: (options: OrganizeOptions) => __TAURI_INVOKE<Preview>("organize_preview", { options }),
@@ -79,6 +143,10 @@ export const commands = {
 };
 
 /* Types */
+export type AddReferenceOutcome = { outcome: "added"; id: number } | 
+/**  Più volti nell'immagine: va indicato quale usare. */
+{ outcome: "choose"; faces: FaceChoice[] } | { outcome: "noFace" };
+
 export type AiConfig = {
 	execution_provider?: ExecutionProvider,
 	/**  Soglia di confidenza predefinita per le catalogazioni (0..1). */
@@ -87,6 +155,18 @@ export type AiConfig = {
 	/**  Lato minimo in pixel di un volto utilizzabile per il riconoscimento. */
 	face_min_size_px?: number,
 	auto_download_models?: boolean,
+};
+
+/**
+ *  Proposta di allineamento: lo scostamento (assoluto) da dare al gruppo di
+ *  `other` perché il suo istante coincida con quello di `reference`.
+ */
+export type Alignment = {
+	group: number,
+	currentShiftS: number,
+	proposedShiftS: number,
+	/**  Differenza applicata (proposto − attuale). */
+	deltaS: number,
 };
 
 export type AppError = {
@@ -111,7 +191,18 @@ export type Budget = {
 
 export type BudgetLimit = "profile" | "user_limit" | "os_reserve" | "minimum";
 
-export type BulkAction = { action: "add_tag"; name: string } | { action: "remove_tag"; name: string } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | { action: "remove_library" };
+export type BulkAction = { action: "add_tag"; name: string; 
+/**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
+exclusive?: string[] } | { action: "remove_tag"; name: string } | 
+/**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | { action: "remove_library" };
+
+export type BulkOutcome = {
+	/**  Elementi effettivamente modificati. */
+	changed: number,
+	/**  Elementi richiesti. */
+	requested: number,
+};
 
 export type Catalog = {
 	id: number,
@@ -133,6 +224,13 @@ export type Category = {
 	label: string,
 	enabled: boolean,
 	prompts: string[],
+};
+
+/**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
+export type ClockPreview = {
+	mediaId: number,
+	before: string | null,
+	after: string | null,
 };
 
 export type Config = {
@@ -239,6 +337,18 @@ export type ExifInfo = {
 	raw: Value | null,
 };
 
+export type ExportDefaults = {
+	template: string,
+	/**  Set proposto per `{tag}` e per-tag: il primo esclusivo, altrimenti quello attivo. */
+	tagSet: number | null,
+};
+
+export type ExportFormat = 
+/**  JPEG ricodificato e verificato. */
+"jpeg" | 
+/**  Copia dell'originale senza ricodifica. */
+"original";
+
 export type ExportOptions = {
 	scope: Scope,
 	destination: string,
@@ -246,6 +356,29 @@ export type ExportOptions = {
 	separator: string,
 	bom: boolean,
 	fields: string[],
+};
+
+export type ExportPreflight = {
+	count: number,
+	/**  Foto senza tag del set scelto (solo in `sequenza/`). */
+	untagged: number,
+	requiredBytes: number,
+	freeBytes: number | null,
+	hardlinks: boolean,
+	/**  Nomi già presenti nella destinazione. */
+	existing: string[],
+	templateErrors: TemplateError[],
+	preview: NamePreview[],
+	canStart: boolean,
+	/**  Motivo per cui l'avvio è bloccato. */
+	blocked: string | null,
+};
+
+export type FaceChoice = {
+	index: number,
+	/**  Ritaglio allineato come data URL PNG. */
+	crop: string,
+	bbox: [(number | null), (number | null), (number | null), (number | null)],
 };
 
 export type FaceView = {
@@ -294,6 +427,8 @@ export type GridItem = {
 	status: MediaStatus,
 	faces: number,
 	analyzed: boolean,
+	/**  Tag utente del file (per i chip colorati della griglia). */
+	tags: string[],
 };
 
 export type Group = {
@@ -301,6 +436,77 @@ export type Group = {
 	label: string,
 	threshold: number | null,
 	categories: Category[],
+};
+
+export type IdentitiesView = {
+	identities: IdentityRow[],
+	groups: string[],
+	/**  Dove si trova `app.db` (contiene dati biometrici). */
+	storePath: string,
+	defaultThreshold: number | null,
+};
+
+export type Identity = {
+	uid: string,
+	name: string,
+	shortName: string,
+	group: string | null,
+	/**  Soglia propria; `None` = [`DEFAULT_THRESHOLD`]. */
+	threshold: number | null,
+	aliases: string[],
+	/**  Numero di volti di riferimento. */
+	faces: number,
+	createdAt: number,
+};
+
+export type IdentityInput = {
+	name: string,
+	/**  Vuoto o assente: la prima parola del nome. */
+	shortName: string | null,
+	group: string | null,
+	threshold: number | null,
+	aliases: string[],
+};
+
+export type IdentityRow = {
+	/**  Persona collegata nella libreria aperta (`None` = non collegata). */
+	person: number | null,
+	/**  Foto della persona collegata nella libreria aperta. */
+	photos: number,
+} & Identity;
+
+export type IdentitySuggestion = {
+	uid: string,
+	name: string,
+	shortName: string,
+	/**  Somiglianza (coseno) con i volti del gruppo, se calcolabile. */
+	score: number | null,
+	/**  Persona già collegata nella libreria. */
+	person: number | null,
+};
+
+export type ImportConflict = {
+	name: string,
+	/**  Identità locale con lo stesso nome. */
+	localUid: string,
+	incomingFaces: number,
+};
+
+export type ImportOutcome = {
+	created: number,
+	merged: number,
+	skipped: number,
+	faces: number,
+};
+
+/**  Esito dell'analisi di un file prima dell'importazione. */
+export type ImportPreview = {
+	total: number,
+	/**  Identità nuove (nome non presente). */
+	new: string[],
+	/**  Identità con un nome già presente: proposte per l'unione. */
+	conflicts: ImportConflict[],
+	faces: number,
 };
 
 export type JobRow = {
@@ -325,6 +531,17 @@ export type JobSnapshot = {
 };
 
 export type JobState = "queued" | "running" | "paused" | "completed" | "completed_with_errors" | "cancelled" | "interrupted" | "failed";
+
+export type JpegSettings = {
+	/**  Qualità iniziale (1–100). */
+	quality?: number,
+	/**  Crominanza a piena risoluzione (4:4:4); altrimenti 4:2:0. */
+	chroma444?: boolean,
+	/**  Confronto con l'originale e ricodifica se sotto soglia. */
+	verify?: boolean,
+	minSsim?: number | null,
+	minPsnr?: number | null,
+};
 
 export type LabelFilter = {
 	group: string,
@@ -396,6 +613,10 @@ export type MediaDates = {
 	capturedAt: string | null,
 	capturedSource: DateSource | null,
 	modifiedAt: string | null,
+	/**  Fuso dichiarato nei metadati per `captured_at`, in minuti. */
+	declaredOffsetMin?: number | null,
+	/**  Dispositivo normalizzato (marca + modello). */
+	device?: string | null,
 };
 
 export type MediaDetail = {
@@ -443,6 +664,16 @@ export type ModelStatus = {
 	selfTest: SelfTestResult | null,
 };
 
+export type NamePreview = {
+	original: string,
+	name: string,
+};
+
+export type NamePreviewResult = {
+	names: NamePreview[],
+	errors: TemplateError[],
+};
+
 export type NewSource = {
 	path: string,
 	recursive: boolean,
@@ -481,6 +712,8 @@ export type Page = {
 export type PersonView = {
 	id: number,
 	name: string | null,
+	/**  Identità dell'app collegata (UUID in `app.db`). */
+	identityUid: string | null,
 	photos: number,
 	faces: number,
 	cover: FaceView | null,
@@ -533,6 +766,19 @@ export type Preview = {
 
 export type Provider = "cpu" | "direct_ml" | "cuda" | "core_ml";
 
+export type RefFaceView = {
+	id: number,
+	uid: string,
+	modelVer: string,
+	/**  "library:<face id>" oppure "file:<nome file>". */
+	source: string,
+	createdAt: number,
+};
+
+export type RenameOutcome = { outcome: "renamed" } | 
+/**  Esiste già un tag con quel nome: va confermata l'unione. */
+{ outcome: "needsMerge"; target: string };
+
 export type ResourceProfile = "light" | "balanced" | "performance";
 
 /**  Payload dell'evento `resources://tick`. */
@@ -560,6 +806,79 @@ export type SelfTestResult = {
 	at: number,
 };
 
+export type SequenceCursor = {
+	instantUtc: number,
+	id: number,
+};
+
+export type SequenceExportOptions = {
+	scope: SequenceScope,
+	template: string,
+	destination: string,
+	format?: ExportFormat,
+	jpeg?: JpegSettings,
+	perTag: boolean,
+	manifest: boolean,
+	/**  Archivio non compresso di `sequenza/`. */
+	zip: boolean,
+	/**  Archivio non compresso di `per-tag/` (con le cartelle per tag). */
+	zipPerTag?: boolean,
+	/**  Metadati (data, fotocamera, GPS, parole chiave, identità) nelle copie. */
+	metadata: boolean,
+	/**  Set (esclusivo) usato per `{tag}` e per le cartelle per tag. */
+	tagSet: number | null,
+};
+
+export type SequenceItem = {
+	id: number,
+	name: string,
+	thumb: string | null,
+	instantUtc: number,
+	/**  Ora locale mostrata (`AAAA-MM-GG HH:MM:SS`). */
+	local: string,
+	localOffsetMin: number,
+	presumed: boolean,
+	groupId: number | null,
+	device: string | null,
+	/**  Indice della sessione (da 0). */
+	session: number,
+	/**  Tag del file che appartengono al set indicato. */
+	tags: string[],
+};
+
+export type SequenceOverview = {
+	sessions: SessionView[],
+	groups: SourceGroupView[],
+	undated: UndatedItem[],
+	suggestions: TzSuggestion[],
+	total: number,
+	gapMin: number,
+};
+
+export type SequencePage = {
+	items: SequenceItem[],
+	next: SequenceCursor | null,
+};
+
+export type SequenceScope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] };
+
+export type SessionView = {
+	index: number,
+	startLocal: string,
+	endLocal: string,
+	startUtc: number,
+	endUtc: number,
+	/**  Luogo più frequente della sessione. */
+	place: string | null,
+	count: number,
+};
+
+export type SetTag = {
+	/**  Tasto rapido (1–9). */
+	key: number,
+	name: string,
+};
+
 export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc";
 
 export type Source = {
@@ -570,6 +889,19 @@ export type Source = {
 	ignorePatterns: string[],
 	watch: boolean,
 	createdAt: number,
+};
+
+/**  Gruppo di sorgente per la UI ("Sorgenti e orari"). */
+export type SourceGroupView = {
+	id: number,
+	/**  `None` = "Altre sorgenti". */
+	device: string | null,
+	declaredOffsetMin: number | null,
+	displayTz: string | null,
+	displayOffsetMin: number | null,
+	shiftS: number,
+	/**  Foto del gruppo (nell'ambito richiesto). */
+	count: number,
 };
 
 export type SourceSummary = {
@@ -598,6 +930,36 @@ export type SystemSnapshot = {
 	physicalCores: number,
 };
 
+export type TagInfo = {
+	name: string,
+	/**  File della libreria con questo tag (0 se il tag esiste solo in un set). */
+	count: number,
+	color: string,
+	/**  Set che contengono il tag. */
+	sets: string[],
+};
+
+export type TagOverview = {
+	tags: TagInfo[],
+	sets: TagSetView[],
+	activeSet: number | null,
+	palette: string[],
+};
+
+export type TagSet = {
+	id: number,
+	name: string,
+	exclusive: boolean,
+	isBase: boolean,
+	exportKeywords: boolean,
+	tags: SetTag[],
+};
+
+export type TagSetView = {
+	/**  File della libreria con almeno un tag del set. */
+	tagged: number,
+} & TagSet;
+
 export type Taxonomy = {
 	version: number,
 	groups: Group[],
@@ -614,7 +976,33 @@ export type TechInfo = {
 	orientation: number | null,
 };
 
+/**  Problema nel modello, con la posizione (in caratteri) da evidenziare. */
+export type TemplateError = {
+	kind: TemplateErrorKind,
+	start: number,
+	end: number,
+	text: string,
+};
+
+export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | "empty";
+
 export type Theme = "dark" | "light";
+
+/**
+ *  Proposta di ora locale per un gruppo, ricavata dalle foto con GPS di altri
+ *  gruppi scattate negli stessi istanti.
+ */
+export type TzSuggestion = {
+	group: number,
+	device: string | null,
+	/**  Fuso proposto (IANA) e scostamento corrispondente. */
+	tz: string | null,
+	offsetMin: number,
+	/**  Ora locale attuale del gruppo. */
+	currentOffsetMin: number,
+	/**  Scatti del gruppo che hanno foto con GPS contemporanee in quel fuso. */
+	count: number,
+};
 
 export type UiConfig = {
 	theme?: Theme,
@@ -634,6 +1022,14 @@ export type UnavailableReason =
 "not_in_runtime" | 
 /**  ONNX Runtime non è caricato: nessuna analisi AI disponibile. */
 "runtime_missing";
+
+export type UndatedItem = {
+	id: number,
+	name: string,
+	thumb: string | null,
+	/**  Data del file system (inaffidabile, solo indicativa). */
+	fileDate: string | null,
+};
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
 

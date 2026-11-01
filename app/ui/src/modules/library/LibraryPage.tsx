@@ -7,6 +7,7 @@ import { LibraryGrid } from "./Grid";
 import { Inspector } from "./Inspector";
 import { LibrarySidebar } from "./Sidebar";
 import { BulkBar } from "./BulkBar";
+import { useTagHotkeys } from "../tags/useTagHotkeys";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
 
@@ -71,6 +72,7 @@ function Toolbar() {
 }
 
 export function LibraryPage() {
+  useTagHotkeys(() => useLibrary.getState().selected);
   return (
     <Panels
       left={<LibrarySidebar />}
