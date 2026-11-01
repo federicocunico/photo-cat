@@ -13,6 +13,7 @@ pub mod query;
 pub mod repo;
 pub mod rules;
 pub mod sequence;
+pub mod sources;
 pub mod timeline;
 
 pub use app_store::AppStore;

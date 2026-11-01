@@ -256,6 +256,62 @@ impl ThumbCache {
         self.path_of(key).is_some_and(|p| p.is_file())
     }
 
+    /// Cancella le miniature indicate. Gli errori di file system vengono solo
+    /// registrati in diagnostica: la rimozione dalla libreria è già avvenuta.
+    pub fn remove(&self, keys: &[String]) -> usize {
+        let mut n = 0;
+        for key in keys {
+            let Some(path) = self.path_of(key) else {
+                continue;
+            };
+            match std::fs::remove_file(&path) {
+                Ok(()) => n += 1,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => tracing::warn!(
+                    code = "IO",
+                    path = %path.display(),
+                    detail = %e,
+                    "miniatura non cancellata"
+                ),
+            }
+        }
+        n
+    }
+
+    /// Cancella le miniature che nessun elemento usa (chiavi assenti da `used`)
+    /// scritte prima di `before`.
+    pub fn purge_unreferenced(
+        &self,
+        used: &std::collections::HashSet<String>,
+        before: std::time::SystemTime,
+    ) -> AppResult<usize> {
+        if !self.root.is_dir() {
+            return Ok(0);
+        }
+        let mut stale = Vec::new();
+        for entry in walkdir::WalkDir::new(&self.root).min_depth(2).max_depth(2) {
+            let entry = entry.map_err(|e| AppError::new(ErrorCode::Io, e.to_string()))?;
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "jpg") {
+                continue;
+            }
+            let recent = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .is_none_or(|t| t >= before);
+            if recent {
+                continue;
+            }
+            if let Some(key) = path.file_stem().and_then(|s| s.to_str()) {
+                if self.path_of(key).is_some() && !used.contains(key) {
+                    stale.push(key.to_string());
+                }
+            }
+        }
+        Ok(self.remove(&stale))
+    }
+
     /// Scrive la miniatura in modo atomico.
     pub fn store(&self, key: &str, img: &RgbImage) -> AppResult<PathBuf> {
         let path = self

@@ -48,6 +48,9 @@ pub enum BulkAction {
 pub type PlaceResolver =
     Arc<dyn Fn(&bulk::PlaceInputs) -> Option<pc_store::model::Location> + Send + Sync>;
 
+/// Cancella dalla cache le miniature non più usate dopo "Rimuovi dalla libreria".
+pub type ThumbRemover = Arc<dyn Fn(&[String]) + Send + Sync>;
+
 impl BulkAction {
     pub fn destructive(&self) -> bool {
         matches!(self, Self::RemoveCatalog { .. } | Self::RemoveLibrary)
@@ -57,6 +60,7 @@ impl BulkAction {
         c: &rusqlite::Connection,
         ids: &[i64],
         resolver: Option<&PlaceResolver>,
+        removed_thumbs: &mut Vec<String>,
     ) -> StoreResult<usize> {
         Ok(match self {
             Self::SetPlace { place } => {
@@ -91,7 +95,11 @@ impl BulkAction {
                 people::assign(c, &faces, *person)?;
                 ids.len()
             }
-            Self::RemoveLibrary => repo::media::delete(c, ids)?,
+            Self::RemoveLibrary => {
+                let removed = pc_store::sources::remove_media(c, ids)?;
+                removed_thumbs.extend(removed.thumbs);
+                removed.items
+            }
         })
     }
 }
@@ -103,6 +111,16 @@ pub fn plan(store: Store, params: &serde_json::Value) -> AppResult<JobPlan> {
 pub fn plan_with(
     store: Store,
     resolver: Option<PlaceResolver>,
+    params: &serde_json::Value,
+) -> AppResult<JobPlan> {
+    plan_full(store, resolver, None, params)
+}
+
+/// Come [`plan_with`], con la pulizia delle miniature dopo la rimozione.
+pub fn plan_full(
+    store: Store,
+    resolver: Option<PlaceResolver>,
+    remover: Option<ThumbRemover>,
     params: &serde_json::Value,
 ) -> AppResult<JobPlan> {
     let ids: Vec<i64> = serde_json::from_value(params["ids"].clone())?;
@@ -125,17 +143,29 @@ pub fn plan_with(
             }
             let control = ctx.control.clone();
             let mut failed = 0;
-            store.write(move|c|bulk::with_undo_group(c,"Modifica selezione",||{
+            let mut thumbs = Vec::new();
+            let cancelled = ctx.control.clone();
+            let result = store.write(move|c|bulk::with_undo_group(c,"Modifica selezione",||{
             for chunk in ids.chunks(JOB_THRESHOLD){
                 // Non attendere in pausa mentre si occupa il writer SQLite.
                 if control.is_cancelled(){break;}
                 let mut valid=Vec::new();for id in chunk {
                     match repo::media::get(c,*id){Ok(_)=>valid.push(*id),Err(e)=>{failed+=1;phase.inc_failed(1);tracing::error!(job_id=ctx.job_id,phase="modifica",path=format!("media:{id}"),code="NOT_FOUND",detail=%e,"elemento non trovato");}}
                 }
-                if !valid.is_empty(){action.apply(c,&valid,resolver.as_ref())?;phase.inc_done(valid.len() as i64);}
+                if !valid.is_empty(){action.apply(c,&valid,resolver.as_ref(),&mut thumbs)?;phase.inc_done(valid.len() as i64);}
             }
-            phase.finish();Ok(failed)
-        })).map(|failed|RunSummary{cancelled:ctx.control.is_cancelled(),failed}).map_err(Into::into)
+            phase.finish();Ok((failed,thumbs))
+        }));
+            let (failed, thumbs) = result?;
+            if let Some(remove) = &remover {
+                if !thumbs.is_empty() {
+                    remove(&thumbs);
+                }
+            }
+            Ok(RunSummary {
+                cancelled: cancelled.is_cancelled(),
+                failed,
+            })
         }),
     })
 }

@@ -38,6 +38,8 @@ export function activeChips(f: LibraryFilter, t: (k: string, o?: object) => stri
   }
   if ((f.sourceIds ?? []).length)
     chips.push({ name: t("library.sources"), clear: { sourceIds: [] } });
+  if (f.ids)
+    chips.push({ name: t("sources.idsChip", { count: f.ids.length }), clear: { ids: null } });
   if (f.catalogId != null) chips.push({ name: t("library.catalogs"), clear: { catalogId: null } });
   return chips;
 }

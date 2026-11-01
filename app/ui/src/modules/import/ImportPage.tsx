@@ -6,6 +6,8 @@ import { fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
 import { FORMAT_GROUPS, splitPatterns } from "./formats";
+import { RelinkDialog, RemoveMissingDialog, RemoveSourceDialog, UpdateSummaryView } from "./manage";
+import { pickFolder, updateFolder, useImportUpdates } from "./sourceActions";
 
 const card = {
   background: "var(--pc-panel)",
@@ -14,70 +16,124 @@ const card = {
   padding: 24,
 } as const;
 
-async function pickFolder(): Promise<string | null> {
-  if (!isTauri()) return null;
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const res = await open({ directory: true, multiple: false });
-  return typeof res === "string" ? res : null;
-}
+type Dialog = { kind: "remove" | "relink" | "missing"; summary: SourceSummary } | null;
 
 function SourcesList({ sources }: { sources: SourceSummary[] }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["sources"] });
+  const updates = useImportUpdates();
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [error, setError] = useState("");
   if (sources.length === 0) return null;
+  const run = (f: () => Promise<unknown>) => async () => {
+    setError("");
+    try {
+      await f();
+    } catch (e) {
+      setError((e as { detail?: string }).detail ?? String(e));
+    }
+  };
   return (
-    <section style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+    <section style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
       <h2 style={{ margin: 0, fontSize: 16 }}>{t("import.sources")}</h2>
-      {sources.map(({ source, items, missing }) => (
-        <div
-          key={source.id}
-          data-testid={`source-${source.id}`}
-          style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}
-        >
-          <span className="mono" style={{ fontSize: 13, wordBreak: "break-all" }}>
-            {source.path}
-          </span>
-          <span className="muted">{t("import.itemsCount", { n: fmtInt(items) })}</span>
-          {missing > 0 && (
-            <span style={{ color: "var(--pc-warn)" }}>
-              {t("import.missing", { n: fmtInt(missing) })}
-            </span>
-          )}
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={source.watch}
-              onChange={async (e) => {
-                await commands.updateSource({ ...source, watch: e.target.checked });
-                await refresh();
-              }}
-            />
-            {t("import.watch")}
-          </label>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button type="button" className="btn" onClick={() => commands.startImport(source.id)}>
-              {t("import.rescan")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                if (
-                  !window.confirm(
-                    t("import.confirmRemove", { path: source.path, n: fmtInt(items) }),
-                  )
-                )
-                  return;
-                await commands.removeSource(source.id);
-                await refresh();
-              }}
-            >
-              {t("import.remove")}
-            </button>
+      {error && <p role="alert">{error}</p>}
+      {sources.map((summary) => {
+        const { source, items, missing } = summary;
+        const last = (updates.data ?? []).find((u) => u.sourceId === source.id);
+        return (
+          <div
+            key={source.id}
+            data-testid={`source-${source.id}`}
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+              <span className="mono" style={{ fontSize: 13, wordBreak: "break-all" }}>
+                {source.path}
+              </span>
+              <span className="muted">{t("import.itemsCount", { n: fmtInt(items) })}</span>
+              {missing > 0 && (
+                <span style={{ color: "var(--pc-warn)" }}>
+                  {t("import.missing", { n: fmtInt(missing) })}
+                </span>
+              )}
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={source.watch}
+                  onChange={async (e) => {
+                    await commands.updateSource({ ...source, watch: e.target.checked });
+                    await refresh();
+                  }}
+                />
+                {t("import.watch")}
+              </label>
+              <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={run(() => commands.startImport(source.id, null))}
+                >
+                  {t("import.rescan")}
+                </button>
+                <button type="button" className="btn" onClick={run(() => updateFolder(source))}>
+                  {t("sources.updateFolder")}
+                </button>
+                {missing > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setDialog({ kind: "relink", summary })}
+                    >
+                      {t("sources.relink")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setDialog({ kind: "missing", summary })}
+                    >
+                      {t("sources.removeMissing")}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => setDialog({ kind: "remove", summary })}
+                >
+                  {t("import.remove")}
+                </button>
+              </div>
+            </div>
+            {last && (
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {t("sources.summary.title")}:
+                </span>
+                <UpdateSummaryView summary={last} />
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
+      {dialog?.kind === "remove" && (
+        <RemoveSourceDialog source={dialog.summary.source} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === "relink" && (
+        <RelinkDialog
+          source={dialog.summary.source}
+          missing={dialog.summary.missing}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === "missing" && (
+        <RemoveMissingDialog
+          sourceId={dialog.summary.source.id}
+          missing={dialog.summary.missing}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </section>
   );
 }
@@ -159,7 +215,7 @@ export function ImportPage() {
         ignorePatterns: splitPatterns(ignore),
         watch,
       });
-      await commands.startImport(id);
+      await commands.startImport(id, null);
       await qc.invalidateQueries({ queryKey: ["sources"] });
       setPath("");
       setModule("jobs");

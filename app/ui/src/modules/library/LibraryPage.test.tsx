@@ -7,7 +7,7 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { clickSelect, emptyFilter, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
-import type { GridItem } from "../../bindings";
+import type { GridItem, SourceSummary } from "../../bindings";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -371,5 +371,46 @@ describe("cartelle, luogo e Apri con", () => {
         false,
       ),
     );
+  });
+});
+
+describe("gestione delle importazioni", () => {
+  it("rimozione dalla Libreria: stessa conferma con riepilogo della pagina Import", async () => {
+    commandsMock.sourceRemovalSummary.mockResolvedValue({
+      items: 12,
+      edited: 2,
+      catalogs: [{ name: "Vacanze", items: 3 }],
+      orphanedPeople: ["Giulia"],
+      jobs: 1,
+    } as never);
+    commandsMock.removeSource.mockResolvedValue(null as never);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Azioni su/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rimuovi dalla libreria…" }));
+    const dialog = await screen.findByRole("dialog", { name: /Rimuovere D:.Foto/ });
+    expect(await within(dialog).findByText("12 foto verranno tolte dal catalogo.")).toBeTruthy();
+    expect(within(dialog).getByText(/Vacanze \(3\)/)).toBeTruthy();
+    expect(within(dialog).getByText(/Giulia/)).toBeTruthy();
+    expect(within(dialog).getByText(/1 job in corso/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Rimuovi dalla libreria" }));
+    await waitFor(() => expect(commandsMock.removeSource).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("le voci sui mancanti compaiono solo se la sorgente ne ha", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Azioni su/ }));
+    expect(screen.getByRole("menuitem", { name: "Ricollega mancanti…" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Rimuovi mancanti…" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Aggiorna" }));
+    await waitFor(() => expect(commandsMock.startImport).toHaveBeenCalledWith(1, null));
+    cleanup();
+    const [first] = (await commandsMock.listSources()) as unknown as SourceSummary[];
+    commandsMock.listSources.mockResolvedValue([{ ...first, missing: 0 }] as never);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Azioni su/ }));
+    expect(screen.getByRole("menuitem", { name: "Aggiorna cartella…" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Ricollega mancanti…" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Rimuovi mancanti…" })).toBeNull();
   });
 });

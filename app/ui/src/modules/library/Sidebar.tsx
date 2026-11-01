@@ -3,10 +3,12 @@ import { useState } from "react";
 import type React from "react";
 import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type FacetValue, type LibraryFilter } from "../../lib/ipc";
+import { commands, isTauri, type FacetValue, type LibraryFilter, type Source } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
+import { SourceMenu } from "./SourceMenu";
+import { updateFolder } from "../import/sourceActions";
 
 function Row({
   label,
@@ -127,11 +129,11 @@ const toggle = (list: string[], v: string) =>
 
 /** Sottocartelle di una sorgente (o cartella), caricate un livello alla volta. */
 function FolderTree({
-  sourceId,
+  source,
   parent,
   depth,
 }: {
-  sourceId: number;
+  source: Source;
   parent: string | null;
   depth: number;
 }) {
@@ -141,8 +143,8 @@ function FolderTree({
   const recursive = useLibrary((s) => s.folderRecursive);
   const [open, setOpen] = useState<string[]>([]);
   const folders = useQuery({
-    queryKey: ["folders", sourceId, parent],
-    queryFn: () => commands.listFolders(sourceId, parent),
+    queryKey: ["folders", source.id, parent],
+    queryFn: () => commands.listFolders(source.id, parent),
     enabled: isTauri(),
   });
   return (
@@ -179,8 +181,18 @@ function FolderTree({
                   })
                 }
               />
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: "0 4px", fontSize: 12 }}
+                title={t("sources.updateFolder")}
+                aria-label={t("sources.updateFolderOf", { name: f.name })}
+                onClick={() => void updateFolder(source, f.path)}
+              >
+                ↻
+              </button>
             </div>
-            {expanded && <FolderTree sourceId={sourceId} parent={f.path} depth={depth + 1} />}
+            {expanded && <FolderTree source={source} parent={f.path} depth={depth + 1} />}
           </div>
         );
       })}
@@ -229,7 +241,8 @@ export function LibrarySidebar() {
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
       <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h2 className="section-title">{t("library.sources")}</h2>
-        {(sources.data ?? []).map(({ source, items }) => {
+        {(sources.data ?? []).map((summary) => {
+          const { source, items } = summary;
           const label = source.path
             .split(/[\\/]/)
             .filter(Boolean)
@@ -267,8 +280,9 @@ export function LibrarySidebar() {
                     })
                   }
                 />
+                <SourceMenu summary={summary} label={label} />
               </div>
-              {expanded && <FolderTree sourceId={source.id} parent={null} depth={0} />}
+              {expanded && <FolderTree source={source} parent={null} depth={0} />}
             </div>
           );
         })}

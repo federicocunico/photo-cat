@@ -26,9 +26,27 @@ export const commands = {
 	listSources: () => __TAURI_INVOKE<SourceSummary[]>("list_sources"),
 	addSource: (source: NewSource) => __TAURI_INVOKE<number>("add_source", { source }),
 	updateSource: (source: Source) => __TAURI_INVOKE<null>("update_source", { source }),
-	/**  Rimuove la sorgente e i suoi elementi dalla libreria (mai i file dal disco). */
+	/**
+	 *  Rimuove la sorgente e i suoi elementi dalla libreria (mai i file dal disco):
+	 *  annulla prima i job della sorgente, poi cancella miniature e dati derivati.
+	 */
 	removeSource: (id: number) => __TAURI_INVOKE<null>("remove_source", { id }),
-	startImport: (sourceId: number) => __TAURI_INVOKE<number>("start_import", { sourceId }),
+	/**  Aggiorna la sorgente o solo una sua cartella (`folder`). */
+	startImport: (sourceId: number, folder: string | null) => __TAURI_INVOKE<number>("start_import", { sourceId, folder }),
+	/**  Cosa comporta la rimozione di una sorgente (mostrato prima della conferma). */
+	sourceRemovalSummary: (id: number) => __TAURI_INVOKE<RemovalSummary>("source_removal_summary", { id }),
+	/**  Ricollega i mancanti sotto `old_folder` cercandoli in `new_folder` (job). */
+	relinkMissing: (sourceId: number, oldFolder: string, newFolder: string) => __TAURI_INVOKE<number>("relink_missing", { sourceId, oldFolder, newFolder }),
+	/**  Rimuove dalla libreria tutti i mancanti della sorgente; restituisce quanti. */
+	removeMissing: (sourceId: number, confirmed: boolean) => __TAURI_INVOKE<number>("remove_missing", { sourceId, confirmed }),
+	/**  Sposta la sorgente su una nuova cartella (dopo un ricollegamento completo). */
+	moveSource: (id: number, path: string) => __TAURI_INVOKE<null>("move_source", { id, path }),
+	/**  Cartella comune più profonda dei mancanti (proposta per "Ricollega"). */
+	missingFolder: (sourceId: number) => __TAURI_INVOKE<string | null>("missing_folder", { sourceId }),
+	/**  Riepiloghi dell'ultimo aggiornamento di ogni sorgente. */
+	importUpdates: () => __TAURI_INVOKE<UpdateSummary[]>("import_updates"),
+	/**  Esito dell'ultimo ricollegamento della sorgente. */
+	lastRelink: (sourceId: number) => __TAURI_INVOKE<RelinkSummary | null>("last_relink", { sourceId }),
 	libraryPage: (filter: LibraryFilter, sort: SortKey, after: Cursor | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, after, limit }),
 	libraryCount: (filter: LibraryFilter) => __TAURI_INVOKE<number>("library_count", { filter }),
 	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
@@ -255,6 +273,11 @@ export type Catalog = {
 
 export type CatalogKind = "manual" | "smart";
 
+export type CatalogLoss = {
+	name: string,
+	items: number,
+};
+
 export type CatalogSummary = {
 	catalog: Catalog,
 	items: number,
@@ -267,6 +290,13 @@ export type Category = {
 	prompts: string[],
 	/**  Soglia propria della categoria; `None` = soglia del gruppo. */
 	threshold?: number | null,
+};
+
+/**  Un gruppo del riepilogo: quanti file e (se non troppi) quali. */
+export type ChangeGroup = {
+	count: number,
+	/**  Vuoto se `count` supera [`MAX_SUMMARY_IDS`]. */
+	ids: number[],
 };
 
 /**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
@@ -652,6 +682,8 @@ export type LibraryFilter = {
 	rule?: Value | null,
 	/**  Cartella (con o senza sottocartelle). */
 	folder?: FolderFilter | null,
+	/**  Solo questi elementi (collegamenti dal riepilogo di un aggiornamento). */
+	ids?: number[] | null,
 };
 
 export type Location = {
@@ -884,6 +916,40 @@ export type RefFaceView = {
 	/**  "library:<face id>" oppure "file:<nome file>". */
 	source: string,
 	createdAt: number,
+};
+
+/**  Esito dell'ultimo ricollegamento di una sorgente. */
+export type RelinkSummary = {
+	sourceId: number,
+	jobId: number,
+	finishedAt: number,
+	oldFolder: string,
+	newFolder: string,
+	/**  Ritrovati per percorso relativo. */
+	relinked: number,
+	/**  Ritrovati per impronta del contenuto (rinominati o spostati). */
+	byHash: number,
+	/**  Restano mancanti (non trovati o ambigui). */
+	stillMissing: number,
+	/**  Di cui ambigui: più copie identiche. */
+	ambiguous: number,
+	/**  La nuova cartella non sta in nessuna sorgente. */
+	outsideSources: boolean,
+	/**  Nessun mancante resta nella sorgente: si può spostarla sulla nuova cartella. */
+	sourceComplete: boolean,
+};
+
+/**  Cosa comporta la rimozione di una sorgente (mostrato prima della conferma). */
+export type RemovalSummary = {
+	items: number,
+	/**  Foto con un'etichetta manuale, un tag o un luogo manuale. */
+	edited: number,
+	/**  Cataloghi manuali che perderanno foto. */
+	catalogs: CatalogLoss[],
+	/**  Persone con nome che resteranno senza volti. */
+	orphanedPeople: string[],
+	/**  Job attivi o in coda che verranno annullati (calcolato dall'app). */
+	jobs: number,
 };
 
 export type RenameOutcome = { outcome: "renamed" } | 
@@ -1158,6 +1224,22 @@ export type UndatedItem = {
 	thumb: string | null,
 	/**  Data del file system (inaffidabile, solo indicativa). */
 	fileDate: string | null,
+};
+
+/**  Riepilogo dell'ultimo aggiornamento di una sorgente. */
+export type UpdateSummary = {
+	sourceId: number,
+	jobId: number,
+	finishedAt: number,
+	/**  Sottocartella aggiornata (`None` = intera sorgente). */
+	folder: string | null,
+	new: ChangeGroup,
+	modified: ChangeGroup,
+	moved: ChangeGroup,
+	missing: ChangeGroup,
+	restored: ChangeGroup,
+	unchanged: number,
+	failed: number,
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };

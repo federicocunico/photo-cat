@@ -124,7 +124,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                     ignorePatterns: ["**/.thumbnails/**", "**/$RECYCLE.BIN/**"],
                     watch: false,
                   });
-                  await commands.startImport(id);
+                  await commands.startImport(id, null);
                   await finish();
                   useLayout.getState().setModule("jobs");
                 })
