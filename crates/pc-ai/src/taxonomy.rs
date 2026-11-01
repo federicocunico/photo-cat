@@ -15,6 +15,9 @@ pub struct Category {
     pub label: String,
     pub enabled: bool,
     pub prompts: Vec<String>,
+    /// Soglia propria della categoria; `None` = soglia del gruppo.
+    #[serde(default)]
+    pub threshold: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,6 +47,39 @@ fn category(id: &str, label: &str, english: &str) -> Category {
             format!("a photo of {english}"),
             format!("a photograph showing {english}"),
         ],
+        threshold: None,
+    }
+}
+
+impl Group {
+    /// Soglia effettiva di una categoria (propria o del gruppo).
+    pub fn threshold_of(&self, category: &str) -> f32 {
+        self.categories
+            .iter()
+            .find(|c| c.id == category)
+            .and_then(|c| c.threshold)
+            .unwrap_or(self.threshold)
+    }
+}
+
+/// Parti della tassonomia che determinano gli embedding testuali
+/// (senza versione, etichette e soglie).
+pub type PromptSignature = Vec<(String, Vec<(String, bool, Vec<String>)>)>;
+
+impl Taxonomy {
+    pub fn prompt_signature(&self) -> PromptSignature {
+        self.groups
+            .iter()
+            .map(|g| {
+                (
+                    g.id.clone(),
+                    g.categories
+                        .iter()
+                        .map(|c| (c.id.clone(), c.enabled, c.prompts.clone()))
+                        .collect(),
+                )
+            })
+            .collect()
     }
 }
 
@@ -140,6 +176,7 @@ impl Taxonomy {
                 if c.id.trim().is_empty()
                     || c.label.trim().is_empty()
                     || !ids.insert(&c.id)
+                    || c.threshold.is_some_and(|t| !(0.0..=1.0).contains(&t))
                     || c.prompts.is_empty()
                     || c.prompts.len() > 16
                     || c.prompts
@@ -270,5 +307,20 @@ mod tests {
         assert_eq!(t, prior);
         assert!(t.rename("subject", "ritratto", "").is_err());
         assert_eq!(t, prior);
+    }
+
+    #[test]
+    fn category_threshold_is_optional_and_validated() {
+        // JSON salvato prima del campo `threshold`.
+        let old = r#"{"version":3,"groups":[{"id":"environment","label":"Ambiente","threshold":0.25,
+            "categories":[{"id":"stanza","label":"Stanza","enabled":true,"prompts":["a room"]}]}]}"#;
+        let mut t: Taxonomy = serde_json::from_str(old).unwrap();
+        t.validate().unwrap();
+        assert_eq!(t.groups[0].categories[0].threshold, None);
+        assert_eq!(t.groups[0].threshold_of("stanza"), 0.25);
+        t.groups[0].categories[0].threshold = Some(0.6);
+        assert_eq!(t.groups[0].threshold_of("stanza"), 0.6);
+        t.groups[0].categories[0].threshold = Some(1.5);
+        assert!(t.validate().is_err());
     }
 }

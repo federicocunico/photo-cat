@@ -48,6 +48,115 @@ pub struct LibraryFilter {
     pub duplicates_only: bool,
     /// Regola smart aggiuntiva (anteprima nell'editor dei cataloghi).
     pub rule: Option<serde_json::Value>,
+    /// Cartella (con o senza sottocartelle).
+    pub folder: Option<FolderFilter>,
+}
+
+/// Filtro per cartella sul percorso dei file.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FolderFilter {
+    pub path: String,
+    /// Includere i file delle sottocartelle.
+    pub recursive: bool,
+}
+
+/// Cartella dell'albero di una sorgente.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FolderNode {
+    pub path: String,
+    pub name: String,
+    /// File contenuti, sottocartelle incluse.
+    pub items: i64,
+    pub has_children: bool,
+}
+
+/// Confronto dei percorsi senza maiuscole (Windows) o esatto (macOS/Linux).
+const PATHS_IGNORE_CASE: bool = cfg!(windows);
+
+/// Separatore e prefisso normalizzato (senza separatori finali) di una cartella.
+fn folder_prefix(path: &str) -> (char, String) {
+    let sep = if path.contains('\\') { '\\' } else { '/' };
+    (sep, path.trim_end_matches(['\\', '/']).to_string())
+}
+
+/// Condizione "il file sta sotto `prefix`" che usa l'indice univoco su
+/// `media_item.path` (intervallo) e, senza maiuscole, un confronto esatto
+/// `NOCASE` sull'inizio del percorso.
+fn under_folder(prefix: &str, sep: char, args: &mut Vec<Value>) -> String {
+    let next = char::from_u32(sep as u32 + 1).expect("separatore ASCII");
+    let mut sql = String::from("m.path >= ? AND m.path < ?");
+    if PATHS_IGNORE_CASE {
+        args.push(Value::Text(format!("{}{sep}", prefix.to_uppercase())));
+        args.push(Value::Text(format!("{}{next}", prefix.to_lowercase())));
+        sql.push_str(" AND substr(m.path, 1, ?) = ? COLLATE NOCASE");
+        args.push(Value::Integer(prefix.chars().count() as i64 + 1));
+        args.push(Value::Text(format!("{prefix}{sep}")));
+    } else {
+        args.push(Value::Text(format!("{prefix}{sep}")));
+        args.push(Value::Text(format!("{prefix}{next}")));
+    }
+    sql
+}
+
+/// Sottocartelle di `parent` (o della radice della sorgente) un livello alla
+/// volta, con il numero di file contenuti (sottocartelle incluse).
+pub fn list_folders(
+    c: &Connection,
+    source_id: i64,
+    parent: Option<&str>,
+) -> StoreResult<Vec<FolderNode>> {
+    let root = match parent {
+        Some(p) => p.to_string(),
+        None => repo::source::get(c, source_id)?.path,
+    };
+    let (sep, prefix) = folder_prefix(&root);
+    let mut args = Vec::new();
+    let cond = under_folder(&prefix, sep, &mut args);
+    let n = prefix.chars().count() as i64;
+    let group = if PATHS_IGNORE_CASE {
+        "GROUP BY seg COLLATE NOCASE ORDER BY seg COLLATE NOCASE"
+    } else {
+        "GROUP BY seg ORDER BY seg"
+    };
+    let sql = format!(
+        "SELECT min(seg), count(*), max(instr(substr(rest, length(seg) + 2), ?) > 0) FROM (
+            SELECT substr(rest, 1, instr(rest, ?) - 1) AS seg, rest FROM (
+                SELECT substr(m.path, {start}) AS rest FROM media_item m
+                WHERE m.source_id = ? AND {cond}
+            ) WHERE instr(rest, ?) > 0
+        ) {group}",
+        start = n + 2,
+    );
+    let mut all: Vec<Value> = vec![
+        Value::Text(sep.to_string()),
+        Value::Text(sep.to_string()),
+        Value::Integer(source_id),
+    ];
+    all.extend(args);
+    all.push(Value::Text(sep.to_string()));
+    let mut q = c.prepare(&sql)?;
+    let rows = q
+        .query_map(rusqlite::params_from_iter(all), |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, bool>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows
+        .into_iter()
+        .map(|(name, items, has_children)| FolderNode {
+            path: format!("{prefix}{sep}{name}"),
+            name,
+            items,
+            has_children,
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -190,6 +299,17 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
                 .into(),
         ),
         None => {}
+    }
+    if let Some(folder) = f.folder.as_ref().filter(|d| !d.path.trim().is_empty()) {
+        let (sep, prefix) = folder_prefix(&folder.path);
+        parts.push(under_folder(&prefix, sep, &mut args));
+        if !folder.recursive {
+            parts.push(format!(
+                "instr(substr(m.path, {}), ?) = 0",
+                prefix.chars().count() + 2
+            ));
+            args.push(Value::Text(sep.to_string()));
+        }
     }
     if !f.places.is_empty() {
         parts.push(format!(

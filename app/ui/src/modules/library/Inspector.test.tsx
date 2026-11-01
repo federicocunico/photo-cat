@@ -122,3 +122,75 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   );
   expect(commandsMock.startBulk).toHaveBeenCalledTimes(3);
 });
+
+it("corregge il luogo con i suggerimenti e ripristina quello automatico", async () => {
+  // Dettaglio preparato in beforeEach, con un luogo diverso.
+  const base = (await (commandsMock.mediaDetail as unknown as () => Promise<object>)()) as Record<
+    string,
+    unknown
+  >;
+  commandsMock.mediaDetail.mockResolvedValue({
+    ...base,
+    location: { name: "D7000", country: null, lat: null, lon: null, source: "directory" },
+  } as never);
+  commandsMock.suggestPlaces.mockResolvedValue([
+    { name: "Giappone", country: null, lat: null, lon: null, inLibrary: true },
+    { name: "Gifu", country: "JP", lat: 35.42, lon: 136.76, inLibrary: false },
+  ]);
+  const { unmount } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  const field = await screen.findByLabelText("Luogo");
+  await waitFor(() => expect(field).toHaveValue("D7000"));
+  // Scenario "Suggerimenti del luogo".
+  fireEvent.change(field, { target: { value: "Gi" } });
+  await waitFor(() => expect(commandsMock.suggestPlaces).toHaveBeenCalledWith("Gi"));
+  const gifu = await screen.findByRole("option", { name: /Gifu/ });
+  expect(screen.getByRole("option", { name: /Giappone/ })).toHaveTextContent("in libreria");
+  fireEvent.mouseDown(gifu);
+  expect(field).toHaveValue("Gifu");
+  fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      [7],
+      {
+        action: "set_place",
+        place: { name: "Gifu", country: "JP", lat: 35.42, lon: 136.76 },
+      },
+      false,
+    ),
+  );
+  // Scenario "Correzione del luogo": testo libero.
+  fireEvent.change(field, { target: { value: "Giappone " } });
+  fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      [7],
+      { action: "set_place", place: { name: "Giappone" } },
+      false,
+    ),
+  );
+  expect(screen.queryByRole("button", { name: "Ripristina automatico" })).not.toBeInTheDocument();
+  unmount();
+
+  // Con un luogo manuale compare "Ripristina automatico".
+  commandsMock.mediaDetail.mockResolvedValue({
+    ...base,
+    location: { name: "Giappone", country: null, lat: null, lon: null, source: "manual" },
+  } as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Ripristina automatico" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      [7],
+      { action: "set_place", place: null },
+      false,
+    ),
+  );
+});

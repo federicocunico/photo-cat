@@ -29,6 +29,13 @@ export function activeChips(f: LibraryFilter, t: (k: string, o?: object) => stri
   if (f.dateFrom)
     chips.push({ name: f.dateFrom.slice(0, 4), clear: { dateFrom: null, dateTo: null } });
   if (f.text) chips.push({ name: `“${f.text}”`, clear: { text: null } });
+  if (f.folder?.path) {
+    const name = f.folder.path.split(/[\\/]/).filter(Boolean).pop() ?? f.folder.path;
+    chips.push({
+      name: t(f.folder.recursive ? "folders.chip" : "folders.chipExact", { name }),
+      clear: { folder: null },
+    });
+  }
   if ((f.sourceIds ?? []).length)
     chips.push({ name: t("library.sources"), clear: { sourceIds: [] } });
   if (f.catalogId != null) chips.push({ name: t("library.catalogs"), clear: { catalogId: null } });

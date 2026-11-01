@@ -6,6 +6,6 @@ pub mod error;
 pub mod paths;
 pub mod platform;
 
-pub use config::Config;
+pub use config::{AiThresholds, Config, ExternalApp};
 pub use error::{AppError, AppResult, ErrorCode};
 pub use paths::AppPaths;

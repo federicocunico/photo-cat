@@ -37,3 +37,32 @@ it("rectangle selects rows independently of the virtual DOM", () => {
     ),
   ).toEqual([9, 10]);
 });
+it("imposta e ripristina il luogo sulla selezione", async () => {
+  vi.clearAllMocks();
+  useLibrary.setState({ filter: emptyFilter(), selected: [4, 5, 6] });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <BulkBar />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "set_place" } });
+  expect(screen.getByText("Applica")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Valore azione"), { target: { value: " Giappone " } });
+  fireEvent.click(screen.getByText("Applica"));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      [4, 5, 6],
+      { action: "set_place", place: { name: "Giappone" } },
+      false,
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "reset_place" } });
+  fireEvent.click(screen.getByText("Applica"));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      [4, 5, 6],
+      { action: "set_place", place: null },
+      false,
+    ),
+  );
+});

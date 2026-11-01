@@ -2,6 +2,7 @@
 #   make dev       avvio locale in debug (Vite + app con ricarica)
 #   make build     test di build come la CI: setup NSIS su Windows, .deb e .tar.gz su Linux
 #   make test      test completi in locale (Rust + UI)
+#   make test-linux  passi della CI Linux in Docker (da Windows o macOS)
 #   make release   tag v<versione> e push: la GitHub Action crea la release
 
 ifeq ($(OS),Windows_NT)
@@ -14,12 +15,13 @@ endif
 UI := app/ui
 VERSION := $(shell node -p "require('./app/src-tauri/tauri.conf.json').version")
 
-.PHONY: help install dev run build test release
+.PHONY: help install dev run build test test-linux release
 
 help:
 	@echo "make dev | run   - avvio locale (debug)"
 	@echo "make build       - test di build: $(BUILD_HELP)"
 	@echo "make test        - fmt, clippy, test Rust e UI"
+	@echo "make test-linux  - CI Linux in Docker: fmt, clippy, test, pacchetti"
 	@echo "make release     - crea e pubblica il tag v$(VERSION) (release automatica su GitHub)"
 
 # Reinstalla le dipendenze UI solo se package-lock.json è cambiato (npm aggiorna lo stamp).
@@ -49,6 +51,10 @@ test: install
 	$(NPM) --prefix $(UI) run typecheck
 	$(NPM) --prefix $(UI) run lint
 	$(NPM) --prefix $(UI) test
+
+# CI Linux in Docker (Ubuntu 22.04), per verificare da Windows o macOS: vedi scripts/test-linux-docker.sh.
+test-linux:
+	bash scripts/test-linux-docker.sh
 
 # La versione viene da tauri.conf.json (deve coincidere con Cargo.toml: la pipeline lo verifica).
 release:

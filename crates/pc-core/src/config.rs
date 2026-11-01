@@ -17,6 +17,20 @@ pub struct Config {
     pub ui: UiConfig,
     /// Percorso dati alternativo scelto dall'utente.
     pub data_dir: Option<PathBuf>,
+    /// Applicazioni esterne per "Apri con" e doppio clic.
+    pub external_apps: Vec<ExternalApp>,
+}
+
+/// Applicazione esterna configurata dall'utente. Negli argomenti `{file}`
+/// indica il percorso della foto; senza `{file}` i percorsi vengono accodati.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ExternalApp {
+    pub id: String,
+    pub name: String,
+    pub path: PathBuf,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -61,6 +75,9 @@ pub struct AiConfig {
     /// Lato minimo in pixel di un volto utilizzabile per il riconoscimento.
     pub face_min_size_px: u32,
     pub auto_download_models: bool,
+    /// Nomi di cartella da ignorare nella deduzione del luogo dal percorso.
+    pub ignored_folder_names: Vec<String>,
+    pub thresholds: AiThresholds,
 }
 
 impl Default for AiConfig {
@@ -71,6 +88,37 @@ impl Default for AiConfig {
             faces_enabled: true,
             face_min_size_px: 40,
             auto_download_models: true,
+            ignored_folder_names: Vec::new(),
+            thresholds: AiThresholds::default(),
+        }
+    }
+}
+
+/// Soglie dei modelli applicate ai risultati salvati (0..1).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AiThresholds {
+    /// Confidenza minima di una rilevazione di persona (YOLO).
+    pub person_detection: f32,
+    /// Confidenza minima di un volto usato per il riconoscimento.
+    pub face_detection: f32,
+    /// Somiglianza coseno minima tra due volti della stessa persona.
+    pub face_similarity: f32,
+}
+
+impl AiThresholds {
+    pub const DEFAULT_PERSON_DETECTION: f32 = 0.4;
+    pub const DEFAULT_FACE_DETECTION: f32 = 0.8;
+    pub const DEFAULT_FACE_SIMILARITY: f32 = 0.363;
+}
+
+impl Default for AiThresholds {
+    fn default() -> Self {
+        Self {
+            person_detection: Self::DEFAULT_PERSON_DETECTION,
+            face_detection: Self::DEFAULT_FACE_DETECTION,
+            face_similarity: Self::DEFAULT_FACE_SIMILARITY,
         }
     }
 }
@@ -138,12 +186,33 @@ pub enum Language {
     En,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+/// Azione del doppio clic su una miniatura: `system` (app predefinita),
+/// `none` oppure l'`id` di un'applicazione esterna.
+pub const DOUBLE_CLICK_SYSTEM: &str = "system";
+pub const DOUBLE_CLICK_NONE: &str = "none";
+
+fn default_double_click() -> String {
+    DOUBLE_CLICK_SYSTEM.into()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct UiConfig {
     pub theme: Theme,
     pub language: Language,
+    /// `system`, `none` o l'id di un'applicazione esterna.
+    pub double_click: String,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            language: Language::default(),
+            double_click: default_double_click(),
+        }
+    }
 }
 
 impl Config {
@@ -189,6 +258,37 @@ impl Config {
             return bad(format!(
                 "ai.confidence_threshold deve essere tra 0 e 1 (trovato {})",
                 self.ai.confidence_threshold
+            ));
+        }
+        let t = &self.ai.thresholds;
+        for (name, v) in [
+            ("person_detection", t.person_detection),
+            ("face_detection", t.face_detection),
+            ("face_similarity", t.face_similarity),
+        ] {
+            if !(0.0..=1.0).contains(&v) {
+                return bad(format!(
+                    "ai.thresholds.{name} deve essere tra 0 e 1 (trovato {v})"
+                ));
+            }
+        }
+        let mut ids = std::collections::HashSet::new();
+        for app in &self.external_apps {
+            let id = app.id.trim();
+            if id.is_empty() || app.name.trim().is_empty() {
+                return bad("external_apps: id e nome sono obbligatori".into());
+            }
+            if id == DOUBLE_CLICK_SYSTEM || id == DOUBLE_CLICK_NONE {
+                return bad(format!("external_apps: id riservato \"{id}\""));
+            }
+            if !ids.insert(id) {
+                return bad(format!("external_apps: id duplicato \"{id}\""));
+            }
+        }
+        let dc = self.ui.double_click.as_str();
+        if dc != DOUBLE_CLICK_SYSTEM && dc != DOUBLE_CLICK_NONE && !ids.contains(dc) {
+            return bad(format!(
+                "ui.double_click punta a un'applicazione inesistente \"{dc}\""
             ));
         }
         if self.ai.face_min_size_px < 8 {
@@ -239,6 +339,10 @@ mod tests {
             "[resources]\nprofile = \"turbo\"\n",
             "not toml at all = = =",
             "[unknown]\nx = 1\n",
+            "[ai.thresholds]\nperson_detection = 1.5\n",
+            "[ai.thresholds]\nface_similarity = -0.1\n",
+            "[ui]\ndouble_click = \"lightroom\"\n",
+            "[[external_apps]]\nid = \"a\"\nname = \"A\"\npath = \"/a\"\n[[external_apps]]\nid = \"a\"\nname = \"B\"\npath = \"/b\"\n",
         ] {
             std::fs::write(&p, bad).unwrap();
             assert_eq!(
@@ -247,6 +351,44 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn old_config_loads_with_new_defaults() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        std::fs::write(
+            &p,
+            "[ai]\nconfidence_threshold = 0.3\nfaces_enabled = true\n[ui]\ntheme = \"light\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load(&p).unwrap();
+        assert_eq!(cfg.ai.thresholds, AiThresholds::default());
+        assert_eq!(cfg.ai.thresholds.person_detection, 0.4);
+        assert_eq!(cfg.ai.thresholds.face_detection, 0.8);
+        assert_eq!(cfg.ai.thresholds.face_similarity, 0.363);
+        assert!(cfg.ai.ignored_folder_names.is_empty());
+        assert!(cfg.external_apps.is_empty());
+        assert_eq!(cfg.ui.double_click, "system");
+    }
+
+    #[test]
+    fn external_apps_and_double_click_roundtrip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        std::fs::write(
+            &p,
+            "[ai]\nignored_folder_names = [\"Selezionate\"]\n[ai.thresholds]\nface_detection = 0.7\n\
+             [ui]\ndouble_click = \"lr\"\n\
+             [[external_apps]]\nid = \"lr\"\nname = \"Lightroom\"\npath = \"C:/LR/Lightroom.exe\"\nargs = [\"--edit\", \"{file}\"]\n",
+        )
+        .unwrap();
+        let cfg = Config::load(&p).unwrap();
+        assert_eq!(cfg.external_apps[0].args, vec!["--edit", "{file}"]);
+        assert_eq!(cfg.ai.thresholds.face_detection, 0.7);
+        assert_eq!(cfg.ai.ignored_folder_names, vec!["Selezionate"]);
+        cfg.save(&p).unwrap();
+        assert_eq!(Config::load(&p).unwrap(), cfg);
     }
 
     #[test]
