@@ -31,6 +31,8 @@ import type {
   AiThresholds,
   Taxonomy,
   ThresholdImpact,
+  UpdateSummary,
+  RelinkSummary,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -70,6 +72,13 @@ export const commandsMock = {
   updateSource: vi.fn(),
   removeSource: vi.fn(),
   startImport: vi.fn(),
+  sourceRemovalSummary: vi.fn(),
+  relinkMissing: vi.fn(),
+  removeMissing: vi.fn(),
+  moveSource: vi.fn(),
+  missingFolder: vi.fn(async () => null as string | null),
+  importUpdates: vi.fn(async () => [] as UpdateSummary[]),
+  lastRelink: vi.fn(async () => null as RelinkSummary | null),
   libraryPage: vi.fn(),
   libraryCount: vi.fn(),
   libraryFacets: vi.fn(),

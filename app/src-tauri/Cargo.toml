@@ -28,7 +28,7 @@ pc-diag = { workspace = true, features = ["specta"] }
 pc-store = { workspace = true, features = ["specta"] }
 pc-governor = { workspace = true, features = ["specta"] }
 pc-jobs = { workspace = true, features = ["specta"] }
-pc-ingest.workspace = true
+pc-ingest = { workspace = true, features = ["specta"] }
 pc-models = { workspace = true, features = ["specta"] }
 pc-ai = { workspace = true, features = ["specta"] }
 pc-organize = { workspace = true, features = ["specta"] }

@@ -21,6 +21,7 @@ export const emptyFilter = (): LibraryFilter => ({
   duplicatesOnly: false,
   rule: null,
   folder: null,
+  ids: null,
 });
 
 interface LibraryState {

@@ -70,6 +70,7 @@ export const en: Messages = {
     aiPaused: "AI analysis paused: not enough memory",
     phases: {
       scansione: "Scan",
+      ricollegamento: "Relinking",
       metadati: "Metadata",
       miniature: "Thumbnails",
       analisi_ai: "AI analysis",
@@ -123,10 +124,8 @@ export const en: Messages = {
     sources: "Sources in the library",
     itemsCount: "{{n}} items",
     missing: "{{n}} missing",
-    rescan: "Rescan",
+    rescan: "Update",
     remove: "Remove",
-    confirmRemove:
-      "Remove source {{path}} from the library? {{n}} items will be removed from the catalog. Files on disk will not be touched.",
     scanning: "Import in progress",
     found: "Files found",
     processed: "Processed",

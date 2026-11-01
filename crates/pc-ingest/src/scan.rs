@@ -18,6 +18,8 @@ pub struct FoundFile {
 /// Regole di selezione derivate dalla configurazione della sorgente.
 pub struct ScanRules {
     root: PathBuf,
+    /// Cartella da cui parte la scansione (una sottocartella della sorgente).
+    start: Option<PathBuf>,
     recursive: bool,
     extensions: Vec<String>,
     ignore: GlobSet,
@@ -48,10 +50,31 @@ impl ScanRules {
             .map_err(|e| AppError::invalid_input(e.to_string()))?;
         Ok(Self {
             root: PathBuf::from(&src.path),
+            start: None,
             recursive: src.recursive,
             extensions,
             ignore,
         })
+    }
+
+    /// Limita la scansione a `folder`, che deve stare dentro la sorgente.
+    pub fn within(mut self, folder: &str) -> AppResult<Self> {
+        let root = self.root.display().to_string();
+        if !pc_store::sources::path_in_folder(folder, &root) {
+            return Err(AppError::invalid_input(format!(
+                "la cartella {folder} non è dentro la sorgente {root}"
+            )));
+        }
+        if pc_store::sources::path_in_folder(&root, folder) {
+            return Ok(self);
+        }
+        if !self.recursive {
+            return Err(AppError::invalid_input(
+                "la sorgente non include le sottocartelle",
+            ));
+        }
+        self.start = Some(PathBuf::from(folder));
+        Ok(self)
     }
 
     fn accepts_ext(&self, path: &Path) -> bool {
@@ -81,13 +104,14 @@ impl ScanRules {
         mut on_file: impl FnMut(FoundFile) -> bool,
         mut on_error: impl FnMut(&Path, AppError),
     ) -> AppResult<()> {
-        if !self.root.is_dir() {
+        let start = self.start.as_ref().unwrap_or(&self.root);
+        if !start.is_dir() {
             return Err(AppError::new(
                 ErrorCode::NotFound,
-                format!("cartella sorgente non trovata: {}", self.root.display()),
+                format!("cartella sorgente non trovata: {}", start.display()),
             ));
         }
-        let mut walker = walkdir::WalkDir::new(&self.root).follow_links(false);
+        let mut walker = walkdir::WalkDir::new(start).follow_links(false);
         if !self.recursive {
             walker = walker.max_depth(1);
         }

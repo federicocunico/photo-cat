@@ -69,6 +69,7 @@ export const it = {
     aiPaused: "Analisi AI in pausa per memoria insufficiente",
     phases: {
       scansione: "Scansione",
+      ricollegamento: "Ricollegamento",
       metadati: "Metadati",
       miniature: "Miniature",
       analisi_ai: "Analisi AI",
@@ -122,10 +123,8 @@ export const it = {
     sources: "Sorgenti nella libreria",
     itemsCount: "{{n}} elementi",
     missing: "{{n}} mancanti",
-    rescan: "Riscansiona",
+    rescan: "Aggiorna",
     remove: "Rimuovi",
-    confirmRemove:
-      "Rimuovere la sorgente {{path}} dalla libreria? {{n}} elementi verranno tolti dal catalogo. I file sul disco non verranno toccati.",
     scanning: "Importazione in corso",
     found: "File trovati",
     processed: "Elaborati",
