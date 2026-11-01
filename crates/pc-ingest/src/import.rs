@@ -15,6 +15,7 @@ use pc_core::{AppError, AppResult, ErrorCode};
 use pc_governor::MemoryGovernor;
 use pc_jobs::{JobContext, JobPlan, PhaseSpec, Pipeline, RunSummary, StageCtx, StageOutcome};
 use pc_store::model::{MediaDates, MediaId, MediaItem, MediaKind, MediaStatus, NewMedia, TechInfo};
+use pc_store::sources::{self, UpdateSummary};
 use pc_store::{repo, Store};
 use std::collections::HashSet;
 use std::path::Path;
@@ -249,9 +250,30 @@ fn stage_thumbnail(
     StageOutcome::Continue
 }
 
+/// Esito di un aggiornamento in corso: gruppi del riepilogo e miniature sostituite.
+#[derive(Default)]
+pub struct UpdateTracker {
+    pub summary: UpdateSummary,
+    /// Miniature del contenuto precedente dei file modificati.
+    pub stale_thumbs: Vec<String>,
+}
+
 /// Fase scrittura: un'unica operazione (in coda al writer) per tutti i dati del file.
-fn stage_write(store: &Store, item: &mut ImportItem) -> StageOutcome {
+fn stage_write(
+    store: &Store,
+    item: &mut ImportItem,
+    track: Arc<Mutex<UpdateTracker>>,
+) -> StageOutcome {
     item.decoded = None; // libera la memoria dell'immagine
+    let existing = item.existing.take();
+    let content_changed = existing
+        .as_ref()
+        .is_some_and(|ex| ex.content_hash.is_some() && ex.content_hash != item.content_hash);
+    let restored = existing
+        .as_ref()
+        .is_some_and(|ex| ex.status == MediaStatus::Missing);
+    let old_thumb = existing.as_ref().and_then(|ex| ex.thumb.clone());
+    let is_new = existing.is_none();
     let new = NewMedia {
         kind: MediaKind::Photo,
         source_id: Some(item.source_id),
@@ -287,6 +309,28 @@ fn stage_write(store: &Store, item: &mut ImportItem) -> StageOutcome {
             }
             None => repo::media::upsert(c, &new)?,
         };
+        // Contenuto cambiato: l'analisi automatica va rifatta, i dati manuali restano.
+        if content_changed && moved_from.is_none() {
+            sources::reset_analysis(c, id)?;
+        }
+        {
+            let mut t = track.lock();
+            if content_changed && old_thumb.is_some() && old_thumb != thumb {
+                t.stale_thumbs.extend(old_thumb.clone());
+            }
+            let s = &mut t.summary;
+            if moved_from.is_some() {
+                s.moved.push(id);
+            } else if is_new {
+                s.new.push(id);
+            } else if restored {
+                s.restored.push(id);
+            } else if content_changed {
+                s.modified.push(id);
+            } else {
+                s.unchanged += 1;
+            }
+        }
         if let Some(t) = &tech {
             repo::meta::set_tech(c, id, t)?;
         }
@@ -332,7 +376,14 @@ pub fn plan(deps: ImportDeps, params: &serde_json::Value) -> AppResult<JobPlan> 
         .as_i64()
         .ok_or_else(|| AppError::invalid_input("sourceId mancante"))?;
     let source = deps.store.read(|c| repo::source::get(c, source_id))?;
-    let rules = ScanRules::from_source(&source)?;
+    let folder = params["folder"]
+        .as_str()
+        .filter(|f| !f.trim().is_empty())
+        .map(str::to_string);
+    let mut rules = ScanRules::from_source(&source)?;
+    if let Some(f) = &folder {
+        rules = rules.within(f)?;
+    }
     let mut deps = deps;
     let only_paths: Option<Vec<String>> = params
         .get("paths")
@@ -376,28 +427,39 @@ pub fn plan(deps: ImportDeps, params: &serde_json::Value) -> AppResult<JobPlan> 
             });
             run(
                 deps,
-                source_id,
+                Scope {
+                    source_id,
+                    folder,
+                    only_paths: only_paths.map(|v| v.into_iter().collect()),
+                },
                 rules,
                 ctx,
-                only_paths.map(|v| v.into_iter().collect()),
             )
         }),
     })
 }
 
-fn run(
-    deps: ImportDeps,
+/// Cosa aggiorna il job: la sorgente, una sua cartella o solo alcuni file.
+struct Scope {
     source_id: i64,
-    rules: ScanRules,
-    ctx: JobContext,
+    folder: Option<String>,
     only_paths: Option<HashSet<String>>,
-) -> AppResult<RunSummary> {
+}
+
+fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> AppResult<RunSummary> {
+    let Scope {
+        source_id,
+        folder,
+        only_paths,
+    } = scope;
     let job_id = ctx.job_id;
     let seen: Arc<Mutex<HashSet<String>>> = Arc::default();
     let seen2 = seen.clone();
     let keep_decoded = deps.extra_stages.iter().any(|s| s.needs_image());
     let (d_meta, d_thumb, d_write) = (deps.clone(), deps.clone(), deps.clone());
     let partial = only_paths.is_some();
+    let track: Arc<Mutex<UpdateTracker>> = Arc::default();
+    let (t_meta, t_write) = (track.clone(), track.clone());
 
     let mut pipeline = Pipeline::<ImportItem>::new(job_id, ctx.progress, ctx.control.clone())
         .key(|i| i.path_str())
@@ -449,7 +511,11 @@ fn run(
             )
         })
         .stage(PHASE_META, deps.io_workers.max(1), move |item, ctx| {
-            stage_metadata(&d_meta.store, item, ctx, partial)
+            let out = stage_metadata(&d_meta.store, item, ctx, partial);
+            if matches!(out, StageOutcome::Skip) {
+                t_meta.lock().summary.unchanged += 1;
+            }
+            out
         })
         .stage(PHASE_THUMB, deps.decode_workers.max(1), move |item, ctx| {
             stage_thumbnail(&d_thumb, keep_decoded, item, ctx)
@@ -463,40 +529,77 @@ fn run(
     }
     let summary = pipeline
         .stage(PHASE_WRITE, 1, move |item, _| {
-            stage_write(&d_write.store, item)
+            stage_write(&d_write.store, item, t_write.clone())
         })
         .run()?;
 
+    let mut missing = Vec::new();
     if !summary.cancelled && !partial {
-        mark_missing(&deps.store, source_id, &seen.lock())?;
+        missing = mark_missing(&deps.store, source_id, folder.as_deref(), &seen.lock())?;
         deps.store.optimize()?;
     }
     deps.store.flush()?;
+    let tracker = std::mem::take(&mut *track.lock());
+    remove_stale_thumbs(&deps, tracker.stale_thumbs);
+    if !summary.cancelled && !partial {
+        let mut s = tracker.summary;
+        s.source_id = source_id;
+        s.job_id = job_id;
+        s.folder = folder;
+        s.failed = summary.failed;
+        for id in missing {
+            s.missing.push(id);
+        }
+        deps.store.write(move |c| sources::save_update(c, &s))?;
+    }
     Ok(summary)
 }
 
-/// Gli elementi della sorgente non trovati nella scansione diventano "mancanti" (mai cancellati).
-fn mark_missing(store: &Store, source_id: i64, seen: &HashSet<String>) -> AppResult<usize> {
+/// Cancella le miniature del contenuto precedente se nessun elemento le usa più.
+fn remove_stale_thumbs(deps: &ImportDeps, keys: Vec<String>) {
+    if keys.is_empty() {
+        return;
+    }
+    match deps.store.read(sources::referenced_thumbs) {
+        Ok(used) => {
+            let stale: Vec<String> = keys.into_iter().filter(|k| !used.contains(k)).collect();
+            deps.thumbs.remove(&stale);
+        }
+        Err(e) => {
+            tracing::warn!(code = "DATABASE", detail = %e, "miniature sostituite non ripulite")
+        }
+    }
+}
+
+/// Gli elementi non trovati nella scansione (solo dentro `folder`, se indicata)
+/// diventano "mancanti", mai cancellati. Restituisce i loro id.
+fn mark_missing(
+    store: &Store,
+    source_id: i64,
+    folder: Option<&str>,
+    seen: &HashSet<String>,
+) -> AppResult<Vec<MediaId>> {
     store.flush()?;
     let items = store.read(|c| repo::media::by_source(c, source_id))?;
     let missing: Vec<MediaId> = items
         .into_iter()
         .filter(|m| m.status == MediaStatus::Ok && !seen.contains(&m.path))
+        .filter(|m| folder.is_none_or(|f| sources::path_in_folder(&m.path, f)))
         .map(|m| m.id)
         .collect();
-    let n = missing.len();
-    if n > 0 {
+    if !missing.is_empty() {
+        let ids = missing.clone();
         store.write(move |c| {
-            for id in &missing {
+            for id in &ids {
                 repo::media::set_status(c, *id, MediaStatus::Missing)?;
             }
             Ok(())
         })?;
         tracing::info!(
             source_id,
-            count = n,
+            count = missing.len(),
             "file non più presenti marcati come mancanti"
         );
     }
-    Ok(n)
+    Ok(missing)
 }

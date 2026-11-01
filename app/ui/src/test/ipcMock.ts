@@ -24,6 +24,15 @@ import type {
   SequenceExportOptions,
   ResourceSnapshot,
   TagOverview,
+  FolderNode,
+  PlaceSuggestion,
+  OpenTarget,
+  OpenOutcome,
+  AiThresholds,
+  Taxonomy,
+  ThresholdImpact,
+  UpdateSummary,
+  RelinkSummary,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -63,6 +72,13 @@ export const commandsMock = {
   updateSource: vi.fn(),
   removeSource: vi.fn(),
   startImport: vi.fn(),
+  sourceRemovalSummary: vi.fn(),
+  relinkMissing: vi.fn(),
+  removeMissing: vi.fn(),
+  moveSource: vi.fn(),
+  missingFolder: vi.fn(async () => null as string | null),
+  importUpdates: vi.fn(async () => [] as UpdateSummary[]),
+  lastRelink: vi.fn(async () => null as RelinkSummary | null),
   libraryPage: vi.fn(),
   libraryCount: vi.fn(),
   libraryFacets: vi.fn(),
@@ -186,6 +202,18 @@ export const commandsMock = {
   exportDiagnostics: vi.fn(async () => null),
   openLogs: vi.fn(async () => null),
   retryFailed: vi.fn(async () => []),
+  listFolders: vi.fn<(sourceId: number, parent: string | null) => Promise<FolderNode[]>>(
+    async () => [],
+  ),
+  suggestPlaces: vi.fn<(prefix: string) => Promise<PlaceSuggestion[]>>(async () => []),
+  renamePlace: vi.fn(async () => ({ changed: 0, requested: 0 })),
+  recomputePlaces: vi.fn(async () => 0),
+  reanalyzeBelowFloor: vi.fn(async (): Promise<number | null> => 9),
+  openWith: vi.fn<(ids: number[], target: OpenTarget, confirmed: boolean) => Promise<OpenOutcome>>(
+    async (ids) => ({ opened: ids.length, needsConfirmation: false }),
+  ),
+  previewThresholds:
+    vi.fn<(thresholds: AiThresholds, taxonomy: Taxonomy | null) => Promise<ThresholdImpact>>(),
 };
 
 export function ipcMockModule(tauri = false) {

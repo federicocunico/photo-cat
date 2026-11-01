@@ -21,6 +21,7 @@ import { Onboarding } from "./modules/onboarding/Onboarding";
 import { Placeholder } from "./modules/Placeholder";
 import { useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents } from "./store/live";
+import { useImportRefresh } from "./modules/import/sourceActions";
 import { applyTheme } from "./theme/tokens";
 
 function ModuleView({ module }: { module: ModuleId }) {
@@ -61,6 +62,7 @@ export function App() {
   const [crash, setCrash] = useState<CrashInfo | null>(null);
   const [onboarding, setOnboarding] = useState(false);
   useLiveEvents();
+  useImportRefresh();
   useEffect(() => {
     // Solo sviluppo: VITE_START_MODULE=jobs apre direttamente un modulo.
     const start = import.meta.env.VITE_START_MODULE as ModuleId | undefined;

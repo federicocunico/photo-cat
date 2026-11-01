@@ -1,5 +1,4 @@
 //! Chinese Whispers su vicini kNN/HNSW, con identità manuali e rifiuti persistenti.
-use crate::faces::SAME_PERSON;
 use hnsw_rs::prelude::*;
 use pc_core::{AppError, AppResult, ErrorCode};
 use pc_governor::MemoryGovernor;
@@ -136,10 +135,16 @@ pub fn run(
     control: &JobControl,
     policy: std::sync::Arc<crate::face_policy::FacePolicy>,
     refs: &people::IdentityRefs,
+    thresholds: &pc_core::AiThresholds,
 ) -> AppResult<()> {
     let Some(generation) = policy.token() else {
         return Ok(());
     };
+    let similarity = thresholds.face_similarity;
+    let min_quality = thresholds.face_detection;
+    // I volti sotto la soglia di rilevamento restano salvati ma non sono
+    // usati per il raggruppamento (né tengono una persona automatica).
+    store.write(move |c| people::unassign_low_quality(c, min_quality, true).map(|_| ()))?;
     let count: i64 = store.read(|c| {
         Ok(c.query_row(
             "SELECT count(*) FROM face WHERE embedding IS NOT NULL",
@@ -169,7 +174,7 @@ pub fn run(
     let (nodes, named) = store.read(|c| {
         let mut nodes: Vec<_> = people::records(c, None)?
             .into_iter()
-            .filter(|f| f.embedding.is_some())
+            .filter(|f| f.embedding.is_some() && (f.manual || f.quality >= min_quality))
             .collect();
         for f in &mut nodes {
             if !f.manual {
@@ -179,7 +184,7 @@ pub fn run(
                     f.embedding.as_ref().expect("embedding"),
                     &f.model,
                     &f.rejected,
-                    SAME_PERSON,
+                    similarity,
                     refs,
                     false,
                 )? {
@@ -189,7 +194,7 @@ pub fn run(
         }
         Ok((nodes, people::named_ids(c)?))
     })?;
-    let labels = chinese_whispers(&nodes, &named, SAME_PERSON, control)?;
+    let labels = chinese_whispers(&nodes, &named, similarity, control)?;
     if !control.checkpoint() {
         return Err(AppError::cancelled());
     }
@@ -256,6 +261,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::faces::SAME_PERSON;
     fn node(
         id: i64,
         person: Option<i64>,
@@ -317,6 +323,7 @@ mod tests {
             &JobControl::new(),
             policy.clone(),
             &Default::default(),
+            &Default::default(),
         )
         .unwrap();
         let (person, other, first, rejected) = db
@@ -336,6 +343,7 @@ mod tests {
                 &JobControl::new(),
                 policy.clone(),
                 &Default::default(),
+                &Default::default(),
             )
             .unwrap();
         }
@@ -353,5 +361,105 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    /// Due volti con somiglianza 0,5 in due foto, con le confidenze indicate.
+    fn two_faces(quality: [f32; 2]) -> (tempfile::TempDir, Store) {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("t.db"), Default::default()).unwrap();
+        db.write(move |c| {
+            for (i, q) in quality.iter().enumerate() {
+                let id = i as i64 + 1;
+                c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (?1,?2,'t','jpg',1,1,1,1)",rusqlite::params![id,format!("t{id}.jpg")])?;
+                let mut e = vec![0.0; 128];
+                if i == 0 {
+                    e[0] = 1.0;
+                } else {
+                    // cos(60°) = 0,5 con il primo volto.
+                    e[0] = 0.5;
+                    e[1] = 0.75f32.sqrt();
+                }
+                people::save_faces(
+                    c,
+                    id,
+                    &[people::DetectedFace {
+                        bbox: [0.1, 0.1, 0.2, 0.2],
+                        quality: *q,
+                        embedding: e,
+                    }],
+                    "sface",
+                    "det+sface",
+                    SAME_PERSON,
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        (tmp, db)
+    }
+
+    fn persons_of(db: &Store) -> Vec<Option<i64>> {
+        db.read(|c| {
+            Ok(people::records(c, None)?
+                .into_iter()
+                .map(|f| f.person_id)
+                .collect())
+        })
+        .unwrap()
+    }
+
+    fn cluster_with(db: &Store, t: pc_core::AiThresholds) {
+        run(
+            db,
+            &MemoryGovernor::new(256),
+            &JobControl::new(),
+            std::sync::Arc::new(crate::face_policy::FacePolicy::new(true)),
+            &Default::default(),
+            &t,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn stricter_similarity_separates_faces_joined_by_default() {
+        let (_t, db) = two_faces([0.99, 0.99]);
+        cluster_with(&db, Default::default());
+        let p = persons_of(&db);
+        assert!(p[0].is_some());
+        assert_eq!(p[0], p[1], "0,5 ≥ 0,363: stessa persona");
+        cluster_with(
+            &db,
+            pc_core::AiThresholds {
+                face_similarity: 0.6,
+                ..Default::default()
+            },
+        );
+        let p = persons_of(&db);
+        assert!(p[0].is_some() && p[1].is_some());
+        assert_ne!(p[0], p[1], "0,5 < 0,6: persone separate");
+    }
+
+    #[test]
+    fn faces_below_detection_threshold_are_not_clustered() {
+        // Scenario "Soglia di rilevamento alzata": volti a 0,95 e 0,85, soglia 0,9.
+        let (_t, db) = two_faces([0.95, 0.85]);
+        cluster_with(&db, Default::default());
+        let p = persons_of(&db);
+        assert_eq!(p[0], p[1]);
+        cluster_with(
+            &db,
+            pc_core::AiThresholds {
+                face_detection: 0.9,
+                ..Default::default()
+            },
+        );
+        let p = persons_of(&db);
+        assert!(p[0].is_some());
+        assert_eq!(
+            p[1], None,
+            "il volto a 0,85 non è usato per il raggruppamento"
+        );
+        // Il volto resta salvato.
+        assert_eq!(p.len(), 2);
     }
 }

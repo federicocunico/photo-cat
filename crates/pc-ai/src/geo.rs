@@ -215,6 +215,23 @@ impl Gazetteer {
             .and_then(|(c, _)| c.timezone.as_deref())
     }
 
+    /// Città il cui nome (italiano o originale) inizia con `prefix`, dalla più
+    /// popolosa.
+    pub fn by_prefix(&self, prefix: &str, limit: usize) -> Vec<&City> {
+        let p = fold(prefix.trim());
+        if p.is_empty() {
+            return Vec::new();
+        }
+        let mut found: Vec<&City> = self
+            .cities
+            .iter()
+            .filter(|c| fold(&c.name).starts_with(&p) || fold(&c.alt_name).starts_with(&p))
+            .collect();
+        found.sort_by_key(|c| std::cmp::Reverse(c.population));
+        found.truncate(limit);
+        found
+    }
+
     pub fn by_name(&self, name: &str) -> Option<&City> {
         self.by_name
             .get(&fold(name.trim()))
@@ -258,9 +275,133 @@ fn generic(seg: &str) -> bool {
         || s.ends_with(':')
 }
 
+/// Luogo automatico di un file: città più vicina alle coordinate GPS (entro
+/// 100 km) oppure luogo dedotto dalle cartelle del percorso.
+pub fn auto_location(
+    i: &pc_store::bulk::PlaceInputs,
+    gaz: Option<&Gazetteer>,
+    ignored: &[String],
+) -> Option<pc_store::model::Location> {
+    use pc_store::model::{Location, LocationSource};
+    let gps = i.gps.filter(|(lat, lon)| {
+        lat.is_finite()
+            && lon.is_finite()
+            && (-90.0..=90.0).contains(lat)
+            && (-180.0..=180.0).contains(lon)
+    });
+    if let Some((lat, lon)) = gps {
+        let city = gaz.and_then(|g| g.nearest(lat, lon, 100.0)).map(|(c, _)| c);
+        return Some(Location {
+            name: city.map(|c| c.name.clone()),
+            country: city.map(|c| c.country.clone()),
+            lat: Some(lat),
+            lon: Some(lon),
+            source: LocationSource::Gps,
+        });
+    }
+    let hints = PlaceHints {
+        camera_make: i.camera_make.as_deref(),
+        camera_model: i.camera_model.as_deref(),
+        ignored,
+    };
+    place_from_path(Path::new(&i.path), gaz, &hints).map(|name| Location {
+        name: Some(name),
+        country: None,
+        lat: None,
+        lon: None,
+        source: LocationSource::Directory,
+    })
+}
+
+/// Contesto della foto per riconoscere le cartelle che non sono luoghi.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlaceHints<'a> {
+    /// Marca EXIF della fotocamera (es. `NIKON CORPORATION`).
+    pub camera_make: Option<&'a str>,
+    /// Modello EXIF (es. `NIKON D7000`).
+    pub camera_model: Option<&'a str>,
+    /// Nomi di cartella da ignorare indicati dall'utente.
+    pub ignored: &'a [String],
+}
+
+/// Parole che indicano una cartella di dispositivo o di app, non un luogo.
+/// Lista prudente: niente nomi che sono anche luoghi (es. "Fuji", "Olympus"),
+/// per quelli vale il confronto con la marca EXIF della foto.
+const DEVICE_WORDS: &[&str] = &[
+    "telefono",
+    "cellulare",
+    "smartphone",
+    "phone",
+    "iphone",
+    "android",
+    "samsung",
+    "huawei",
+    "xiaomi",
+    "nikon",
+    "canon",
+    "sony",
+    "fujifilm",
+    "panasonic",
+    "lumix",
+    "gopro",
+    "insta360",
+    "drone",
+    "dji",
+    "mavic",
+    "reflex",
+    "mirrorless",
+    "fotocamera",
+    "whatsapp",
+    "telegram",
+    "screenshot",
+    "screenshots",
+];
+
+/// Testo ridotto a lettere e cifre minuscole (`NIKON D-7000` → `nikond7000`).
+fn compact(s: &str) -> String {
+    fold(s).chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
+/// Vero se il segmento è il nome di un dispositivo o di una cartella ignorata.
+fn device_or_ignored(seg: &str, hints: &PlaceHints) -> bool {
+    let folded = fold(seg.trim());
+    if hints.ignored.iter().any(|i| fold(i.trim()) == folded) {
+        return true;
+    }
+    if folded
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|w| DEVICE_WORDS.contains(&w))
+    {
+        return true;
+    }
+    let seg = compact(seg);
+    if seg.len() < 2 {
+        return false;
+    }
+    let make = hints.camera_make.map(compact).unwrap_or_default();
+    // Prima parola della marca: `NIKON CORPORATION` → `nikon`.
+    let make_word = hints
+        .camera_make
+        .and_then(|m| m.split_whitespace().next())
+        .map(compact)
+        .unwrap_or_default();
+    let model = hints.camera_model.map(compact).unwrap_or_default();
+    let model_only = [&make, &make_word]
+        .iter()
+        .filter(|m| !m.is_empty())
+        .find_map(|m| model.strip_prefix(m.as_str()))
+        .unwrap_or(&model)
+        .to_string();
+    [make, make_word, model, model_only]
+        .iter()
+        .any(|v| !v.is_empty() && *v == seg)
+}
+
 /// Luogo dedotto dal percorso: il segmento più profondo che corrisponde a una
-/// città nota; in mancanza, il segmento più profondo non generico.
-pub fn place_from_path(path: &Path, gaz: Option<&Gazetteer>) -> Option<String> {
+/// città nota; in mancanza, il segmento più profondo non generico. Le
+/// cartelle di dispositivo (marca o modello EXIF della foto, nomi comuni come
+/// "Telefono") e quelle indicate dall'utente sono saltate, risalendo.
+pub fn place_from_path(path: &Path, gaz: Option<&Gazetteer>, hints: &PlaceHints) -> Option<String> {
     let full = path.to_string_lossy();
     let (parent, _) = full.rsplit_once(['/', '\\'])?;
     let segs: Vec<String> = parent
@@ -268,7 +409,11 @@ pub fn place_from_path(path: &Path, gaz: Option<&Gazetteer>) -> Option<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .collect();
-    let candidates: Vec<&String> = segs.iter().rev().filter(|s| !generic(s)).collect();
+    let candidates: Vec<&String> = segs
+        .iter()
+        .rev()
+        .filter(|s| !generic(s) && !device_or_ignored(s, hints))
+        .collect();
     if let Some(g) = gaz {
         for s in &candidates {
             if let Some(c) = g.by_name(s) {
@@ -322,14 +467,121 @@ mod tests {
     #[test]
     fn place_from_directory_names() {
         let g = Gazetteer::parse(SAMPLE).unwrap();
+        let none = PlaceHints::default();
         let p = Path::new(r"D:\Foto\2023\Toscana\Siena\IMG_1.JPG");
-        assert_eq!(place_from_path(p, Some(&g)).as_deref(), Some("Siena"));
+        assert_eq!(
+            place_from_path(p, Some(&g), &none).as_deref(),
+            Some("Siena")
+        );
         let p = Path::new(r"D:\Foto\2023\Val_d'Orcia\IMG_1.JPG");
-        assert_eq!(place_from_path(p, Some(&g)).as_deref(), Some("Val d'Orcia"));
+        assert_eq!(
+            place_from_path(p, Some(&g), &none).as_deref(),
+            Some("Val d'Orcia")
+        );
         let p = Path::new(r"D:\Foto\2023\07\DCIM\IMG_1.JPG");
-        assert_eq!(place_from_path(p, Some(&g)), None);
+        assert_eq!(place_from_path(p, Some(&g), &none), None);
         let p = Path::new(r"E:\Archivio\Roma 2019\IMG_1.JPG");
-        assert_eq!(place_from_path(p, Some(&g)).as_deref(), Some("Roma 2019"));
+        assert_eq!(
+            place_from_path(p, Some(&g), &none).as_deref(),
+            Some("Roma 2019")
+        );
+    }
+
+    #[test]
+    fn auto_location_prefers_gps_then_folders_and_prefix_search() {
+        let g = Gazetteer::parse(SAMPLE).unwrap();
+        let mut i = pc_store::bulk::PlaceInputs {
+            path: r"D:\Foto\Viaggio\Telefono\IMG_1.JPG".into(),
+            gps: Some((43.77, 11.25)),
+            ..Default::default()
+        };
+        let l = auto_location(&i, Some(&g), &[]).unwrap();
+        assert_eq!(l.name.as_deref(), Some("Firenze"));
+        assert_eq!(l.source, pc_store::model::LocationSource::Gps);
+        i.gps = None;
+        let l = auto_location(&i, Some(&g), &[]).unwrap();
+        assert_eq!(l.name.as_deref(), Some("Viaggio"));
+        assert_eq!(l.source, pc_store::model::LocationSource::Directory);
+        let names: Vec<_> = g
+            .by_prefix("fl", 5)
+            .iter()
+            .map(|c| c.country.as_str())
+            .collect();
+        assert_eq!(names, vec!["IT", "US"], "dalla più popolosa");
+        assert_eq!(
+            g.by_prefix("ro", 5)[0].name,
+            "Roma",
+            "anche dal nome originale"
+        );
+        assert!(g.by_prefix(" ", 5).is_empty());
+    }
+
+    #[test]
+    fn device_and_ignored_folders_are_skipped() {
+        let g = Gazetteer::parse(SAMPLE).unwrap();
+        let d7000 = PlaceHints {
+            camera_make: Some("NIKON CORPORATION"),
+            camera_model: Some("NIKON D7000"),
+            ignored: &[],
+        };
+        // Scenario "Sottocartella del dispositivo".
+        let p = Path::new(r"D:\Foto\Viaggio Giappone\D7000\DSC_0001.NEF");
+        assert_eq!(
+            place_from_path(p, Some(&g), &d7000).as_deref(),
+            Some("Viaggio Giappone")
+        );
+        // Senza EXIF "D7000" resta un candidato (nessuna euristica sui codici).
+        assert_eq!(
+            place_from_path(p, Some(&g), &PlaceHints::default()).as_deref(),
+            Some("D7000")
+        );
+        // Scenario "Sottocartella del telefono" (anche senza EXIF).
+        for folder in [
+            "Telefono",
+            "iPhone di Giulia",
+            "altra Nikon",
+            "WhatsApp Images",
+        ] {
+            let p = format!(r"D:\Foto\Viaggio Giappone\{folder}\IMG_1.JPG");
+            assert_eq!(
+                place_from_path(Path::new(&p), Some(&g), &PlaceHints::default()).as_deref(),
+                Some("Viaggio Giappone"),
+                "{folder}"
+            );
+        }
+        // Marca e modello in altre forme.
+        let fuji = PlaceHints {
+            camera_make: Some("FUJIFILM"),
+            camera_model: Some("X-T5"),
+            ignored: &[],
+        };
+        let p = Path::new(r"D:\Foto\Giappone\Monte Fuji\x-t5\DSCF1.RAF");
+        assert_eq!(
+            place_from_path(p, Some(&g), &fuji).as_deref(),
+            Some("Monte Fuji"),
+            "\"Fuji\" non è un nome di dispositivo"
+        );
+        // Scenario "Nome di cartella ignorato dall'utente".
+        let ignored = vec!["Selezionate".to_string()];
+        let hints = PlaceHints {
+            ignored: &ignored,
+            ..Default::default()
+        };
+        let p = Path::new(r"D:\Foto\Sardegna\Selezionate\IMG_1.JPG");
+        assert_eq!(
+            place_from_path(p, Some(&g), &hints).as_deref(),
+            Some("Sardegna")
+        );
+        assert_eq!(
+            place_from_path(p, Some(&g), &PlaceHints::default()).as_deref(),
+            Some("Selezionate")
+        );
+        // Con un dispositivo nel percorso, una città nota resta riconosciuta.
+        let p = Path::new(r"D:\Foto\2023\Toscana\Siena\D7000\DSC_1.NEF");
+        assert_eq!(
+            place_from_path(p, Some(&g), &d7000).as_deref(),
+            Some("Siena")
+        );
     }
 
     #[test]

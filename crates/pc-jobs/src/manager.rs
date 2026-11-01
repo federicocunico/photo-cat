@@ -283,6 +283,36 @@ impl JobManager {
             .any(|e| e.kind == kind && !e.state.is_terminal() && pred(&e.params))
     }
 
+    /// Job non conclusi (in coda, in esecuzione o in pausa): id, tipo e parametri.
+    pub fn active(&self) -> Vec<(i64, String, serde_json::Value)> {
+        self.shared
+            .jobs
+            .lock()
+            .iter()
+            .filter(|(_, e)| !e.state.is_terminal())
+            .map(|(id, e)| (*id, e.kind.clone(), e.params.clone()))
+            .collect()
+    }
+
+    /// Attende che i job indicati siano conclusi; `false` allo scadere del tempo.
+    pub fn wait_finished(&self, ids: &[i64], timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let busy = {
+                let jobs = self.shared.jobs.lock();
+                ids.iter()
+                    .any(|id| jobs.get(id).is_some_and(|e| !e.state.is_terminal()))
+            };
+            if !busy {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     pub fn snapshots(&self) -> Vec<JobSnapshot> {
         let now = Instant::now();
         self.shared

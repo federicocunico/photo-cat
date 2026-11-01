@@ -13,6 +13,8 @@ import {
 import { fmtDateTime, fmtDec, fmtEta, fmtInt, mbToGb } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
+import { UpdateSummaryView } from "../import/manage";
+import { useImportUpdates } from "../import/sourceActions";
 
 const card = {
   background: "var(--pc-panel)",
@@ -203,8 +205,17 @@ export function JobCard({ job }: { job: JobSnapshot }) {
         </button>
       )}
       {job.error && <div style={{ color: "var(--pc-danger)" }}>{job.error}</div>}
+      <JobUpdateSummary jobId={job.id} kind={job.kind} />
     </section>
   );
+}
+
+/** Riepilogo dell'aggiornamento nella riga di un import concluso. */
+function JobUpdateSummary({ jobId, kind }: { jobId: number; kind: string }) {
+  const updates = useImportUpdates();
+  if (kind !== "import") return null;
+  const s = (updates.data ?? []).find((u) => u.jobId === jobId);
+  return s ? <UpdateSummaryView summary={s} /> : null;
 }
 
 function History({ rows, liveIds }: { rows: JobRow[]; liveIds: Set<number> }) {
@@ -228,6 +239,7 @@ function History({ rows, liveIds }: { rows: JobRow[]; liveIds: Set<number> }) {
           <span className="muted mono" style={{ fontSize: 12 }}>
             {fmtDateTime(r.createdAt)}
           </span>
+          <JobUpdateSummary jobId={r.id} kind={r.kind} />
           {r.state === "interrupted" && (
             <button
               type="button"

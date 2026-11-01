@@ -5,3 +5,5 @@ assets/** -text
 *.dll binary
 *.so binary
 *.heic binary
+# Script eseguiti da bash (anche nel container Linux): sempre LF.
+*.sh text eol=lf

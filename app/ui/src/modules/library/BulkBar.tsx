@@ -40,6 +40,8 @@ export function BulkBar() {
       void qc.invalidateQueries({ queryKey: ["library-count"] });
       void qc.invalidateQueries({ queryKey: ["bulk-undo"] });
       void qc.invalidateQueries({ queryKey: ["catalogs"] });
+      void qc.invalidateQueries({ queryKey: ["facets"] });
+      void qc.invalidateQueries({ queryKey: ["media-detail"] });
     }
   }, [result, qc]);
   const run = async (fn: () => Promise<unknown>) => {
@@ -85,6 +87,12 @@ export function BulkBar() {
       case "assign_person":
         operation = { action, person: Number(value) };
         break;
+      case "set_place":
+        operation = { action: "set_place", place: { name: value.trim() } };
+        break;
+      case "reset_place":
+        operation = { action: "set_place", place: null };
+        break;
       default:
         operation = { action: "remove_library" };
     }
@@ -96,6 +104,7 @@ export function BulkBar() {
     "add_catalog",
     "remove_catalog",
     "assign_person",
+    "set_place",
   ].includes(action);
   const done = result?.phases.reduce((n, p) => n + p.done, 0) ?? 0;
   return (
@@ -127,6 +136,8 @@ export function BulkBar() {
             "remove_catalog",
             "set_label",
             "assign_person",
+            "set_place",
+            "reset_place",
             "reanalyze",
             "export",
             "organize",
@@ -180,7 +191,7 @@ export function BulkBar() {
             ))}
           </select>
         ) : (
-          ["add_tag", "remove_tag", "set_label"].includes(action) && (
+          ["add_tag", "remove_tag", "set_label", "set_place"].includes(action) && (
             <input
               className="field"
               aria-label={t("bulk.value")}
