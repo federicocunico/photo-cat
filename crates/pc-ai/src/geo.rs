@@ -227,7 +227,7 @@ impl Gazetteer {
             .iter()
             .filter(|c| fold(&c.name).starts_with(&p) || fold(&c.alt_name).starts_with(&p))
             .collect();
-        found.sort_by(|a, b| b.population.cmp(&a.population));
+        found.sort_by_key(|c| std::cmp::Reverse(c.population));
         found.truncate(limit);
         found
     }
