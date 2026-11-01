@@ -8,6 +8,7 @@ import { fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
+import { useLabelName } from "./labelName";
 import { updateFolder } from "../import/sourceActions";
 
 function Row({
@@ -202,6 +203,7 @@ function FolderTree({
 
 export function LibrarySidebar() {
   const { t } = useTranslation();
+  const names = useLabelName();
   const filter = useLibrary((s) => s.filter);
   const setFilter = useLibrary((s) => s.setFilter);
   const folderRecursive = useLibrary((s) => s.folderRecursive);
@@ -323,14 +325,12 @@ export function LibrarySidebar() {
         <h2 className="section-title">{t("library.filters")}</h2>
         {(facets.data?.labels ?? []).map(([grp, values]) => (
           <div key={grp} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontWeight: 600 }}>
-              {t(`library.facets.groups.${grp}`, { defaultValue: grp })}
-            </div>
+            <div style={{ fontWeight: 600 }}>{names.group(grp)}</div>
             <CheckList
               values={values}
               selected={labelSel(grp)}
               onToggle={(v) => setLabel(grp, toggle(labelSel(grp), v))}
-              render={(v) => t(`labels.${v}`, { defaultValue: v.replace(/_/g, " ") })}
+              render={(v) => names.label(grp, v)}
             />
           </div>
         ))}

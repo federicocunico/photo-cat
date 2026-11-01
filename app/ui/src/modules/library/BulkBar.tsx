@@ -5,13 +5,17 @@ import { commands, isTauri, type BulkAction } from "../../lib/ipc";
 import { useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { useLive } from "../../store/live";
+import { CategoryPicker } from "./CategoryPicker";
+import { useLabelName, useTaxonomy } from "./labelName";
 export function BulkBar() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { selected, filter, setSelection } = useLibrary();
   const [action, setAction] = useState("add_tag");
   const [value, setValue] = useState("");
-  const [group, setGroup] = useState("location");
+  const [group, setGroup] = useState("subject");
+  const taxonomy = useTaxonomy();
+  const names = useLabelName();
   const [error, setError] = useState("");
   const [job, setJob] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -149,16 +153,35 @@ export function BulkBar() {
           ))}
         </select>
         {action === "set_label" && (
-          <select
-            className="field"
-            aria-label={t("catalogs.field")}
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-          >
-            {["subject", "location", "environment"].map((g) => (
-              <option key={g}>{g}</option>
-            ))}
-          </select>
+          <>
+            <select
+              className="field"
+              aria-label={t("catalogs.field")}
+              value={group}
+              onChange={(e) => {
+                setGroup(e.target.value);
+                setValue("");
+              }}
+            >
+              {(taxonomy.data?.groups ?? []).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {names.group(g.id)}
+                </option>
+              ))}
+            </select>
+            <CategoryPicker
+              ariaLabel={t("bulk.value")}
+              group={taxonomy.data?.groups.find((g) => g.id === group)}
+              value={value}
+              onChange={setValue}
+              onCreate={async (label) => {
+                const r = await commands.addCategory(group, label, [], selected);
+                await qc.invalidateQueries({ queryKey: ["taxonomy"] });
+                setValue(r.id);
+                if (r.job != null) setJob(r.job);
+              }}
+            />
+          </>
         )}
         {action.includes("catalog") ? (
           <select
@@ -191,7 +214,7 @@ export function BulkBar() {
             ))}
           </select>
         ) : (
-          ["add_tag", "remove_tag", "set_label", "set_place"].includes(action) && (
+          ["add_tag", "remove_tag", "set_place"].includes(action) && (
             <input
               className="field"
               aria-label={t("bulk.value")}

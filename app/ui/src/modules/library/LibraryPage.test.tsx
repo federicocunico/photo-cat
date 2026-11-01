@@ -171,7 +171,7 @@ describe("Libreria", () => {
     expect(insp).toHaveTextContent("8,4 MB");
     expect(insp).toHaveTextContent("Val d'Orcia");
     expect(insp).toHaveTextContent("GPS EXIF");
-    expect(insp).toHaveTextContent("Tipo soggetto: paesaggio");
+    expect(insp).toHaveTextContent("Tipo soggetto: Paesaggio");
     expect(insp).toHaveTextContent("0,82");
     expect(insp).toHaveTextContent("Giulia");
     expect(insp).toHaveTextContent("tramonto");
@@ -187,7 +187,7 @@ describe("Libreria", () => {
     renderPage();
     await screen.findByTestId("thumb-1");
     expect(await screen.findByText("Tipo soggetto")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: /paesaggio/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Paesaggio/ }));
     await waitFor(() =>
       expect(commandsMock.libraryPage).toHaveBeenLastCalledWith(
         expect.objectContaining({ labels: [{ group: "subject", values: ["paesaggio"] }] }),
@@ -198,7 +198,7 @@ describe("Libreria", () => {
     );
     fireEvent.click(screen.getByRole("checkbox", { name: /Siena/ }));
     await waitFor(() => expect(useLibrary.getState().filter.places).toEqual(["Siena"]));
-    fireEvent.click(screen.getByRole("button", { name: "Rimuovi filtro paesaggio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi filtro Paesaggio" }));
     await waitFor(() => expect(useLibrary.getState().filter.labels).toEqual([]));
     expect(useLibrary.getState().filter.places).toEqual(["Siena"]);
 
@@ -412,5 +412,39 @@ describe("gestione delle importazioni", () => {
     expect(screen.getByRole("menuitem", { name: "Aggiorna cartella…" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Ricollega mancanti…" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Rimuovi mancanti…" })).toBeNull();
+  });
+});
+
+describe("voci e gruppi creati dall'utente", () => {
+  it("il gruppo solo manuale compare tra i filtri con i nomi delle voci", async () => {
+    commandsMock.getTaxonomy.mockResolvedValue({
+      version: 2,
+      groups: [
+        {
+          id: "evento",
+          label: "Evento",
+          threshold: 0.25,
+          categories: [{ id: "compleanno", label: "Compleanno", enabled: true, prompts: [] }],
+        },
+      ],
+    } as never);
+    commandsMock.libraryFacets.mockResolvedValue({
+      labels: [["evento", [{ value: "compleanno", count: 3 }]]],
+      places: [],
+      years: [],
+      formats: [],
+      people: [],
+      tags: [],
+    } as never);
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    expect(await within(filters).findByText("Evento")).toBeInTheDocument();
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /Compleanno/ }));
+    await waitFor(() =>
+      expect(useLibrary.getState().filter.labels).toEqual([
+        { group: "evento", values: ["compleanno"] },
+      ]),
+    );
+    expect(await screen.findByRole("button", { name: "Rimuovi filtro Compleanno" })).toBeTruthy();
   });
 });

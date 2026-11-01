@@ -9,6 +9,8 @@ import { thumbUrl } from "./thumbUrl";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { PlaceEditor } from "./PlaceEditor";
+import { useLabelName } from "./labelName";
+import { CategoryPicker } from "./CategoryPicker";
 
 function Grid2({ children }: { children: ReactNode }) {
   return (
@@ -39,6 +41,7 @@ const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
 /** Correzioni sul file ispezionato: catalogazione, tag e cataloghi (operazioni bulk su un solo id). */
 function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const { t } = useTranslation();
+  const names = useLabelName();
   const qc = useQueryClient();
   const taxonomy = useQuery({
     queryKey: ["taxonomy"],
@@ -87,25 +90,22 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
         >
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.label}
+              {names.group(g.id)}
             </option>
           ))}
         </select>
-        <select
-          className="field"
-          aria-label={t("library.inspector.value")}
+        <CategoryPicker
+          ariaLabel={t("library.inspector.value")}
+          group={groups.find((g) => g.id === group)}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-        >
-          <option value="">—</option>
-          {groups
-            .find((g) => g.id === group)
-            ?.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-        </select>
+          onChange={setValue}
+          onCreate={async (label) => {
+            const r = await commands.addCategory(group, label, [], [id]);
+            await qc.invalidateQueries({ queryKey: ["taxonomy"] });
+            setValue(r.id);
+            if (r.job != null) setJob(r.job);
+          }}
+        />
         <button
           className="btn"
           disabled={value === current}
@@ -165,6 +165,7 @@ const fmtCaptured = (s: string | null | undefined) => (s ? fmtDateTime(s.replace
 
 export function Inspector() {
   const { t } = useTranslation();
+  const names = useLabelName();
   const focused = useLibrary((s) => s.focused);
   const tags = useTagOverview();
   const detail = useQuery({
@@ -284,8 +285,7 @@ export function Inspector() {
           <div key={`${l.group}/${l.value}`}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
               <span>
-                {t(`library.facets.groups.${l.group}`, { defaultValue: l.group })}:{" "}
-                {t(`labels.${l.value}`, { defaultValue: l.value.replace(/_/g, " ") })}
+                {names.group(l.group)}: {names.label(l.group, l.value)}
               </span>
               <span className="mono muted">{fmtDec(l.score ?? 0, 2)}</span>
             </div>

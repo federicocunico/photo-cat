@@ -103,7 +103,7 @@ pub fn relabel_all(
 ) -> AppResult<i64> {
     let groups: Arc<Vec<String>> =
         Arc::new(clip.taxonomy.groups.iter().map(|g| g.id.clone()).collect());
-    let version = clip.taxonomy.version;
+    let version = clip.taxonomy.analysis_version;
     let model = clip.model.to_string();
     if let Some(p) = phase {
         let m = model.clone();

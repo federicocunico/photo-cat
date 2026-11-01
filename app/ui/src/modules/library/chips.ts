@@ -1,12 +1,16 @@
 import type { LibraryFilter } from "../../lib/ipc";
 
 /** Filtri attivi come chip rimovibili: nome e modifica che lo toglie. */
-export function activeChips(f: LibraryFilter, t: (k: string, o?: object) => string) {
+export function activeChips(
+  f: LibraryFilter,
+  t: (k: string, o?: object) => string,
+  label?: (group: string, value: string) => string,
+) {
   const chips: Array<{ name: string; clear: Partial<LibraryFilter> }> = [];
   for (const l of f.labels ?? []) {
     for (const v of l.values) {
       chips.push({
-        name: t(`labels.${v}`, { defaultValue: v.replace(/_/g, " ") }),
+        name: label ? label(l.group, v) : t(`labels.${v}`, { defaultValue: v.replace(/_/g, " ") }),
         clear: {
           labels: (f.labels ?? [])
             .map((x) =>

@@ -12,24 +12,13 @@ pub(crate) fn retune_after_settings(previous: &Config, next: &Config) -> RetuneS
     RetuneSpec::between(&previous.ai.thresholds, &next.ai.thresholds)
 }
 
-/// Fasi di rivalutazione richieste da un salvataggio della tassonomia: solo
-/// se è cambiata almeno una soglia di gruppo o di categoria.
+/// Fasi di rivalutazione richieste da un salvataggio della tassonomia: solo se
+/// cambia l'analisi automatica (soglie, voci automatiche attive e loro prompt).
+/// Le catalogazioni si ricalcolano dagli embedding salvati, senza rieseguire il
+/// modello immagine. Voci e gruppi manuali e nomi non richiedono nulla.
 pub(crate) fn retune_after_taxonomy(previous: &Taxonomy, next: &Taxonomy) -> RetuneSpec {
-    // (gruppo, categoria o "" per il gruppo, soglia)
-    let thresholds = |t: &Taxonomy| -> Vec<(String, String, Option<f32>)> {
-        t.groups
-            .iter()
-            .flat_map(|g| {
-                std::iter::once((g.id.clone(), String::new(), Some(g.threshold))).chain(
-                    g.categories
-                        .iter()
-                        .map(|c| (g.id.clone(), c.id.clone(), c.threshold)),
-                )
-            })
-            .collect()
-    };
     RetuneSpec {
-        clip: thresholds(previous) != thresholds(next),
+        clip: previous.changes_analysis(next),
         ..Default::default()
     }
 }
@@ -220,7 +209,7 @@ mod tests {
         tax.version = 2;
         tax.groups[0].threshold = 0.6;
         tax.groups[1].threshold = 0.1;
-        taxonomy::save(&db, tax.clone(), 1).unwrap();
+        let tax = taxonomy::save(&db, tax, 1).unwrap();
         let previous = Config::default();
         let mut next = previous.clone();
         next.ai.confidence_threshold = 0.4;

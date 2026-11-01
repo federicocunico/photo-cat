@@ -89,6 +89,13 @@ pub enum UndoAction {
     LocationReplaced {
         previous: Vec<(MediaId, Option<Location>)>,
     },
+    /// Voce eliminata dalla tassonomia (JSON in `settings_kv[key]`): l'annullamento
+    /// la reinserisce nel suo gruppo come nuova versione.
+    CategoryRemoved {
+        key: String,
+        group: String,
+        category: serde_json::Value,
+    },
 }
 
 /// Luogo scelto dall'utente (nome libero o località del dataset geografico).
@@ -711,6 +718,112 @@ pub fn set_label(
     })
 }
 
+/// Foto che hanno il valore `value` nel gruppo `group`.
+pub fn label_usage(c: &Connection, group: &str, value: &str) -> StoreResult<i64> {
+    Ok(c.query_row(
+        "SELECT count(DISTINCT media_id) FROM label WHERE grp = ?1 AND value = ?2",
+        params![group, value],
+        |r| r.get(0),
+    )?)
+}
+
+/// Voce eliminata dalla tassonomia conservata nel JSON `settings_kv[key]`.
+pub struct RemovedCategory {
+    pub key: String,
+    pub category: serde_json::Value,
+}
+
+/// Toglie il valore `value` del gruppo `group` da tutte le foto (voce
+/// eliminata dalla tassonomia), in modo annullabile: l'annullamento ripristina
+/// le etichette e, con `removed`, la voce nella tassonomia. Restituisce le foto toccate.
+pub fn remove_label_value(
+    c: &Connection,
+    group: &str,
+    value: &str,
+    removed: Option<RemovedCategory>,
+) -> StoreResult<Vec<MediaId>> {
+    let mut q = c.prepare(
+        "SELECT DISTINCT media_id FROM label WHERE grp = ?1 AND value = ?2 ORDER BY media_id",
+    )?;
+    let ids: Vec<MediaId> = q
+        .query_map(params![group, value], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    let mut actions = Vec::new();
+    if !ids.is_empty() {
+        let previous = labels_of_group(c, group, &ids)?;
+        c.execute(
+            "DELETE FROM label WHERE grp = ?1 AND value = ?2",
+            params![group, value],
+        )?;
+        refresh_all(c, &ids)?;
+        actions.push(UndoAction::LabelsReplaced {
+            group: group.into(),
+            ids: ids.clone(),
+            previous,
+        });
+    }
+    if let Some(r) = removed {
+        actions.push(UndoAction::CategoryRemoved {
+            key: r.key,
+            group: group.into(),
+            category: r.category,
+        });
+    }
+    let action = match actions.len() {
+        0 => return Ok(ids),
+        1 => actions.remove(0),
+        _ => UndoAction::Group { actions },
+    };
+    record(c, &format!("Elimina voce {group} = {value}"), &action)?;
+    Ok(ids)
+}
+
+/// Reinserisce una voce eliminata nella tassonomia salvata in `settings_kv[key]`
+/// (annullamento): nuova versione e, se la voce è automatica, nuova versione di analisi.
+fn restore_category(
+    c: &Connection,
+    key: &str,
+    group: &str,
+    category: serde_json::Value,
+) -> StoreResult<()> {
+    let raw: Option<String> = c
+        .query_row("SELECT value FROM settings_kv WHERE key = ?1", [key], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    let Some(raw) = raw else {
+        return Ok(());
+    };
+    let mut t: serde_json::Value = serde_json::from_str(&raw)?;
+    let version = t["version"].as_i64().unwrap_or(1) + 1;
+    let Some(groups) = t["groups"].as_array_mut() else {
+        return Ok(());
+    };
+    let Some(g) = groups.iter_mut().find(|g| g["id"] == group) else {
+        return Ok(());
+    };
+    let Some(cats) = g["categories"].as_array_mut() else {
+        return Ok(());
+    };
+    if cats.iter().any(|x| x["id"] == category["id"]) {
+        return Ok(());
+    }
+    let automatic = category["enabled"] == true
+        && category["prompts"]
+            .as_array()
+            .is_some_and(|p| !p.is_empty());
+    cats.push(category);
+    t["version"] = version.into();
+    if automatic {
+        t["analysisVersion"] = version.into();
+    }
+    c.execute(
+        "UPDATE settings_kv SET value = ?2 WHERE key = ?1",
+        params![key, t.to_string()],
+    )?;
+    Ok(())
+}
+
 /// Descrizione dell'ultima operazione annullabile.
 pub fn last_undoable(c: &Connection) -> StoreResult<Option<String>> {
     Ok(c.query_row(
@@ -763,6 +876,11 @@ fn undo_action(
             }
         }
         UndoAction::AppStore { payload } => app.push(payload),
+        UndoAction::CategoryRemoved {
+            key,
+            group,
+            category,
+        } => restore_category(c, &key, &group, category)?,
         UndoAction::GroupClock { group, previous } => {
             crate::timeline::set_clock(c, group, &previous, &crate::timeline::system_offset)?;
         }
