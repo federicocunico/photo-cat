@@ -115,17 +115,27 @@ impl ImportStage for ClipStage {
     }
 }
 
+/// Rilevamento persone: salva i riquadri dal pavimento in su e conta quelli
+/// sopra la soglia configurata.
 pub struct PersonsStage {
     pub resources: AiResources,
-    pub threshold: f32,
+    pub count_threshold: f32,
 }
 struct PersonsWrite {
     boxes: Vec<[f32; 5]>,
     model: String,
+    count_threshold: f32,
 }
 impl ExtraWrite for PersonsWrite {
     fn write(&self, c: &rusqlite::Connection, id: i64) -> pc_store::StoreResult<()> {
-        analysis::people(c, id, &self.boxes, &self.model)
+        analysis::people_with(
+            c,
+            id,
+            &self.boxes,
+            &self.model,
+            self.count_threshold,
+            Some(crate::analyze::PERSON_FLOOR),
+        )
     }
 }
 
@@ -181,7 +191,11 @@ impl ImportStage for PersonsStage {
                     "memoria insufficiente per il rilevamento persone",
                 )
             })?;
-            let found = persons::detect(&mut model.session.lock(), &decoded.image, self.threshold)?;
+            let found = persons::detect(
+                &mut model.session.lock(),
+                &decoded.image,
+                crate::analyze::PERSON_FLOOR,
+            )?;
             let boxes = found
                 .iter()
                 .filter_map(|p| {
@@ -196,6 +210,7 @@ impl ImportStage for PersonsStage {
             Ok(PersonsWrite {
                 boxes,
                 model: model_key(entry),
+                count_threshold: self.count_threshold,
             })
         };
         match run() {

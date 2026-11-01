@@ -134,6 +134,11 @@ export const commands = {
 	saveSettings: (config: Config) => __TAURI_INVOKE<null>("save_settings", { config }),
 	getTaxonomy: () => __TAURI_INVOKE<Taxonomy>("get_taxonomy"),
 	saveTaxonomy: (taxonomy: Taxonomy, expectedVersion: number) => __TAURI_INVOKE<null>("save_taxonomy", { taxonomy, expectedVersion }),
+	/**
+	 *  Effetto di nuove soglie (e, se indicata, di una tassonomia con soglie
+	 *  diverse) calcolato dai risultati salvati, senza scrivere.
+	 */
+	previewThresholds: (thresholds: AiThresholds, taxonomy: Taxonomy | null) => __TAURI_INVOKE<ThresholdImpact>("preview_thresholds", { thresholds, taxonomy }),
 	onboardingDone: () => __TAURI_INVOKE<boolean>("onboarding_done"),
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
@@ -155,6 +160,19 @@ export type AiConfig = {
 	/**  Lato minimo in pixel di un volto utilizzabile per il riconoscimento. */
 	face_min_size_px?: number,
 	auto_download_models?: boolean,
+	/**  Nomi di cartella da ignorare nella deduzione del luogo dal percorso. */
+	ignored_folder_names?: string[],
+	thresholds?: AiThresholds,
+};
+
+/**  Soglie dei modelli applicate ai risultati salvati (0..1). */
+export type AiThresholds = {
+	/**  Confidenza minima di una rilevazione di persona (YOLO). */
+	person_detection?: number | null,
+	/**  Confidenza minima di un volto usato per il riconoscimento. */
+	face_detection?: number | null,
+	/**  Somiglianza coseno minima tra due volti della stessa persona. */
+	face_similarity?: number | null,
 };
 
 /**
@@ -224,6 +242,8 @@ export type Category = {
 	label: string,
 	enabled: boolean,
 	prompts: string[],
+	/**  Soglia propria della categoria; `None` = soglia del gruppo. */
+	threshold?: number | null,
 };
 
 /**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
@@ -240,6 +260,8 @@ export type Config = {
 	ui?: UiConfig,
 	/**  Percorso dati alternativo scelto dall'utente. */
 	data_dir?: string | null,
+	/**  Applicazioni esterne per "Apri con" e doppio clic. */
+	external_apps?: ExternalApp[],
 };
 
 export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number };
@@ -372,6 +394,17 @@ export type ExportPreflight = {
 	canStart: boolean,
 	/**  Motivo per cui l'avvio è bloccato. */
 	blocked: string | null,
+};
+
+/**
+ *  Applicazione esterna configurata dall'utente. Negli argomenti `{file}`
+ *  indica il percorso della foto; senza `{file}` i percorsi vengono accodati.
+ */
+export type ExternalApp = {
+	id?: string,
+	name?: string,
+	path?: string,
+	args?: string[],
 };
 
 export type FaceChoice = {
@@ -988,6 +1021,22 @@ export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | 
 
 export type Theme = "dark" | "light";
 
+/**  Effetto di nuove soglie sulla libreria, calcolato dai risultati salvati. */
+export type ThresholdImpact = {
+	/**  Foto le cui catalogazioni automatiche cambiano. */
+	mediaLabelsChanged: number,
+	/**  Foto il cui conteggio delle persone cambia. */
+	mediaPeopleChanged: number,
+	/**  Volti esclusi dal riconoscimento con la nuova soglia di rilevamento. */
+	facesExcluded: number,
+	/**  Stima delle persone senza nome che cambierebbero raggruppamento. */
+	personsAffectedEstimate: number,
+	/**  File salvati con un minimo di persone più alto della nuova soglia. */
+	reanalysisPersons: number,
+	/**  File salvati con un minimo di volti più alto della nuova soglia. */
+	reanalysisFaces: number,
+};
+
 /**
  *  Proposta di ora locale per un gruppo, ricavata dalle foto con GPS di altri
  *  gruppi scattate negli stessi istanti.
@@ -1007,6 +1056,8 @@ export type TzSuggestion = {
 export type UiConfig = {
 	theme?: Theme,
 	language?: Language,
+	/**  `system`, `none` o l'id di un'applicazione esterna. */
+	double_click?: string,
 };
 
 export type UnavailableProvider = {

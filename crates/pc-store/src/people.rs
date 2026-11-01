@@ -359,6 +359,44 @@ pub fn save_faces_with(
     threshold: f32,
     ids: &IdentityRefs,
 ) -> StoreResult<()> {
+    save_faces_tuned(
+        c,
+        media,
+        detected,
+        embedding_model,
+        analysis_model,
+        FaceMatch {
+            similarity: threshold,
+            min_quality: 0.0,
+            floor: None,
+        },
+        ids,
+    )
+}
+
+/// Soglie applicate al salvataggio dei volti.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FaceMatch {
+    /// Somiglianza minima per associare un volto a una persona.
+    pub similarity: f32,
+    /// Confidenza minima di rilevamento di un volto usato per il riconoscimento:
+    /// i volti sotto restano salvati ma senza persona automatica.
+    pub min_quality: f32,
+    /// Pavimento del rilevatore, registrato nella versione del risultato.
+    pub floor: Option<f32>,
+}
+
+/// Come [`save_faces_with`], con soglia di qualità e pavimento registrato.
+pub fn save_faces_tuned(
+    c: &Connection,
+    media: i64,
+    detected: &[DetectedFace],
+    embedding_model: &str,
+    analysis_model: &str,
+    m: FaceMatch,
+    ids: &IdentityRefs,
+) -> StoreResult<()> {
+    let threshold = m.similarity;
     for f in detected {
         if f.embedding.len() != 128
             || f.embedding.iter().any(|x| !x.is_finite())
@@ -416,15 +454,19 @@ pub fn save_faces_with(
                 .find(|x| x.id == id)
                 .map(|x| x.rejected.as_slice())
                 .unwrap_or(&[]);
-            let person = named_match_refs(
-                c,
-                &f.embedding,
-                embedding_model,
-                rejects,
-                threshold,
-                ids,
-                true,
-            )?;
+            let person = if f.quality < m.min_quality {
+                None
+            } else {
+                named_match_refs(
+                    c,
+                    &f.embedding,
+                    embedding_model,
+                    rejects,
+                    threshold,
+                    ids,
+                    true,
+                )?
+            };
             c.execute(
                 "UPDATE face SET person_id=?2,assigned_by='auto' WHERE id=?1",
                 params![id, person],
@@ -449,9 +491,83 @@ pub fn save_faces_with(
             c.execute("DELETE FROM face WHERE id=?1", [f.id])?;
         }
     }
-    analysis::version(c, media, "faces", analysis_model, None)?;
+    let ver = m.floor.map_or_else(
+        || analysis_model.to_string(),
+        |f| analysis::with_floor(analysis_model, f),
+    );
+    analysis::version(c, media, "faces", &ver, None)?;
     repo::fts::refresh(c, media)?;
     Ok(())
+}
+
+/// Toglie la persona automatica ai volti sotto la confidenza `min_quality`
+/// (le assegnazioni manuali restano). Con `write` falso conta soltanto.
+/// Restituisce il numero di volti interessati.
+pub fn unassign_low_quality(c: &Connection, min_quality: f32, write: bool) -> StoreResult<i64> {
+    let filter =
+        "quality < ?1 AND person_id IS NOT NULL AND COALESCE(assigned_by,'auto') <> 'manual'";
+    let ids: Vec<i64> = {
+        let mut q = c.prepare(&format!(
+            "SELECT DISTINCT media_id FROM face WHERE {filter}"
+        ))?;
+        let v = q
+            .query_map([min_quality], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        v
+    };
+    let n: i64 = c.query_row(
+        &format!("SELECT count(*) FROM face WHERE {filter}"),
+        [min_quality],
+        |r| r.get(0),
+    )?;
+    if write && n > 0 {
+        c.execute(
+            &format!("UPDATE face SET person_id=NULL,assigned_by='auto' WHERE {filter}"),
+            [min_quality],
+        )?;
+        refresh_centroids(c)?;
+        for id in ids {
+            repo::fts::refresh(c, id)?;
+        }
+    }
+    Ok(n)
+}
+
+/// Volti con embedding esclusi dal riconoscimento con la soglia `min_quality`.
+pub fn faces_below(c: &Connection, min_quality: f32) -> StoreResult<i64> {
+    Ok(c.query_row(
+        "SELECT count(*) FROM face WHERE quality < ?1 AND embedding IS NOT NULL",
+        [min_quality],
+        |r| r.get(0),
+    )?)
+}
+
+/// Stima delle persone senza nome che cambierebbero raggruppamento con la
+/// somiglianza `similarity`: quelle con almeno un volto automatico meno simile
+/// del valore al centroide della persona. Le persone con nome sono protette.
+pub fn persons_below_similarity(c: &Connection, similarity: f32) -> StoreResult<i64> {
+    let mut q = c.prepare(
+        "SELECT f.person_id,f.embedding,pc.vector FROM face f
+         JOIN person p ON p.id=f.person_id AND p.name IS NULL
+         JOIN person_centroid pc ON pc.person_id=f.person_id AND pc.model_ver=f.model_ver
+         WHERE f.embedding IS NOT NULL AND COALESCE(f.assigned_by,'auto') <> 'manual'",
+    )?;
+    let rows = q
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, Vec<u8>>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut persons = HashSet::new();
+    for (p, face, centroid) in rows {
+        if cosine(&vector(&face)?, &vector(&centroid)?) < similarity {
+            persons.insert(p);
+        }
+    }
+    Ok(persons.len() as i64)
 }
 pub fn named_ids(c: &Connection) -> StoreResult<HashSet<i64>> {
     let mut q = c.prepare("SELECT id FROM person WHERE name IS NOT NULL")?;

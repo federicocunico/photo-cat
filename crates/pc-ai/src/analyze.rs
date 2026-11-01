@@ -22,7 +22,23 @@ pub const PHASE_CLIP: &str = "clip";
 pub const PHASE_PERSONS: &str = "persons";
 pub const PHASE_FACES: &str = "faces";
 pub const PHASE_CLUSTER: &str = "cluster";
-const PERSON_THRESHOLD: f32 = 0.4;
+/// Pavimenti di salvataggio: il rilevatore conserva i risultati da qui in su e
+/// le soglie configurate si applicano in conteggio e raggruppamento, così si
+/// possono abbassare senza rianalisi fino al pavimento.
+pub const PERSON_FLOOR: f32 = 0.25;
+pub const FACE_FLOOR: f32 = 0.6;
+/// Minimo dei risultati salvati prima dei pavimenti (le vecchie soglie fisse).
+pub const LEGACY_PERSON_FLOOR: f32 = pc_core::AiThresholds::DEFAULT_PERSON_DETECTION;
+pub const LEGACY_FACE_FLOOR: f32 = pc_core::AiThresholds::DEFAULT_FACE_DETECTION;
+
+/// Soglie di salvataggio dei volti dalla configurazione.
+pub fn face_match(t: &pc_core::AiThresholds) -> pc_store::people::FaceMatch {
+    pc_store::people::FaceMatch {
+        similarity: t.face_similarity,
+        min_quality: t.face_detection,
+        floor: Some(FACE_FLOOR),
+    }
+}
 
 #[derive(Clone)]
 pub struct AiDeps {
@@ -255,14 +271,14 @@ pub fn import_stages(deps: &AiDeps, source_id: i64) -> StagePlan {
     if persons.is_some() {
         plan.stages.push(Arc::new(PersonsStage {
             resources: deps.resources.clone(),
-            threshold: PERSON_THRESHOLD,
+            count_threshold: deps.config.read().ai.thresholds.person_detection,
         }));
     }
     if faces.is_some() {
         plan.stages.push(Arc::new(crate::face_analysis::FaceStage {
             resources: deps.resources.clone(),
             min_pixels: deps.config.read().ai.face_min_size_px,
-            threshold: 0.8,
+            thresholds: deps.config.read().ai.thresholds,
             policy: deps.face_policy.clone(),
             refs: deps.identity_refs(),
         }));
@@ -486,22 +502,17 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                                         img,
                                         decoded.source_size,
                                         deps.config.read().ai.face_min_size_px,
-                                        0.8,
+                                        FACE_FLOOR,
                                     )?;
                                     let (emb, analysis) =
                                         crate::face_analysis::versions(&deps.resources)?;
                                     let policy = deps.face_policy.clone();
                                     let refs = face_refs.clone();
+                                    let m = face_match(&deps.config.read().ai.thresholds);
                                     deps.store.submit(move |c| {
                                         if policy.is_current(generation) {
-                                            pc_store::people::save_faces_with(
-                                                c,
-                                                id,
-                                                &found,
-                                                &emb,
-                                                &analysis,
-                                                crate::faces::SAME_PERSON,
-                                                &refs,
+                                            pc_store::people::save_faces_tuned(
+                                                c, id, &found, &emb, &analysis, m, &refs,
                                             )?;
                                         }
                                         Ok(())
@@ -518,7 +529,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                                 let found = persons::detect(
                                     &mut loaded[0].session.lock(),
                                     img,
-                                    PERSON_THRESHOLD,
+                                    PERSON_FLOOR,
                                 )?;
                                 let boxes: Vec<[f32; 5]> = found
                                     .iter()
@@ -527,8 +538,10 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                                     })
                                     .collect();
                                 let k = key.clone();
-                                deps.store
-                                    .submit(move |c| analysis::people(c, id, &boxes, &k))?;
+                                let t = deps.config.read().ai.thresholds.person_detection;
+                                deps.store.submit(move |c| {
+                                    analysis::people_with(c, id, &boxes, &k, t, Some(PERSON_FLOOR))
+                                })?;
                             }
                             Ok(())
                         })();
@@ -577,6 +590,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                     &ctx.control,
                     deps.face_policy.clone(),
                     &refs,
+                    &deps.config.read().ai.thresholds,
                 )?;
                 p.inc_done(1);
                 p.finish();

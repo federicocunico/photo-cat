@@ -147,6 +147,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             settings::save_settings,
             settings::get_taxonomy,
             settings::save_taxonomy,
+            settings::preview_thresholds,
             settings::onboarding_done,
             settings::complete_onboarding,
             diagnostics::export_diagnostics,
@@ -350,6 +351,11 @@ pub fn run() {
             jobs.register(
                 pc_jobs::bulk::JOB_KIND,
                 Arc::new(move |p| pc_jobs::bulk::plan(bulk_store.clone(), p)),
+            );
+            let retune_deps = ai_deps.clone();
+            jobs.register(
+                pc_ai::retune::JOB_KIND,
+                Arc::new(move |p| pc_ai::retune::plan(retune_deps.clone(), p)),
             );
             let state_ai_deps = ai_deps.clone();
             let analysis_deps = ai_deps.clone();

@@ -222,7 +222,8 @@ pub fn analyze(
 pub struct FaceStage {
     pub resources: AiResources,
     pub min_pixels: u32,
-    pub threshold: f32,
+    /// Soglie della configurazione (rilevamento e somiglianza dei volti).
+    pub thresholds: pc_core::AiThresholds,
     pub policy: Arc<crate::face_policy::FacePolicy>,
     /// Volti di riferimento delle identità dell'app.
     pub refs: Arc<IdentityRefs>,
@@ -234,19 +235,20 @@ struct FaceWrite {
     policy: Arc<crate::face_policy::FacePolicy>,
     generation: u64,
     refs: Arc<IdentityRefs>,
+    matching: pc_store::people::FaceMatch,
 }
 impl ExtraWrite for FaceWrite {
     fn write(&self, c: &rusqlite::Connection, id: i64) -> pc_store::StoreResult<()> {
         if !self.policy.is_current(self.generation) {
             return Ok(());
         }
-        pc_store::people::save_faces_with(
+        pc_store::people::save_faces_tuned(
             c,
             id,
             &self.faces,
             &self.embedding_model,
             &self.analysis_model,
-            faces::SAME_PERSON,
+            self.matching,
             &self.refs,
         )
     }
@@ -285,7 +287,7 @@ impl ImportStage for FaceStage {
                 &d.image,
                 source,
                 self.min_pixels,
-                self.threshold,
+                crate::analyze::FACE_FLOOR,
             )?;
             let (embedding_model, analysis_model) = versions(&self.resources)?;
             Ok(FaceWrite {
@@ -295,6 +297,7 @@ impl ImportStage for FaceStage {
                 policy: self.policy.clone(),
                 generation,
                 refs: self.refs.clone(),
+                matching: crate::analyze::face_match(&self.thresholds),
             })
         };
         match run() {
@@ -331,6 +334,11 @@ mod tests {
             generation: policy.token().unwrap(),
             policy: policy.clone(),
             refs: Arc::default(),
+            matching: pc_store::people::FaceMatch {
+                similarity: 0.363,
+                min_quality: 0.0,
+                floor: None,
+            },
         };
         policy.invalidate();
         pc_store::people::clear(&c).unwrap();

@@ -57,7 +57,9 @@ pub fn cached_or_compute(
                     .map(move |c| (&g.id, &c.id))
             })
             .collect();
-        if c.taxonomy == *taxonomy
+        // Versione, etichette e soglie non cambiano gli embedding: una
+        // modifica alle sole soglie riusa la cache.
+        if c.taxonomy.prompt_signature() == taxonomy.prompt_signature()
             && c.model_key == model_key
             && c.concepts.len() == expected.len()
             && c.concepts
@@ -164,6 +166,12 @@ mod tests {
             27
         );
         assert_eq!(calls.get(), 55);
+        // Le sole soglie (e la versione) non invalidano la cache.
+        let mut tuned = taxonomy.clone();
+        tuned.version += 1;
+        tuned.groups[0].threshold = 0.5;
+        tuned.groups[0].categories[0].threshold = Some(0.7);
+        cached_or_compute(&db, &tuned, "model1", |_| panic!("soglie: cache valida")).unwrap();
         cached_or_compute(&db, &taxonomy, "model2", encode).unwrap();
         assert_eq!(calls.get(), 82);
         db.close();
