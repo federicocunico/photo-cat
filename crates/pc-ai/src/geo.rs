@@ -89,19 +89,7 @@ pub fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     6371.0 * 2.0 * a.clamp(0.0, 1.0).sqrt().asin()
 }
 
-pub fn fold(s: &str) -> String {
-    s.to_lowercase()
-        .chars()
-        .map(|c| match c {
-            'à' | 'á' | 'â' | 'ä' => 'a',
-            'è' | 'é' | 'ê' | 'ë' => 'e',
-            'ì' | 'í' | 'î' | 'ï' => 'i',
-            'ò' | 'ó' | 'ô' | 'ö' => 'o',
-            'ù' | 'ú' | 'û' | 'ü' => 'u',
-            c => c,
-        })
-        .collect::<String>()
-}
+pub use pc_core::text::fold;
 
 impl Gazetteer {
     /// Formato: `id · nome · nome italiano · lat · lon · paese · admin1 · popolazione · fuso IANA`
