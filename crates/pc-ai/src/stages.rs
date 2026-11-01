@@ -225,6 +225,8 @@ impl ImportStage for PersonsStage {
 
 pub struct GeoStage {
     pub gazetteer: Option<Arc<crate::geo::Gazetteer>>,
+    /// Nomi di cartella da ignorare per il luogo (configurazione).
+    pub ignored_folders: Vec<String>,
 }
 struct LocationWrite(pc_store::model::Location);
 impl ExtraWrite for LocationWrite {
@@ -244,41 +246,15 @@ impl ImportStage for GeoStage {
         1
     }
     fn process(&self, item: &mut ImportItem, _: &StageCtx) -> StageOutcome {
-        use pc_store::model::{Location, LocationSource};
-        let gps = item
-            .exif
-            .as_ref()
-            .and_then(|e| Some((e.info.gps_lat?, e.info.gps_lon?)))
-            .filter(|(lat, lon)| {
-                lat.is_finite()
-                    && lon.is_finite()
-                    && (-90.0..=90.0).contains(lat)
-                    && (-180.0..=180.0).contains(lon)
-            });
-        let location = if let Some((lat, lon)) = gps {
-            let city = self
-                .gazetteer
-                .as_ref()
-                .and_then(|g| g.nearest(lat, lon, 100.0))
-                .map(|(c, _)| c);
-            Some(Location {
-                name: city.map(|c| c.name.clone()),
-                country: city.map(|c| c.country.clone()),
-                lat: Some(lat),
-                lon: Some(lon),
-                source: LocationSource::Gps,
-            })
-        } else {
-            crate::geo::place_from_path(&item.found.path, self.gazetteer.as_deref()).map(|name| {
-                Location {
-                    name: Some(name),
-                    country: None,
-                    lat: None,
-                    lon: None,
-                    source: LocationSource::Directory,
-                }
-            })
+        let info = item.exif.as_ref().map(|e| &e.info);
+        let inputs = pc_store::bulk::PlaceInputs {
+            path: item.found.path.to_string_lossy().into_owned(),
+            gps: info.and_then(|i| Some((i.gps_lat?, i.gps_lon?))),
+            camera_make: info.and_then(|i| i.camera_make.clone()),
+            camera_model: info.and_then(|i| i.camera_model.clone()),
         };
+        let location =
+            crate::geo::auto_location(&inputs, self.gazetteer.as_deref(), &self.ignored_folders);
         if let Some(l) = location {
             item.extra.push(Box::new(LocationWrite(l)));
         }

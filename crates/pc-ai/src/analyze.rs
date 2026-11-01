@@ -96,6 +96,17 @@ impl AiDeps {
         slot.clone()
     }
 
+    /// Calcolo del luogo automatico con il gazetteer e le cartelle da ignorare
+    /// della configurazione corrente (per "Ripristina luogo automatico").
+    pub fn place_resolver(
+        &self,
+    ) -> impl Fn(&pc_store::bulk::PlaceInputs) -> Option<pc_store::model::Location> + Send + Sync
+    {
+        let gaz = self.gazetteer();
+        let ignored = self.config.read().ai.ignored_folder_names.clone();
+        move |i| crate::geo::auto_location(i, gaz.as_deref(), &ignored)
+    }
+
     fn verified(&self, role: Role) -> Option<String> {
         let e = self.resources.models.manifest().by_role(role)?;
         self.resources
@@ -216,6 +227,7 @@ pub fn import_stages(deps: &AiDeps, source_id: i64) -> StagePlan {
     let mut plan = StagePlan::default();
     plan.stages.push(Arc::new(GeoStage {
         gazetteer: deps.gazetteer(),
+        ignored_folders: deps.config.read().ai.ignored_folder_names.clone(),
     }));
     let runnable = deps.runnable_models();
     let RunnableModels {

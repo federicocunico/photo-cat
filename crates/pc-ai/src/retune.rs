@@ -275,12 +275,13 @@ fn finish_empty(p: Option<Arc<PhaseCounters>>) {
     }
 }
 
+/// Tassonomia corrente, concetti testuali e versione del modello immagine.
+pub type ClipContext = (Arc<Taxonomy>, Arc<Vec<Concept>>, String);
+
 /// Concetti testuali e versione del modello immagine correnti, se CLIP è
 /// installato. Con la cache valida l'encoder di testo non viene caricato;
 /// il modello immagine non viene mai caricato.
-pub fn clip_context(
-    deps: &AiDeps,
-) -> AppResult<Option<(Arc<Taxonomy>, Arc<Vec<Concept>>, String)>> {
+pub fn clip_context(deps: &AiDeps) -> AppResult<Option<ClipContext>> {
     let (clip, _) = deps.ready_models();
     if clip.is_none() {
         return Ok(None);

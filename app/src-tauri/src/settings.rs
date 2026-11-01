@@ -15,17 +15,15 @@ pub(crate) fn retune_after_settings(previous: &Config, next: &Config) -> RetuneS
 /// Fasi di rivalutazione richieste da un salvataggio della tassonomia: solo
 /// se è cambiata almeno una soglia di gruppo o di categoria.
 pub(crate) fn retune_after_taxonomy(previous: &Taxonomy, next: &Taxonomy) -> RetuneSpec {
-    let thresholds = |t: &Taxonomy| -> Vec<(String, u32, Vec<(String, Option<u32>)>)> {
+    // (gruppo, categoria o "" per il gruppo, soglia)
+    let thresholds = |t: &Taxonomy| -> Vec<(String, String, Option<f32>)> {
         t.groups
             .iter()
-            .map(|g| {
-                (
-                    g.id.clone(),
-                    g.threshold.to_bits(),
+            .flat_map(|g| {
+                std::iter::once((g.id.clone(), String::new(), Some(g.threshold))).chain(
                     g.categories
                         .iter()
-                        .map(|c| (c.id.clone(), c.threshold.map(f32::to_bits)))
-                        .collect(),
+                        .map(|c| (g.id.clone(), c.id.clone(), c.threshold)),
                 )
             })
             .collect()
@@ -48,6 +46,7 @@ pub(crate) fn submit_retune(jobs: &JobManager, spec: RetuneSpec) -> AppResult<Op
 #[specta::specta]
 pub async fn save_settings(state: State<'_, AppState>, config: Config) -> AppResult<()> {
     config.validate()?;
+    crate::open_with::validate_apps(&config)?;
     if let Some(path) = &config.data_dir {
         pc_organize::paths::writable_destination(&state.store, path)?;
     }

@@ -99,6 +99,23 @@ pub fn library_ids(state: State<'_, AppState>, filter: LibraryFilter) -> AppResu
     Ok(state.store.read(|c| query::ids(c, &filter))?)
 }
 
+/// Sottocartelle di una sorgente (o di `parent`), un livello alla volta.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_folders(
+    state: State<'_, AppState>,
+    source_id: i64,
+    parent: Option<String>,
+) -> AppResult<Vec<query::FolderNode>> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(|c| query::list_folders(c, source_id, parent.as_deref()))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn media_detail(state: State<'_, AppState>, id: MediaId) -> AppResult<MediaDetail> {

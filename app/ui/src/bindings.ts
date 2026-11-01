@@ -34,6 +34,8 @@ export const commands = {
 	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
 	/**  Tutti gli id del filtro corrente ("Seleziona tutto"). */
 	libraryIds: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("library_ids", { filter }),
+	/**  Sottocartelle di una sorgente (o di `parent`), un livello alla volta. */
+	listFolders: (sourceId: number, parent: string | null) => __TAURI_INVOKE<FolderNode[]>("list_folders", { sourceId, parent }),
 	mediaDetail: (id: number) => __TAURI_INVOKE<MediaDetail>("media_detail", { id }),
 	listCatalogs: () => __TAURI_INVOKE<CatalogSummary[]>("list_catalogs"),
 	systemInfo: () => __TAURI_INVOKE<SystemInfo>("system_info"),
@@ -139,6 +141,19 @@ export const commands = {
 	 *  diverse) calcolato dai risultati salvati, senza scrivere.
 	 */
 	previewThresholds: (thresholds: AiThresholds, taxonomy: Taxonomy | null) => __TAURI_INVOKE<ThresholdImpact>("preview_thresholds", { thresholds, taxonomy }),
+	suggestPlaces: (prefix: string) => __TAURI_INVOKE<PlaceSuggestion[]>("suggest_places", { prefix }),
+	/**  Rinomina un luogo per tutte le foto che lo hanno (annullabile). */
+	renamePlace: (from: string, to: string) => __TAURI_INVOKE<BulkOutcome>("rename_place", { from, to }),
+	/**
+	 *  Ricalcola i luoghi dedotti dalle cartelle con le cartelle da ignorare
+	 *  correnti; manuali e GPS restano. Restituisce le foto cambiate.
+	 */
+	recomputePlaces: () => __TAURI_INVOKE<number>("recompute_places"),
+	/**
+	 *  Apre i file con l'app predefinita, un'applicazione esterna o il file
+	 *  manager. Oltre [`MAX_FILES`] file serve `confirmed`.
+	 */
+	openWith: (ids: number[], target: OpenTarget, confirmed: boolean) => __TAURI_INVOKE<OpenOutcome>("open_with", { ids, target, confirmed }),
 	onboardingDone: () => __TAURI_INVOKE<boolean>("onboarding_done"),
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
@@ -213,7 +228,9 @@ export type BulkAction = { action: "add_tag"; name: string;
 /**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
 exclusive?: string[] } | { action: "remove_tag"; name: string } | 
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
-{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | { action: "remove_library" };
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+/**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
+{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
 export type BulkOutcome = {
 	/**  Elementi effettivamente modificati. */
@@ -438,6 +455,22 @@ export type Facets = {
 	tags: FacetValue[],
 };
 
+/**  Filtro per cartella sul percorso dei file. */
+export type FolderFilter = {
+	path: string,
+	/**  Includere i file delle sottocartelle. */
+	recursive: boolean,
+};
+
+/**  Cartella dell'albero di una sorgente. */
+export type FolderNode = {
+	path: string,
+	name: string,
+	/**  File contenuti, sottocartelle incluse. */
+	items: number,
+	hasChildren: boolean,
+};
+
 export type Format = "csv" | "json";
 
 export type GovernorSnapshot = {
@@ -611,6 +644,8 @@ export type LibraryFilter = {
 	duplicatesOnly?: boolean,
 	/**  Regola smart aggiuntiva (anteprima nell'editor dei cataloghi). */
 	rule?: Value | null,
+	/**  Cartella (con o senza sottocartelle). */
+	folder?: FolderFilter | null,
 };
 
 export type Location = {
@@ -715,6 +750,25 @@ export type NewSource = {
 	watch: boolean,
 };
 
+/**  Esito di [`open_with`]. */
+export type OpenOutcome = {
+	/**  File aperti. */
+	opened: number,
+	/**  Troppi file: serve la conferma dell'utente. */
+	needsConfirmation: boolean,
+};
+
+/**  Dove aprire i file. */
+export type OpenTarget = 
+/**  Applicazione predefinita del sistema per il formato. */
+{ kind: "system" } | 
+/**  Applicazione esterna configurata. */
+{ kind: "app"; id: string } | 
+/**  File manager sulla cartella, con il file evidenziato dove possibile. */
+{ kind: "reveal" } | 
+/**  Azione del doppio clic scelta nelle impostazioni. */
+{ kind: "double_click" };
+
 export type Organization = {
 	id: number,
 	dest: string,
@@ -767,6 +821,24 @@ export type PhaseSnapshot = {
 };
 
 export type PhaseState = "pending" | "running" | "done";
+
+/**  Luogo scelto dall'utente (nome libero o località del dataset geografico). */
+export type PlaceInput = {
+	name: string,
+	country?: string | null,
+	lat?: number | null,
+	lon?: number | null,
+};
+
+/**  Luogo proposto durante la digitazione. */
+export type PlaceSuggestion = {
+	name: string,
+	country: string | null,
+	lat: number | null,
+	lon: number | null,
+	/**  Già presente in libreria (altrimenti dal dataset geografico). */
+	inLibrary: boolean,
+};
 
 export type Postprocessing = "normalized_embedding512" | "token_ids" | "person_nms" | "face_landmarks_nms" | "normalized_embedding128" | "city_index";
 
