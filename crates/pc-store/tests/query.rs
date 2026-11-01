@@ -181,12 +181,21 @@ fn combined_filters_and_keyset_pagination_on_100k() {
             )
         })
         .unwrap();
+    // La lista Luoghi ignora la propria selezione: restano tutti i luoghi.
+    assert_eq!(facets.places.total, 4);
+    assert!(facets.places.values.contains(&query::FacetValue {
+        value: "Roma".into(),
+        count: 25_000
+    }));
+    // Le altre liste applicano il filtro per luogo.
     assert_eq!(
-        facets.places,
-        vec![query::FacetValue {
-            value: "Roma".into(),
-            count: 25_000
-        }]
+        facets.labels[0]
+            .1
+            .values
+            .iter()
+            .map(|v| v.count)
+            .sum::<i64>(),
+        25_000
     );
     assert_eq!(facets.labels[0].0, "subject");
 }

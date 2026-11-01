@@ -226,6 +226,27 @@ pub fn library_facets(state: State<'_, AppState>, filter: LibraryFilter) -> AppR
     Ok(state.store.read(|c| query::facets(c, &filter))?)
 }
 
+/// Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine).
+#[tauri::command]
+#[specta::specta]
+pub async fn library_facet_values(
+    state: State<'_, AppState>,
+    filter: LibraryFilter,
+    facet: query::FacetKey,
+    search: Option<String>,
+    sort: query::FacetSort,
+    offset: u32,
+    limit: u32,
+) -> AppResult<query::FacetPage> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(|c| query::facet_values(c, &filter, &facet, search.as_deref(), sort, offset, limit))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 /// Tutti gli id del filtro corrente ("Seleziona tutto").
 #[tauri::command]
 #[specta::specta]

@@ -50,6 +50,8 @@ export const commands = {
 	libraryPage: (filter: LibraryFilter, sort: SortKey, after: Cursor | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, after, limit }),
 	libraryCount: (filter: LibraryFilter) => __TAURI_INVOKE<number>("library_count", { filter }),
 	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
+	/**  Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine). */
+	libraryFacetValues: (filter: LibraryFilter, facet: FacetKey, search: string | null, sort: FacetSort, offset: number, limit: number) => __TAURI_INVOKE<FacetPage>("library_facet_values", { filter, facet, search, sort, offset, limit }),
 	/**  Tutti gli id del filtro corrente ("Seleziona tutto"). */
 	libraryIds: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("library_ids", { filter }),
 	/**  Sottocartelle di una sorgente (o di `parent`), un livello alla volta. */
@@ -499,6 +501,31 @@ export type FaceView = {
 	personId: number | null,
 };
 
+/**  Una lista di filtro. */
+export type FacetKey = { kind: "label"; group: string } | { kind: "place" } | { kind: "year" } | { kind: "format" } | { kind: "tag" };
+
+/**
+ *  Valori di una lista di filtro: i principali (più quelli selezionati) e il
+ *  numero totale di voci.
+ */
+export type FacetList = {
+	values: FacetValue[],
+	total: number,
+};
+
+/**  Una pagina dell'elenco completo dei valori di una lista. */
+export type FacetPage = {
+	values: FacetValue[],
+	/**  Voci che corrispondono alla ricerca. */
+	total: number,
+};
+
+export type FacetSort = 
+/**  Per numero di foto (decrescente). */
+"count" | 
+/**  Alfabetico, senza maiuscole e accenti. */
+"name";
+
 export type FacetValue = {
 	value: string,
 	count: number,
@@ -506,12 +533,12 @@ export type FacetValue = {
 
 export type Facets = {
 	/**  gruppo → valori */
-	labels: ([string, FacetValue[]])[],
-	places: FacetValue[],
-	years: FacetValue[],
-	formats: FacetValue[],
-	people: FacetValue[],
-	tags: FacetValue[],
+	labels: ([string, FacetList])[],
+	places: FacetList,
+	years: FacetList,
+	formats: FacetList,
+	people: FacetList,
+	tags: FacetList,
 };
 
 /**  Filtro per cartella sul percorso dei file. */
