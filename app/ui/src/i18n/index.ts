@@ -7,6 +7,7 @@ import { screens } from "./screens";
 import { modules } from "./modules";
 import { tuning } from "./tuning";
 import { sources } from "./sources";
+import { entries } from "./entries";
 
 export type Language = "it" | "en";
 
@@ -20,6 +21,7 @@ void i18n.use(initReactI18next).init({
         ...modules.it,
         ...tuning.it,
         ...sources.it,
+        ...entries.it,
       },
     },
     en: {
@@ -30,6 +32,7 @@ void i18n.use(initReactI18next).init({
         ...modules.en,
         ...tuning.en,
         ...sources.en,
+        ...entries.en,
       },
     },
   },

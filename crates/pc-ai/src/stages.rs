@@ -102,7 +102,7 @@ impl ImportStage for ClipStage {
                 labels: result.labels,
                 embedding: result.embedding,
                 model: model_key(self.resources.entry(Role::ClassificationImage)?),
-                taxonomy: self.taxonomy.version,
+                taxonomy: self.taxonomy.analysis_version,
             })
         };
         match run() {

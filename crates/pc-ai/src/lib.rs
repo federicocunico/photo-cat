@@ -4,6 +4,7 @@ pub mod analyze;
 pub mod classify;
 pub mod clip;
 pub mod cluster;
+pub mod entries;
 pub mod face_analysis;
 pub mod face_crop;
 pub mod face_policy;

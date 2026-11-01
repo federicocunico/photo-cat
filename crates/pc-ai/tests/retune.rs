@@ -24,6 +24,7 @@ fn category(id: &str) -> Category {
 fn taxonomy() -> Taxonomy {
     Taxonomy {
         version: 1,
+        analysis_version: 1,
         groups: vec![Group {
             id: "subject".into(),
             label: "Tipo soggetto".into(),
@@ -139,6 +140,7 @@ fn raising_a_category_threshold_relabels_from_saved_embeddings() {
     // "b" passa a soglia propria 0,5: la tassonomia sale alla versione 2.
     let mut tuned = tax.clone();
     tuned.version = 2;
+    tuned.analysis_version = 2;
     tuned.groups[0].categories[1].threshold = Some(0.5);
     let concepts = concepts();
     let clip = ClipInputs {

@@ -66,3 +66,53 @@ it("imposta e ripristina il luogo sulla selezione", async () => {
     ),
   );
 });
+it("nuova voce in bulk: creata e assegnata alle 60 foto selezionate", async () => {
+  vi.clearAllMocks();
+  const ids = Array.from({ length: 60 }, (_, i) => i + 1);
+  useLibrary.setState({ filter: emptyFilter(), selected: ids });
+  commandsMock.getTaxonomy.mockResolvedValue({
+    version: 4,
+    groups: [
+      {
+        id: "subject",
+        label: "Tipo soggetto",
+        threshold: 0.25,
+        categories: [{ id: "fiori", label: "Fiori", enabled: true, prompts: ["flowers"] }],
+      },
+      {
+        id: "evento",
+        label: "Evento",
+        threshold: 0.25,
+        categories: [{ id: "laurea", label: "Laurea", enabled: true, prompts: [] }],
+      },
+    ],
+  } as never);
+  commandsMock.addCategory.mockResolvedValue({
+    group: "evento",
+    id: "gita_scolastica",
+    label: "Gita scolastica",
+    created: true,
+    job: 12,
+  } as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <BulkBar />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "set_label" } });
+  await screen.findByRole("option", { name: "Evento" });
+  fireEvent.change(screen.getByLabelText("Campo"), { target: { value: "evento" } });
+  expect(screen.getByRole("option", { name: "Laurea" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Valore azione"), { target: { value: "__new__" } });
+  fireEvent.click(screen.getByText("Conferma"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Il nome è obbligatorio");
+  fireEvent.change(screen.getByLabelText("Nome della nuova voce"), {
+    target: { value: "Gita scolastica" },
+  });
+  fireEvent.click(screen.getByText("Conferma"));
+  await waitFor(() =>
+    expect(commandsMock.addCategory).toHaveBeenCalledWith("evento", "Gita scolastica", [], ids),
+  );
+  expect(commandsMock.addCategory).toHaveBeenCalledTimes(1);
+  expect(commandsMock.startBulk).not.toHaveBeenCalled();
+});

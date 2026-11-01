@@ -155,6 +155,18 @@ export const commands = {
 	getTaxonomy: () => __TAURI_INVOKE<Taxonomy>("get_taxonomy"),
 	saveTaxonomy: (taxonomy: Taxonomy, expectedVersion: number) => __TAURI_INVOKE<null>("save_taxonomy", { taxonomy, expectedVersion }),
 	/**
+	 *  "Nuova voce…": crea nel gruppo una voce con questo nome (o riusa quella
+	 *  con lo stesso nome) e, con `assign_to`, la assegna come correzione manuale.
+	 */
+	addCategory: (group: string, label: string, prompts: string[], assignTo: number[] | null) => __TAURI_INVOKE<CategoryRef>("add_category", { group, label, prompts, assignTo }),
+	/**  Foto a cui è assegnata la voce (per la conferma dell'eliminazione). */
+	categoryUsage: (group: string, id: string) => __TAURI_INVOKE<number>("category_usage", { group, id }),
+	/**
+	 *  Elimina la voce e la toglie dalle foto (annullabile). Se era automatica,
+	 *  le catalogazioni si ricalcolano dagli embedding. Restituisce le foto toccate.
+	 */
+	deleteCategory: (group: string, id: string) => __TAURI_INVOKE<number>("delete_category", { group, id }),
+	/**
 	 *  Effetto di nuove soglie (e, se indicata, di una tassonomia con soglie
 	 *  diverse) calcolato dai risultati salvati, senza scrivere.
 	 */
@@ -290,6 +302,17 @@ export type Category = {
 	prompts: string[],
 	/**  Soglia propria della categoria; `None` = soglia del gruppo. */
 	threshold?: number | null,
+};
+
+/**  Voce creata o riusata, con il job che la assegna (se richiesto). */
+export type CategoryRef = {
+	group: string,
+	id: string,
+	label: string,
+	/**  `false` se esisteva già una voce con lo stesso nome. */
+	created: boolean,
+	/**  Job "Modifica selezione" che assegna la voce. */
+	job: number | null,
 };
 
 /**  Un gruppo del riepilogo: quanti file e (se non troppi) quali. */
@@ -1138,7 +1161,14 @@ export type TagSetView = {
 } & TagSet;
 
 export type Taxonomy = {
+	/**  Versione delle modifiche (concorrenza ottimistica): cresce a ogni salvataggio. */
 	version: number,
+	/**
+	 *  Versione dell'analisi automatica, registrata nei risultati CLIP: cambia
+	 *  solo quando cambia la parte della tassonomia che l'analisi usa. Assente
+	 *  nelle tassonomie salvate prima del campo (0 = uguale a `version`).
+	 */
+	analysisVersion?: number,
 	groups: Group[],
 };
 

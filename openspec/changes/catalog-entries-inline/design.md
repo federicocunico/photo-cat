@@ -68,3 +68,15 @@ Un hook `useLabelName()` (basato sulla query `["taxonomy"]` già esistente) rest
 ## Migration Plan
 
 Nessuna migrazione di `catalog.db`. Al primo caricamento della tassonomia `analysis_version = version`. Rollback: una versione precedente rifiuta le voci senza prompt in `validate()`. Prima del rollback vanno eliminate le voci manuali, oppure ripristinata la tassonomia predefinita da Impostazioni. Va documentato nelle note di rilascio.
+
+## Implementation Notes
+
+Decisioni prese durante l'implementazione:
+
+- **`analysis_version`**: il campo è `#[serde(default)]`. Il valore 0 delle tassonomie salvate prima del campo diventa `version` al caricamento. Il valore lo decide sempre `taxonomy::save`, che confronta la parte rilevante della tassonomia salvata e di quella nuova (`changes_analysis`) e ignora quello inviato dalla UI. La parte rilevante comprende soglie di gruppo e voci automatiche attive con prompt e soglia, senza ordine. I gruppi senza voci automatiche non contano, quindi anche la loro soglia è irrilevante.
+- **Rinomina**: `Taxonomy::rename` cambiava anche i prompt della voce, rigenerandoli dal nome. Ora cambia solo il nome, come richiede lo scenario "Rinomina del nome visualizzato".
+- **Rianalisi**: `retune_after_taxonomy` usa `changes_analysis`, così anche un prompt cambiato o una voce resa automatica avviano il job `retune`. Il job ricalcola le catalogazioni CLIP dagli embedding salvati e registra `analysis_version`. In Impostazioni l'avviso compare prima del salvataggio (confronto equivalente in `taxonomyEdit.ts`).
+- **Eliminazione annullabile**: `delete_category` salva la tassonomia e toglie le etichette nella stessa transazione (`taxonomy::save_with`). L'annullamento ripristina le etichette (`LabelsReplaced`) e reinserisce la voce nella tassonomia come nuova versione (nuova azione di undo `CategoryRemoved`, che lavora sul JSON in `settings_kv`). Una voce automatica ripristinata aumenta anche `analysis_version`.
+- **Nomi**: non esistevano traduzioni `labels.<id>`, quindi la UI mostrava gli id. Ora ci sono le traduzioni it/en delle 28 voci predefinite. `useLabelName` usa la traduzione solo se il nome nella tassonomia coincide con quello predefinito italiano; altrimenti la voce è stata rinominata o creata dall'utente e si mostra il suo nome. Lo stesso vale per i nomi dei gruppi.
+- **Rollback**: non esiste un comando "ripristina la tassonomia predefinita". La nota di rilascio (README) chiede quindi di eliminare le voci manuali, o di dare loro una descrizione, prima di tornare a una versione precedente.
+- **`facet-lists-expand`**: non è ancora unito. Le liste dei filtri in `Sidebar.tsx` passano il nome tramite `render` di `CheckList`; quando arriverà `FacetList` basterà passarle la stessa funzione.

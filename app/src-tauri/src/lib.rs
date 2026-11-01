@@ -6,6 +6,7 @@ mod demo;
 #[cfg(any(debug_assertions, feature = "e2e"))]
 mod dev;
 mod diagnostics;
+mod entries;
 mod events;
 mod identities;
 mod library;
@@ -157,6 +158,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
             settings::save_settings,
             settings::get_taxonomy,
             settings::save_taxonomy,
+            entries::add_category,
+            entries::category_usage,
+            entries::delete_category,
             settings::preview_thresholds,
             settings::reanalyze_below_floor,
             places::suggest_places,
