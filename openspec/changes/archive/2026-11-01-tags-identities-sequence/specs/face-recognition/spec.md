@@ -9,6 +9,10 @@ L'utente SHALL poter assegnare a una persona un'identità dell'archivio dell'app
 - **WHEN** l'utente collega un cluster all'identità "Giulia" e poi importa nuove foto in cui Giulia compare
 - **THEN** le nuove foto riportano "Persone: Giulia"
 
+#### Scenario: Volto sotto soglia
+- **WHEN** un nuovo volto ha somiglianza con "Giulia" inferiore alla soglia dell'identità (o, se non impostata, a quella configurata)
+- **THEN** il volto non viene associato automaticamente a "Giulia"
+
 #### Scenario: Riconoscimento in una libreria nuova
 - **WHEN** l'identità "Giulia" ha volti di riferimento e l'utente analizza una libreria nuova in cui Giulia compare
 - **THEN** i volti di Giulia vengono raggruppati in una persona collegata all'identità "Giulia" senza che l'utente la nomini
