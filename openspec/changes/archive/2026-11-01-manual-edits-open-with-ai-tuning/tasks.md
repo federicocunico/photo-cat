@@ -49,7 +49,7 @@
 
 - [x] 7.1 Sezione "Soglie AI" in `SettingsPage` (`ThresholdsSection`): persone, volti, dimensione minima, somiglianza; tabella gruppi/categorie con soglia ereditata visibile; anteprima da `preview_thresholds`; avviso e proposta di rianalisi sotto il pavimento; "Ripristina predefiniti". Verifica: test in `SettingsPage.test.tsx` per anteprima, valore non valido rifiutato e ripristino dei predefiniti.
 - [x] 7.2 Sezione "Applicazioni esterne" (`ExternalAppsSection`): aggiunta con file picker di `tauri-plugin-dialog`, argomenti, eliminazione, scelta dell'azione del doppio clic; campo "Cartelle da ignorare per il luogo" con proposta di ricalcolo. Verifica: test in `SettingsPage.test.tsx` per aggiunta, errore di eseguibile inesistente e scelta del doppio clic.
-- [ ] 7.3 Documentare nel `README.md` le soglie AI (significato, predefiniti, effetto senza rianalisi), la configurazione di "Apri con" con esempi per Windows/macOS/Linux e la correzione del luogo. Verifica: gli esempi di configurazione si caricano senza errori in un `config.toml` di prova.
+- [x] 7.3 Documentare nel `README.md` le soglie AI (significato, predefiniti, effetto senza rianalisi), la configurazione di "Apri con" con esempi per Windows/macOS/Linux e la correzione del luogo. Verifica: gli esempi di configurazione si caricano senza errori in un `config.toml` di prova.
 
 ## 8. Verifica d'insieme
 
