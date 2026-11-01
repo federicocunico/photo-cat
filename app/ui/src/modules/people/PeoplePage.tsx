@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Correction, type FaceView } from "../../lib/ipc";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
+import { WhoIs } from "../identities/WhoIs";
 
 export function FaceCrop({ face }: { face: FaceView }) {
   const [x, y, w, h] = face.bbox.map((v) => v ?? 0);
@@ -49,7 +50,6 @@ export function PeoplePage() {
   const [person, setPerson] = useState<number | null>(null);
   const [detail, setDetail] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
-  const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -84,7 +84,6 @@ export function PeoplePage() {
     setPerson(id);
     setDetail(true);
     setSelected([]);
-    setName(people.data?.find((p) => p.id === id)?.name ?? "");
   };
   return (
     <section style={{ overflow: "auto", padding: 24, flex: 1 }}>
@@ -114,21 +113,11 @@ export function PeoplePage() {
           <h2>{active?.name ?? t("people.all")}</h2>
           <div className="feature-actions">
             {person !== null && (
-              <>
-                <input
-                  className="field"
-                  aria-label={t("people.name")}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <button
-                  className="btn"
-                  disabled={busy || !name.trim()}
-                  onClick={() => void correct({ action: "rename", person, name })}
-                >
-                  {t("people.rename")}
-                </button>
-              </>
+              <WhoIs
+                person={person}
+                linked={active?.identityUid ? (active.name ?? null) : null}
+                onLinked={(p) => setPerson(p)}
+              />
             )}
             <select
               className="field"

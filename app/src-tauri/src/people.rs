@@ -75,8 +75,10 @@ pub async fn purge_faces(state: State<'_, AppState>) -> AppResult<()> {
     state.save_config(cfg)?;
     let db = state.store.clone();
     let crops = state.paths.face_crops();
+    let app_store = state.app_store.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        db.write(people::clear)?;
+        let app = app_store.clone();
+        db.write(move |c| people::clear_with_references(c, &app))?;
         // Anche i ritagli in cache sono dati dei volti.
         match std::fs::remove_dir_all(&crops) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),

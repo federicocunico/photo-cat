@@ -13,6 +13,10 @@ import { PeoplePage } from "./modules/people/PeoplePage";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
+import { TagsPage } from "./modules/tags/TagsPage";
+import { IdentitiesPage } from "./modules/identities/IdentitiesPage";
+import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
+import { ActiveSetStatus, TagsStatus } from "./modules/tags/TagStatus";
 import { Onboarding } from "./modules/onboarding/Onboarding";
 import { Placeholder } from "./modules/Placeholder";
 import { useLayout, type ModuleId } from "./store/layout";
@@ -31,8 +35,14 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <ModelsPage />;
     case "people":
       return <PeoplePage />;
+    case "identities":
+      return <IdentitiesPage />;
     case "catalogs":
       return <CatalogsPage />;
+    case "tags":
+      return <TagsPage />;
+    case "sequence":
+      return <SequencePage />;
     case "organize":
       return <OrganizePage />;
     case "settings":
@@ -81,7 +91,21 @@ export function App() {
     <AppShell banner={crash && <CrashBanner crash={crash} onDismiss={dismiss} />}>
       <ModuleView module={module} />
       {onboarding && <Onboarding onDone={() => setOnboarding(false)} />}
-      <StatusBar>{module === "library" && <LibraryStatus />}</StatusBar>
+      <StatusBar>
+        {module === "library" && (
+          <>
+            <LibraryStatus />
+            <ActiveSetStatus />
+          </>
+        )}
+        {module === "tags" && <TagsStatus />}
+        {module === "sequence" && (
+          <>
+            <SequenceStatus />
+            <ActiveSetStatus />
+          </>
+        )}
+      </StatusBar>
     </AppShell>
   );
 }

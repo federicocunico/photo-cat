@@ -9,7 +9,7 @@ use pc_ingest::thumb::ThumbCache;
 use pc_ingest::watch::SourceWatcher;
 use pc_jobs::manager::TickerHandle;
 use pc_jobs::JobManager;
-use pc_store::Store;
+use pc_store::{AppStore, Store};
 use std::sync::Arc;
 
 pub struct AppState {
@@ -18,6 +18,10 @@ pub struct AppState {
     pub face_policy: Arc<pc_ai::face_policy::FacePolicy>,
     pub diagnostics: Diagnostics,
     pub store: Store,
+    /// Archivio dell'app (`app.db`): identità e set di tag, indipendente dalla libreria.
+    pub app_store: AppStore,
+    /// Dipendenze delle analisi AI (gazetteer per i suggerimenti di fuso).
+    pub ai_deps: pc_ai::analyze::AiDeps,
     #[allow(dead_code)] // usato dai comandi di import e impostazioni (gruppi successivi)
     pub governor: MemoryGovernor,
     #[allow(dead_code)]

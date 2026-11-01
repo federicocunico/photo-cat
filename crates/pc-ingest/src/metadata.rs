@@ -19,6 +19,12 @@ pub struct ExifMeta {
     pub dpi: Option<(f64, f64)>,
     pub pixel_size: Option<(u32, u32)>,
     pub color_space: Option<String>,
+    /// Fuso dichiarato per `date_original` (OffsetTimeOriginal), in minuti.
+    pub offset_original: Option<i32>,
+    /// Fuso dichiarato per `date_create` (OffsetTimeDigitized, poi OffsetTime).
+    pub offset_create: Option<i32>,
+    /// Dispositivo normalizzato ("Apple iPhone 17 Pro Max", "Fujifilm X-T5").
+    pub device: Option<String>,
 }
 
 /// `Ok(None)` = nessun EXIF; `Err(CORRUPT_EXIF)` = EXIF presente ma illeggibile.
@@ -128,13 +134,22 @@ pub fn read_exif(path: &Path) -> AppResult<Option<ExifMeta>> {
         gps_lon: gps(Tag::GPSLongitude, Tag::GPSLongitudeRef, b'W'),
         raw: Some(serde_json::Value::Object(raw)),
     };
+    let digitized = text(Tag::DateTimeDigitized).and_then(|s| normalize_exif_date(&s));
+    let offset_create = if digitized.is_some() {
+        text(Tag::OffsetTimeDigitized).and_then(|s| parse_offset(&s))
+    } else {
+        text(Tag::OffsetTime).and_then(|s| parse_offset(&s))
+    };
+    let device = normalize_device(info.camera_make.as_deref(), info.camera_model.as_deref());
     Ok(Some(ExifMeta {
+        device,
+        offset_original: text(Tag::OffsetTimeOriginal).and_then(|s| parse_offset(&s)),
+        offset_create,
         info,
         orientation: uint(Tag::Orientation).filter(|o| (1..=8).contains(o)),
         date_original: text(Tag::DateTimeOriginal).and_then(|s| normalize_exif_date(&s)),
-        date_create: text(Tag::DateTimeDigitized)
-            .or_else(|| text(Tag::DateTime))
-            .and_then(|s| normalize_exif_date(&s)),
+        date_create: digitized
+            .or_else(|| text(Tag::DateTime).and_then(|s| normalize_exif_date(&s))),
         dpi,
         pixel_size,
         color_space: match uint(Tag::ColorSpace) {
@@ -143,6 +158,94 @@ pub fn read_exif(path: &Path) -> AppResult<Option<ExifMeta>> {
             _ => None,
         },
     }))
+}
+
+/// Fuso EXIF `±HH:MM` in minuti (`None` se assente o malformato).
+pub fn parse_offset(s: &str) -> Option<i32> {
+    let s = s.trim();
+    let (sign, rest) = match s.as_bytes().first()? {
+        b'+' => (1, &s[1..]),
+        b'-' => (-1, &s[1..]),
+        _ => return None,
+    };
+    let (h, m) = rest.split_once(':')?;
+    if h.len() != 2 || m.len() != 2 {
+        return None;
+    }
+    let (h, m): (i32, i32) = (h.parse().ok()?, m.parse().ok()?);
+    if h > 14 || m > 59 || (h == 14 && m > 0) {
+        return None;
+    }
+    Some(sign * (h * 60 + m))
+}
+
+/// Marca e modello in un nome di dispositivo leggibile: suffissi societari
+/// tolti, maiuscole sistemate, marca non ripetuta se il modello la contiene già.
+pub fn normalize_device(make: Option<&str>, model: Option<&str>) -> Option<String> {
+    let clean = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let make = make.map(clean).filter(|s| !s.is_empty()).map(|m| {
+        let mut words: Vec<&str> = m.split(' ').collect();
+        while words.len() > 1
+            && matches!(
+                words
+                    .last()
+                    .map(|w| w.trim_end_matches(['.', ',']).to_ascii_uppercase())
+                    .as_deref(),
+                Some(
+                    "CORPORATION"
+                        | "CORP"
+                        | "CO"
+                        | "LTD"
+                        | "INC"
+                        | "IMAGING"
+                        | "COMPANY"
+                        | "ELECTRONICS"
+                )
+            )
+        {
+            words.pop();
+        }
+        let joined = words.join(" ");
+        let has_lower = joined.chars().any(|c| c.is_lowercase());
+        let has_upper = joined.chars().any(|c| c.is_uppercase());
+        if has_lower && has_upper {
+            joined
+        } else {
+            // "FUJIFILM" → "Fujifilm", "samsung" → "Samsung".
+            joined
+                .split(' ')
+                .map(|w| {
+                    let mut c = w.chars();
+                    match c.next() {
+                        Some(f) => f
+                            .to_uppercase()
+                            .chain(c.flat_map(|x| x.to_lowercase()))
+                            .collect(),
+                        None => String::new(),
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(" ")
+        }
+    });
+    let model = model.map(clean).filter(|s| !s.is_empty());
+    match (make, model) {
+        (Some(mk), Some(md)) => {
+            if md.to_lowercase().starts_with(&mk.to_lowercase()) {
+                let rest = md[mk.len()..].trim();
+                Some(if rest.is_empty() {
+                    mk
+                } else {
+                    format!("{mk} {rest}")
+                })
+            } else {
+                Some(format!("{mk} {md}"))
+            }
+        }
+        (Some(mk), None) => Some(mk),
+        (None, Some(md)) => Some(md),
+        (None, None) => None,
+    }
 }
 
 /// `2023:07:14 10:22:01` → `2023-07-14 10:22:01` (scarta date non valide).
@@ -165,15 +268,17 @@ fn fs_time(t: std::io::Result<std::time::SystemTime>) -> Option<String> {
 /// Data di acquisizione (EXIF originale → EXIF creazione → file system) e di ultima modifica.
 pub fn resolve_dates(meta: &std::fs::Metadata, exif: Option<&ExifMeta>) -> MediaDates {
     let modified = fs_time(meta.modified());
-    let (captured_at, src) = match exif {
+    let (captured_at, src, offset) = match exif {
         Some(ExifMeta {
             date_original: Some(d),
+            offset_original,
             ..
-        }) => (Some(d.clone()), DateSource::ExifOriginal),
+        }) => (Some(d.clone()), DateSource::ExifOriginal, *offset_original),
         Some(ExifMeta {
             date_create: Some(d),
+            offset_create,
             ..
-        }) => (Some(d.clone()), DateSource::ExifCreate),
+        }) => (Some(d.clone()), DateSource::ExifCreate, *offset_create),
         _ => {
             // La data di creazione del file cambia con le copie: si prende la più vecchia.
             let created = fs_time(meta.created());
@@ -181,13 +286,15 @@ pub fn resolve_dates(meta: &std::fs::Metadata, exif: Option<&ExifMeta>) -> Media
                 (Some(c), Some(m)) => Some(c.min(m).clone()),
                 (c, m) => c.clone().or_else(|| m.clone()),
             };
-            (oldest, DateSource::FileSystem)
+            (oldest, DateSource::FileSystem, None)
         }
     };
     MediaDates {
         captured_source: captured_at.as_ref().map(|_| src),
         captured_at,
         modified_at: modified,
+        declared_offset_min: offset,
+        device: exif.and_then(|e| e.device.clone()),
     }
 }
 
@@ -403,6 +510,130 @@ pub(crate) mod tests {
         let d = resolve_dates(&std::fs::metadata(&p).unwrap(), None);
         assert_eq!(d.captured_source, Some(DateSource::FileSystem));
         assert!(d.captured_at.is_some() && d.modified_at.is_some());
+    }
+
+    #[test]
+    fn declared_offset_and_device_are_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("IMG_0042.JPG");
+        let fields = [
+            ascii(Tag::Make, "Apple"),
+            ascii(Tag::Model, "iPhone 17 Pro Max"),
+            ascii(Tag::DateTimeOriginal, "2026:08:19 10:44:12"),
+            ascii(Tag::OffsetTimeOriginal, "-06:00"),
+        ];
+        std::fs::write(&p, jpeg_with_exif(32, 32, &fields)).unwrap();
+        let e = read_exif(&p).unwrap().unwrap();
+        assert_eq!(e.offset_original, Some(-360));
+        assert_eq!(e.device.as_deref(), Some("Apple iPhone 17 Pro Max"));
+        let d = resolve_dates(&std::fs::metadata(&p).unwrap(), Some(&e));
+        assert_eq!(d.captured_at.as_deref(), Some("2026-08-19 10:44:12"));
+        assert_eq!(d.declared_offset_min, Some(-360));
+        assert_eq!(d.device.as_deref(), Some("Apple iPhone 17 Pro Max"));
+    }
+
+    #[test]
+    fn missing_or_malformed_offset_is_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let absent = tmp.path().join("a.jpg");
+        std::fs::write(
+            &absent,
+            jpeg_with_exif(
+                16,
+                16,
+                &[ascii(Tag::DateTimeOriginal, "2026:08:19 10:43:00")],
+            ),
+        )
+        .unwrap();
+        let e = read_exif(&absent).unwrap().unwrap();
+        assert_eq!(e.offset_original, None);
+        assert_eq!(e.device, None);
+        let bad = tmp.path().join("b.jpg");
+        std::fs::write(
+            &bad,
+            jpeg_with_exif(
+                16,
+                16,
+                &[
+                    ascii(Tag::DateTimeOriginal, "2026:08:19 10:43:00"),
+                    ascii(Tag::OffsetTimeOriginal, "+2h"),
+                ],
+            ),
+        )
+        .unwrap();
+        assert_eq!(read_exif(&bad).unwrap().unwrap().offset_original, None);
+        // Senza DateTimeOriginal si usa la data di digitalizzazione con il suo fuso.
+        let dig = tmp.path().join("c.jpg");
+        std::fs::write(
+            &dig,
+            jpeg_with_exif(
+                16,
+                16,
+                &[
+                    ascii(Tag::DateTimeDigitized, "2026:08:19 10:43:00"),
+                    ascii(Tag::OffsetTimeDigitized, "+02:00"),
+                    ascii(Tag::OffsetTime, "+05:00"),
+                ],
+            ),
+        )
+        .unwrap();
+        let e = read_exif(&dig).unwrap().unwrap();
+        let d = resolve_dates(&std::fs::metadata(&dig).unwrap(), Some(&e));
+        assert_eq!(d.captured_source, Some(DateSource::ExifCreate));
+        assert_eq!(d.declared_offset_min, Some(120));
+    }
+
+    #[test]
+    fn offsets_and_devices_are_normalized() {
+        assert_eq!(parse_offset("+02:00"), Some(120));
+        assert_eq!(parse_offset(" -07:00 "), Some(-420));
+        assert_eq!(parse_offset("+05:45"), Some(345));
+        assert_eq!(parse_offset("+14:00"), Some(840));
+        for bad in [
+            "", "02:00", "+2:00", "+15:00", "+02:60", "   :  ", "Z", "+02-00",
+        ] {
+            assert_eq!(parse_offset(bad), None, "{bad}");
+        }
+        let dev = |m: Option<&str>, n: Option<&str>| normalize_device(m, n);
+        assert_eq!(
+            dev(Some("FUJIFILM"), Some("X-T5")).as_deref(),
+            Some("Fujifilm X-T5")
+        );
+        assert_eq!(
+            dev(Some("Canon"), Some("Canon EOS R6")).as_deref(),
+            Some("Canon EOS R6")
+        );
+        assert_eq!(
+            dev(Some("NIKON CORPORATION"), Some("NIKON Z 6_2")).as_deref(),
+            Some("Nikon Z 6_2")
+        );
+        assert_eq!(
+            dev(Some("samsung"), Some("SM-S918B")).as_deref(),
+            Some("Samsung SM-S918B")
+        );
+        assert_eq!(
+            dev(Some("OLYMPUS IMAGING CORP.  "), Some("E-M10")).as_deref(),
+            Some("Olympus E-M10")
+        );
+        assert_eq!(dev(None, Some("  Pixel 9  ")).as_deref(), Some("Pixel 9"));
+        assert_eq!(dev(Some(" "), None), None);
+    }
+
+    #[test]
+    fn selftest_images_have_no_declared_offset() {
+        let dir =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/selftest");
+        for name in [
+            "group_3_faces.jpg",
+            "group_4_people.jpg",
+            "landscape_mountain.jpg",
+        ] {
+            let p = dir.join(name);
+            let e = read_exif(&p).unwrap();
+            let d = resolve_dates(&std::fs::metadata(&p).unwrap(), e.as_ref());
+            assert_eq!(d.declared_offset_min, None, "{name}");
+            assert!(d.captured_at.is_some(), "{name}");
+        }
     }
 
     #[test]

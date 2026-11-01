@@ -13,6 +13,36 @@ import {
   useLibrary,
 } from "../../store/library";
 import { thumbUrl } from "./thumbUrl";
+import { colorOf, useTagOverview } from "../tags/data";
+import { TagChip } from "../tags/TagChip";
+
+/** Chip dei tag in basso sulla miniatura (al massimo 3, poi "+N"). */
+export function ThumbTags({ tags, color }: { tags: string[]; color: (name: string) => string }) {
+  if (!tags.length) return null;
+  const shown = tags.slice(0, 3);
+  return (
+    <span
+      style={{
+        position: "absolute",
+        left: 6,
+        right: 34,
+        bottom: 6,
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 4,
+        overflow: "hidden",
+        maxHeight: 40,
+      }}
+    >
+      {shown.map((t) => (
+        <TagChip key={t} name={t} color={color(t)} compact />
+      ))}
+      {tags.length > shown.length && (
+        <TagChip name={`+${tags.length - shown.length}`} color="gray" compact />
+      )}
+    </span>
+  );
+}
 
 export const PAGE_SIZE = 300;
 const GAP = 12;
@@ -24,11 +54,13 @@ function Thumb({
   size,
   selected,
   onClick,
+  tagColor,
 }: {
   item: GridItem;
   size: number;
   selected: boolean;
   onClick: (e: MouseEvent) => void;
+  tagColor: (name: string) => string;
 }) {
   const { t } = useTranslation();
   const url = thumbUrl(item.thumb);
@@ -110,6 +142,7 @@ function Thumb({
               ? t("library.aiBadge")
               : t("library.queuedBadge")}
         </span>
+        <ThumbTags tags={item.tags} color={tagColor} />
         {selected && (
           <span
             aria-hidden="true"
@@ -154,6 +187,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const [width, setWidth] = useState(initialWidth ?? 800);
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
+  const tagInfo = useTagOverview().data;
+  const tagColor = (name: string) => colorOf(tagInfo, name);
 
   const pages = useInfiniteQuery({
     queryKey: ["library", filter, sort],
@@ -305,6 +340,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                 size={cell}
                 selected={selected.includes(it.id)}
                 onClick={onClick(it.id)}
+                tagColor={tagColor}
               />
             ))}
           </div>

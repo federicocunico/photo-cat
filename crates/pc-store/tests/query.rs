@@ -267,3 +267,23 @@ fn malicious_rules_are_rejected_and_tables_survive() {
     assert_eq!(s.read(|c| query::count(c, &f)).unwrap(), 0);
     assert_eq!(s.read(repo::media::count).unwrap(), 0);
 }
+
+#[test]
+fn grid_items_carry_their_tags() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = store(tmp.path());
+    db.write(|c| {
+        seed(c, 14);
+        c.execute("INSERT INTO tag(id, name) VALUES (2, 'Alba')", [])?;
+        c.execute("INSERT INTO media_tag(media_id, tag_id) VALUES (7, 2)", [])?;
+        Ok(())
+    })
+    .unwrap();
+    let page = db
+        .read(|c| query::page(c, &LibraryFilter::default(), SortKey::NameAsc, None, 50))
+        .unwrap();
+    let tags = |id: i64| page.items.iter().find(|i| i.id == id).unwrap().tags.clone();
+    assert_eq!(tags(7), vec!["Alba".to_string(), "mare".to_string()]);
+    assert_eq!(tags(14), vec!["mare".to_string()]);
+    assert!(tags(1).is_empty());
+}

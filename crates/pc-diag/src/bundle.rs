@@ -9,6 +9,8 @@ pub struct Bundle {
     pub models: Value,
     pub jobs: Value,
     pub errors: Value,
+    /// Riepilogo di `app.db` (solo conteggi: niente nomi né dati biometrici).
+    pub app_store: Value,
     pub logs: Vec<LogLine>,
 }
 pub const CONTENTS: &[&str] = &[
@@ -18,6 +20,7 @@ pub const CONTENTS: &[&str] = &[
     "models.json",
     "jobs.json",
     "errors.json",
+    "app-store.json",
     "recent-log.json",
 ];
 pub fn write(destination: &Path, bundle: Bundle) -> AppResult<()> {
@@ -61,6 +64,7 @@ pub fn write(destination: &Path, bundle: Bundle) -> AppResult<()> {
         bundle.models,
         bundle.jobs,
         bundle.errors,
+        bundle.app_store,
         json!(logs),
     ];
     {
@@ -101,6 +105,7 @@ mod tests {
                 models: json!([{ "id":"sface","version":"1"}]),
                 jobs: json!([]),
                 errors: json!([]),
+                app_store: json!({"schema_version":1,"identities":0}),
                 logs: vec![LogLine {
                     ts: chrono::Utc::now(),
                     level: "INFO".into(),

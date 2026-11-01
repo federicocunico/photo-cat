@@ -1,6 +1,7 @@
 //! Persistenza del catalogo di photo-cat su SQLite.
 
 pub mod analysis;
+pub mod app_store;
 pub mod bulk;
 pub mod db;
 pub mod detail;
@@ -11,7 +12,10 @@ pub mod people;
 pub mod query;
 pub mod repo;
 pub mod rules;
+pub mod sequence;
+pub mod timeline;
 
+pub use app_store::AppStore;
 pub use db::{Store, StoreOptions};
 
 use pc_core::{AppError, ErrorCode};
@@ -24,6 +28,8 @@ pub enum StoreError {
     Schema(String),
     #[error("dato non valido: {0}")]
     Invalid(String),
+    #[error("conflitto: {0}")]
+    Conflict(String),
     #[error("elemento non trovato: {0}")]
     NotFound(String),
     #[error("commit del batch fallito")]
@@ -50,7 +56,7 @@ impl From<serde_json::Error> for StoreError {
 impl From<StoreError> for AppError {
     fn from(e: StoreError) -> Self {
         let code = match &e {
-            StoreError::Invalid(_) => ErrorCode::InvalidInput,
+            StoreError::Invalid(_) | StoreError::Conflict(_) => ErrorCode::InvalidInput,
             StoreError::NotFound(_) => ErrorCode::NotFound,
             _ => ErrorCode::Database,
         };

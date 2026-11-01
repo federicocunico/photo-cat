@@ -1,6 +1,8 @@
 //! Ingestione dei file nella libreria di photo-cat.
 
+pub mod backfill;
 pub mod formats;
+pub mod full;
 pub mod hash;
 pub mod heif;
 pub mod import;

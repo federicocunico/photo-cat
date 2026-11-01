@@ -9,6 +9,9 @@ export const en: Messages = {
   modules: {
     library: "Library",
     catalogs: "Catalogs",
+    tags: "Tags",
+    sequence: "Sequence",
+    identities: "Identities",
     people: "People",
     import: "Import",
     jobs: "Jobs",
@@ -75,6 +78,12 @@ export const en: Messages = {
       verifica: "Model check",
       download: "Download",
       self_test: "Self-test",
+      orari: "Times and time zones",
+      preparazione: "Preflight check",
+      codifica: "Encoding",
+      per_tag: "Per-tag folders",
+      manifest: "Manifest",
+      archivi: "Zip archives",
     },
     states: {
       queued: "Queued",

@@ -7,8 +7,11 @@ import type { Language } from "../i18n";
 
 export type ModuleId =
   | "library"
+  | "sequence"
   | "catalogs"
+  | "tags"
   | "people"
+  | "identities"
   | "import"
   | "jobs"
   | "organize"

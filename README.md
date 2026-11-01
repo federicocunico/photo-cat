@@ -115,18 +115,37 @@ cargo run -p pc-ai --example benchmark_detector -- yolox
 cargo run -p pc-ai --example benchmark_detector -- rtdetr target/model-bench/rtdetr_r18vd.onnx
 ```
 
+## Tag, identità e sequenza
+
+- **Tag**: elenco dei tag della libreria con conteggi, rinomina, unione, eliminazione (annullabili) e colore; **set di tag** con tasti rapidi 1–9, eventualmente esclusivi. Il set attivo assegna i tag da tastiera in Libreria e Sequenza (0 rimuove i tag del set).
+- **Identità**: persone note all'app (nome, nome breve per i file, alias, gruppo, soglia di somiglianza, volti di riferimento). In ogni libreria i gruppi di volti si collegano alle identità dal campo "Chi è?" di Persone; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova. Esportazione e importazione in un file JSON, con o senza volti.
+- **Sequenza**: le foto di un ambito (libreria, catalogo, selezione) in ordine di istante reale, divise in sessioni. Per ogni gruppo di sorgente (dispositivo + fuso dichiarato) si possono impostare l'ora locale mostrata e uno scostamento dell'orologio, allineare due foto dello stesso momento e accettare i suggerimenti di fuso ricavati dal GPS; le foto senza data si collocano trascinandole. Le correzioni stanno nel catalogo: gli originali non vengono mai modificati.
+- **Export della sequenza**: copie rinominate con un modello di nome (`{seq:04d}_{date}_{time}_{tag}` e altri token), cartelle `sequenza/` e `per-tag/<Tag>/` (hard link quando possibile), `manifest.csv` e due zip non compressi. Il JPEG è ricodificato a qualità 97 con crominanza 4:4:4, verificato con SSIM/PSNR e ricodificato fino a 100 se serve; profilo ICC, risoluzione e orientamento vengono preservati e i metadati corretti scritti nelle copie.
+
+### Archivio dell'app (`app.db`)
+
+Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che **non segue** la cartella dati scelta nelle impostazioni, così sopravvivono a cambi di libreria:
+
+| Sistema | Percorso |
+|---|---|
+| Windows | `%APPDATA%\photocat\photo-cat\config\app.db` |
+| Linux | `~/.config/photo-cat/app.db` |
+| `PHOTO_CAT_DATA_DIR` impostata | `<radice>/app/app.db` (installazioni portabili e prove) |
+
+`app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; la schermata Identità mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
+
 ## Struttura
 
 | Percorso | Contenuto |
 |---|---|
 | `crates/pc-core` | tipi di dominio, errori con codici, configurazione |
-| `crates/pc-store` | database SQLite, migrazioni, query |
+| `crates/pc-store` | database SQLite (catalogo e archivio dell'app `app.db`), migrazioni, query, istante reale e sequenza |
 | `crates/pc-diag` | log, registro errori, panic hook, pacchetto diagnostico |
 | `crates/pc-governor` | rilevamento RAM/CPU e budget di memoria |
 | `crates/pc-jobs` | motore dei job a fasi e progresso |
-| `crates/pc-ingest` | scansione, metadati, EXIF, hash, miniature |
+| `crates/pc-ingest` | scansione, metadati, EXIF (fuso e dispositivo), hash, miniature, decodifica a piena risoluzione |
 | `crates/pc-models` | manifest, download e verifica dei modelli |
-| `crates/pc-ai` | classificazione, persone, volti, geolocalizzazione |
-| `crates/pc-organize` | export CSV/JSON e organizzazione in cartelle |
+| `crates/pc-ai` | classificazione, persone, volti e volti di riferimento, geolocalizzazione e fuso dal GPS |
+| `crates/pc-organize` | export CSV/JSON, organizzazione in cartelle, export della sequenza |
 | `app/src-tauri` | shell desktop Tauri |
 | `app/ui` | interfaccia React |

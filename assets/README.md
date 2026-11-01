@@ -8,7 +8,7 @@ Modelli, runtime e dati sono versionati nel repository (ogni file < 100 MB, limi
 | `models/yolox-tiny/yolox_tiny.onnx` | [Megvii-BaseDetection/YOLOX release 0.1.1rc0](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0) | Apache-2.0 |
 | `models/yunet/face_detection_yunet_2023mar.onnx` | [OpenCV Zoo · YuNet](https://huggingface.co/opencv/face_detection_yunet) | MIT |
 | `models/sface/face_recognition_sface_2021dec.onnx` | [OpenCV Zoo · SFace](https://huggingface.co/opencv/face_recognition_sface) | Apache-2.0 |
-| `models/geo/cities15000.tsv` | Derivato da GeoNames `cities15000.zip` + nomi italiani da `alternateNamesV2.zip` (scaricati il 2026-10-30) | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), © GeoNames |
+| `models/geo/cities15000.tsv` | Derivato da GeoNames `cities15000.zip` + nomi italiani da `alternateNamesV2.zip` (scaricati il 2026-10-30); colonna del fuso orario da `cities15000.zip` scaricato il 2026-11-01 | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), © GeoNames |
 | `runtime/win-x64/onnxruntime.dll`, `onnxruntime_providers_shared.dll` | NuGet `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 | MIT (`licenses/onnxruntime-*`) |
 | `runtime/linux-x64/libonnxruntime.so` | `libonnxruntime.so.1.24.4` dal pacchetto ufficiale [`onnxruntime-linux-x64-1.24.4.tgz`](https://github.com/microsoft/onnxruntime/releases/tag/v1.24.4) (solo CPU), SHA-256 `d132535d051344ff5c64c9c200004150559049a81ed330eb4422c1962fb6b7e4` | MIT (`licenses/onnxruntime-*`) |
 | `runtime/win-x64/DirectML.dll` | NuGet `Microsoft.AI.DirectML` 1.15.4 | Microsoft DirectML (`licenses/DirectML-*`), ridistribuibile all'interno di applicazioni |
@@ -18,6 +18,8 @@ Modelli, runtime e dati sono versionati nel repository (ogni file < 100 MB, limi
 ## Formato di `geo/cities15000.tsv`
 
 Una riga per città con più di 15.000 abitanti, separatore tabulazione, senza intestazione:
-`geonameid · nome · nome italiano (vuoto se assente) · latitudine · longitudine · paese ISO · codice admin1 · popolazione`.
+`geonameid · nome · nome italiano (vuoto se assente) · latitudine · longitudine · paese ISO · codice admin1 · popolazione · fuso IANA`.
 
-Il file derivato non ha un URL pubblico stabile (GeoNames aggiorna i dump ogni giorno): per rigenerarlo si ripete l'estrazione descritta sopra e si aggiorna lo SHA-256 nel manifest.
+Il fuso IANA (es. `Europe/Rome`) è la colonna `timezone` (la diciottesima) del dump GeoNames, unita per `geonameid`; serve a suggerire l'ora locale delle foto a partire dal GPS. Il lettore accetta anche file senza questa colonna.
+
+Il file derivato non ha un URL pubblico stabile (GeoNames aggiorna i dump ogni giorno): per rigenerarlo si ripete l'estrazione descritta sopra (le prime otto colonne da `cities15000.txt` e `alternateNamesV2.txt`, la nona dalla colonna `timezone` di `cities15000.txt`) e si aggiorna lo SHA-256 nel manifest.

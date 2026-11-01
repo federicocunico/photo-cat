@@ -281,7 +281,7 @@ fn full_import_incremental_rescan_moves_and_missing() {
 
     // --- spostamento + cancellazione
     e.store
-        .write(move |c| bulk::add_tag(c, "vacanze", &[a.id]).map(|_| ()))
+        .write(move |c| bulk::add_tag(c, "vacanze", &[a.id], &[]).map(|_| ()))
         .unwrap();
     let from = e.root.join("2023/Toscana/IMG_0001.JPG");
     let to = e.root.join("2023/Archivio/IMG_0001.JPG");
