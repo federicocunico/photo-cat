@@ -5,13 +5,14 @@ import { it } from "./it";
 import { features } from "./features";
 import { screens } from "./screens";
 import { modules } from "./modules";
+import { tuning } from "./tuning";
 
 export type Language = "it" | "en";
 
 void i18n.use(initReactI18next).init({
   resources: {
-    it: { translation: { ...it, ...features.it, ...screens.it, ...modules.it } },
-    en: { translation: { ...en, ...features.en, ...screens.en, ...modules.en } },
+    it: { translation: { ...it, ...features.it, ...screens.it, ...modules.it, ...tuning.it } },
+    en: { translation: { ...en, ...features.en, ...screens.en, ...modules.en, ...tuning.en } },
   },
   lng: "it",
   fallbackLng: "it",

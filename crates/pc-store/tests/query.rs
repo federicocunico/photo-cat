@@ -287,3 +287,172 @@ fn grid_items_carry_their_tags() {
     assert_eq!(tags(14), vec!["mare".to_string()]);
     assert!(tags(1).is_empty());
 }
+
+mod folders {
+    use super::*;
+    use pc_store::query::{FolderFilter, FolderNode};
+
+    /// Sorgente `D:\Foto` con un viaggio e le sottocartelle dei dispositivi.
+    fn library() -> (Connection, i64, Vec<i64>) {
+        let mut c = Connection::open_in_memory().unwrap();
+        pc_store::migrate::migrate(&mut c, None).unwrap();
+        let src = repo::source::insert(
+            &c,
+            &NewSource {
+                path: r"D:\Foto".into(),
+                recursive: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let files = [
+            r"D:\Foto\Viaggio Giappone\copertina.jpg",
+            r"D:\Foto\Viaggio Giappone\D7000\a.jpg",
+            r"D:\Foto\Viaggio Giappone\D7000\b.jpg",
+            r"D:\Foto\Viaggio Giappone\D7000\Scarti\c.jpg",
+            r"D:\Foto\Viaggio Giappone\Telefono\d.jpg",
+            r"D:\Foto\Viaggio Giappone 2\e.jpg",
+            r"D:\Foto\50%_sconto\f.jpg",
+            r"D:\Foto\50x_sconto\g.jpg",
+            r"D:\Foto\radice.jpg",
+        ];
+        let ids = files
+            .iter()
+            .map(|p| {
+                repo::media::upsert(
+                    &c,
+                    &NewMedia {
+                        source_id: Some(src),
+                        path: p.to_string(),
+                        name: p.rsplit('\\').next().unwrap().into(),
+                        ext: "jpg".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+            })
+            .collect();
+        (c, src, ids)
+    }
+
+    fn in_folder(c: &Connection, path: &str, recursive: bool) -> Vec<i64> {
+        let mut v = query::ids(
+            c,
+            &LibraryFilter {
+                folder: Some(FolderFilter {
+                    path: path.into(),
+                    recursive,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn folder_filter_with_and_without_subfolders() {
+        let (c, _, ids) = library();
+        // Scenario "Filtro per cartella con sottocartelle".
+        assert_eq!(
+            in_folder(&c, r"D:\Foto\Viaggio Giappone", true),
+            ids[..5].to_vec()
+        );
+        // Separatore finale e prefisso di un'altra cartella ("Viaggio Giappone 2").
+        assert_eq!(
+            in_folder(&c, r"D:\Foto\Viaggio Giappone\", true),
+            ids[..5].to_vec()
+        );
+        // Scenario "Filtro per cartella esatta".
+        assert_eq!(
+            in_folder(&c, r"D:\Foto\Viaggio Giappone\D7000", false),
+            vec![ids[1], ids[2]]
+        );
+        // `%` e `_` sono caratteri normali.
+        assert_eq!(in_folder(&c, r"D:\Foto\50%_sconto", true), vec![ids[6]]);
+        // "Seleziona tutto" usa gli stessi id del filtro.
+        let count = query::count(
+            &c,
+            &LibraryFilter {
+                folder: Some(FolderFilter {
+                    path: r"D:\Foto\Viaggio Giappone".into(),
+                    recursive: true,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(count, 5);
+        if cfg!(windows) {
+            assert_eq!(
+                in_folder(&c, r"d:\foto\viaggio giappone\d7000", false).len(),
+                2
+            );
+        } else {
+            assert!(in_folder(&c, r"d:\foto\viaggio giappone\d7000", false).is_empty());
+        }
+    }
+
+    #[test]
+    fn folder_tree_one_level_at_a_time_with_counts() {
+        let (c, src, _) = library();
+        let node = |n: &FolderNode| (n.name.clone(), n.items, n.has_children);
+        let top: Vec<_> = query::list_folders(&c, src, None)
+            .unwrap()
+            .iter()
+            .map(node)
+            .collect();
+        assert_eq!(
+            top,
+            vec![
+                ("50%_sconto".to_string(), 1, false),
+                ("50x_sconto".to_string(), 1, false),
+                ("Viaggio Giappone".to_string(), 5, true),
+                ("Viaggio Giappone 2".to_string(), 1, false),
+            ]
+        );
+        let trip = query::list_folders(&c, src, Some(r"D:\Foto\Viaggio Giappone")).unwrap();
+        assert_eq!(trip[0].path, r"D:\Foto\Viaggio Giappone\D7000");
+        assert_eq!(
+            trip.iter().map(node).collect::<Vec<_>>(),
+            vec![
+                ("D7000".to_string(), 3, true),
+                ("Telefono".to_string(), 1, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn folder_filter_uses_the_path_index() {
+        let (c, _, _) = library();
+        let frag = query::compile_filter(
+            &c,
+            &LibraryFilter {
+                folder: Some(FolderFilter {
+                    path: r"D:\Foto\Viaggio Giappone".into(),
+                    recursive: true,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let sql = format!(
+            "EXPLAIN QUERY PLAN SELECT m.id FROM media_item m WHERE {}",
+            frag.sql
+        );
+        let mut q = c.prepare(&sql).unwrap();
+        let plan: Vec<String> = q
+            .query_map(rusqlite::params_from_iter(frag.args), |r| {
+                r.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            plan.iter()
+                .any(|p| p.contains("INDEX sqlite_autoindex_media_item") && p.contains("path>")),
+            "{plan:?}"
+        );
+    }
+}

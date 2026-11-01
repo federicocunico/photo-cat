@@ -11,6 +11,7 @@ pub mod faces;
 pub mod geo;
 pub mod models_job;
 pub mod persons;
+pub mod retune;
 pub mod schedule;
 pub mod selftest;
 pub mod stages;

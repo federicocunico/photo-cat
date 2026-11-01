@@ -11,6 +11,9 @@ import {
   type LogLevel,
 } from "../../lib/ipc";
 import { useLayout } from "../../store/layout";
+import { cleanSettings } from "./cleanSettings";
+import { ExternalAppsSection } from "./ExternalAppsSection";
+import { ThresholdsSection } from "./ThresholdsSection";
 export function SettingsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -60,13 +63,26 @@ export function SettingsPage() {
   };
   if (!cfg) return <p style={{ padding: 24 }}>{t("settings.loading")}</p>;
   const save = async () => {
-    await commands.saveSettings(cfg);
+    const clean = cleanSettings(cfg);
+    await commands.saveSettings(clean);
     useLayout.getState().setTheme(cfg.ui.theme);
     useLayout.getState().setLanguage(cfg.ui.language);
+    const before = (config.data as Settings | undefined)?.ai.ignored_folder_names ?? [];
     await qc.invalidateQueries({ queryKey: ["config"] });
     await qc.invalidateQueries({ queryKey: ["system"] });
     await qc.invalidateQueries({ queryKey: ["taxonomy"] });
     setNotice(t("settings.saved"));
+    // Cartelle da ignorare cambiate: si propone il ricalcolo dei luoghi da cartella.
+    const after = clean.ai.ignored_folder_names ?? [];
+    if (
+      JSON.stringify(before) !== JSON.stringify(after) &&
+      window.confirm(t("externalApps.recomputeConfirm"))
+    ) {
+      const n = await commands.recomputePlaces();
+      await qc.invalidateQueries({ queryKey: ["facets"] });
+      await qc.invalidateQueries({ queryKey: ["library"] });
+      setNotice(t("externalApps.recomputed", { count: n }));
+    }
   };
   return (
     <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
@@ -163,18 +179,6 @@ export function SettingsPage() {
           />
           {t("settings.faces")}
         </label>
-        <label>
-          {t("settings.faceSize")}{" "}
-          <input
-            className="field"
-            type="number"
-            min={8}
-            value={cfg.ai.face_min_size_px}
-            onChange={(e) =>
-              setCfg({ ...cfg, ai: { ...cfg.ai, face_min_size_px: Number(e.target.value) } })
-            }
-          />
-        </label>
         <button
           className="btn"
           disabled={busy}
@@ -242,10 +246,19 @@ export function SettingsPage() {
           />
         </label>
         <p className="muted">{t("settings.pathHint")}</p>
-        <button className="btn" disabled={busy} onClick={() => void run(save)}>
-          {t("people.save")}
-        </button>
       </div>
+      <ThresholdsSection
+        cfg={cfg}
+        setCfg={setCfg}
+        tax={tax}
+        setTax={setTax}
+        saved={config.data as Settings}
+        savedTax={taxonomy.data}
+      />
+      <ExternalAppsSection cfg={cfg} setCfg={setCfg} />
+      <button className="btn" disabled={busy} onClick={() => void run(save)}>
+        {t("people.save")}
+      </button>
       {tax && (
         <>
           <h2>{t("settings.taxonomy")}</h2>
@@ -253,25 +266,6 @@ export function SettingsPage() {
           {tax.groups.map((g, gi) => (
             <fieldset key={g.id} style={{ margin: "16px 0", border: "1px solid var(--pc-border)" }}>
               <legend>{g.label}</legend>
-              <label>
-                {t("settings.groupThreshold")}{" "}
-                <input
-                  className="field"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={g.threshold ?? 0}
-                  onChange={(e) =>
-                    setTax({
-                      ...tax,
-                      groups: tax.groups.map((v, i) =>
-                        i === gi ? { ...v, threshold: Number(e.target.value) } : v,
-                      ),
-                    })
-                  }
-                />
-              </label>
               {g.categories.map((c, ci) => (
                 <div className="feature-actions" key={c.id}>
                   <input

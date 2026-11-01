@@ -45,6 +45,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.22"
 chrono-tz = "0.10"
 tempfile.workspace = true
+tauri-plugin-opener = "2"
 
 [target.'cfg(windows)'.dependencies]
 # Stesse versioni usate da Tauri/wry: servono solo per verificare il runtime WebView2 all'avvio.

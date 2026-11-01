@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import type React from "react";
 import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type FacetValue, type LibraryFilter } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
+import { RenamePlaceDialog } from "./RenamePlaceDialog";
 
 function Row({
   label,
@@ -72,31 +74,49 @@ function CheckList({
   selected,
   onToggle,
   render = (v) => v,
+  onRename,
 }: {
   values: FacetValue[];
   selected: string[];
   onToggle: (v: string) => void;
   render?: (v: string) => string;
+  /** Voce "Rinomina…" accanto a ogni valore. */
+  onRename?: (f: FacetValue) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       {values.slice(0, 12).map((f) => (
-        <label key={f.value} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            type="checkbox"
-            checked={selected.includes(f.value)}
-            onChange={() => onToggle(f.value)}
-          />
-          <span
-            title={render(f.value)}
-            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-          >
-            {render(f.value)}
-          </span>
-          <span className="muted" style={{ marginLeft: "auto" }}>
-            {fmtInt(f.count)}
-          </span>
-        </label>
+        <div key={f.value} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+            <input
+              type="checkbox"
+              checked={selected.includes(f.value)}
+              onChange={() => onToggle(f.value)}
+            />
+            <span
+              title={render(f.value)}
+              style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {render(f.value)}
+            </span>
+            <span className="muted" style={{ marginLeft: "auto" }}>
+              {fmtInt(f.count)}
+            </span>
+          </label>
+          {onRename && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: "0 4px", fontSize: 12 }}
+              title={t("place.rename")}
+              aria-label={t("place.renameOf", { name: f.value })}
+              onClick={() => onRename(f)}
+            >
+              ✎
+            </button>
+          )}
+        </div>
       ))}
     </>
   );
@@ -105,10 +125,77 @@ function CheckList({
 const toggle = (list: string[], v: string) =>
   list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 
+/** Sottocartelle di una sorgente (o cartella), caricate un livello alla volta. */
+function FolderTree({
+  sourceId,
+  parent,
+  depth,
+}: {
+  sourceId: number;
+  parent: string | null;
+  depth: number;
+}) {
+  const { t } = useTranslation();
+  const filter = useLibrary((s) => s.filter);
+  const setFilter = useLibrary((s) => s.setFilter);
+  const recursive = useLibrary((s) => s.folderRecursive);
+  const [open, setOpen] = useState<string[]>([]);
+  const folders = useQuery({
+    queryKey: ["folders", sourceId, parent],
+    queryFn: () => commands.listFolders(sourceId, parent),
+    enabled: isTauri(),
+  });
+  return (
+    <>
+      {(folders.data ?? []).map((f) => {
+        const expanded = open.includes(f.path);
+        return (
+          <div key={f.path}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ width: 8 + depth * 12, flexShrink: 0 }} />
+              {f.hasChildren ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                  aria-expanded={expanded}
+                  aria-label={t(expanded ? "folders.collapse" : "folders.expand", { name: f.name })}
+                  onClick={() => setOpen(toggle(open, f.path))}
+                >
+                  {expanded ? "▾" : "▸"}
+                </button>
+              ) : (
+                <span style={{ width: 20, flexShrink: 0 }} />
+              )}
+              <Row
+                mono
+                title={f.path}
+                label={f.name}
+                count={f.items}
+                active={filter.folder?.path === f.path}
+                onClick={() =>
+                  setFilter({
+                    folder: filter.folder?.path === f.path ? null : { path: f.path, recursive },
+                  })
+                }
+              />
+            </div>
+            {expanded && <FolderTree sourceId={sourceId} parent={f.path} depth={depth + 1} />}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function LibrarySidebar() {
   const { t } = useTranslation();
   const filter = useLibrary((s) => s.filter);
   const setFilter = useLibrary((s) => s.setFilter);
+  const folderRecursive = useLibrary((s) => s.folderRecursive);
+  const setFolderRecursive = useLibrary((s) => s.setFolderRecursive);
+  const [openSources, setOpenSources] = useState<number[]>([]);
+  const [renaming, setRenaming] = useState<FacetValue | null>(null);
   const sources = useQuery({
     queryKey: ["sources"],
     queryFn: commands.listSources,
@@ -142,25 +229,59 @@ export function LibrarySidebar() {
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
       <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h2 className="section-title">{t("library.sources")}</h2>
-        {(sources.data ?? []).map(({ source, items }) => (
-          <Row
-            key={source.id}
-            mono
-            title={source.path}
-            label={source.path
-              .split(/[\\/]/)
-              .filter(Boolean)
-              .slice(-2)
-              .join(source.path.includes("\\") ? "\\" : "/")}
-            count={items}
-            active={(filter.sourceIds ?? []).includes(source.id)}
-            onClick={() =>
-              setFilter({
-                sourceIds: (filter.sourceIds ?? []).includes(source.id) ? [] : [source.id],
-              })
-            }
-          />
-        ))}
+        {(sources.data ?? []).map(({ source, items }) => {
+          const label = source.path
+            .split(/[\\/]/)
+            .filter(Boolean)
+            .slice(-2)
+            .join(source.path.includes("\\") ? "\\" : "/");
+          const expanded = openSources.includes(source.id);
+          return (
+            <div key={source.id}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                  aria-expanded={expanded}
+                  aria-label={t(expanded ? "folders.collapse" : "folders.expand", { name: label })}
+                  onClick={() =>
+                    setOpenSources(
+                      expanded
+                        ? openSources.filter((x) => x !== source.id)
+                        : [...openSources, source.id],
+                    )
+                  }
+                >
+                  {expanded ? "▾" : "▸"}
+                </button>
+                <Row
+                  mono
+                  title={source.path}
+                  label={label}
+                  count={items}
+                  active={(filter.sourceIds ?? []).includes(source.id)}
+                  onClick={() =>
+                    setFilter({
+                      sourceIds: (filter.sourceIds ?? []).includes(source.id) ? [] : [source.id],
+                    })
+                  }
+                />
+              </div>
+              {expanded && <FolderTree sourceId={source.id} parent={null} depth={0} />}
+            </div>
+          );
+        })}
+        {openSources.length > 0 && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={folderRecursive}
+              onChange={(e) => setFolderRecursive(e.target.checked)}
+            />
+            {t("folders.includeSub")}
+          </label>
+        )}
       </section>
       <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <h2 className="section-title">{t("library.catalogs")}</h2>
@@ -206,7 +327,17 @@ export function LibrarySidebar() {
               values={facets.data!.places}
               selected={filter.places ?? []}
               onToggle={(v) => setFilter({ places: toggle(filter.places ?? [], v) })}
+              onRename={setRenaming}
             />
+            {renaming && (
+              <RenamePlaceDialog
+                key={renaming.value}
+                from={renaming.value}
+                count={renaming.count}
+                places={facets.data!.places}
+                onClose={() => setRenaming(null)}
+              />
+            )}
           </>
         )}
         {(facets.data?.years.length ?? 0) > 0 && (

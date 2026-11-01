@@ -23,6 +23,7 @@ Scorciatoie (GNU Make: su Windows da cmd o Git Bash, su Linux dal terminale):
 | `make dev` (o `make run`) | avvio locale in debug: Vite + finestra Tauri con ricarica |
 | `make build` | test di build come la CI: setup NSIS in `target/release/bundle/nsis` su Windows, `.deb` e `.tar.gz` con SHA-256 in `target/release/dist` su Linux |
 | `make test` | fmt, clippy, test Rust e UI (i test non girano in CI) |
+| `make test-linux` | da Windows o macOS, con Docker: ripete in un container Ubuntu 22.04 i passi della CI Linux (build UI, fmt, clippy, test Rust, `.deb` e `.tar.gz`) sullo stato corrente del repository, file nuovi compresi se in stage; `SKIP_PACKAGE=1` salta i pacchetti |
 | `make release` | crea e pubblica il tag `v<versione>` di `tauri.conf.json`: la GitHub Action pubblica la release con installer Windows, pacchetti Linux e SHA-256 |
 
 Per una nuova versione aggiornare prima `version` in `Cargo.toml` e in `app/src-tauri/tauri.conf.json` (devono coincidere: la pipeline lo verifica).
@@ -133,6 +134,94 @@ Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che
 | `PHOTO_CAT_DATA_DIR` impostata | `<radice>/app/app.db` (installazioni portabili e prove) |
 
 `app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; la schermata Identità mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
+
+## Luogo, cartelle, "Apri con" e soglie AI
+
+Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni → Percorso dati): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.
+
+### Correzione del luogo
+
+- **Una foto**: nell'Inspector il campo Luogo suggerisce i luoghi già presenti in libreria e le località del dataset geografico offline. Il luogo scelto diventa una correzione **manuale**: le analisi successive non lo modificano. "Ripristina automatico" torna al luogo dedotto da GPS o cartella.
+- **Più foto**: azione bulk "Imposta luogo" (o "Ripristina luogo automatico") sulla selezione, oppure dal menu del tasto destro sulla griglia. Si annulla con "Annulla".
+- **Un luogo intero**: nel facet Luogo, ✎ accanto al nome rinomina il luogo per tutte le foto che lo hanno (es. "D7000" → "Giappone"). Se il nuovo nome esiste già, i due luoghi si uniscono.
+- **Una cartella**: le sorgenti nella barra laterale si espandono nell'albero delle cartelle (con il numero di foto, sottocartelle incluse). Scegliendo una cartella la libreria si filtra, con o senza sottocartelle; "Seleziona tutto (filtro)" seleziona tutte le sue foto per un'azione bulk.
+
+Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca o modello della fotocamera della foto (EXIF, es. `D7000` per una Nikon D7000) e nomi comuni come `Telefono`, `iPhone`, `WhatsApp`. Per `Viaggio Giappone\D7000\DSC_0001.NEF` il luogo è quindi "Viaggio Giappone". Altri nomi da saltare si aggiungono in Impostazioni → "Cartelle da ignorare per il luogo"; dopo il salvataggio l'app propone di ricalcolare i luoghi dedotti dalle cartelle (quelli manuali e da GPS non cambiano).
+
+### Soglie AI
+
+| Soglia | Predefinito | Effetto |
+|---|---:|---|
+| `ai.thresholds.person_detection` | 0,4 | confidenza minima di una persona rilevata (conteggio persone) |
+| `ai.thresholds.face_detection` | 0,8 | confidenza minima di un volto usato per riconoscere le persone |
+| `ai.thresholds.face_similarity` | 0,363 | somiglianza minima tra due volti della stessa persona (raggruppamento e associazione ai nomi; una soglia propria dell'identità ha la precedenza) |
+| soglia di gruppo (tassonomia) | 0,25 | punteggio minimo delle catalogazioni CLIP del gruppo |
+| soglia di categoria (tassonomia) | quella del gruppo | punteggio minimo di una singola categoria |
+
+Valori più alti danno meno catalogazioni automatiche, più sicure. La sezione "Soglie AI" mostra prima l'effetto ("N foto cambiano catalogazioni", conteggi delle persone, volti esclusi, stima delle persone che cambiano raggruppamento). Al salvataggio parte il job **retune**, che ricalcola i risultati già salvati senza rieseguire i modelli: le catalogazioni dagli embedding CLIP, i conteggi dai riquadri delle persone, i raggruppamenti dai volti. Le correzioni manuali restano. Le analisi conservano i risultati da 0,25 (persone) e 0,6 (volti) in su: si può scendere fino a questi valori senza rianalizzare. Le foto analizzate con versioni precedenti hanno come minimo 0,4 e 0,8; scendendo sotto, l'app lo segnala e propone la rianalisi dei soli file interessati. La soglia globale `ai.confidence_threshold` è solo il valore proposto ai gruppi nuovi e non modifica le soglie dei gruppi esistenti.
+
+```toml
+[ai]
+confidence_threshold = 0.25
+ignored_folder_names = ["Selezionate", "Da stampare"]
+
+[ai.thresholds]
+person_detection = 0.4
+face_detection = 0.8
+face_similarity = 0.363
+```
+
+### Applicazioni esterne ("Apri con")
+
+Il doppio clic su una miniatura apre la foto con l'app predefinita del sistema (`double_click = "system"`), con un'applicazione configurata (il suo `id`) o non fa nulla (`"none"`). Il tasto destro (o il tasto Menu / Maiusc+F10) apre il menu della griglia: "Apri con ▸", "Apri con l'app predefinita", "Mostra nella cartella", "Imposta luogo…" e altre azioni, sulla selezione o sulla sola miniatura cliccata. Negli argomenti `{file}` è sostituito dal percorso di ogni foto, come argomento separato; senza `{file}` i percorsi vengono aggiunti in fondo. Le applicazioni sono avviate senza shell intermedia, quindi spazi, `&` e virgolette nei percorsi non sono un problema. Con più di 100 file l'app chiede conferma. Gli eseguibili devono esistere al salvataggio.
+
+Windows (nei percorsi TOML con `\` usare apici singoli):
+
+```toml
+[ui]
+double_click = "lightroom"
+
+[[external_apps]]
+id = "lightroom"
+name = "Lightroom Classic"
+path = 'C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe'
+args = ["{file}"]
+
+[[external_apps]]
+id = "xnview"
+name = "XnView MP"
+path = 'C:\Program Files\XnViewMP\xnviewmp.exe'
+args = []
+```
+
+macOS (un bundle `.app` viene avviato con `open -a`):
+
+```toml
+[[external_apps]]
+id = "affinity"
+name = "Affinity Photo"
+path = "/Applications/Affinity Photo 2.app"
+args = []
+```
+
+Linux:
+
+```toml
+[ui]
+double_click = "gimp"
+
+[[external_apps]]
+id = "gimp"
+name = "GIMP"
+path = "/usr/bin/gimp"
+args = ["{file}"]
+
+[[external_apps]]
+id = "darktable"
+name = "darktable"
+path = "/usr/bin/darktable"
+args = ["--library", ":memory:", "{file}"]
+```
 
 ## Struttura
 

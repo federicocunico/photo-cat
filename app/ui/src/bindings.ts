@@ -34,6 +34,8 @@ export const commands = {
 	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
 	/**  Tutti gli id del filtro corrente ("Seleziona tutto"). */
 	libraryIds: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("library_ids", { filter }),
+	/**  Sottocartelle di una sorgente (o di `parent`), un livello alla volta. */
+	listFolders: (sourceId: number, parent: string | null) => __TAURI_INVOKE<FolderNode[]>("list_folders", { sourceId, parent }),
 	mediaDetail: (id: number) => __TAURI_INVOKE<MediaDetail>("media_detail", { id }),
 	listCatalogs: () => __TAURI_INVOKE<CatalogSummary[]>("list_catalogs"),
 	systemInfo: () => __TAURI_INVOKE<SystemInfo>("system_info"),
@@ -134,6 +136,30 @@ export const commands = {
 	saveSettings: (config: Config) => __TAURI_INVOKE<null>("save_settings", { config }),
 	getTaxonomy: () => __TAURI_INVOKE<Taxonomy>("get_taxonomy"),
 	saveTaxonomy: (taxonomy: Taxonomy, expectedVersion: number) => __TAURI_INVOKE<null>("save_taxonomy", { taxonomy, expectedVersion }),
+	/**
+	 *  Effetto di nuove soglie (e, se indicata, di una tassonomia con soglie
+	 *  diverse) calcolato dai risultati salvati, senza scrivere.
+	 */
+	previewThresholds: (thresholds: AiThresholds, taxonomy: Taxonomy | null) => __TAURI_INVOKE<ThresholdImpact>("preview_thresholds", { thresholds, taxonomy }),
+	/**
+	 *  Rianalisi dei file salvati con un minimo più alto delle soglie in vigore
+	 *  (scenario "Soglia sotto il minimo salvato"). Restituisce l'id del job, o
+	 *  `None` se non ci sono file da rianalizzare.
+	 */
+	reanalyzeBelowFloor: () => __TAURI_INVOKE<number | null>("reanalyze_below_floor"),
+	suggestPlaces: (prefix: string) => __TAURI_INVOKE<PlaceSuggestion[]>("suggest_places", { prefix }),
+	/**  Rinomina un luogo per tutte le foto che lo hanno (annullabile). */
+	renamePlace: (from: string, to: string) => __TAURI_INVOKE<BulkOutcome>("rename_place", { from, to }),
+	/**
+	 *  Ricalcola i luoghi dedotti dalle cartelle con le cartelle da ignorare
+	 *  correnti; manuali e GPS restano. Restituisce le foto cambiate.
+	 */
+	recomputePlaces: () => __TAURI_INVOKE<number>("recompute_places"),
+	/**
+	 *  Apre i file con l'app predefinita, un'applicazione esterna o il file
+	 *  manager. Oltre [`MAX_FILES`] file serve `confirmed`.
+	 */
+	openWith: (ids: number[], target: OpenTarget, confirmed: boolean) => __TAURI_INVOKE<OpenOutcome>("open_with", { ids, target, confirmed }),
 	onboardingDone: () => __TAURI_INVOKE<boolean>("onboarding_done"),
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
@@ -155,6 +181,19 @@ export type AiConfig = {
 	/**  Lato minimo in pixel di un volto utilizzabile per il riconoscimento. */
 	face_min_size_px?: number,
 	auto_download_models?: boolean,
+	/**  Nomi di cartella da ignorare nella deduzione del luogo dal percorso. */
+	ignored_folder_names?: string[],
+	thresholds?: AiThresholds,
+};
+
+/**  Soglie dei modelli applicate ai risultati salvati (0..1). */
+export type AiThresholds = {
+	/**  Confidenza minima di una rilevazione di persona (YOLO). */
+	person_detection?: number | null,
+	/**  Confidenza minima di un volto usato per il riconoscimento. */
+	face_detection?: number | null,
+	/**  Somiglianza coseno minima tra due volti della stessa persona. */
+	face_similarity?: number | null,
 };
 
 /**
@@ -195,7 +234,9 @@ export type BulkAction = { action: "add_tag"; name: string;
 /**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
 exclusive?: string[] } | { action: "remove_tag"; name: string } | 
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
-{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | { action: "remove_library" };
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+/**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
+{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
 export type BulkOutcome = {
 	/**  Elementi effettivamente modificati. */
@@ -224,6 +265,8 @@ export type Category = {
 	label: string,
 	enabled: boolean,
 	prompts: string[],
+	/**  Soglia propria della categoria; `None` = soglia del gruppo. */
+	threshold?: number | null,
 };
 
 /**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
@@ -240,6 +283,8 @@ export type Config = {
 	ui?: UiConfig,
 	/**  Percorso dati alternativo scelto dall'utente. */
 	data_dir?: string | null,
+	/**  Applicazioni esterne per "Apri con" e doppio clic. */
+	external_apps?: ExternalApp[],
 };
 
 export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number };
@@ -374,6 +419,17 @@ export type ExportPreflight = {
 	blocked: string | null,
 };
 
+/**
+ *  Applicazione esterna configurata dall'utente. Negli argomenti `{file}`
+ *  indica il percorso della foto; senza `{file}` i percorsi vengono accodati.
+ */
+export type ExternalApp = {
+	id?: string,
+	name?: string,
+	path?: string,
+	args?: string[],
+};
+
 export type FaceChoice = {
 	index: number,
 	/**  Ritaglio allineato come data URL PNG. */
@@ -403,6 +459,22 @@ export type Facets = {
 	formats: FacetValue[],
 	people: FacetValue[],
 	tags: FacetValue[],
+};
+
+/**  Filtro per cartella sul percorso dei file. */
+export type FolderFilter = {
+	path: string,
+	/**  Includere i file delle sottocartelle. */
+	recursive: boolean,
+};
+
+/**  Cartella dell'albero di una sorgente. */
+export type FolderNode = {
+	path: string,
+	name: string,
+	/**  File contenuti, sottocartelle incluse. */
+	items: number,
+	hasChildren: boolean,
 };
 
 export type Format = "csv" | "json";
@@ -578,6 +650,8 @@ export type LibraryFilter = {
 	duplicatesOnly?: boolean,
 	/**  Regola smart aggiuntiva (anteprima nell'editor dei cataloghi). */
 	rule?: Value | null,
+	/**  Cartella (con o senza sottocartelle). */
+	folder?: FolderFilter | null,
 };
 
 export type Location = {
@@ -682,6 +756,25 @@ export type NewSource = {
 	watch: boolean,
 };
 
+/**  Esito di [`open_with`]. */
+export type OpenOutcome = {
+	/**  File aperti. */
+	opened: number,
+	/**  Troppi file: serve la conferma dell'utente. */
+	needsConfirmation: boolean,
+};
+
+/**  Dove aprire i file. */
+export type OpenTarget = 
+/**  Applicazione predefinita del sistema per il formato. */
+{ kind: "system" } | 
+/**  Applicazione esterna configurata. */
+{ kind: "app"; id: string } | 
+/**  File manager sulla cartella, con il file evidenziato dove possibile. */
+{ kind: "reveal" } | 
+/**  Azione del doppio clic scelta nelle impostazioni. */
+{ kind: "double_click" };
+
 export type Organization = {
 	id: number,
 	dest: string,
@@ -734,6 +827,24 @@ export type PhaseSnapshot = {
 };
 
 export type PhaseState = "pending" | "running" | "done";
+
+/**  Luogo scelto dall'utente (nome libero o località del dataset geografico). */
+export type PlaceInput = {
+	name: string,
+	country?: string | null,
+	lat?: number | null,
+	lon?: number | null,
+};
+
+/**  Luogo proposto durante la digitazione. */
+export type PlaceSuggestion = {
+	name: string,
+	country: string | null,
+	lat: number | null,
+	lon: number | null,
+	/**  Già presente in libreria (altrimenti dal dataset geografico). */
+	inLibrary: boolean,
+};
 
 export type Postprocessing = "normalized_embedding512" | "token_ids" | "person_nms" | "face_landmarks_nms" | "normalized_embedding128" | "city_index";
 
@@ -988,6 +1099,22 @@ export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | 
 
 export type Theme = "dark" | "light";
 
+/**  Effetto di nuove soglie sulla libreria, calcolato dai risultati salvati. */
+export type ThresholdImpact = {
+	/**  Foto le cui catalogazioni automatiche cambiano. */
+	mediaLabelsChanged: number,
+	/**  Foto il cui conteggio delle persone cambia. */
+	mediaPeopleChanged: number,
+	/**  Volti esclusi dal riconoscimento con la nuova soglia di rilevamento. */
+	facesExcluded: number,
+	/**  Stima delle persone senza nome che cambierebbero raggruppamento. */
+	personsAffectedEstimate: number,
+	/**  File salvati con un minimo di persone più alto della nuova soglia. */
+	reanalysisPersons: number,
+	/**  File salvati con un minimo di volti più alto della nuova soglia. */
+	reanalysisFaces: number,
+};
+
 /**
  *  Proposta di ora locale per un gruppo, ricavata dalle foto con GPS di altri
  *  gruppi scattate negli stessi istanti.
@@ -1007,6 +1134,8 @@ export type TzSuggestion = {
 export type UiConfig = {
 	theme?: Theme,
 	language?: Language,
+	/**  `system`, `none` o l'id di un'applicazione esterna. */
+	double_click?: string,
 };
 
 export type UnavailableProvider = {

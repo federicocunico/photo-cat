@@ -8,6 +8,7 @@ import { useLive } from "../../store/live";
 import { thumbUrl } from "./thumbUrl";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
+import { PlaceEditor } from "./PlaceEditor";
 
 function Grid2({ children }: { children: ReactNode }) {
   return (
@@ -268,6 +269,11 @@ export function Inspector() {
             />
           )}
         </Grid2>
+        <PlaceEditor
+          id={d.item.id}
+          name={d.location?.name ?? null}
+          source={d.location?.source ?? null}
+        />
       </section>
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h3 className="section-title">{t("library.inspector.ai")}</h3>

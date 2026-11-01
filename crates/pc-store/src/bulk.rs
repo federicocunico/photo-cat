@@ -1,7 +1,7 @@
 //! Modifiche in blocco a tag, cataloghi e catalogazioni, con registrazione
 //! dell'operazione inversa in `undo_log` per "Annulla".
 
-use crate::model::MediaId;
+use crate::model::{Location, LocationSource, MediaId};
 use crate::repo::{catalog, fts, tag};
 use crate::{now_ms, StoreError, StoreResult};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -85,6 +85,215 @@ pub enum UndoAction {
         media_id: MediaId,
         previous: Option<(i64, Option<i32>)>,
     },
+    /// Luoghi precedenti (riga completa o assenza) di un gruppo di file.
+    LocationReplaced {
+        previous: Vec<(MediaId, Option<Location>)>,
+    },
+}
+
+/// Luogo scelto dall'utente (nome libero o località del dataset geografico).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct PlaceInput {
+    pub name: String,
+    #[serde(default)]
+    pub country: Option<String>,
+    #[serde(default)]
+    pub lat: Option<f64>,
+    #[serde(default)]
+    pub lon: Option<f64>,
+}
+
+/// Dati salvati da cui si ricalcola il luogo automatico di un file.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PlaceInputs {
+    pub path: String,
+    pub gps: Option<(f64, f64)>,
+    pub camera_make: Option<String>,
+    pub camera_model: Option<String>,
+}
+
+/// Calcolo del luogo automatico (GPS o cartella), fornito da chi conosce il
+/// dataset geografico e le cartelle da ignorare.
+pub type PlaceResolver<'a> = &'a dyn Fn(&PlaceInputs) -> Option<Location>;
+
+/// Percorso, GPS e fotocamera di un file, dal catalogo.
+pub fn place_inputs(c: &Connection, id: MediaId) -> StoreResult<PlaceInputs> {
+    let path: String = c.query_row("SELECT path FROM media_item WHERE id=?1", [id], |r| {
+        r.get(0)
+    })?;
+    let exif = c
+        .query_row(
+            "SELECT camera_make, camera_model, gps_lat, gps_lon FROM exif WHERE media_id=?1",
+            [id],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, Option<f64>>(2)?,
+                    r.get::<_, Option<f64>>(3)?,
+                ))
+            },
+        )
+        .optional()?;
+    let (camera_make, camera_model, lat, lon) = exif.unwrap_or_default();
+    Ok(PlaceInputs {
+        path,
+        gps: lat.zip(lon),
+        camera_make,
+        camera_model,
+    })
+}
+
+fn locations_of(c: &Connection, ids: &[MediaId]) -> StoreResult<Vec<(MediaId, Option<Location>)>> {
+    ids.iter()
+        .map(|id| Ok((*id, crate::repo::meta::location(c, *id)?)))
+        .collect()
+}
+
+fn write_location(c: &Connection, id: MediaId, l: Option<&Location>) -> StoreResult<()> {
+    c.execute("DELETE FROM location WHERE media_id=?1", [id])?;
+    if let Some(l) = l {
+        c.execute(
+            "INSERT INTO location(media_id, name, country, lat, lon, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, l.name, l.country, l.lat, l.lon, l.source.as_str()],
+        )?;
+    }
+    Ok(())
+}
+
+/// Imposta il luogo come correzione manuale (`Some`) oppure ripristina il
+/// luogo automatico (`None`): la riga manuale viene tolta e il luogo
+/// ricalcolato subito con `resolve` da GPS o cartella. Annullabile.
+pub fn set_place(
+    c: &Connection,
+    ids: &[MediaId],
+    place: Option<&PlaceInput>,
+    resolve: PlaceResolver,
+) -> StoreResult<BulkOutcome> {
+    let manual = match place {
+        Some(p) => {
+            let name = p.name.trim();
+            if name.is_empty() || name.chars().count() > 200 {
+                return Err(StoreError::Invalid("nome del luogo non valido".into()));
+            }
+            Some(Location {
+                name: Some(name.to_string()),
+                country: p.country.clone().filter(|s| !s.trim().is_empty()),
+                lat: p
+                    .lat
+                    .filter(|v| v.is_finite() && (-90.0..=90.0).contains(v)),
+                lon: p
+                    .lon
+                    .filter(|v| v.is_finite() && (-180.0..=180.0).contains(v)),
+                source: LocationSource::Manual,
+            })
+        }
+        None => None,
+    };
+    let previous = locations_of(c, ids)?;
+    for id in ids {
+        let next = match &manual {
+            Some(l) => Some(l.clone()),
+            None => resolve(&place_inputs(c, *id)?).filter(|l| l.source != LocationSource::Manual),
+        };
+        write_location(c, *id, next.as_ref())?;
+    }
+    refresh_all(c, ids)?;
+    let description = match &manual {
+        Some(l) => format!("Imposta luogo {}", l.name.as_deref().unwrap_or_default()),
+        None => "Ripristina luogo automatico".to_string(),
+    };
+    record(c, &description, &UndoAction::LocationReplaced { previous })?;
+    Ok(BulkOutcome {
+        changed: ids.len(),
+        requested: ids.len(),
+    })
+}
+
+/// File con il luogo `name` (stesso confronto del facet "Luogo").
+pub fn place_ids(c: &Connection, name: &str) -> StoreResult<Vec<MediaId>> {
+    let mut q = c.prepare("SELECT media_id FROM location WHERE name = ?1 ORDER BY media_id")?;
+    let ids = q
+        .query_map([name], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(ids)
+}
+
+/// Rinomina un luogo per tutti i file che lo hanno, come correzione manuale
+/// (coordinate e paese di ogni file restano). Rinominare verso un luogo già
+/// esistente unisce i due luoghi. Un'unica operazione annullabile.
+pub fn rename_place(c: &Connection, from: &str, to: &str) -> StoreResult<BulkOutcome> {
+    let to = to.trim();
+    if to.is_empty() || to.chars().count() > 200 {
+        return Err(StoreError::Invalid("nome del luogo non valido".into()));
+    }
+    let ids = place_ids(c, from)?;
+    if ids.is_empty() || from == to {
+        return Ok(BulkOutcome {
+            changed: 0,
+            requested: ids.len(),
+        });
+    }
+    let previous = locations_of(c, &ids)?;
+    c.execute(
+        "UPDATE location SET name = ?2, source = 'manual' WHERE name = ?1",
+        params![from, to],
+    )?;
+    refresh_all(c, &ids)?;
+    record(
+        c,
+        &format!("Rinomina luogo {from} → {to}"),
+        &UndoAction::LocationReplaced { previous },
+    )?;
+    Ok(BulkOutcome {
+        changed: ids.len(),
+        requested: ids.len(),
+    })
+}
+
+/// Ricalcola i luoghi dedotti dalle cartelle (e quelli dei file senza luogo né
+/// GPS), ad esempio dopo un cambio delle cartelle da ignorare. I luoghi
+/// manuali e quelli da GPS non vengono toccati. Restituisce i file cambiati.
+pub fn recompute_directory_places(c: &Connection, resolve: PlaceResolver) -> StoreResult<usize> {
+    let mut q = c.prepare(
+        "SELECT m.id FROM media_item m LEFT JOIN location l ON l.media_id = m.id
+         LEFT JOIN exif e ON e.media_id = m.id
+         WHERE l.source = 'directory'
+            OR (l.media_id IS NULL AND (e.gps_lat IS NULL OR e.gps_lon IS NULL))
+         ORDER BY m.id",
+    )?;
+    let ids: Vec<MediaId> = q.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    let mut changed = 0;
+    for id in ids {
+        let next = resolve(&place_inputs(c, id)?).filter(|l| l.source == LocationSource::Directory);
+        let prev = crate::repo::meta::location(c, id)?;
+        if prev != next {
+            write_location(c, id, next.as_ref())?;
+            fts::refresh(c, id)?;
+            changed += 1;
+        }
+    }
+    Ok(changed)
+}
+
+/// Luoghi della libreria che iniziano con `prefix` (senza maiuscole), dal più
+/// frequente.
+pub fn suggest_places(c: &Connection, prefix: &str, limit: usize) -> StoreResult<Vec<String>> {
+    let escaped = prefix
+        .trim()
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let mut q = c.prepare(
+        "SELECT name FROM location WHERE name IS NOT NULL AND name LIKE ?1 || '%' ESCAPE '\\'
+         GROUP BY name ORDER BY count(*) DESC, name LIMIT ?2",
+    )?;
+    let v = q
+        .query_map(params![escaped, limit as i64], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(v)
 }
 
 thread_local! { static GROUPING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -559,6 +768,12 @@ fn undo_action(
         }
         UndoAction::Placement { media_id, previous } => {
             crate::timeline::set_placement(c, media_id, previous, &crate::timeline::system_offset)?;
+        }
+        UndoAction::LocationReplaced { previous } => {
+            for (id, l) in &previous {
+                write_location(c, *id, l.as_ref())?;
+            }
+            refresh_all(c, &previous.iter().map(|(id, _)| *id).collect::<Vec<_>>())?;
         }
         UndoAction::TagRenamed { tag_id, from, .. } => {
             c.execute(
