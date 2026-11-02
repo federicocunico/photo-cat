@@ -90,7 +90,7 @@ fn main() {
     println!("| Estensione | Codice | Causa | File | Esempi |");
     println!("|---|---|---|---|---|");
     let mut groups: Vec<_> = failures.into_inner().unwrap().into_iter().collect();
-    groups.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+    groups.sort_by_key(|g| std::cmp::Reverse(g.1 .0));
     for ((ext, code, msg), (n, examples)) in groups {
         println!(
             "| {ext} | {code} | {msg} | {n} | {} |",

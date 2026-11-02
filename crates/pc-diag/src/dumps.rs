@@ -85,7 +85,7 @@ fn recent_dumps(dir: &Path, since: Option<SystemTime>) -> Vec<PathBuf> {
         .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
         .filter(|(t, _)| since.is_none_or(|s| *t > s))
         .collect();
-    dumps.sort_by(|a, b| b.0.cmp(&a.0));
+    dumps.sort_by_key(|a| std::cmp::Reverse(a.0));
     dumps.into_iter().take(MAX_DUMPS).map(|(_, p)| p).collect()
 }
 
