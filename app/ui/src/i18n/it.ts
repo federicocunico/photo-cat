@@ -39,6 +39,15 @@ export const it = {
     comingSoon: "Questa sezione sarà disponibile a breve.",
     crashNotice: "La sessione precedente si è chiusa in modo anomalo.",
     crashOpen: "Apri diagnostica",
+    crashKind: {
+      panic: "Errore interno dell'app.",
+      native: "Errore di un componente nativo.",
+      unclean: "L'app non si è chiusa regolarmente (chiusa dal sistema, memoria esaurita o interfaccia terminata).",
+    },
+    crashLast: "ultima attività {{time}}",
+    crashMemory: "memoria: app {{app}} MB, interfaccia {{ui}} MB, RAM libera {{free}} MB",
+    uiRecovered: "L'interfaccia si è chiusa ed è stata ricaricata.",
+    uiRecoveredDetail: "Alle {{time}}. I job in corso continuano e il catalogo non ha perso dati.",
     dismiss: "Chiudi",
   },
   jobs: {

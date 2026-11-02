@@ -12,6 +12,8 @@ pub struct Bundle {
     /// Riepilogo di `app.db` (solo conteggi: niente nomi né dati biometrici).
     pub app_store: Value,
     pub logs: Vec<LogLine>,
+    /// Dump di crash e marcatore dell'ultima sessione anomala, salvati in `crash/`.
+    pub attachments: Vec<crate::dumps::Attachment>,
 }
 pub const CONTENTS: &[&str] = &[
     "manifest.json",
@@ -58,7 +60,7 @@ pub fn write(destination: &Path, bundle: Bundle) -> AppResult<()> {
         })
         .collect();
     let snapshots = [
-        json!({"schema_version":1,"app_version":env!("CARGO_PKG_VERSION"),"generated_at":chrono::Utc::now().to_rfc3339(),"contents":CONTENTS}),
+        json!({"schema_version":1,"app_version":env!("CARGO_PKG_VERSION"),"generated_at":chrono::Utc::now().to_rfc3339(),"contents":CONTENTS,"crash":bundle.attachments.iter().map(|a| format!("crash/{}", a.name)).collect::<Vec<_>>()}),
         serde_json::to_value(bundle.config)?,
         bundle.system,
         bundle.models,
@@ -77,6 +79,15 @@ pub fn write(destination: &Path, bundle: Bundle) -> AppResult<()> {
             )
             .map_err(|e| AppError::internal(e.to_string()))?;
             zip.write_all(&serde_json::to_vec_pretty(&value)?)?;
+        }
+        for a in &bundle.attachments {
+            zip.start_file(
+                format!("crash/{}", a.name),
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated),
+            )
+            .map_err(|e| AppError::internal(e.to_string()))?;
+            zip.write_all(&a.bytes)?;
         }
         zip.finish()
             .map_err(|e| AppError::internal(e.to_string()))?;
@@ -117,6 +128,7 @@ mod tests {
                         ("count".into(), "3".into()),
                     ],
                 }],
+                attachments: vec![],
             },
         )
         .unwrap();
@@ -130,5 +142,52 @@ mod tests {
             assert!(!text.contains("PRIVATE-BIOMETRIC-CANARY"));
             assert!(!text.contains("face-crop"));
         }
+    }
+
+    #[test]
+    fn webview_crash_dumps_go_into_the_crash_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let logs = tmp.path().join("logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let reports = crate::dumps::crashpad_reports(&tmp.path().join("EBWebView"));
+        std::fs::create_dir_all(&reports).unwrap();
+        std::fs::write(reports.join("e8195465.dmp"), b"MDMP-webview").unwrap();
+        let (_m, _) = crate::SessionMarker::start(&logs, "1");
+        let (_m2, prev) = crate::SessionMarker::start(&logs, "1");
+        assert!(prev.is_some(), "sessione anomala");
+        let out = tmp.path().join("d.zip");
+        write(
+            &out,
+            Bundle {
+                config: Config::default(),
+                system: json!({}),
+                models: json!([]),
+                jobs: json!([]),
+                errors: json!([]),
+                app_store: json!({}),
+                logs: vec![],
+                attachments: crate::dumps::collect(&logs, Some(&reports)),
+            },
+        )
+        .unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(out).unwrap()).unwrap();
+        let mut dump = String::new();
+        zip.by_name("crash/webview-e8195465.dmp")
+            .unwrap()
+            .read_to_string(&mut dump)
+            .unwrap();
+        assert_eq!(dump, "MDMP-webview");
+        let mut session = String::new();
+        zip.by_name("crash/session.json")
+            .unwrap()
+            .read_to_string(&mut session)
+            .unwrap();
+        assert!(session.contains("lastActivity"));
+        let mut manifest = String::new();
+        zip.by_name("manifest.json")
+            .unwrap()
+            .read_to_string(&mut manifest)
+            .unwrap();
+        assert!(manifest.contains("crash/webview-e8195465.dmp"));
     }
 }

@@ -9,6 +9,15 @@ export const commands = {
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**  Segna come letto l'avviso di chiusura anomala. */
 	dismissCrashNotice: () => __TAURI_INVOKE<void>("dismiss_crash_notice"),
+	/**  Terminazione dell'interfaccia da segnalare dopo la ricarica (una volta sola). */
+	takeUiRecovery: () => __TAURI_INVOKE<UiRecovery | null>("take_ui_recovery"),
+	/**
+	 *  Long task dell'interfaccia (≥ 50 ms) degli ultimi secondi, registrati in modalità
+	 *  diagnostica (livello debug) per il test di carico.
+	 */
+	reportLongTasks: (count: number, maxMs: number | null, totalMs: number | null) => __TAURI_INVOKE<void>("report_long_tasks", { count, maxMs, totalMs }),
+	/**  Solo sviluppo: provoca un abort nativo per verificare log, minidump e avviso al riavvio. */
+	devNativeCrash: () => __TAURI_INVOKE<null>("dev_native_crash"),
 	getConfig: () => __TAURI_INVOKE<Config>("get_config"),
 	getResources: () => __TAURI_INVOKE<ResourceSnapshot>("get_resources"),
 	listJobs: () => __TAURI_INVOKE<JobSnapshot[]>("list_jobs"),
@@ -21,6 +30,8 @@ export const commands = {
 	/**  Job dimostrativo (solo build di sviluppo) per verificare la schermata Job. */
 	startDemoJob: (items: number, failEvery: number) => __TAURI_INVOKE<number>("start_demo_job", { items, failEvery }),
 	queryErrors: (query: ErrorQuery) => __TAURI_INVOKE<ErrorEntry[]>("query_errors", { query }),
+	/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
+	errorGroups: (query: ErrorQuery) => __TAURI_INVOKE<ErrorGroup[]>("error_groups", { query }),
 	logTail: () => __TAURI_INVOKE<LogLine[]>("log_tail"),
 	setLogLevel: (level: LogLevel) => __TAURI_INVOKE<null>("set_log_level", { level }),
 	listSources: () => __TAURI_INVOKE<SourceSummary[]>("list_sources"),
@@ -349,11 +360,29 @@ export type Config = {
 export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number };
 
 export type CrashInfo = {
-	ts: string,
+	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */
+	ts?: string,
 	message: string,
 	location: string | null,
 	thread: string | null,
+	kind?: CrashKind,
+	/**  Ultima attività registrata dal marcatore di sessione. */
+	lastActivity?: string | null,
+	/**  Memoria all'ultimo aggiornamento del marcatore di sessione. */
+	memory?: MemorySummary | null,
 };
+
+/**  Causa della chiusura anomala. */
+export type CrashKind = 
+/**  Panic Rust (messaggio e posizione nel log). */
+"panic" | 
+/**  Eccezione o segnale nativo (abort, accesso non valido). */
+"native" | 
+/**
+ *  Sessione non chiusa regolarmente senza altre informazioni (chiusura forzata,
+ *  crash della WebView, memoria esaurita...).
+ */
+"unclean";
 
 /**  Posizione dopo l'ultimo elemento della pagina precedente. */
 export type Cursor = {
@@ -383,11 +412,26 @@ export type Entry = {
 	license: string,
 };
 
+/**  Payload dell'evento `errors://batch`. */
+export type ErrorBatch = {
+	counts: ErrorCount[],
+	/**  Ultimi record completi (al massimo [`BATCH_RECENT`]). */
+	recent: ErrorRecord[],
+};
+
 /**
  *  Codici errore stabili: compaiono nei log, nel registro errori e nell'export
  *  diagnostico, quindi non vanno rinominati.
  */
 export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED";
+
+export type ErrorCount = {
+	jobId: number | null,
+	phase: string | null,
+	code: string | null,
+	level: string,
+	count: number,
+};
 
 export type ErrorEntry = {
 	id: number,
@@ -400,6 +444,21 @@ export type ErrorEntry = {
 	phase: string | null,
 	path: string | null,
 	detail: string | null,
+};
+
+/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
+export type ErrorGroup = {
+	jobId: number | null,
+	phase: string | null,
+	code: string | null,
+	level: string,
+	/**  Numero di righe (errori) del gruppo. */
+	count: number,
+	/**  File distinti coinvolti. */
+	files: number,
+	lastTs: string,
+	/**  Messaggio dell'errore più recente del gruppo. */
+	message: string,
 };
 
 export type ErrorQuery = {
@@ -818,6 +877,17 @@ export type MediaKind = "photo";
 
 export type MediaStatus = "ok" | "missing";
 
+/**  Memoria al momento dell'ultimo aggiornamento del marcatore. */
+export type MemorySummary = {
+	/**  Memoria residente del processo dell'app. */
+	appMb: number,
+	/**  Memoria residente dei processi dell'interfaccia (WebView). */
+	webviewMb: number,
+	/**  RAM disponibile nel sistema. */
+	availableMb: number,
+	totalMb: number,
+};
+
 export type Method = "symlink" | "hardlink" | "copy";
 
 export type ModelState = { state: "missing" } | { state: "downloading"; done_bytes: number; total_bytes: number; bytes_per_second?: number } | { state: "verified" } | { state: "error"; code: string; message: string } | { state: "self_test_failed"; message: string } | { state: "update_available" };
@@ -1021,6 +1091,11 @@ export type ResourceSnapshot = {
 	system: SystemSnapshot,
 	governor: GovernorSnapshot,
 	state: PressureState,
+	/**
+	 *  Solo al cambio: `Some(true)` quando la memoria della WebView supera la quota
+	 *  (l'interfaccia deve liberare le cache), `Some(false)` quando rientra.
+	 */
+	uiTrim?: boolean | null,
 };
 
 export type ResourcesConfig = {
@@ -1161,6 +1236,11 @@ export type SystemSnapshot = {
 	availableMb: number,
 	/**  Memoria residente del processo di photo-cat. */
 	processMb: number,
+	/**
+	 *  Memoria residente dei processi dell'interfaccia (WebView2 o WebKitGTK) discendenti
+	 *  dell'app; 0 dove non misurabile (macOS) o nei test.
+	 */
+	webviewMb?: number,
 	logicalCores: number,
 	physicalCores: number,
 };
@@ -1267,6 +1347,15 @@ export type UiConfig = {
 	language?: Language,
 	/**  `system`, `none` o l'id di un'applicazione esterna. */
 	double_click?: string,
+};
+
+/**  Ultima terminazione dell'interfaccia, mostrata dall'UI dopo la ricarica. */
+export type UiRecovery = {
+	ts: string,
+	/**  Processo terminato e motivo, come li riporta la WebView. */
+	reason: string,
+	/**  Terminazioni negli ultimi 5 minuti. */
+	count: number,
 };
 
 export type UnavailableProvider = {

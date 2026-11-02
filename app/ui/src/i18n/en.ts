@@ -40,6 +40,15 @@ export const en: Messages = {
     comingSoon: "This section will be available soon.",
     crashNotice: "The previous session ended unexpectedly.",
     crashOpen: "Open diagnostics",
+    crashKind: {
+      panic: "Internal app error.",
+      native: "A native component failed.",
+      unclean: "The app did not shut down cleanly (closed by the system, out of memory or interface terminated).",
+    },
+    crashLast: "last activity {{time}}",
+    crashMemory: "memory: app {{app}} MB, interface {{ui}} MB, free RAM {{free}} MB",
+    uiRecovered: "The interface closed and was reloaded.",
+    uiRecoveredDetail: "At {{time}}. Running jobs continue and no catalog data was lost.",
     dismiss: "Dismiss",
   },
   jobs: {

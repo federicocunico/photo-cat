@@ -39,6 +39,39 @@ pub fn dismiss_crash_notice(state: State<'_, AppState>) {
     state.previous_crash.lock().take();
 }
 
+/// Terminazione dell'interfaccia da segnalare dopo la ricarica (una volta sola).
+#[tauri::command]
+#[specta::specta]
+pub fn take_ui_recovery(state: State<'_, AppState>) -> Option<crate::recovery::UiRecovery> {
+    state.recovery.take_pending()
+}
+
+/// Long task dell'interfaccia (≥ 50 ms) degli ultimi secondi, registrati in modalità
+/// diagnostica (livello debug) per il test di carico.
+#[tauri::command]
+#[specta::specta]
+pub fn report_long_tasks(count: u32, max_ms: f64, total_ms: f64) {
+    tracing::debug!(
+        count,
+        max_ms = max_ms.round() as u64,
+        total_ms = total_ms.round() as u64,
+        "long task dell'interfaccia"
+    );
+}
+
+/// Solo sviluppo: provoca un abort nativo per verificare log, minidump e avviso al riavvio.
+#[tauri::command]
+#[specta::specta]
+pub fn dev_native_crash() -> AppResult<()> {
+    #[cfg(debug_assertions)]
+    {
+        tracing::warn!("abort nativo provocato dal comando di sviluppo");
+        pc_diag::native::crash_for_test();
+    }
+    #[cfg(not(debug_assertions))]
+    Err(AppError::invalid_input("disponibile solo in sviluppo"))
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn get_config(state: State<'_, AppState>) -> Config {
@@ -105,6 +138,19 @@ pub fn start_demo_job(state: State<'_, AppState>, items: u32, fail_every: u32) -
 #[specta::specta]
 pub fn query_errors(state: State<'_, AppState>, query: ErrorQuery) -> AppResult<Vec<ErrorEntry>> {
     Ok(state.store.read(|c| errorlog::query(c, &query))?)
+}
+
+/// Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica).
+#[tauri::command]
+#[specta::specta]
+pub async fn error_groups(
+    state: State<'_, AppState>,
+    query: ErrorQuery,
+) -> AppResult<Vec<errorlog::ErrorGroup>> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || Ok(db.read(|c| errorlog::groups(c, &query))?))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?
 }
 
 #[tauri::command]

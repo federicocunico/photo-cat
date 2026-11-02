@@ -18,7 +18,7 @@
 - [ ] 2.1 Marcatore `session.lock` con aggiornamento periodico, cancellazione su `RunEvent::Exit` e avviso al riavvio con ora e memoria dell'ultima attività (design §1). Verifica: test in `pc-diag` per marcatore presente e assente, e prova manuale terminando il processo dal Task Manager.
 - [ ] 2.2 Gestione di `ProcessFailed` di WebView2 (Windows) e di `web-process-terminated` (Linux): registrazione, ricarica, avviso nell'UI, pausa dei job e dialogo oltre 3 terminazioni in 5 minuti. Verifica: prova manuale terminando `msedgewebview2.exe` dal Task Manager durante un import (interfaccia ricaricata, job ancora presente, voce nel log); test UI per l'avviso dopo `app://ui-recovered`.
 - [ ] 2.3 Abort nativi (filtro delle eccezioni non gestite con minidump su Windows, segnali su Unix) e comando di sviluppo che provoca un abort solo in debug. Verifica: in debug, il comando produce la riga nel log e il minidump in `logs/crash/`, e al riavvio compare l'avviso.
-- [ ] 2.4 Dump di WebView2 e minidump nel pacchetto diagnostico, con i limiti di numero e dimensione. Verifica: test in `pc-diag/src/bundle.rs` con una cartella Crashpad finta.
+- [x] 2.4 Dump di WebView2 e minidump nel pacchetto diagnostico, con i limiti di numero e dimensione. Verifica: test in `pc-diag/src/bundle.rs` con una cartella Crashpad finta.
 
 ## 3. Thread principale e protocolli
 
@@ -30,11 +30,11 @@
 - [ ] 4.1 Griglia con `maxPages` e paginazione bidirezionale per cursore, `gcTime` breve per le chiavi inattive. Verifica: test con `ipcMock` che, dopo lo scorrimento di 50 pagine, il numero di pagine in cache è ≤ 5 e che tornando su la pagina viene richiesta di nuovo.
 - [ ] 4.2 Selezione come insieme (`ids` o `filter` più eccezioni con `snapshot`) nello store, in Grid e BulkBar; `Target` nei comandi bulk risolto lato Rust a blocchi. Verifica: test Rust e UI per "Seleziona tutto su una libreria grande" e "Risultati cambiati dopo la selezione".
 - [ ] 4.3 `person_faces` paginato, polling sostituito da `faces://changed`, con la stessa invalidazione su evento per `list_people`. Verifica: test con `ipcMock` che non partono richieste periodiche e che l'evento invalida le query.
-- [ ] 4.4 Eventi dei job limitati a 250 ms, `upsertJob` mirato, risposta a `app://trim-caches`. Verifica: test di `live.ts`.
+- [x] 4.4 Eventi dei job limitati a 250 ms, `upsertJob` mirato, risposta a `app://trim-caches`. Verifica: test di `live.ts`.
 
 ## 5. Errori raggruppati
 
-- [ ] 5.1 Buffer degli errori con `errors://batch` ogni 500 ms e scrittura a lotti nel DB (design §4). Verifica: test Rust con 10.000 errori sintetici: al massimo un evento ogni 500 ms e tutti i 10.000 record presenti in `error_log`.
+- [x] 5.1 Buffer degli errori con `errors://batch` ogni 500 ms e scrittura a lotti nel DB (design §4). Verifica: test Rust con 10.000 errori sintetici: al massimo un evento ogni 500 ms e tutti i 10.000 record presenti in `error_log`.
 - [ ] 5.2 Vista "per codice" in Diagnostica con elenco dei file paginato. Verifica: test con `ipcMock` per "Migliaia di file non decodificabili" ed "Errori diversi".
 
 ## 6. Import robusto

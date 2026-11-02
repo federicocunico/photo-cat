@@ -3,7 +3,7 @@
 
 import { vi } from "vitest";
 import type {
-  ErrorRecord,
+  ErrorBatch,
   JobSnapshot,
   LogLine,
   ModelStatus,
@@ -42,8 +42,11 @@ export const emitters = {
   job: [] as Cb<JobSnapshot>[],
   resources: [] as Cb<ResourceSnapshot>[],
   log: [] as Cb<LogLine[]>[],
-  error: [] as Cb<ErrorRecord>[],
+  errorBatch: [] as Cb<ErrorBatch>[],
   models: [] as Cb<ModelStatus[]>[],
+  uiRecovered: [] as Cb<void>[],
+  trimCaches: [] as Cb<void>[],
+  facesChanged: [] as Cb<void>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -56,6 +59,9 @@ export function emit<K extends keyof typeof emitters>(
 export const commandsMock = {
   appInfo: vi.fn(),
   dismissCrashNotice: vi.fn(),
+  takeUiRecovery: vi.fn(async () => null),
+  reportLongTasks: vi.fn(async () => null),
+  devNativeCrash: vi.fn(async () => null),
   getConfig: vi.fn(),
   getResources: vi.fn(),
   listJobs: vi.fn(),
@@ -66,6 +72,7 @@ export const commandsMock = {
   listJobHistory: vi.fn(async () => []),
   startDemoJob: vi.fn(),
   queryErrors: vi.fn(async () => []),
+  errorGroups: vi.fn(async () => []),
   logTail: vi.fn(async () => []),
   setLogLevel: vi.fn(async () => null),
   listSources: vi.fn(async () => []),
@@ -239,8 +246,11 @@ export function ipcMockModule(tauri = false) {
       onJobProgress: reg(emitters.job),
       onResources: reg(emitters.resources),
       onLogLines: reg(emitters.log),
-      onError: reg(emitters.error),
+      onErrorBatch: reg(emitters.errorBatch),
       onModels: reg(emitters.models),
+      onUiRecovered: reg(emitters.uiRecovered),
+      onTrimCaches: reg(emitters.trimCaches),
+      onFacesChanged: reg(emitters.facesChanged),
     },
   };
 }
@@ -277,5 +287,6 @@ export function resources(partial: Partial<ResourceSnapshot["system"]> = {}): Re
       aiPaused: false,
     },
     state: "normal",
+    uiTrim: null,
   };
 }

@@ -1,9 +1,16 @@
 // Stato "vivo" alimentato dagli eventi del backend: job, risorse, errori recenti.
 
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { commands, events, isTauri } from "../lib/ipc";
-import type { ErrorRecord, JobSnapshot, LogLine, ResourceSnapshot } from "../lib/ipc";
+import type {
+  ErrorBatch,
+  ErrorRecord,
+  JobSnapshot,
+  LogLine,
+  ResourceSnapshot,
+} from "../lib/ipc";
 
 const TAIL_MAX = 500;
 
@@ -17,11 +24,15 @@ interface LiveState {
   upsertJob: (s: JobSnapshot) => void;
   setJobs: (list: JobSnapshot[]) => void;
   setResources: (r: ResourceSnapshot) => void;
-  addError: (e: ErrorRecord) => void;
+  /** Lotto di errori raggruppati (`errors://batch`): un solo aggiornamento per lotto. */
+  addErrors: (b: ErrorBatch) => void;
   addLines: (l: LogLine[]) => void;
   setTail: (lines: LogLine[]) => void;
   resetErrors: () => void;
 }
+
+const sameJob = (a: JobSnapshot | undefined, b: JobSnapshot) =>
+  a !== undefined && JSON.stringify(a) === JSON.stringify(b);
 
 export const useLive = create<LiveState>()((set) => ({
   jobs: {},
@@ -29,13 +40,17 @@ export const useLive = create<LiveState>()((set) => ({
   errorCount: 0,
   lastError: null,
   tail: [],
-  upsertJob: (s) => set((st) => ({ jobs: { ...st.jobs, [s.id]: s } })),
+  // Solo l'elemento cambiato: uno snapshot identico non provoca alcun aggiornamento.
+  upsertJob: (s) =>
+    set((st) => (sameJob(st.jobs[s.id], s) ? st : { jobs: { ...st.jobs, [s.id]: s } })),
   setJobs: (list) => set({ jobs: Object.fromEntries(list.map((j) => [j.id, j])) }),
   setResources: (resources) => set({ resources }),
-  addError: (e) =>
+  addErrors: (b) =>
     set((st) => ({
-      errorCount: e.level === "ERROR" ? st.errorCount + 1 : st.errorCount,
-      lastError: e,
+      errorCount:
+        st.errorCount +
+        b.counts.filter((c) => c.level === "ERROR").reduce((n, c) => n + c.count, 0),
+      lastError: b.recent[b.recent.length - 1] ?? st.lastError,
     })),
   addLines: (l) => set((st) => ({ tail: [...st.tail, ...l].slice(-TAIL_MAX) })),
   setTail: (tail) => set({ tail: tail.slice(-TAIL_MAX) }),
@@ -55,7 +70,7 @@ export function useLiveEvents() {
     const unlisten = [
       events.onJobProgress(s.upsertJob),
       events.onResources(s.setResources),
-      events.onError(s.addError),
+      events.onErrorBatch(s.addErrors),
       events.onLogLines(s.addLines),
     ];
     if (isTauri()) {
@@ -76,4 +91,23 @@ export function useLiveEvents() {
       unlisten.forEach((p) => p.then((f) => f()));
     };
   }, []);
+}
+
+/**
+ * Memoria della WebView oltre la quota (`app://trim-caches`): si eliminano i dati delle
+ * query non mostrate. Le query attive restano e si ricaricano solo se servono.
+ */
+export function useTrimCaches() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const off = events.onTrimCaches(() => {
+      qc.getQueryCache()
+        .getAll()
+        .filter((q) => q.getObserversCount() === 0)
+        .forEach((q) => qc.removeQueries({ queryKey: q.queryKey, exact: true }));
+    });
+    return () => {
+      void off.then((f) => f());
+    };
+  }, [qc]);
 }

@@ -38,6 +38,12 @@ pub struct AppState {
     pub assets: crate::models::AssetPaths,
     pub watcher: Mutex<Option<SourceWatcher>>,
     pub previous_crash: Mutex<Option<CrashInfo>>,
+    /// Marcatore della sessione in corso (aggiornato dal monitor, cancellato all'uscita).
+    pub session: Arc<pc_diag::SessionMarker>,
+    /// Terminazioni della WebView in questa sessione.
+    pub recovery: crate::recovery::Recovery,
+    /// La finestra principale viene ricreata: la sua chiusura non è un'uscita.
+    pub recreating: Mutex<bool>,
     pub last_resources: RwLock<Option<ResourceSnapshot>>,
     pub(crate) _monitor_handle: Mutex<Option<MonitorHandle>>,
     pub(crate) _ticker: Mutex<Option<TickerHandle>>,

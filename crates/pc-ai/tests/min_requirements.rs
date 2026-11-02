@@ -60,8 +60,8 @@ fn budget_below_smallest_model_disables_ai_and_import_completes() {
         std::fs::write(root.join(format!("IMG_{i}.jpg")), jpeg(i * 40)).unwrap();
     }
     let store = Store::open(&tmp.path().join("catalog.db"), StoreOptions::default()).unwrap();
-    diag.hub()
-        .add_sink(Arc::new(DbErrorSink::new(store.clone())));
+    let db_sink = Arc::new(DbErrorSink::new(store.clone()));
+    diag.hub().add_sink(db_sink.clone());
     let source_id = store
         .write({
             let path = root.display().to_string();
@@ -198,6 +198,7 @@ fn budget_below_smallest_model_disables_ai_and_import_completes() {
     assert!(pool.loaded_ids().is_empty());
 
     // L'utente vede il motivo: avviso INSUFFICIENT_MEMORY nel registro, per fase.
+    db_sink.flush();
     store.flush().unwrap();
     let warns = store
         .read(|c| {
