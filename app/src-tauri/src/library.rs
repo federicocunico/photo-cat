@@ -41,7 +41,7 @@ pub async fn add_source(app: tauri::AppHandle, source: NewSource) -> AppResult<i
             Ok(id)
         })?;
         tracing::info!(source_id = id, "sorgente aggiunta");
-        restart_watcher(&app);
+        restart_watcher(app);
         Ok(id)
     })
     .await
@@ -54,7 +54,7 @@ pub async fn update_source(app: tauri::AppHandle, source: Source) -> AppResult<(
         state
             .store
             .write(move |c| repo::source::update(c, &source))?;
-        restart_watcher(&app);
+        restart_watcher(app);
         Ok(())
     })
     .await
@@ -200,7 +200,7 @@ pub async fn move_source(app: tauri::AppHandle, id: i64, path: String) -> AppRes
             Ok(())
         })?;
         tracing::info!(source_id = id, "cartella della sorgente cambiata");
-        restart_watcher(&app);
+        restart_watcher(app);
         Ok(())
     })
     .await

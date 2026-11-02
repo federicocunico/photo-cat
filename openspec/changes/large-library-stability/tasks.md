@@ -35,21 +35,21 @@
 ## 5. Errori raggruppati
 
 - [x] 5.1 Buffer degli errori con `errors://batch` ogni 500 ms e scrittura a lotti nel DB (design §4). Verifica: test Rust con 10.000 errori sintetici: al massimo un evento ogni 500 ms e tutti i 10.000 record presenti in `error_log`.
-- [ ] 5.2 Vista "per codice" in Diagnostica con elenco dei file paginato. Verifica: test con `ipcMock` per "Migliaia di file non decodificabili" ed "Errori diversi".
+- [x] 5.2 Vista "per codice" in Diagnostica con elenco dei file paginato. Verifica: test con `ipcMock` per "Migliaia di file non decodificabili" ed "Errori diversi".
 
 ## 6. Import robusto
 
-- [ ] 6.1 Limiti e decodifica senza copie inutili per PNG, WebP e TIFF, `MAX_PIXELS`, permessi corretti, anteprima RAW estratta una sola volta (design §5). Verifica: test in `pc-ingest` con un PNG sintetico enorme ("Immagine enorme") e misura dei permessi richiesti.
+- [x] 6.1 Limiti e decodifica senza copie inutili per PNG, WebP e TIFF, `MAX_PIXELS`, permessi corretti, anteprima RAW estratta una sola volta (design §5). Verifica: test in `pc-ingest` con un PNG sintetico enorme ("Immagine enorme") e misura dei permessi richiesti.
 - [ ] 6.2 Decodificatori di riserva scelti in base al task 1.3 e cause classificate (`DecodeCause`) con messaggi it/en. Verifica: test con file di prova generati (JPEG CMYK, JPEG troncato) per gli scenari "JPEG CMYK" e "File troncato"; nuova esecuzione della classificazione su `D:\photo-cat-loadtest` con il numero di `DECODE_FAILED` residui annotato nel design.
-- [ ] 6.3 Concorrenza dinamica dei worker, sospensione della decodifica in pressione critica con stato del job "in pausa per memoria", e misura della memoria dei processi WebView2 nel governor. Verifica: test di `pc-governor` con una sonda simulata per gli scenari "Interfaccia che cresce" e "Pressione critica".
-- [ ] 6.4 Checkpoint del WAL durante l'import e `temp_store=FILE`. Verifica: test che durante un import sintetico di 20.000 elementi il file WAL resta sotto una soglia definita.
+- [x] 6.3 Concorrenza dinamica dei worker, sospensione della decodifica in pressione critica con stato del job "in pausa per memoria", e misura della memoria dei processi WebView2 nel governor. Verifica: test di `pc-governor` con una sonda simulata per gli scenari "Interfaccia che cresce" e "Pressione critica".
+- [x] 6.4 Checkpoint del WAL durante l'import e `temp_store=FILE`. Verifica: test che durante un import sintetico di 20.000 elementi il file WAL resta sotto una soglia definita.
 
 ## 7. Verifica d'insieme
 
-- [ ] 7.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
+- [x] 7.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
 - [ ] 7.2 Prova a 100.000 foto con `D:\photo-cat-loadtest` e cartella dati separata, monitor attivo: import, analisi, scorrimento completo della griglia, "Seleziona tutto" con un'azione bulk, apertura di Persone durante l'analisi. Verifica: criteri di accettazione del design §6 rispettati, CSV della memoria e risultati riassunti nel design, `D:\Foto` invariata (stesso controllo del task 1.1).
 - [ ] 7.3 Ripetere la prova con il profilo "Leggero" e annotare i tempi. Verifica: nessuna chiusura anomala.
-- [ ] 7.4 Aggiornare il `README.md` (librerie grandi, dove trovare log e dump dopo un crash, script di carico), allineare le delta e verificare che `openspec validate large-library-stability --strict` passi.
+- [x] 7.4 Aggiornare il `README.md` (librerie grandi, dove trovare log e dump dopo un crash, script di carico), allineare le delta e verificare che `openspec validate large-library-stability --strict` passi.
 
 ## Workflow follow-up
 

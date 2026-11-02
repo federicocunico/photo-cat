@@ -263,6 +263,7 @@ export function job(partial: Partial<JobSnapshot> & { id: number }): JobSnapshot
     etaSecs: null,
     failed: 0,
     error: null,
+    memoryPaused: false,
     phases: [],
     ...partial,
   };

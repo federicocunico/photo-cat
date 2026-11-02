@@ -563,7 +563,7 @@ pub fn run() {
                 if let Some(state) = emit_handle.try_state::<AppState>() {
                     *state.last_resources.write() = Some(snap.clone());
                     let n = ticks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    if n % SESSION_TOUCH_TICKS == 0 {
+                    if n.is_multiple_of(SESSION_TOUCH_TICKS) {
                         state.session.touch(
                             Some(memory_summary(&snap.system)),
                             active_job_labels(&state.jobs),

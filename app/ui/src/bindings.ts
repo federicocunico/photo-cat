@@ -765,6 +765,8 @@ export type JobSnapshot = {
 	etaSecs: number | null,
 	failed: number,
 	error: string | null,
+	/**  Il job è fermo in attesa di memoria ("in pausa per memoria"). */
+	memoryPaused?: boolean,
 };
 
 export type JobState = "queued" | "running" | "paused" | "completed" | "completed_with_errors" | "cancelled" | "interrupted" | "failed";
@@ -1017,6 +1019,8 @@ export type PhaseSnapshot = {
 	/**  Elementi al secondo. */
 	rate: number | null,
 	etaSecs: number | null,
+	/**  In pausa per memoria insufficiente (pressione critica). */
+	memoryPaused?: boolean,
 };
 
 export type PhaseState = "pending" | "running" | "done";

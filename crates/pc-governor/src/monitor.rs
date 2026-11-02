@@ -261,6 +261,39 @@ mod tests {
     }
 
     #[test]
+    fn critical_pressure_suspends_decoding_until_memory_returns() {
+        let (probe, gov, mon) = setup(10_000);
+        mon.tick();
+        probe.set_available(600);
+        assert_eq!(mon.tick().state, PressureState::Critical);
+        let states = Arc::new(Mutex::new(Vec::new()));
+        let (g2, s2) = (gov.clone(), states.clone());
+        let worker = std::thread::spawn(move || {
+            let started = Instant::now();
+            let ok = g2.wait_memory(|| true, |p| s2.lock().push(p));
+            (ok, started.elapsed())
+        });
+        std::thread::sleep(Duration::from_millis(250));
+        assert_eq!(*states.lock(), vec![true], "job in pausa per memoria");
+        probe.set_available(9_000);
+        assert_eq!(mon.tick().state, PressureState::Normal);
+        let (ok, waited) = worker.join().unwrap();
+        assert!(ok && waited >= Duration::from_millis(200));
+        assert_eq!(*states.lock(), vec![true, false], "ripresa al rientro");
+        // Annullamento durante l'attesa.
+        probe.set_available(600);
+        mon.tick();
+        let mut n = 0;
+        assert!(!gov.wait_memory(
+            || {
+                n += 1;
+                n < 3
+            },
+            |_| {}
+        ));
+    }
+
+    #[test]
     fn growing_ui_reduces_capacity_and_asks_to_trim_caches() {
         let (probe, gov, mon) = setup(10_000);
         assert_eq!(mon.tick().ui_trim, None);

@@ -69,7 +69,7 @@ describe("griglia a memoria limitata", () => {
     expect(cached?.pages.length).toBeLessThanOrEqual(MAX_PAGES);
     expect(result.current.items.length).toBeLessThanOrEqual(MAX_PAGES * PAGE_SIZE);
     // La finestra è sulle ultime pagine scorse, con le posizioni globali corrette.
-    expect(result.current.start).toBe(45 * PAGE_SIZE);
+    await waitFor(() => expect(result.current.start).toBe(45 * PAGE_SIZE));
     expect(result.current.items[0].id).toBe(45 * PAGE_SIZE + 1);
     expect(result.current.pages.hasPreviousPage).toBe(true);
 
@@ -81,7 +81,7 @@ describe("griglia a memoria limitata", () => {
     expect(commandsMock.libraryPage).toHaveBeenCalledTimes(1);
     const at = commandsMock.libraryPage.mock.calls[0][2] as PageAt;
     expect(at.kind).toBe("before");
-    expect(result.current.start).toBe(44 * PAGE_SIZE);
+    await waitFor(() => expect(result.current.start).toBe(44 * PAGE_SIZE));
     expect(result.current.items[0].id).toBe(44 * PAGE_SIZE + 1);
     expect(
       qc.getQueryData<{ pages: unknown[] }>(gridKey(filter, "captured_desc", 0))?.pages.length,

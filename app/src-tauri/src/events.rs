@@ -62,14 +62,14 @@ const LOG_BATCH_MAX: usize = 200;
 /// Intervallo minimo tra due eventi di progresso dello stesso job (i cambi di stato passano subito).
 pub const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 
+/// Ultimo invio per job: istante e stato.
+type LastSent = HashMap<i64, (Instant, pc_jobs::JobState)>;
+
 /// Limita gli snapshot di progresso a uno ogni [`PROGRESS_EVERY`] per job; l'ultimo snapshot
 /// trattenuto viene inviato dal thread di svuotamento, così lo stato finale arriva sempre.
 #[derive(Default)]
 pub struct ProgressThrottle {
-    inner: Mutex<(
-        HashMap<i64, (Instant, pc_jobs::JobState)>,
-        HashMap<i64, JobSnapshot>,
-    )>,
+    inner: Mutex<(LastSent, HashMap<i64, JobSnapshot>)>,
 }
 
 impl ProgressThrottle {
@@ -217,6 +217,7 @@ mod tests {
             eta_secs: None,
             failed: 0,
             error: None,
+            memory_paused: false,
         }
     }
 
@@ -262,6 +263,7 @@ mod faces_tests {
             percent: None,
             rate: None,
             eta_secs: None,
+            memory_paused: false,
         };
         JobSnapshot {
             id: 3,
@@ -272,6 +274,7 @@ mod faces_tests {
             eta_secs: None,
             failed: 0,
             error: None,
+            memory_paused: false,
         }
     }
 

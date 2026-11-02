@@ -528,6 +528,8 @@ pub fn page_at(
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
+// Valore di breve durata (parametro di un comando o di un job): la differenza di dimensione è irrilevante.
+#[allow(clippy::large_enum_variant)]
 pub enum Target {
     Ids {
         ids: Vec<MediaId>,

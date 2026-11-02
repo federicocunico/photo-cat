@@ -78,6 +78,7 @@ export const en: Messages = {
     cores: "Logical / physical cores",
     pressure: "Memory state",
     aiPaused: "AI analysis paused: not enough memory",
+    memoryPaused: "Paused for memory",
     phases: {
       scansione: "Scan",
       ricollegamento: "Relinking",
@@ -324,6 +325,18 @@ export const en: Messages = {
     refresh: "Refresh",
     clearFilters: "Clear filters",
     follow: "Follow",
+    byCode: "Summary by code",
+    groupTitle: "{{code}} — {{n}} files",
+    groupFiles: "Affected files",
+    moreFiles: "Show more ({{n}} left)",
+    causes: {
+      truncated: "Damaged or incomplete file",
+      corrupt: "Damaged file",
+      unsupported_variant: "Unsupported format variant",
+      no_raw_preview: "RAW without embedded preview",
+      too_large: "Image over the limits",
+      io: "Read error",
+    },
   },
   errors: {
     internal: "Internal application error.",

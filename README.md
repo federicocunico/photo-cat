@@ -275,6 +275,49 @@ path = "/usr/bin/darktable"
 args = ["--library", ":memory:", "{file}"]
 ```
 
+## Librerie grandi
+
+L'app è pensata per librerie da 100.000 foto e oltre:
+
+- la griglia tiene in memoria solo le pagine vicine alla vista (al massimo 5 da 300 foto); scorrendo lontano le altre vengono scaricate e ricaricate quando si torna indietro;
+- "Seleziona tutto" e "Inverti" non caricano l'elenco delle foto: la selezione è "tutti i risultati del filtro" più le eccezioni (Ctrl+clic), e le azioni in blocco si applicano solo alle foto presenti al momento della selezione;
+- conteggi, filtri e miniature non bloccano mai la finestra: una richiesta superata da un filtro più recente viene interrotta;
+- gli errori per file arrivano a gruppi: Diagnostica › **Riepilogo per codice** mostra, per esempio, "DECODE_FAILED — 1.240 file"; aprendo la riga si vede l'elenco dei file con il motivo (file danneggiato o incompleto, variante non supportata, RAW senza anteprima, immagine oltre i limiti);
+- immagini non JPEG oltre 100 megapixel non vengono decodificate (miniatura assente, errore "immagine oltre i limiti"); per i JPEG che il decodificatore principale non legge si usa un decodificatore di riserva;
+- se la memoria del sistema diventa critica, decodifica e analisi si fermano ("in pausa per memoria" nella schermata Job) e riprendono da sole; se l'interfaccia supera 1,5 GB, l'import rallenta e l'interfaccia libera le cache.
+
+### Dopo una chiusura anomala
+
+Al riavvio un avviso indica che la sessione precedente non si è chiusa regolarmente, con l'ora dell'ultima attività e la memoria in quel momento. Se si chiude solo l'interfaccia (processo WebView), l'app la ricarica e i job continuano; dopo tre chiusure in pochi minuti i job vanno in pausa e compare una finestra con il percorso dei log.
+
+Dove guardare (cartella dati, vedi Impostazioni → Percorso dati):
+
+| File | Contenuto |
+|---|---|
+| `logs/photo-cat.<data>.log` | log dell'app (JSON, una riga per evento) |
+| `logs/session.last-abnormal.json` | ultima sessione non chiusa: ora, memoria, job attivi |
+| `logs/crash/native.log`, `logs/crash/native-*.dmp` | abort nativi (eccezioni, segnali) e minidump (Windows) |
+| `%LOCALAPPDATA%\com.photocat.app\EBWebView\Crashpad\reports\*.dmp` | dump di crash di WebView2 (Windows) |
+
+Diagnostica › **Esporta pacchetto** include questi file (al massimo 3 dump per tipo e 20 MB in tutto, solo quelli successivi all'ultima chiusura regolare).
+
+### Test di carico
+
+`scripts/loadtest/` contiene la prova ripetibile a 100.000 foto, che non modifica mai la cartella delle foto:
+
+```powershell
+# libreria di prova con collegamenti fisici alle foto di D:\Foto (in sola lettura)
+powershell -ExecutionPolicy Bypass -File scripts\loadtest\make-library.ps1 -Source D:\Foto -Target D:\photo-cat-loadtest
+# app con cartella dati separata, poi aggiungere la sorgente D:\photo-cat-loadtest\library
+$env:PHOTO_CAT_DATA_DIR = 'D:\photo-cat-loadtest\data'; .\photo-cat.exe
+# memoria dell'app e della WebView ogni 5 s in un CSV (long task: livello di log "debug")
+powershell -ExecutionPolicy Bypass -File scripts\loadtest\monitor.ps1 -DataDir D:\photo-cat-loadtest\data
+# pulizia (solo D:\photo-cat-loadtest)
+powershell -ExecutionPolicy Bypass -File scripts\loadtest\clean.ps1
+```
+
+Su Linux: `scripts/loadtest/make-library.sh SORGENTE DESTINAZIONE 100000 2000` (e `--clean`). Gli script verificano prima e dopo che numero e date dei file della sorgente siano invariati. Per classificare le decodifiche fallite di una cartella senza importarla: `cargo run --release -p pc-ingest --features heif --example classify_decode -- D:\Foto`.
+
 ## Struttura
 
 | Percorso | Contenuto |

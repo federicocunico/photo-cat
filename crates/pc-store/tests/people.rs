@@ -405,6 +405,6 @@ fn faces_are_paged_without_duplicates_or_gaps() {
         }
         let expected = if person.is_some() { 1_666 } else { 2_500 };
         assert_eq!(seen.len(), expected);
-        assert_eq!(pages, (expected + 299) / 300);
+        assert_eq!(pages, expected.div_ceil(300));
     }
 }
