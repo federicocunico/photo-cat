@@ -99,7 +99,11 @@ function Thumb({
       }}
       aria-pressed={selected}
       data-testid={`thumb-${item.id}`}
-      title={item.name}
+      title={
+        item.excludedAt
+          ? `${item.name} · ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
+          : item.name
+      }
       style={{
         width: size,
         padding: 0,
@@ -171,6 +175,20 @@ function Thumb({
               : t("library.queuedBadge")}
         </span>
         <ThumbTags tags={item.tags} color={tagColor} />
+        {item.excludedAt != null && (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              background: "var(--pc-panel)",
+              padding: 3,
+              fontSize: 11,
+            }}
+          >
+            {t("exclusions.date", { date: new Date(item.excludedAt).toLocaleDateString() })}
+          </span>
+        )}
         {selected && (
           <span
             aria-hidden="true"
@@ -206,10 +224,18 @@ function Thumb({
 }
 
 /** Griglia virtualizzata: carica le pagine (keyset) man mano che si scorre. */
+import { useCatalogAction } from "./useCatalogAction";
+
 export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const { t } = useTranslation();
   const { filter, sort, thumbSize, selected, focused, setSelection, scrollTop, setScrollTop } =
     useLibrary();
+  const catalogAction = useCatalogAction();
+  const catalogs = useQuery({
+    queryKey: ["catalogs"],
+    queryFn: commands.listCatalogs,
+    enabled: isTauri(),
+  });
   const size = thumbPx(thumbSize);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(initialWidth ?? 800);
@@ -294,6 +320,25 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   return (
     <div
       ref={scrollRef}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]"))
+          return;
+        const restore = filter.excludedFrom != null;
+        if (
+          (e.key === "Delete" && filter.catalogId != null && !restore) ||
+          (e.key === "Enter" && restore)
+        ) {
+          e.preventDefault();
+          const id = filter.excludedFrom ?? filter.catalogId!;
+          void catalogAction.act(
+            selected,
+            id,
+            catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
+            restore,
+          );
+        }
+      }}
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}

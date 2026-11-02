@@ -11,6 +11,9 @@ import { BulkBar } from "./BulkBar";
 import { FacetPanels } from "./FacetPanel";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
 
+import { CatalogHeader } from "./CatalogHeader";
+import { CatalogFeedback } from "./catalogActions";
+
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
 
 function Toolbar() {
@@ -33,6 +36,9 @@ function Toolbar() {
       <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {t("library.sort")}
         <select className="field" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+          {filter.excludedFrom != null && (
+            <option value="excluded_at">{t("exclusions.sort")}</option>
+          )}
           {SORTS.map((s) => (
             <option key={s} value={s}>
               {t(`library.sortKeys.${s}`)}
@@ -81,6 +87,8 @@ export function LibraryPage() {
       left={<LibrarySidebar />}
       center={
         <>
+          <CatalogHeader />
+          <CatalogFeedback />
           <Toolbar />
           <BulkBar />
           <LibraryGrid />

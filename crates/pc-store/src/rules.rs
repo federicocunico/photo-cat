@@ -161,6 +161,96 @@ pub fn compile(rule: &Rule) -> StoreResult<SqlFragment> {
     Ok(f)
 }
 
+/// Compila l'appartenenza con le stesse regole del contenuto del catalogo.
+pub fn compile_with(c: &rusqlite::Connection, rule: &Rule) -> StoreResult<SqlFragment> {
+    compile_resolved(c, rule, &[])
+}
+
+pub fn catalog_content(
+    c: &rusqlite::Connection,
+    id: i64,
+    stack: &[i64],
+) -> StoreResult<SqlFragment> {
+    if stack.contains(&id) || stack.len() >= MAX_DEPTH {
+        return Err(StoreError::Invalid(
+            "riferimento circolare tra cataloghi".into(),
+        ));
+    }
+    let cat = crate::repo::catalog::get(c, id)?;
+    let mut next = stack.to_vec();
+    next.push(id);
+    let mut f = if cat.kind == crate::model::CatalogKind::Manual {
+        SqlFragment {
+            sql: "m.id IN (SELECT media_id FROM catalog_item WHERE catalog_id=?)".into(),
+            args: vec![Value::Integer(id)],
+        }
+    } else {
+        let json = cat
+            .rules
+            .ok_or_else(|| StoreError::Invalid("catalogo smart senza regole".into()))?;
+        compile_resolved(c, &parse(&json)?, &next)?
+    };
+    f.sql = format!(
+        "({}) AND m.id NOT IN (SELECT media_id FROM catalog_exclusion WHERE catalog_id=?)",
+        f.sql
+    );
+    f.args.push(Value::Integer(id));
+    Ok(f)
+}
+
+fn compile_resolved(
+    c: &rusqlite::Connection,
+    rule: &Rule,
+    stack: &[i64],
+) -> StoreResult<SqlFragment> {
+    match rule {
+        Rule::Group { op, rules } => {
+            let mut out = SqlFragment::default();
+            let mut parts = Vec::new();
+            for rule in rules {
+                let f = compile_resolved(c, rule, stack)?;
+                parts.push(format!("({})", f.sql));
+                out.args.extend(f.args);
+            }
+            out.sql = parts.join(if *op == BoolOp::And { " AND " } else { " OR " });
+            Ok(out)
+        }
+        Rule::Cond { field, cmp, value } if field == "catalog" => {
+            let values = value
+                .as_array()
+                .cloned()
+                .unwrap_or_else(|| vec![value.clone()]);
+            let mut out = SqlFragment::default();
+            let mut parts = Vec::new();
+            for value in values {
+                let id = value
+                    .as_i64()
+                    .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+                    .ok_or_else(|| StoreError::Invalid("id catalogo non valido".into()))?;
+                let f = match catalog_content(c, id, stack) {
+                    Ok(f) => f,
+                    Err(StoreError::NotFound(_)) => SqlFragment {
+                        sql: "0".into(),
+                        args: Vec::new(),
+                    },
+                    Err(error) => return Err(error),
+                };
+                // L'appartenenza è sempre booleana, anche se una regola smart
+                // confronta un metadato assente (NULL).
+                parts.push(format!("COALESCE(({}),0)", f.sql));
+                out.args.extend(f.args);
+            }
+            out.sql = format!(
+                "{}({})",
+                if *cmp == Cmp::Neq { "NOT " } else { "" },
+                parts.join(" OR ")
+            );
+            Ok(out)
+        }
+        _ => compile(rule),
+    }
+}
+
 fn compile_into(rule: &Rule, f: &mut SqlFragment) -> StoreResult<()> {
     match rule {
         Rule::Group { op, rules } => {

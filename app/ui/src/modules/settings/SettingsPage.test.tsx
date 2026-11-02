@@ -158,6 +158,8 @@ it("anteprima di una soglia di categoria e applicazione senza rianalisi", async 
 
 it("rifiuta un valore non valido e ripristina i predefiniti", async () => {
   renderSettings();
+  // Attende anche la tassonomia prima di modificare il modulo appena idratato.
+  await screen.findByLabelText("Categoria Stanza");
   const persons = await screen.findByLabelText("Rilevamento persone");
   // Scenario "Valore non valido".
   fireEvent.change(persons, { target: { value: "1.5" } });

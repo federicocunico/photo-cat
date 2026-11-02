@@ -576,16 +576,91 @@ pub mod catalog {
 
     /// Aggiunge elementi a un catalogo manuale; restituisce quelli effettivamente aggiunti.
     pub fn add_items(c: &Connection, id: i64, ids: &[MediaId]) -> StoreResult<Vec<MediaId>> {
-        let mut st = c.prepare_cached(
-            "INSERT OR IGNORE INTO catalog_item(catalog_id, media_id) VALUES (?1, ?2)",
-        )?;
-        let mut added = Vec::new();
-        for m in ids {
-            if st.execute(params![id, m])? > 0 {
-                added.push(*m);
+        if get(c, id)?.kind != CatalogKind::Manual {
+            return Err(StoreError::Invalid(
+                "i cataloghi smart si modificano con le regole o le esclusioni".into(),
+            ));
+        }
+        atomic(c, || {
+            let mut st = c.prepare_cached(
+                "INSERT OR IGNORE INTO catalog_item(catalog_id, media_id) VALUES (?1, ?2)",
+            )?;
+            let mut added = Vec::new();
+            for m in ids {
+                c.execute(
+                    "DELETE FROM catalog_exclusion WHERE catalog_id=?1 AND media_id=?2",
+                    params![id, m],
+                )?;
+                if st.execute(params![id, m])? > 0 {
+                    added.push(*m);
+                }
+            }
+            drop(st);
+            Ok(added)
+        })
+    }
+
+    fn atomic<T>(c: &Connection, operation: impl FnOnce() -> StoreResult<T>) -> StoreResult<T> {
+        c.execute_batch("SAVEPOINT catalog_change")?;
+        match operation() {
+            Ok(value) => {
+                c.execute_batch("RELEASE catalog_change")?;
+                Ok(value)
+            }
+            Err(error) => {
+                c.execute_batch("ROLLBACK TO catalog_change; RELEASE catalog_change")?;
+                Err(error)
             }
         }
-        Ok(added)
+    }
+
+    /// Esclude senza modificare media_item o i file. La transazione del chiamante
+    /// può già essere aperta (bulk): un savepoint mantiene atomiche le due tabelle.
+    pub fn exclude(c: &Connection, id: i64, ids: &[MediaId]) -> StoreResult<Vec<MediaId>> {
+        change_exclusion(c, id, ids, false)
+    }
+
+    pub fn restore(c: &Connection, id: i64, ids: &[MediaId]) -> StoreResult<Vec<MediaId>> {
+        change_exclusion(c, id, ids, true)
+    }
+
+    fn change_exclusion(
+        c: &Connection,
+        id: i64,
+        ids: &[MediaId],
+        restore: bool,
+    ) -> StoreResult<Vec<MediaId>> {
+        let manual = get(c, id)?.kind == CatalogKind::Manual;
+        atomic(c, || {
+            let mut changed = Vec::new();
+            for media in ids {
+                let n = if restore {
+                    c.execute(
+                        "DELETE FROM catalog_exclusion WHERE catalog_id=?1 AND media_id=?2",
+                        params![id, media],
+                    )?
+                } else {
+                    c.execute("INSERT OR IGNORE INTO catalog_exclusion(catalog_id,media_id,excluded_at) VALUES (?1,?2,?3)", params![id,media,now_ms()])?
+                };
+                if n > 0 {
+                    if manual {
+                        if restore {
+                            c.execute(
+                                "INSERT OR IGNORE INTO catalog_item VALUES (?1,?2)",
+                                params![id, media],
+                            )?;
+                        } else {
+                            c.execute(
+                                "DELETE FROM catalog_item WHERE catalog_id=?1 AND media_id=?2",
+                                params![id, media],
+                            )?;
+                        }
+                    }
+                    changed.push(*media);
+                }
+            }
+            Ok(changed)
+        })
     }
 
     pub fn remove_items(c: &Connection, id: i64, ids: &[MediaId]) -> StoreResult<Vec<MediaId>> {
@@ -610,13 +685,18 @@ pub mod catalog {
     }
 
     pub fn catalogs_of(c: &Connection, media: MediaId) -> StoreResult<Vec<String>> {
-        let mut st = c.prepare_cached(
-            "SELECT k.name FROM catalog_item ci JOIN catalog k ON k.id=ci.catalog_id WHERE ci.media_id=?1 ORDER BY k.name",
-        )?;
-        let rows = st
-            .query_map([media], |r| r.get(0))?
-            .collect::<Result<_, _>>()?;
-        Ok(rows)
+        let mut names = Vec::new();
+        for cat in list(c)? {
+            let filter = crate::query::LibraryFilter {
+                catalog_id: Some(cat.id),
+                ids: Some(vec![media]),
+                ..Default::default()
+            };
+            if crate::query::count(c, &filter)? > 0 {
+                names.push(cat.name);
+            }
+        }
+        Ok(names)
     }
 }
 

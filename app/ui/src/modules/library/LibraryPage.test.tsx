@@ -7,6 +7,7 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { clickSelect, emptyFilter, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
+import { useLive } from "../../store/live";
 import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
@@ -24,6 +25,7 @@ const list = (values: { value: string; count: number }[], total = values.length)
 
 const item = (id: number): GridItem => ({
   id,
+  excludedAt: null,
   name: `IMG_${String(id).padStart(4, "0")}.JPG`,
   path: `D:\\Foto\\IMG_${id}.JPG`,
   thumb: id % 2 ? `abcdef${id}0000` : null,
@@ -677,4 +679,82 @@ describe("filtro per data anno → mese → giorno", () => {
     expect(within(filters).getByRole("checkbox", { name: /Sun 14/ })).toBeChecked();
     expect(await screen.findByRole("button", { name: /14 May 2023/ })).toBeTruthy();
   });
+});
+
+it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 5, name: "Viaggio", kind: "smart", rules: null, createdAt: 0 },
+      items: 34,
+      excluded: 6,
+    },
+  ] as never);
+  commandsMock.startBulk.mockResolvedValue(799);
+  useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 5 }, selected: [] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Escluse (6)" }));
+  expect(useLibrary.getState().filter).toMatchObject({
+    catalogId: null,
+    excludedFrom: 5,
+    matchingOnly: true,
+  });
+  expect(useLibrary.getState().sort).toBe("excluded_at");
+  expect(JSON.parse(localStorage.getItem("photo-cat.library")!).state.sort).toBe("captured_desc");
+  fireEvent.click(screen.getByRole("checkbox", { name: /Mostra anche/ }));
+  expect(useLibrary.getState().filter.matchingOnly).toBe(false);
+  fireEvent.click(await screen.findByTestId("thumb-1"));
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Enter" });
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      [1],
+      { action: "restore_to_catalog", catalog: 5 },
+      false,
+    ),
+  );
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 5, name: "Viaggio", kind: "smart", rules: null, createdAt: 0 },
+      items: 36,
+      excluded: 4,
+    },
+  ] as never);
+  act(() =>
+    useLive.setState({
+      jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  expect(await screen.findByText(/foto reinserite/)).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
+  expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
+});
+
+it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annulla", async () => {
+  commandsMock.startBulk.mockResolvedValue(800);
+  commandsMock.undoBulk.mockResolvedValue(null);
+  const confirm = vi.spyOn(window, "confirm");
+  useLibrary.setState({ selected: [1], filter: emptyFilter() });
+  renderPage();
+  fireEvent.keyDown(await screen.findByTestId("grid-scroll"), { key: "Delete" });
+  expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  act(() => useLibrary.getState().setFilter({ catalogId: 5 }));
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalledTimes(1));
+  expect(commandsMock.startBulk).toHaveBeenCalledWith(
+    [1],
+    { action: "exclude_from_catalog", catalog: 5 },
+    false,
+  );
+  expect(confirm).not.toHaveBeenCalled();
+  act(() =>
+    useLive.setState({
+      jobs: { 800: { id: 800, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  expect(await screen.findByText(/file non sono stati toccati/)).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+  await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
+  confirm.mockRestore();
 });
