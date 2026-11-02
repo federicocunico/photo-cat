@@ -60,3 +60,7 @@ Per i cataloghi manuali escludere = `DELETE FROM catalog_item` + `INSERT OR REPL
 ## Migration Plan
 
 Migrazione v6 automatica con il backup del catalogo già previsto prima delle migrazioni. Nessun dato esistente cambia: le rimozioni fatte prima di questa versione non compaiono tra le escluse, perché non erano tracciate. Rollback: una versione precedente rifiuta un catalogo v6 (comportamento esistente); serve il backup automatico pre-migrazione.
+
+## Decisione sulle verifiche (2026-11-02)
+
+L'utente ha autorizzato la conclusione con CI e merge dopo il blocco di accesso di Computer Use alla finestra di prova. Il flusso interattivo completo del precedente task 4.2 viene differito e resta documentato in tasks.md; i requisiti funzionali rimangono invariati. Sono superati i test automatici Rust/UI e le pipeline di build; l'avvio reale, la migrazione con backup e l'integrita degli otto file nella copia di prova sono stati verificati separatamente.

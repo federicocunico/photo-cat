@@ -27,8 +27,17 @@
 ## 4. Verifica d'insieme
 
 - [x] 4.1 Eseguire `make test` (fmt, clippy, test Rust e UI). Verifica: tutto verde.
-- [ ] 4.2 Prova sull'app reale con una copia della libreria (mai sulla cartella `D:\Foto` in scrittura): escludere da un manuale e da uno smart, annullare, rivedere le escluse, reinserire, rianalizzare e controllare che le esclusioni smart reggano. Verifica: tutti i passi riusciti, file su disco intatti, nessun errore nuovo in Diagnostica.
 - [x] 4.3 Aggiornare il `README.md` (esclusioni dai cataloghi), allineare le delta e verificare che `openspec validate catalog-exclusions --strict` passi.
+
+## Verifica interattiva differita (decisione del 2026-11-02)
+
+La prova precedentemente prevista dal task 4.2 resta da eseguire:
+
+4.2 Prova sull'app reale con una copia della libreria (mai sulla cartella `D:\Foto` in scrittura): escludere da un manuale e da uno smart, annullare, rivedere le escluse, reinserire, rianalizzare e controllare che le esclusioni smart reggano. Verifica: tutti i passi riusciti, file su disco intatti, nessun errore nuovo in Diagnostica.
+
+Computer Use ha negato l'accesso alla finestra con `Computer Use was not approved to use photo-cat`, anche dopo il consenso dell'utente e la configurazione dell'app consentita. L'utente ha richiesto esplicitamente di concludere con CI e merge, differendo questa verifica. Non viene dichiarata superata.
+
+Sono stati verificati l'avvio reale della build release Windows, la migrazione v5 -> v6 con backup e una copia isolata con 8 foto, 8 miniature, zero errori registrati e hash dei file invariati. I flussi di esclusione, undo e reinserimento sono coperti dai test automatici Rust e UI.
 
 ## Workflow follow-up
 
