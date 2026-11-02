@@ -14,7 +14,7 @@
 
 - [x] 3.1 README, "Aggiornare e tornare a una versione precedente" section: what upgrades and uninstalls keep (folders, "Delete app data" checkbox) and how to remove everything; check that the paths match `AppPaths`
 - [x] 3.2 Run `cargo test`, `npm test` and `make test-linux`, fixing every failure
-- [ ] 3.3 Real installer test on Windows, with a backup of the user data first: install the new build over the installed version (prefs and library unchanged), then uninstall with "Delete app data" and reinstall (prefs restored from `ui-prefs.json`, library intact)
+- [x] 3.3 Real installer test on Windows, with a backup of the user data first: install the new build over the installed version (prefs and library unchanged), then uninstall with "Delete app data" and reinstall (prefs restored from `ui-prefs.json`, library intact)
 
 ## Workflow follow-up
 
