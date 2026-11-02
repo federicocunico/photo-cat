@@ -6,8 +6,6 @@ import { commandsMock, emit, ipcMockModule } from "./test/ipcMock";
 import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
-import { act } from "@testing-library/react";
-import { emit } from "./test/ipcMock";
 
 it("Primo avvio: does not render Library before startup and onboarding decisions", async () => {
   commandsMock.bootStatus.mockResolvedValue({

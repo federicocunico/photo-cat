@@ -1,5 +1,6 @@
 // Menu contestuale della griglia: agisce sulla selezione (o sulla sola
 // miniatura cliccata). Navigabile con le frecce, Invio ed Esc.
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";

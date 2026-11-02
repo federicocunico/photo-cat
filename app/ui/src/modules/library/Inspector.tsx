@@ -130,8 +130,9 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
           className="btn"
           disabled={!tag.trim()}
           onClick={() => {
-            void apply({ action: "add_tag", name: tag.trim() });
+            const pending = apply({ action: "add_tag", name: tag.trim() });
             setTag("");
+            return pending;
           }}
         >
           {t("bulk.actions.add_tag")}

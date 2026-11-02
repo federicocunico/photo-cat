@@ -65,3 +65,7 @@ Nessun dato coinvolto. Rollback: revert.
 - Tauri 2.12.5: `tests/late_state.rs` uses the real IPC dispatcher with MockRuntime. A command requiring managed State rejects before registration; registering it on a worker after setup makes the same command succeed. The executable test passes on Linux. The primary route (late AppState registration) is therefore used; no OnceLock wrapper is needed.
 - `boot::open_stores` is shared by startup and a migration test against a real schema-v1 database in a temporary directory. It verifies opening, migration and archive phases, schema upgrade and catalog/config backups.
 - The logger is retained through retries using Arc<Diagnostics>. If the selected data directory cannot hold logs, boot errors point to the temporary boot log directory. The catalog and app archive are initialized on the startup worker.
+
+## Decisione sulle verifiche (2026-11-02)
+
+L'utente ha autorizzato la conclusione con CI e archive dopo il blocco di una prova GUI interattiva completa (come per `catalog-exclusions`). Il flusso interattivo del task 5.2 viene differito e resta documentato in tasks.md; i requisiti funzionali rimangono invariati. Sono previsti i test automatici Rust/UI (Boot, QueryView, BusyButton, Toast, griglia) e `make test-linux`; l'avvio con migrazione in cartella temporanea è coperto dal test `boot::tests::phases_cover_migration_and_app_archive_with_a_real_old_catalog`.

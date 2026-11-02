@@ -425,6 +425,7 @@ fn initialize(
     ));
     let shared_config = Arc::new(RwLock::new(config.clone()));
     let face_policy = Arc::new(pc_ai::face_policy::FacePolicy::new(config.ai.faces_enabled));
+    let thumbs = ThumbCache::new(paths.thumbnails());
     let ai_deps = pc_ai::analyze::AiDeps {
         resources: pc_ai::stages::AiResources {
             models: model_store.clone(),
@@ -437,13 +438,14 @@ fn initialize(
         face_policy: face_policy.clone(),
         analysis_lock: Arc::default(),
         app_store: Some(app_store.clone()),
+        thumbs: Some(thumbs.clone()),
     };
 
     let jobs = JobManager::new(
         store.clone(),
         governor.clone(),
         2,
-        Arc::new(events::TauriProgressSink(handle.clone())),
+        Arc::new(events::TauriProgressSink::new(handle.clone())),
     );
     jobs.register("demo", Arc::new(demo::plan));
     let export_store = store.clone();
@@ -469,7 +471,6 @@ fn initialize(
             pc_organize::sequence::job::plan(seq_store.clone(), seq_governor.clone(), p)
         }),
     );
-    let thumbs = ThumbCache::new(paths.thumbnails());
     let bulk_store = store.clone();
     let bulk_deps = ai_deps.clone();
     let bulk_thumbs = thumbs.clone();

@@ -4,7 +4,6 @@
 import { vi } from "vitest";
 import type {
   SourceSummary,
-  ErrorRecord,
   ErrorBatch,
   JobSnapshot,
   LogLine,
