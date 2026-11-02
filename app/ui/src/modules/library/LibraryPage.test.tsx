@@ -593,3 +593,88 @@ describe("elenco completo dei filtri e pannelli flottanti", () => {
     });
   });
 });
+
+describe("filtro per data anno → mese → giorno", () => {
+  beforeEach(() => {
+    commandsMock.libraryFacets.mockImplementation((async (f: {
+      dateFrom: string | null;
+      dateTo: string | null;
+    }) => {
+      const month = f.dateFrom?.startsWith("2023-05") && f.dateTo?.startsWith("2023-05");
+      return {
+        labels: [],
+        places: list([]),
+        years: list([
+          { value: "2023", count: 7 },
+          { value: "2022", count: 1 },
+        ]),
+        months: f.dateFrom?.startsWith("2023")
+          ? list([
+              { value: "2023-03", count: 4 },
+              { value: "2023-05", count: 3 },
+            ])
+          : null,
+        days: month
+          ? list([
+              { value: "2023-05-14", count: 2 },
+              { value: "2023-05-20", count: 1 },
+            ])
+          : null,
+        formats: list([]),
+        people: list([]),
+        tags: list([]),
+      };
+    }) as never);
+  });
+  afterEach(() => i18n.changeLanguage("it"));
+
+  it("mesi sotto l'anno scelto, giorni sotto il mese, chip e risalita", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    expect(within(filters).queryByRole("checkbox", { name: /maggio/ })).toBeNull();
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /2023/ }));
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /maggio/ }));
+    await waitFor(() =>
+      expect(commandsMock.libraryPage).toHaveBeenCalledWith(
+        expect.objectContaining({ dateFrom: "2023-05-01", dateTo: "2023-05-31" }),
+        expect.anything(),
+        null,
+        expect.any(Number),
+      ),
+    );
+    expect(await screen.findByRole("button", { name: "Rimuovi filtro maggio 2023" })).toBeTruthy();
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /dom 14/ }));
+    await waitFor(() =>
+      expect(useLibrary.getState().filter).toMatchObject({
+        dateFrom: "2023-05-14",
+        dateTo: "2023-05-14",
+      }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Rimuovi filtro 14 maggio 2023" }),
+    ).toBeTruthy();
+    // Togliere la spunta al giorno torna al mese.
+    fireEvent.click(within(filters).getByRole("checkbox", { name: /dom 14/ }));
+    await waitFor(() =>
+      expect(useLibrary.getState().filter).toMatchObject({
+        dateFrom: "2023-05-01",
+        dateTo: "2023-05-31",
+      }),
+    );
+    // Il chip toglie tutto il filtro per data.
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi filtro maggio 2023" }));
+    await waitFor(() => expect(useLibrary.getState().filter.dateFrom).toBeNull());
+  });
+
+  it("nomi di mesi e chip nella lingua dell'interfaccia", async () => {
+    await i18n.changeLanguage("en");
+    useLibrary.setState({
+      filter: { ...emptyFilter(), dateFrom: "2023-05-14", dateTo: "2023-05-14" },
+    });
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filters" });
+    expect(await within(filters).findByRole("checkbox", { name: /May/ })).toBeChecked();
+    expect(within(filters).getByRole("checkbox", { name: /Sun 14/ })).toBeChecked();
+    expect(await screen.findByRole("button", { name: /14 May 2023/ })).toBeTruthy();
+  });
+});

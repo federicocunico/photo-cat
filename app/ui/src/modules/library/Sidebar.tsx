@@ -10,6 +10,7 @@ import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
 import { FacetList } from "./FacetList";
+import { DateFacet } from "./DateFacet";
 
 function Row({
   label,
@@ -290,7 +291,11 @@ export function LibrarySidebar() {
           </>
         )}
         {(facets.data?.years.total ?? 0) > 0 && (
-          <FacetList facetKey={{ kind: "year" }} list={facets.data!.years} />
+          <DateFacet
+            years={facets.data!.years}
+            months={facets.data!.months ?? null}
+            days={facets.data!.days ?? null}
+          />
         )}
         {(facets.data?.formats.total ?? 0) > 0 && (
           <FacetList facetKey={{ kind: "format" }} list={facets.data!.formats} />

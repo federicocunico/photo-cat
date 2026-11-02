@@ -58,6 +58,15 @@ Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
 
 ## Aggiornare e tornare a una versione precedente
 
+**Dove stanno i dati.** Libreria e preferenze sono nella cartella utente dell'app, separata dalla cartella del programma:
+
+| Contenuto | Windows | Linux |
+|---|---|---|
+| Cartella dati: `catalog.db`, `config.toml` (impostazioni, tema, lingua), miniature, modelli, log, `backups/` | `%APPDATA%\photocat\photo-cat\data` (o il percorso scelto nelle impostazioni) | `~/.local/share/photo-cat` |
+| Cartella dell'app: `app.db` (identità, set di tag), `ui-prefs.json` (layout, ordinamento, miniature, pannelli) | `%APPDATA%\photocat\photo-cat\config` | `~/.config/photo-cat` |
+
+**Installare sopra una versione esistente** (anche senza disinstallare) conserva tutto: l'installer sostituisce solo il programma. **Disinstallare e reinstallare** conserva comunque libreria, impostazioni e preferenze, anche spuntando "Elimina i dati dell'applicazione": quella casella cancella solo il profilo dell'interfaccia (`%LOCALAPPDATA%\com.photocat.app`), e al primo avvio le preferenze dell'interfaccia vengono ripristinate da `ui-prefs.json`. Per rimuovere davvero tutto, dopo la disinstallazione cancellare a mano la cartella `%APPDATA%\photocat` (Windows) oppure `~/.local/share/photo-cat` e `~/.config/photo-cat` (Linux).
+
 All'avvio la nuova versione aggiorna il catalogo (`catalog.db`) se è di una versione precedente. Prima di farlo ne salva una copia in `backups/` dentro la cartella dati (`catalog-v<schema>-<data>.db`), insieme a una copia della configurazione (`config-v<schema>-<data>.toml`). L'archivio dell'app (`app.db`, identità e set di tag) è nuovo dalla 0.2.0 e viene creato al primo avvio; le persone con nome del catalogo diventano identità.
 
 Una versione precedente non apre un catalogo aggiornato: lo segnala e non lo modifica. Non legge nemmeno la configurazione nuova, quindi usa i valori predefiniti, compresa la cartella dati. Per tornare a una versione precedente:
@@ -186,6 +195,7 @@ Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazi
 - **Più foto**: azione bulk "Imposta luogo" (o "Ripristina luogo automatico") sulla selezione, oppure dal menu del tasto destro sulla griglia. Si annulla con "Annulla".
 - **Un luogo intero**: nel facet Luogo, ✎ accanto al nome rinomina il luogo per tutte le foto che lo hanno (es. "D7000" → "Giappone"). Se il nuovo nome esiste già, i due luoghi si uniscono.
 - **Elenco completo dei filtri**: ogni lista di filtro (luoghi, tag, catalogazioni, anni, formati) mostra le voci principali e "Mostra tutti (N)" con ricerca. ⧉ la apre in un pannello flottante, con ricerca e ordinamento per numero di foto o alfabetico, che resta aperto mentre si lavora sulla griglia e ricorda posizione e dimensione. I conteggi di una lista ignorano la sua selezione: scelto un luogo, gli altri restano selezionabili.
+- **Filtro per data**: la lista Anno è una gerarchia. Scelto un anno compaiono sotto di esso i suoi mesi, scelto un mese i suoi giorni, ognuno con il numero di foto; mese e giorno valgono solo dentro l'anno scelto. Togliere la spunta risale di un livello (giorno → mese → anno → nessun filtro); il chip mostra la data scelta (es. "14 maggio 2023") e rimuoverlo toglie il filtro per data. Le date usano l'ora locale corretta di ogni foto; le foto senza data non compaiono.
 - **Una cartella**: le sorgenti nella barra laterale si espandono nell'albero delle cartelle (con il numero di foto, sottocartelle incluse). Scegliendo una cartella la libreria si filtra, con o senza sottocartelle; "Seleziona tutto (filtro)" seleziona tutte le sue foto per un'azione bulk.
 
 Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca o modello della fotocamera della foto (EXIF, es. `D7000` per una Nikon D7000) e nomi comuni come `Telefono`, `iPhone`, `WhatsApp`. Per `Viaggio Giappone\D7000\DSC_0001.NEF` il luogo è quindi "Viaggio Giappone". Altri nomi da saltare si aggiungono in Impostazioni → "Cartelle da ignorare per il luogo"; dopo il salvataggio l'app propone di ricalcolare i luoghi dedotti dalle cartelle (quelli manuali e da GPS non cambiano).
