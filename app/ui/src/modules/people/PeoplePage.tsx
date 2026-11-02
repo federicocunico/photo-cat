@@ -1,7 +1,14 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type Correction, type FaceView } from "../../lib/ipc";
+import {
+  commands,
+  events,
+  isTauri,
+  type Correction,
+  type FaceCursor,
+  type FaceView,
+} from "../../lib/ipc";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { WhoIs } from "../identities/WhoIs";
 
@@ -44,6 +51,24 @@ export function FaceCrop({ face }: { face: FaceView }) {
     </span>
   );
 }
+/** Volti per pagina: "Tutti i volti" non è mai un elenco unico. */
+export const FACE_PAGE = 200;
+
+/** Invalida persone e volti quando il backend segnala un cambiamento. */
+export function useFacesChanged() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const off = events.onFacesChanged(() => {
+      void qc.invalidateQueries({ queryKey: ["people"] });
+      void qc.invalidateQueries({ queryKey: ["faces"] });
+      void qc.invalidateQueries({ queryKey: ["face-count"] });
+    });
+    return () => {
+      void off.then((f) => f());
+    };
+  }, [qc]);
+}
+
 export function PeoplePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -53,18 +78,21 @@ export function PeoplePage() {
   const [target, setTarget] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Nessun aggiornamento a intervalli: le liste si ricaricano su `faces://changed`.
+  useFacesChanged();
   const people = useQuery({
     queryKey: ["people"],
     queryFn: commands.listPeople,
     enabled: isTauri(),
-    refetchInterval: 5000,
   });
-  const faces = useQuery({
+  const faces = useInfiniteQuery({
     queryKey: ["faces", person],
-    queryFn: () => commands.personFaces(person),
+    queryFn: ({ pageParam }) => commands.personFaces(person, pageParam, FACE_PAGE),
+    initialPageParam: null as FaceCursor | null,
+    getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && detail,
-    refetchInterval: 5000,
   });
+  const faceList = useMemo(() => faces.data?.pages.flatMap((p) => p.items) ?? [], [faces.data]);
   const active = people.data?.find((p) => p.id === person);
   const correct = async (c: Correction) => {
     setBusy(true);
@@ -168,7 +196,7 @@ export function PeoplePage() {
             <span>{t("people.selected", { count: selected.length })}</span>
           </div>
           <div className="feature-grid">
-            {faces.data?.map((f) => (
+            {faceList.map((f) => (
               <article className="feature-card" key={f.id}>
                 <label>
                   <input
@@ -207,6 +235,15 @@ export function PeoplePage() {
               </article>
             ))}
           </div>
+          {faces.hasNextPage && (
+            <button
+              className="btn"
+              disabled={faces.isFetchingNextPage}
+              onClick={() => void faces.fetchNextPage()}
+            >
+              {t("people.more")}
+            </button>
+          )}
         </>
       )}
     </section>

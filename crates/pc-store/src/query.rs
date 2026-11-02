@@ -230,7 +230,24 @@ pub struct GridItem {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Page {
     pub items: Vec<GridItem>,
+    /// Cursore dell'ultimo elemento, se ci sono altri elementi dopo.
     pub next: Option<Cursor>,
+    /// Cursore del primo elemento, se ci sono altri elementi prima (pagine scorse e scaricate).
+    #[serde(default)]
+    pub prev: Option<Cursor>,
+}
+
+/// Dove inizia una pagina della griglia.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum PageAt {
+    /// Dopo il cursore (scorrimento in avanti).
+    After { cursor: Cursor },
+    /// Prima del cursore (scorrimento all'indietro, pagine già scaricate).
+    Before { cursor: Cursor },
+    /// Dalla posizione `offset` (salto con la barra di scorrimento).
+    Offset { offset: u32 },
 }
 
 const FROM: &str = "FROM media_item m
@@ -375,14 +392,31 @@ pub fn page(
     after: Option<&Cursor>,
     limit: u32,
 ) -> StoreResult<Page> {
+    let at = after.map(|c| PageAt::After { cursor: c.clone() });
+    page_at(c, f, sort, at.as_ref(), limit)
+}
+
+/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
+pub fn page_at(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    at: Option<&PageAt>,
+    limit: u32,
+) -> StoreResult<Page> {
     let mut w = compile_filter(c, f)?;
     let key = sort.expr();
-    let (op, dir) = if sort.desc() {
-        ("<", "DESC")
-    } else {
-        (">", "ASC")
+    // All'indietro si legge in ordine inverso e si ribalta il risultato.
+    let backward = matches!(at, Some(PageAt::Before { .. }));
+    let (op, dir) = match (sort.desc(), backward) {
+        (true, false) | (false, true) => ("<", "DESC"),
+        _ => (">", "ASC"),
     };
-    if let Some(cur) = after {
+    let cursor = match at {
+        Some(PageAt::After { cursor } | PageAt::Before { cursor }) => Some(cursor),
+        _ => None,
+    };
+    if let Some(cur) = cursor {
         w.sql.push_str(&format!(
             " AND ({key} {op} ? OR ({key} = ? AND m.id {op} ?))"
         ));
@@ -391,6 +425,10 @@ pub fn page(
         w.args.push(k);
         w.args.push(Value::Integer(cur.id));
     }
+    let offset = match at {
+        Some(PageAt::Offset { offset }) => *offset,
+        _ => 0,
+    };
     let limit = limit.clamp(1, 2000);
     let sql = format!(
         "SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
@@ -399,10 +437,11 @@ pub fn page(
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
                  WHERE mt.media_id = m.id)
-         {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ?",
+         {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ? OFFSET ?",
         w.sql
     );
     w.args.push(Value::Integer(limit as i64 + 1));
+    w.args.push(Value::Integer(i64::from(offset)));
     let mut st = c.prepare(&sql)?;
     let mut keys: Vec<serde_json::Value> = Vec::new();
     let mut items: Vec<GridItem> = st
@@ -424,17 +463,168 @@ pub fn page(
             })
         })?
         .collect::<Result<_, _>>()?;
-    let next = if items.len() > limit as usize {
-        items.truncate(limit as usize);
-        let last = items.last().expect("pagina non vuota");
+    let more = items.len() > limit as usize;
+    items.truncate(limit as usize);
+    keys.truncate(limit as usize);
+    if backward {
+        items.reverse();
+        keys.reverse();
+    }
+    let cursor_at = |i: usize| -> Option<Cursor> {
         Some(Cursor {
-            key: keys[limit as usize - 1].clone(),
-            id: last.id,
+            key: keys.get(i)?.clone(),
+            id: items.get(i)?.id,
         })
-    } else {
-        None
     };
-    Ok(Page { items, next })
+    let last = items.len().checked_sub(1);
+    let (prev, next) = match at {
+        // Prima del cursore: dopo c'è almeno l'elemento del cursore.
+        Some(PageAt::Before { .. }) => (
+            if more { cursor_at(0) } else { None },
+            last.and_then(cursor_at),
+        ),
+        Some(PageAt::After { .. }) => (
+            cursor_at(0),
+            if more { last.and_then(cursor_at) } else { None },
+        ),
+        Some(PageAt::Offset { offset }) => (
+            if *offset > 0 { cursor_at(0) } else { None },
+            if more { last.and_then(cursor_at) } else { None },
+        ),
+        None => (None, if more { last.and_then(cursor_at) } else { None }),
+    };
+    Ok(Page { items, next, prev })
+}
+
+/// Elementi su cui agisce un'azione bulk: un elenco esplicito, oppure "tutti i risultati del
+/// filtro" (Seleziona tutto) meno le eccezioni, limitati agli elementi presenti al momento
+/// della selezione (`max_id`): un import successivo non allarga la selezione.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum Target {
+    Ids {
+        ids: Vec<MediaId>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Filter {
+        filter: LibraryFilter,
+        max_id: MediaId,
+        except: Vec<MediaId>,
+    },
+}
+
+/// Blocchi in cui si risolve un [`Target::Filter`].
+pub const TARGET_CHUNK: usize = 5_000;
+
+/// Conteggio e id massimo all'istante di "Seleziona tutto".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct SelectionBase {
+    pub count: i64,
+    pub max_id: MediaId,
+}
+
+/// Base di "Seleziona tutto": quanti elementi ha il filtro e fin dove arrivano gli id.
+pub fn selection_base(c: &Connection, f: &LibraryFilter) -> StoreResult<SelectionBase> {
+    let max_id: MediaId = c.query_row("SELECT COALESCE(MAX(id), 0) FROM media_item", [], |r| {
+        r.get(0)
+    })?;
+    Ok(SelectionBase {
+        count: count(c, f)?,
+        max_id,
+    })
+}
+
+impl Target {
+    pub fn ids(ids: Vec<MediaId>) -> Self {
+        Self::Ids { ids }
+    }
+
+    fn filter_sql(
+        c: &Connection,
+        filter: &LibraryFilter,
+        max_id: MediaId,
+        except: &[MediaId],
+    ) -> StoreResult<SqlFragment> {
+        let mut w = compile_filter(c, filter)?;
+        w.sql
+            .push_str(" AND m.id <= ? AND m.id NOT IN (SELECT value FROM json_each(?))");
+        w.args.push(Value::Integer(max_id));
+        w.args.push(Value::Text(serde_json::to_string(except)?));
+        Ok(w)
+    }
+
+    /// Numero di elementi del target.
+    pub fn count(&self, c: &Connection) -> StoreResult<i64> {
+        match self {
+            Self::Ids { ids } => Ok(ids.len() as i64),
+            Self::Filter {
+                filter,
+                max_id,
+                except,
+            } => {
+                let w = Self::filter_sql(c, filter, *max_id, except)?;
+                Ok(c.query_row(
+                    &format!("SELECT count(*) {FROM} WHERE {}", w.sql),
+                    rusqlite::params_from_iter(w.args.iter()),
+                    |r| r.get(0),
+                )?)
+            }
+        }
+    }
+
+    /// Chiama `f` sugli id del target a blocchi di al massimo `chunk` (in ordine di id per i filtri).
+    pub fn for_each_chunk(
+        &self,
+        c: &Connection,
+        chunk: usize,
+        mut f: impl FnMut(&[MediaId]) -> StoreResult<()>,
+    ) -> StoreResult<()> {
+        match self {
+            Self::Ids { ids } => ids.chunks(chunk.max(1)).try_for_each(f),
+            Self::Filter {
+                filter,
+                max_id,
+                except,
+            } => {
+                let w = Self::filter_sql(c, filter, *max_id, except)?;
+                let sql = format!(
+                    "SELECT m.id {FROM} WHERE {} AND m.id > ? ORDER BY m.id LIMIT ?",
+                    w.sql
+                );
+                let mut after: MediaId = i64::MIN;
+                loop {
+                    let mut args = w.args.clone();
+                    args.push(Value::Integer(after));
+                    args.push(Value::Integer(chunk.max(1) as i64));
+                    let ids: Vec<MediaId> = c
+                        .prepare_cached(&sql)?
+                        .query_map(rusqlite::params_from_iter(args.iter()), |r| r.get(0))?
+                        .collect::<Result<_, _>>()?;
+                    let Some(&last) = ids.last() else {
+                        return Ok(());
+                    };
+                    f(&ids)?;
+                    if ids.len() < chunk.max(1) {
+                        return Ok(());
+                    }
+                    after = last;
+                }
+            }
+        }
+    }
+
+    /// Tutti gli id del target (per le azioni che richiedono un elenco esplicito).
+    pub fn resolve(&self, c: &Connection) -> StoreResult<Vec<MediaId>> {
+        let mut out = Vec::new();
+        self.for_each_chunk(c, TARGET_CHUNK, |ids| {
+            out.extend_from_slice(ids);
+            Ok(())
+        })?;
+        Ok(out)
+    }
 }
 
 /// Tutti gli id che soddisfano il filtro (per "seleziona tutto" e azioni bulk).

@@ -465,3 +465,66 @@ mod folders {
         );
     }
 }
+
+/// Griglia a memoria limitata: le pagine scaricate si ricaricano all'indietro dal cursore
+/// del primo elemento, e un salto con la barra di scorrimento parte da un offset.
+#[test]
+fn pages_go_forward_backward_and_seek_without_gaps() {
+    use pc_store::query::PageAt;
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        seed(c, 1_000);
+        Ok(())
+    })
+    .unwrap();
+    for sort in [SortKey::CapturedDesc, SortKey::NameAsc] {
+        let f = LibraryFilter::default();
+        let get = |at: Option<PageAt>| {
+            s.read(|c| query::page_at(c, &f, sort, at.as_ref(), 100))
+                .unwrap()
+        };
+        // Avanti fino in fondo.
+        let mut pages = vec![get(None)];
+        assert!(pages[0].prev.is_none());
+        while let Some(next) = pages.last().unwrap().next.clone() {
+            pages.push(get(Some(PageAt::After { cursor: next })));
+        }
+        assert_eq!(pages.len(), 10);
+        let forward: Vec<i64> = pages
+            .iter()
+            .flat_map(|p| p.items.iter().map(|i| i.id))
+            .collect();
+        assert_eq!(forward.len(), 1_000);
+        // Indietro dal fondo: stesse pagine, stesso ordine.
+        let mut back = vec![pages.last().unwrap().clone()];
+        while let Some(prev) = back.last().unwrap().prev.clone() {
+            back.push(get(Some(PageAt::Before { cursor: prev })));
+        }
+        back.reverse();
+        assert_eq!(back.len(), 10);
+        for (a, b) in back.iter().zip(&pages) {
+            assert_eq!(
+                a.items.iter().map(|i| i.id).collect::<Vec<_>>(),
+                b.items.iter().map(|i| i.id).collect::<Vec<_>>()
+            );
+        }
+        // Salto: dall'offset 450 gli elementi coincidono e si può andare in entrambe le direzioni.
+        let seek = get(Some(PageAt::Offset { offset: 450 }));
+        assert_eq!(
+            seek.items.iter().map(|i| i.id).collect::<Vec<_>>(),
+            forward[450..550].to_vec()
+        );
+        let before = get(Some(PageAt::Before {
+            cursor: seek.prev.clone().unwrap(),
+        }));
+        assert_eq!(
+            before.items.iter().map(|i| i.id).collect::<Vec<_>>(),
+            forward[350..450].to_vec()
+        );
+        let after = get(Some(PageAt::After {
+            cursor: seek.next.clone().unwrap(),
+        }));
+        assert_eq!(after.items[0].id, forward[550]);
+    }
+}

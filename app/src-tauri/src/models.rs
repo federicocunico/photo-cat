@@ -88,47 +88,57 @@ pub fn system_info(state: State<'_, AppState>) -> SystemInfo {
 
 #[tauri::command]
 #[specta::specta]
-pub fn list_models(state: State<'_, AppState>) -> Vec<ModelStatus> {
-    state.model_store.statuses()
+pub async fn list_models(app: tauri::AppHandle) -> AppResult<Vec<ModelStatus>> {
+    crate::state::blocking(app, move |_app, state| Ok(state.model_store.statuses())).await
 }
 
 /// Verifica tutti i modelli e ripristina/scarica quelli mancanti o corrotti.
 #[tauri::command]
 #[specta::specta]
-pub fn verify_models(state: State<'_, AppState>) -> AppResult<i64> {
-    state
-        .jobs
-        .submit(models_job::JOB_KIND, serde_json::json!({}))
+pub async fn verify_models(app: tauri::AppHandle) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .jobs
+            .submit(models_job::JOB_KIND, serde_json::json!({}))
+    })
+    .await
 }
 
 /// Riscarica (o ripristina) un modello e ne esegue il self-test.
 #[tauri::command]
 #[specta::specta]
-pub fn download_model(state: State<'_, AppState>, id: String) -> AppResult<i64> {
-    state.jobs.submit(
-        models_job::JOB_KIND,
-        serde_json::json!({ "ids": [id], "selfTest": [id] }),
-    )
+pub async fn download_model(app: tauri::AppHandle, id: String) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        state.jobs.submit(
+            models_job::JOB_KIND,
+            serde_json::json!({ "ids": [id], "selfTest": [id] }),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn self_test_models(state: State<'_, AppState>, ids: Vec<String>) -> AppResult<i64> {
-    let sel = if ids.is_empty() {
-        serde_json::json!("all")
-    } else {
-        serde_json::json!(ids)
-    };
-    state.jobs.submit(
-        models_job::JOB_KIND,
-        serde_json::json!({ "restore": false, "selfTest": sel }),
-    )
+pub async fn self_test_models(app: tauri::AppHandle, ids: Vec<String>) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        let sel = if ids.is_empty() {
+            serde_json::json!("all")
+        } else {
+            serde_json::json!(ids)
+        };
+        state.jobs.submit(
+            models_job::JOB_KIND,
+            serde_json::json!({ "restore": false, "selfTest": sel }),
+        )
+    })
+    .await
 }
 
 /// Installa un modello da un file locale (accettato solo se lo SHA-256 corrisponde).
 #[tauri::command]
 #[specta::specta]
 pub async fn install_model_file(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     id: String,
     path: String,
@@ -139,7 +149,7 @@ pub async fn install_model_file(
         .await
         .map_err(|e| AppError::internal(e.to_string()))??;
     state.model_pool.unload(&id);
-    self_test_models(state, vec![id])
+    self_test_models(app, vec![id]).await
 }
 
 #[tauri::command]
@@ -200,11 +210,16 @@ pub fn set_resource_profile(state: State<'_, AppState>, profile: ResourceProfile
 /// Rianalizza con l'AI: `ids` vuoto = tutta la libreria (solo gli elementi non aggiornati).
 #[tauri::command]
 #[specta::specta]
-pub fn reanalyze(state: State<'_, AppState>, ids: Vec<i64>) -> AppResult<i64> {
-    let params = if ids.is_empty() {
-        serde_json::json!({})
-    } else {
-        serde_json::json!({ "ids": ids })
-    };
-    state.jobs.submit(pc_ai::analyze::JOB_KIND, params)
+pub async fn reanalyze(app: tauri::AppHandle, target: pc_store::query::Target) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        // Il target si risolve qui: l'interfaccia non riceve mai l'elenco completo degli id.
+        let ids = state.store.read(|c| target.resolve(c))?;
+        if ids.is_empty() {
+            return Err(AppError::invalid_input("nessun elemento da rianalizzare"));
+        }
+        state
+            .jobs
+            .submit(pc_ai::analyze::JOB_KIND, serde_json::json!({ "ids": ids }))
+    })
+    .await
 }

@@ -9,10 +9,13 @@ pub fn export_fields() -> Vec<String> {
 }
 #[tauri::command]
 #[specta::specta]
-pub fn start_export(state: State<'_, AppState>, options: export::Options) -> AppResult<i64> {
-    state
-        .jobs
-        .submit(export::JOB_KIND, serde_json::to_value(options)?)
+pub async fn start_export(app: tauri::AppHandle, options: export::Options) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .jobs
+            .submit(export::JOB_KIND, serde_json::to_value(options)?)
+    })
+    .await
 }
 #[tauri::command]
 #[specta::specta]
@@ -38,10 +41,13 @@ pub async fn organize_preflight(
 }
 #[tauri::command]
 #[specta::specta]
-pub fn start_organize(state: State<'_, AppState>, options: organize::Options) -> AppResult<i64> {
-    state
-        .jobs
-        .submit(organize::JOB_KIND, serde_json::to_value(options)?)
+pub async fn start_organize(app: tauri::AppHandle, options: organize::Options) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .jobs
+            .submit(organize::JOB_KIND, serde_json::to_value(options)?)
+    })
+    .await
 }
 #[derive(serde::Serialize, specta::Type)]
 pub struct Organization {
@@ -53,11 +59,14 @@ pub struct Organization {
 }
 #[tauri::command]
 #[specta::specta]
-pub fn list_organizations(state: State<'_, AppState>) -> AppResult<Vec<Organization>> {
-    Ok(state.store.read(|c|{
-    let mut q=c.prepare("SELECT o.id,o.dest,o.method,o.state,count(e.created) FROM organize_op o LEFT JOIN organize_entry e ON e.op_id=o.id GROUP BY o.id ORDER BY o.id DESC LIMIT 50")?;
-    let v=q.query_map([],|r|Ok(Organization{id:r.get(0)?,dest:r.get(1)?,method:r.get(2)?,state:r.get(3)?,entries:r.get(4)?}))?.collect::<Result<_,_>>()?;Ok(v)
-})?)
+pub async fn list_organizations(app: tauri::AppHandle) -> AppResult<Vec<Organization>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c|{
+        let mut q=c.prepare("SELECT o.id,o.dest,o.method,o.state,count(e.created) FROM organize_op o LEFT JOIN organize_entry e ON e.op_id=o.id GROUP BY o.id ORDER BY o.id DESC LIMIT 50")?;
+        let v=q.query_map([],|r|Ok(Organization{id:r.get(0)?,dest:r.get(1)?,method:r.get(2)?,state:r.get(3)?,entries:r.get(4)?}))?.collect::<Result<_,_>>()?;Ok(v)
+    })?)
+    })
+    .await
 }
 #[tauri::command]
 #[specta::specta]

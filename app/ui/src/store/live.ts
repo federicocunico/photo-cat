@@ -4,13 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { commands, events, isTauri } from "../lib/ipc";
-import type {
-  ErrorBatch,
-  ErrorRecord,
-  JobSnapshot,
-  LogLine,
-  ResourceSnapshot,
-} from "../lib/ipc";
+import type { ErrorBatch, ErrorRecord, JobSnapshot, LogLine, ResourceSnapshot } from "../lib/ipc";
 
 const TAIL_MAX = 500;
 

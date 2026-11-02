@@ -112,7 +112,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::library_count,
             library::library_facets,
             library::library_facet_values,
-            library::library_ids,
+            library::library_selection,
             library::list_folders,
             library::media_detail,
             library::list_catalogs,
@@ -286,7 +286,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .register_uri_scheme_protocol("thumb", library::thumb_protocol)
+        .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
@@ -551,6 +551,7 @@ pub fn run() {
                 session: setup_session.clone(),
                 recovery: recovery::Recovery::default(),
                 recreating: Mutex::new(false),
+                gates: Default::default(),
                 last_resources: RwLock::new(None),
                 _monitor_handle: Mutex::new(None),
                 _ticker: Mutex::new(Some(ticker)),

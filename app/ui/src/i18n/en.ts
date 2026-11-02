@@ -43,7 +43,8 @@ export const en: Messages = {
     crashKind: {
       panic: "Internal app error.",
       native: "A native component failed.",
-      unclean: "The app did not shut down cleanly (closed by the system, out of memory or interface terminated).",
+      unclean:
+        "The app did not shut down cleanly (closed by the system, out of memory or interface terminated).",
     },
     crashLast: "last activity {{time}}",
     crashMemory: "memory: app {{app}} MB, interface {{ui}} MB, free RAM {{free}} MB",

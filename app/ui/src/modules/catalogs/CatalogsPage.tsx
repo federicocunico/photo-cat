@@ -21,7 +21,7 @@ export function CatalogsPage() {
   });
   const preview = useQuery({
     queryKey: ["catalog-preview", rule],
-    queryFn: () => commands.libraryCount({ ...emptyFilter(), rule }),
+    queryFn: () => commands.libraryCount({ ...emptyFilter(), rule }, null).then((n) => n ?? 0),
     enabled: isTauri() && editing && smart,
     retry: false,
   });

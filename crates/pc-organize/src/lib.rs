@@ -16,13 +16,24 @@ use serde::{Deserialize, Serialize};
 #[allow(clippy::large_enum_variant)]
 pub enum Scope {
     Library,
-    Catalog { id: i64 },
-    Selection { ids: Vec<i64> },
-    Filter { filter: LibraryFilter },
+    Catalog {
+        id: i64,
+    },
+    Selection {
+        ids: Vec<i64>,
+    },
+    Filter {
+        filter: LibraryFilter,
+    },
+    /// Selezione della Libreria come insieme ("tutti tranne…"), risolta qui.
+    Target {
+        target: query::Target,
+    },
 }
 pub fn ids(store: &Store, scope: &Scope) -> AppResult<Vec<i64>> {
     let mut ids = match scope {
         Scope::Selection { ids } => ids.clone(),
+        Scope::Target { target } => store.read(|c| target.resolve(c))?,
         Scope::Library => store.read(|c| query::ids(c, &LibraryFilter::default()))?,
         Scope::Catalog { id } => store.read(|c| {
             query::ids(

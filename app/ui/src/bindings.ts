@@ -58,13 +58,17 @@ export const commands = {
 	importUpdates: () => __TAURI_INVOKE<UpdateSummary[]>("import_updates"),
 	/**  Esito dell'ultimo ricollegamento della sorgente. */
 	lastRelink: (sourceId: number) => __TAURI_INVOKE<RelinkSummary | null>("last_relink", { sourceId }),
-	libraryPage: (filter: LibraryFilter, sort: SortKey, after: Cursor | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, after, limit }),
-	libraryCount: (filter: LibraryFilter) => __TAURI_INVOKE<number>("library_count", { filter }),
-	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
+	libraryPage: (filter: LibraryFilter, sort: SortKey, at: PageAt | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, at, limit }),
+	/**  Numero di elementi del filtro; `None` se la richiesta è stata superata. */
+	libraryCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_count", { filter, request }),
+	libraryFacets: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<Facets | null>("library_facets", { filter, request }),
 	/**  Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine). */
 	libraryFacetValues: (filter: LibraryFilter, facet: FacetKey, search: string | null, sort: FacetSort, offset: number, limit: number) => __TAURI_INVOKE<FacetPage>("library_facet_values", { filter, facet, search, sort, offset, limit }),
-	/**  Tutti gli id del filtro corrente ("Seleziona tutto"). */
-	libraryIds: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("library_ids", { filter }),
+	/**
+	 *  Base di "Seleziona tutto": numero di risultati e id massimo in quell'istante. La selezione
+	 *  resta "filtro più eccezioni" e non porta mai nell'interfaccia l'elenco di tutti gli id.
+	 */
+	librarySelection: (filter: LibraryFilter) => __TAURI_INVOKE<SelectionBase>("library_selection", { filter }),
 	/**  Sottocartelle di una sorgente (o di `parent`), un livello alla volta. */
 	listFolders: (sourceId: number, parent: string | null) => __TAURI_INVOKE<FolderNode[]>("list_folders", { sourceId, parent }),
 	mediaDetail: (id: number) => __TAURI_INVOKE<MediaDetail>("media_detail", { id }),
@@ -80,17 +84,17 @@ export const commands = {
 	installModelFile: (id: string, path: string) => __TAURI_INVOKE<number>("install_model_file", { id, path }),
 	setExecutionProvider: (provider: ExecutionProvider) => __TAURI_INVOKE<null>("set_execution_provider", { provider }),
 	/**  Rianalizza con l'AI: `ids` vuoto = tutta la libreria (solo gli elementi non aggiornati). */
-	reanalyze: (ids: number[]) => __TAURI_INVOKE<number>("reanalyze", { ids }),
+	reanalyze: (target: Target) => __TAURI_INVOKE<number>("reanalyze", { target }),
 	setResourceProfile: (profile: ResourceProfile) => __TAURI_INVOKE<null>("set_resource_profile", { profile }),
 	listPeople: () => __TAURI_INVOKE<PersonView[]>("list_people"),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
-	personFaces: (person: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person }),
+	personFaces: (person: number | null, after: FaceCursor | null, limit: number) => __TAURI_INVOKE<FacePage>("person_faces", { person, after, limit }),
 	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
 	/**  Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati. */
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
 	deleteCatalog: (id: number, confirmed: boolean) => __TAURI_INVOKE<null>("delete_catalog", { id, confirmed }),
-	startBulk: (ids: number[], operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { ids, operation, confirmed }),
+	startBulk: (target: Target, operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { target, operation, confirmed }),
 	undoBulk: () => __TAURI_INVOKE<string | null>("undo_bulk"),
 	lastBulkUndo: () => __TAURI_INVOKE<string | null>("last_bulk_undo"),
 	tagOverview: () => __TAURI_INVOKE<TagOverview>("tag_overview"),
@@ -171,7 +175,7 @@ export const commands = {
 	 *  "Nuova voce…": crea nel gruppo una voce con questo nome (o riusa quella
 	 *  con lo stesso nome) e, con `assign_to`, la assegna come correzione manuale.
 	 */
-	addCategory: (group: string, label: string, prompts: string[], assignTo: number[] | null) => __TAURI_INVOKE<CategoryRef>("add_category", { group, label, prompts, assignTo }),
+	addCategory: (group: string, label: string, prompts: string[], assignTo: Target | null) => __TAURI_INVOKE<CategoryRef>("add_category", { group, label, prompts, assignTo }),
 	/**  Foto a cui è assegnata la voce (per la conferma dell'eliminazione). */
 	categoryUsage: (group: string, id: string) => __TAURI_INVOKE<number>("category_usage", { group, id }),
 	/**
@@ -553,6 +557,18 @@ export type FaceChoice = {
 	/**  Ritaglio allineato come data URL PNG. */
 	crop: string,
 	bbox: [(number | null), (number | null), (number | null), (number | null)],
+};
+
+/**  Posizione dopo l'ultimo volto di una pagina (ordine: qualità decrescente, id). */
+export type FaceCursor = {
+	/**  Qualità come salvata nel catalogo (f64), per un confronto esatto. */
+	quality: number | null,
+	id: number,
+};
+
+export type FacePage = {
+	items: FaceView[],
+	next: FaceCursor | null,
 };
 
 export type FaceView = {
@@ -959,8 +975,20 @@ export type OrganizeOptions = {
 
 export type Page = {
 	items: GridItem[],
+	/**  Cursore dell'ultimo elemento, se ci sono altri elementi dopo. */
 	next: Cursor | null,
+	/**  Cursore del primo elemento, se ci sono altri elementi prima (pagine scorse e scaricate). */
+	prev?: Cursor | null,
 };
+
+/**  Dove inizia una pagina della griglia. */
+export type PageAt = 
+/**  Dopo il cursore (scorrimento in avanti). */
+{ kind: "after"; cursor: Cursor } | 
+/**  Prima del cursore (scorrimento all'indietro, pagine già scaricate). */
+{ kind: "before"; cursor: Cursor } | 
+/**  Dalla posizione `offset` (salto con la barra di scorrimento). */
+{ kind: "offset"; offset: number };
 
 export type PersonView = {
 	id: number,
@@ -1084,6 +1112,15 @@ export type RenameOutcome = { outcome: "renamed" } |
 /**  Esiste già un tag con quel nome: va confermata l'unione. */
 { outcome: "needsMerge"; target: string };
 
+/**
+ *  Etichetta di una richiesta della UI: le richieste più vecchie dello stesso canale vengono
+ *  scartate o interrotte (filtro cambiato mentre il motore calcolava).
+ */
+export type RequestTag = {
+	channel: string,
+	id: number,
+};
+
 export type ResourceProfile = "light" | "balanced" | "performance";
 
 /**  Payload dell'evento `resources://tick`. */
@@ -1106,7 +1143,15 @@ export type ResourcesConfig = {
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
 
-export type Scope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] } | { scope: "filter"; filter: LibraryFilter };
+export type Scope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] } | { scope: "filter"; filter: LibraryFilter } | 
+/**  Selezione della Libreria come insieme ("tutti tranne…"), risolta qui. */
+{ scope: "target"; target: Target };
+
+/**  Conteggio e id massimo all'istante di "Seleziona tutto". */
+export type SelectionBase = {
+	count: number,
+	maxId: number,
+};
 
 export type SelfTestResult = {
 	passed: boolean,
@@ -1274,6 +1319,13 @@ export type TagSetView = {
 	/**  File della libreria con almeno un tag del set. */
 	tagged: number,
 } & TagSet;
+
+/**
+ *  Elementi su cui agisce un'azione bulk: un elenco esplicito, oppure "tutti i risultati del
+ *  filtro" (Seleziona tutto) meno le eccezioni, limitati agli elementi presenti al momento
+ *  della selezione (`max_id`): un import successivo non allarga la selezione.
+ */
+export type Target = { kind: "ids"; ids: number[] } | { kind: "filter"; filter: LibraryFilter; maxId: number; except: number[] };
 
 export type Taxonomy = {
 	/**  Versione delle modifiche (concorrenza ottimistica): cresce a ogni salvataggio. */

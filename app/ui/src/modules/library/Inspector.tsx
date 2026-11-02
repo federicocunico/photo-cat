@@ -73,7 +73,7 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const apply = async (operation: BulkAction) => {
     setError("");
     try {
-      setJob(await commands.startBulk([id], operation, false));
+      setJob(await commands.startBulk({ kind: "ids", ids: [id] }, operation, false));
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     }
@@ -100,7 +100,7 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
           value={value}
           onChange={setValue}
           onCreate={async (label) => {
-            const r = await commands.addCategory(group, label, [], [id]);
+            const r = await commands.addCategory(group, label, [], { kind: "ids", ids: [id] });
             await qc.invalidateQueries({ queryKey: ["taxonomy"] });
             setValue(r.id);
             if (r.job != null) setJob(r.job);

@@ -22,14 +22,14 @@
 
 ## 3. Thread principale e protocolli
 
-- [ ] 3.1 Comandi del catalogo `async` con `spawn_blocking`, e un test o lint che fallisce se compare un nuovo comando sincrono che legge il catalogo (design §3). Verifica: test che elenca i comandi sincroni ammessi; `cargo test` passa.
-- [ ] 3.2 `thumb://` asincrono, `Cache-Control` senza `immutable`, `request_id` e scarto dei conteggi e facet superati, con interruzione della query. Verifica: test UI con risposte fuori ordine (vince l'ultima) e test Rust dell'interruzione.
+- [x] 3.1 Comandi del catalogo `async` con `spawn_blocking`, e un test o lint che fallisce se compare un nuovo comando sincrono che legge il catalogo (design §3). Verifica: test che elenca i comandi sincroni ammessi; `cargo test` passa.
+- [x] 3.2 `thumb://` asincrono, `Cache-Control` senza `immutable`, `request_id` e scarto dei conteggi e facet superati, con interruzione della query. Verifica: test UI con risposte fuori ordine (vince l'ultima) e test Rust dell'interruzione.
 
 ## 4. Interfaccia a memoria limitata
 
-- [ ] 4.1 Griglia con `maxPages` e paginazione bidirezionale per cursore, `gcTime` breve per le chiavi inattive. Verifica: test con `ipcMock` che, dopo lo scorrimento di 50 pagine, il numero di pagine in cache è ≤ 5 e che tornando su la pagina viene richiesta di nuovo.
-- [ ] 4.2 Selezione come insieme (`ids` o `filter` più eccezioni con `snapshot`) nello store, in Grid e BulkBar; `Target` nei comandi bulk risolto lato Rust a blocchi. Verifica: test Rust e UI per "Seleziona tutto su una libreria grande" e "Risultati cambiati dopo la selezione".
-- [ ] 4.3 `person_faces` paginato, polling sostituito da `faces://changed`, con la stessa invalidazione su evento per `list_people`. Verifica: test con `ipcMock` che non partono richieste periodiche e che l'evento invalida le query.
+- [x] 4.1 Griglia con `maxPages` e paginazione bidirezionale per cursore, `gcTime` breve per le chiavi inattive. Verifica: test con `ipcMock` che, dopo lo scorrimento di 50 pagine, il numero di pagine in cache è ≤ 5 e che tornando su la pagina viene richiesta di nuovo.
+- [x] 4.2 Selezione come insieme (`ids` o `filter` più eccezioni con `snapshot`) nello store, in Grid e BulkBar; `Target` nei comandi bulk risolto lato Rust a blocchi. Verifica: test Rust e UI per "Seleziona tutto su una libreria grande" e "Risultati cambiati dopo la selezione".
+- [x] 4.3 `person_faces` paginato, polling sostituito da `faces://changed`, con la stessa invalidazione su evento per `list_people`. Verifica: test con `ipcMock` che non partono richieste periodiche e che l'evento invalida le query.
 - [x] 4.4 Eventi dei job limitati a 250 ms, `upsertJob` mirato, risposta a `app://trim-caches`. Verifica: test di `live.ts`.
 
 ## 5. Errori raggruppati

@@ -196,79 +196,110 @@ pub async fn delete_tag(
 
 #[tauri::command]
 #[specta::specta]
-pub fn set_tag_color(
-    state: State<'_, AppState>,
+pub async fn set_tag_color(
+    app: tauri::AppHandle,
     name: String,
     color: Option<String>,
 ) -> AppResult<()> {
-    Ok(state
-        .app_store
-        .with(|c| sets::set_color(c, &name, color.as_deref()))?)
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .app_store
+            .with(|c| sets::set_color(c, &name, color.as_deref()))?)
+    })
+    .await
 }
 
 /// Crea (senza `id`) o aggiorna un set: nome e tag in ordine di tasto.
 #[tauri::command]
 #[specta::specta]
-pub fn save_tag_set(
-    state: State<'_, AppState>,
+pub async fn save_tag_set(
+    app: tauri::AppHandle,
     id: Option<i64>,
     name: String,
     tags: Vec<String>,
 ) -> AppResult<i64> {
-    Ok(state.app_store.tx(|c| match id {
-        Some(id) => {
-            sets::rename_set(c, id, &name)?;
-            sets::set_tags(c, id, &tags)?;
-            Ok(id)
-        }
-        None => sets::create_set(c, &name, &tags),
-    })?)
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.tx(|c| match id {
+            Some(id) => {
+                sets::rename_set(c, id, &name)?;
+                sets::set_tags(c, id, &tags)?;
+                Ok(id)
+            }
+            None => sets::create_set(c, &name, &tags),
+        })?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn duplicate_tag_set(state: State<'_, AppState>, id: i64) -> AppResult<i64> {
-    Ok(state.app_store.tx(|c| sets::duplicate_set(c, id))?)
+pub async fn duplicate_tag_set(app: tauri::AppHandle, id: i64) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.tx(|c| sets::duplicate_set(c, id))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn delete_tag_set(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    Ok(state.app_store.tx(|c| sets::delete_set(c, id))?)
+pub async fn delete_tag_set(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.tx(|c| sets::delete_set(c, id))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn reorder_tag_sets(state: State<'_, AppState>, ids: Vec<i64>) -> AppResult<()> {
-    Ok(state.app_store.tx(|c| sets::reorder_sets(c, &ids))?)
+pub async fn reorder_tag_sets(app: tauri::AppHandle, ids: Vec<i64>) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.tx(|c| sets::reorder_sets(c, &ids))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn add_tag_to_set(state: State<'_, AppState>, id: i64, tag: String) -> AppResult<u8> {
-    Ok(state.app_store.with(|c| sets::add_to_set(c, id, &tag))?)
+pub async fn add_tag_to_set(app: tauri::AppHandle, id: i64, tag: String) -> AppResult<u8> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.with(|c| sets::add_to_set(c, id, &tag))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn remove_tag_from_set(state: State<'_, AppState>, id: i64, tag: String) -> AppResult<()> {
-    Ok(state
-        .app_store
-        .with(|c| sets::remove_from_set(c, id, &tag))?)
+pub async fn remove_tag_from_set(app: tauri::AppHandle, id: i64, tag: String) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .app_store
+            .with(|c| sets::remove_from_set(c, id, &tag))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn set_active_tag_set(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    Ok(state.app_store.with(|c| sets::set_active(c, id))?)
+pub async fn set_active_tag_set(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.with(|c| sets::set_active(c, id))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn set_tag_set_export_keywords(state: State<'_, AppState>, id: i64, on: bool) -> AppResult<()> {
-    Ok(state
-        .app_store
-        .with(|c| sets::set_export_keywords(c, id, on))?)
+pub async fn set_tag_set_export_keywords(
+    app: tauri::AppHandle,
+    id: i64,
+    on: bool,
+) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .app_store
+            .with(|c| sets::set_export_keywords(c, id, on))?)
+    })
+    .await
 }
 
 /// File con due o più tag del set (da sistemare a mano se il set è esclusivo).

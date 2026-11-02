@@ -14,6 +14,46 @@ pub const RESOURCES_TICK: &str = "resources://tick";
 pub const LOG_LINES: &str = "log://lines";
 /// Errori per file raggruppati (al massimo ogni `pc_diag::batch::BATCH_INTERVAL`).
 pub const ERROR_BATCH: &str = "errors://batch";
+/// Volti o persone cambiati (fine delle fasi volti/raggruppamento, correzioni): l'UI
+/// aggiorna le liste su questo evento invece di interrogare a intervalli.
+pub const FACES_CHANGED: &str = "faces://changed";
+
+pub fn faces_changed(app: &AppHandle) {
+    let _ = app.emit(FACES_CHANGED, ());
+}
+
+/// Fasi dopo le quali volti e persone sono cambiati.
+const FACE_PHASES: &[&str] = &["faces", "cluster"];
+
+/// Riconosce le fasi dei volti appena concluse e i job che modificano le persone.
+#[derive(Default)]
+pub struct FacesWatch {
+    done: Mutex<std::collections::HashSet<(i64, String)>>,
+}
+
+impl FacesWatch {
+    /// `true` se dopo questo snapshot volti o persone sono cambiati.
+    pub fn changed(&self, s: &JobSnapshot) -> bool {
+        let mut done = self.done.lock();
+        let mut changed = false;
+        for p in &s.phases {
+            if FACE_PHASES.contains(&p.name.as_str())
+                && p.state == pc_jobs::PhaseState::Done
+                && done.insert((s.id, p.name.clone()))
+            {
+                changed = true;
+            }
+        }
+        // Assegnazioni di persone in bulk.
+        if s.kind == pc_jobs::bulk::JOB_KIND
+            && s.state.is_terminal()
+            && done.insert((s.id, String::new()))
+        {
+            changed = true;
+        }
+        changed
+    }
+}
 
 const LOG_FLUSH: Duration = Duration::from_millis(300);
 /// Righe inviate per raffica: oltre, si tengono le più recenti (il file di log ha tutto).
@@ -75,6 +115,7 @@ impl ProgressThrottle {
 pub struct TauriProgressSink {
     app: AppHandle,
     throttle: Arc<ProgressThrottle>,
+    faces: FacesWatch,
 }
 
 impl TauriProgressSink {
@@ -93,7 +134,11 @@ impl TauriProgressSink {
                 }
             })
             .expect("thread eventi dei job");
-        Self { app, throttle }
+        Self {
+            app,
+            throttle,
+            faces: FacesWatch::default(),
+        }
     }
 }
 
@@ -101,6 +146,9 @@ impl ProgressSink for TauriProgressSink {
     fn on_progress(&self, snapshot: &JobSnapshot) {
         if self.throttle.offer(snapshot, Instant::now()) {
             let _ = self.app.emit(JOB_PROGRESS, snapshot);
+        }
+        if self.faces.changed(snapshot) {
+            faces_changed(&self.app);
         }
     }
 }
@@ -195,5 +243,55 @@ mod tests {
             late[0].overall_percent, 51.0,
             "l'ultimo valore arriva comunque"
         );
+    }
+}
+
+#[cfg(test)]
+mod faces_tests {
+    use super::*;
+    use pc_jobs::{JobState, PhaseSnapshot, PhaseState};
+
+    fn snap(state: JobState, faces: PhaseState, cluster: PhaseState) -> JobSnapshot {
+        let phase = |name: &str, state| PhaseSnapshot {
+            name: name.into(),
+            state,
+            done: 0,
+            failed: 0,
+            total: 0,
+            total_known: true,
+            percent: None,
+            rate: None,
+            eta_secs: None,
+        };
+        JobSnapshot {
+            id: 3,
+            kind: "analysis".into(),
+            state,
+            phases: vec![phase("faces", faces), phase("cluster", cluster)],
+            overall_percent: 0.0,
+            eta_secs: None,
+            failed: 0,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn faces_changed_once_per_phase_end() {
+        use PhaseState::*;
+        let w = FacesWatch::default();
+        assert!(!w.changed(&snap(JobState::Running, Running, Pending)));
+        assert!(
+            w.changed(&snap(JobState::Running, Done, Pending)),
+            "fine fase volti"
+        );
+        assert!(
+            !w.changed(&snap(JobState::Running, Done, Running)),
+            "solo una volta"
+        );
+        assert!(
+            w.changed(&snap(JobState::Completed, Done, Done)),
+            "fine raggruppamento"
+        );
+        assert!(!w.changed(&snap(JobState::Completed, Done, Done)));
     }
 }

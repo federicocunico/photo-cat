@@ -9,6 +9,7 @@ import {
   type OpenTarget,
   type PlaceInput,
   type PlaceSuggestion,
+  type Target,
 } from "../../lib/ipc";
 import { PlaceField } from "./PlaceEditor";
 
@@ -28,15 +29,22 @@ export function GridContextMenu({
   x,
   y,
   ids,
+  target,
+  count = ids.length,
   onOpen,
   onPlace,
   onClose,
 }: {
   x: number;
   y: number;
+  /** Elementi caricati su cui agisce "Apri con". */
   ids: number[];
+  /** Bersaglio delle azioni bulk (anche una selezione "tutti tranne…"). */
+  target: Target;
+  /** Elementi del bersaglio. */
+  count?: number;
   onOpen: (ids: number[], target: OpenTarget) => void;
-  onPlace: (ids: number[], place: PlaceInput | null) => void;
+  onPlace: (target: Target, place: PlaceInput | null) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -170,7 +178,7 @@ export function GridContextMenu({
       <hr style={{ border: 0, borderTop: "1px solid var(--pc-border)", margin: "4px 0" }} />
       {placing ? (
         <div style={{ padding: "4px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>{t("place.dialogCount", { count: ids.length })}</span>
+          <span style={{ fontSize: 12 }}>{t("place.dialogCount", { count })}</span>
           <div style={{ display: "flex", gap: 6 }}>
             <PlaceField
               value={place}
@@ -188,7 +196,7 @@ export function GridContextMenu({
               onClick={() => {
                 const name = place.trim();
                 onPlace(
-                  ids,
+                  target,
                   picked && picked.name === name
                     ? { name, country: picked.country, lat: picked.lat, lon: picked.lon }
                     : { name },
@@ -205,14 +213,14 @@ export function GridContextMenu({
           {t("externalApps.setPlace")}
         </button>
       )}
-      <button type="button" role="menuitem" style={item} onClick={act(() => onPlace(ids, null))}>
+      <button type="button" role="menuitem" style={item} onClick={act(() => onPlace(target, null))}>
         {t("externalApps.resetPlace")}
       </button>
       <button
         type="button"
         role="menuitem"
         style={item}
-        onClick={act(() => void commands.reanalyze(ids))}
+        onClick={act(() => void commands.reanalyze(target))}
       >
         {t("externalApps.reanalyze")}
       </button>

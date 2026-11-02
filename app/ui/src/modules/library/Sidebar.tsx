@@ -5,6 +5,7 @@ import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type FacetValue, type Source } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
+import { latestOnly, retryUnlessSuperseded } from "../../lib/latest";
 import { useLibrary } from "../../store/library";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
@@ -169,8 +170,9 @@ export function LibrarySidebar() {
   });
   const facets = useQuery({
     queryKey: ["facets", filter],
-    queryFn: () => commands.libraryFacets(filter),
+    queryFn: () => latestOnly("facets", (tag) => commands.libraryFacets(filter, tag)),
     enabled: isTauri(),
+    retry: retryUnlessSuperseded,
     placeholderData: (prev) => prev,
   });
 

@@ -42,7 +42,8 @@ export const it = {
     crashKind: {
       panic: "Errore interno dell'app.",
       native: "Errore di un componente nativo.",
-      unclean: "L'app non si è chiusa regolarmente (chiusa dal sistema, memoria esaurita o interfaccia terminata).",
+      unclean:
+        "L'app non si è chiusa regolarmente (chiusa dal sistema, memoria esaurita o interfaccia terminata).",
     },
     crashLast: "ultima attività {{time}}",
     crashMemory: "memoria: app {{app}} MB, interfaccia {{ui}} MB, RAM libera {{free}} MB",

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type BulkAction } from "../../lib/ipc";
-import { useLibrary } from "../../store/library";
+import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { useLive } from "../../store/live";
 import { CategoryPicker } from "./CategoryPicker";
@@ -10,7 +10,8 @@ import { useLabelName, useTaxonomy } from "./labelName";
 export function BulkBar() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { selected, filter, setSelection } = useLibrary();
+  const { selection, filter, setSelection, selectAll, invertSelection } = useLibrary();
+  const count = selCount(selection);
   const [action, setAction] = useState("add_tag");
   const [value, setValue] = useState("");
   const [group, setGroup] = useState("subject");
@@ -59,14 +60,15 @@ export function BulkBar() {
       setBusy(false);
     }
   };
+  // Solo conteggio e id massimo: la selezione resta "filtro più eccezioni".
   const select = async (invert: boolean) => {
-    const ids = await commands.libraryIds(filter);
-    const s = new Set(selected);
-    setSelection(invert ? ids.filter((id) => !s.has(id)) : ids);
+    const base = await commands.librarySelection(filter);
+    if (invert) invertSelection(base);
+    else selectAll(base);
   };
   const submit = async () => {
     if (action === "reanalyze") {
-      setJob(await commands.reanalyze(selected));
+      setJob(await commands.reanalyze(selTarget(selection)));
       return;
     }
     if (action === "export" || action === "organize") {
@@ -74,7 +76,7 @@ export function BulkBar() {
       return;
     }
     const destructive = action === "remove_library" || action === "remove_catalog";
-    if (destructive && !window.confirm(t("bulk.confirm", { count: selected.length }))) return;
+    if (destructive && !window.confirm(t("bulk.confirm", { count }))) return;
     let operation: BulkAction;
     switch (action) {
       case "add_tag":
@@ -100,7 +102,7 @@ export function BulkBar() {
       default:
         operation = { action: "remove_library" };
     }
-    setJob(await commands.startBulk(selected, operation, destructive));
+    setJob(await commands.startBulk(selTarget(selection), operation, destructive));
   };
   const needsValue = [
     "add_tag",
@@ -123,7 +125,7 @@ export function BulkBar() {
         <button className="btn" onClick={() => setSelection([])}>
           {t("bulk.clear")}
         </button>
-        <span>{t("people.selected", { count: selected.length })}</span>
+        <span data-testid="bulk-count">{t("people.selected", { count })}</span>
         <select
           className="field"
           aria-label={t("bulk.action")}
@@ -175,7 +177,7 @@ export function BulkBar() {
               value={value}
               onChange={setValue}
               onCreate={async (label) => {
-                const r = await commands.addCategory(group, label, [], selected);
+                const r = await commands.addCategory(group, label, [], selTarget(selection));
                 await qc.invalidateQueries({ queryKey: ["taxonomy"] });
                 setValue(r.id);
                 if (r.job != null) setJob(r.job);
@@ -225,7 +227,7 @@ export function BulkBar() {
         )}
         <button
           className="btn"
-          disabled={busy || !selected.length || (needsValue && !value.trim())}
+          disabled={busy || !count || (needsValue && !value.trim())}
           onClick={() => void run(submit)}
         >
           {t("bulk.apply")}

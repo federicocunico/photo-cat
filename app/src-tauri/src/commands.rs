@@ -97,47 +97,53 @@ pub fn list_jobs(state: State<'_, AppState>) -> Vec<JobSnapshot> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn pause_job(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    state.jobs.pause(id)
+pub async fn pause_job(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| state.jobs.pause(id)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn resume_job(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    state.jobs.resume(id)
+pub async fn resume_job(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| state.jobs.resume(id)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn cancel_job(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    state.jobs.cancel(id)
+pub async fn cancel_job(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| state.jobs.cancel(id)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn resume_interrupted_job(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    state.jobs.resume_interrupted(id)
+pub async fn resume_interrupted_job(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| state.jobs.resume_interrupted(id)).await
 }
 
 /// Job dimostrativo (solo build di sviluppo) per verificare la schermata Job.
 #[tauri::command]
 #[specta::specta]
-pub fn start_demo_job(state: State<'_, AppState>, items: u32, fail_every: u32) -> AppResult<i64> {
-    if !cfg!(debug_assertions) {
-        return Err(AppError::invalid_input(
-            "job dimostrativo disponibile solo in sviluppo",
-        ));
-    }
-    state.jobs.submit(
-        "demo",
-        serde_json::json!({ "items": items, "failEvery": fail_every }),
-    )
+pub async fn start_demo_job(app: tauri::AppHandle, items: u32, fail_every: u32) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        if !cfg!(debug_assertions) {
+            return Err(AppError::invalid_input(
+                "job dimostrativo disponibile solo in sviluppo",
+            ));
+        }
+        state.jobs.submit(
+            "demo",
+            serde_json::json!({ "items": items, "failEvery": fail_every }),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn query_errors(state: State<'_, AppState>, query: ErrorQuery) -> AppResult<Vec<ErrorEntry>> {
-    Ok(state.store.read(|c| errorlog::query(c, &query))?)
+pub async fn query_errors(app: tauri::AppHandle, query: ErrorQuery) -> AppResult<Vec<ErrorEntry>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c| errorlog::query(c, &query))?)
+    })
+    .await
 }
 
 /// Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica).
@@ -173,6 +179,9 @@ pub fn set_log_level(state: State<'_, AppState>, level: LogLevel) -> AppResult<(
 /// Storico dei job dal catalogo (inclusi quelli interrotti nella sessione precedente).
 #[tauri::command]
 #[specta::specta]
-pub fn list_job_history(state: State<'_, AppState>, limit: u32) -> AppResult<Vec<JobRow>> {
-    Ok(pc_jobs::persist::recent(&state.store, limit.min(500))?)
+pub async fn list_job_history(app: tauri::AppHandle, limit: u32) -> AppResult<Vec<JobRow>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(pc_jobs::persist::recent(&state.store, limit.min(500))?)
+    })
+    .await
 }

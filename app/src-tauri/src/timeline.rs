@@ -151,13 +151,16 @@ pub async fn sequence_ids(state: State<'_, AppState>, scope: SequenceScope) -> A
 
 #[tauri::command]
 #[specta::specta]
-pub fn set_session_gap(state: State<'_, AppState>, minutes: i64) -> AppResult<()> {
-    if !(1..=7 * 24 * 60).contains(&minutes) {
-        return Err(AppError::invalid_input(
-            "soglia delle sessioni fuori dai limiti",
-        ));
-    }
-    Ok(state.app_store.kv_set(GAP_KEY, &minutes.to_string())?)
+pub async fn set_session_gap(app: tauri::AppHandle, minutes: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        if !(1..=7 * 24 * 60).contains(&minutes) {
+            return Err(AppError::invalid_input(
+                "soglia delle sessioni fuori dai limiti",
+            ));
+        }
+        Ok(state.app_store.kv_set(GAP_KEY, &minutes.to_string())?)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -238,14 +241,17 @@ pub async fn place_undated(state: State<'_, AppState>, media: i64, after: i64) -
 
 #[tauri::command]
 #[specta::specta]
-pub fn ignore_tz_suggestion(
-    state: State<'_, AppState>,
+pub async fn ignore_tz_suggestion(
+    app: tauri::AppHandle,
     group: i64,
     offset_min: i32,
 ) -> AppResult<()> {
-    Ok(state
-        .store
-        .write(move |c| timeline::ignore_suggestion(c, group, offset_min))?)
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .store
+            .write(move |c| timeline::ignore_suggestion(c, group, offset_min))?)
+    })
+    .await
 }
 
 /// Nomi dei fusi IANA per il selettore dell'ora locale.

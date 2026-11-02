@@ -6,6 +6,7 @@ pub mod bulk;
 pub mod db;
 pub mod detail;
 pub mod errorlog;
+pub mod gate;
 pub mod migrate;
 pub mod model;
 pub mod people;
