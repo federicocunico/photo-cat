@@ -8,16 +8,21 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./styles/global.css";
 import "./i18n";
-import { App } from "./App";
+import { restoreUiPrefs } from "./lib/uiPrefs";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000, retry: 1 } },
 });
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+// Le preferenze dell'interfaccia vanno ripristinate prima che i negozi
+// persistiti (importati con l'app) leggano localStorage.
+void restoreUiPrefs().then(async () => {
+  const { App } = await import("./App");
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+});

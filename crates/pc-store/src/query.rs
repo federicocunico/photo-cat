@@ -31,6 +31,9 @@ pub enum Presence {
 pub struct LibraryFilter {
     pub source_ids: Vec<i64>,
     pub catalog_id: Option<i64>,
+    pub excluded_from: Option<i64>,
+    /// None equivale a true.
+    pub matching_only: Option<bool>,
     /// AND tra gruppi, OR tra i valori dello stesso gruppo.
     pub labels: Vec<LabelFilter>,
     /// Tutte le persone indicate devono essere presenti.
@@ -171,6 +174,7 @@ pub enum SortKey {
     NameAsc,
     SizeDesc,
     AddedDesc,
+    ExcludedAt,
 }
 
 /// Ora locale corretta (`AAAA-MM-GG HH:MM:SS`): istante reale più il fuso
@@ -191,10 +195,14 @@ impl SortKey {
             Self::NameAsc => "m.name COLLATE NOCASE",
             Self::SizeDesc => "m.size",
             Self::AddedDesc => "m.added_at",
+            Self::ExcludedAt => "m.added_at",
         }
     }
     fn desc(self) -> bool {
-        matches!(self, Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc)
+        matches!(
+            self,
+            Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc | Self::ExcludedAt
+        )
     }
 }
 
@@ -223,6 +231,7 @@ pub struct GridItem {
     pub analyzed: bool,
     /// Tag utente del file (per i chip colorati della griglia).
     pub tags: Vec<String>,
+    pub excluded_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -257,27 +266,31 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         ));
         args.extend(f.source_ids.iter().map(|v| Value::Integer(*v)));
     }
+    if f.catalog_id.is_some() && f.excluded_from.is_some() {
+        return Err(StoreError::Invalid(
+            "catalog_id ed excluded_from sono alternativi".into(),
+        ));
+    }
     if let Some(cid) = f.catalog_id {
+        let frag = rules::catalog_content(c, cid, &[])?;
+        parts.push(format!("({})", frag.sql));
+        args.extend(frag.args);
+    }
+    if let Some(cid) = f.excluded_from {
         let cat = repo::catalog::get(c, cid)?;
-        match cat.kind {
-            CatalogKind::Manual => {
-                parts.push(
-                    "m.id IN (SELECT media_id FROM catalog_item WHERE catalog_id = ?)".into(),
-                );
-                args.push(Value::Integer(cid));
-            }
-            CatalogKind::Smart => {
-                let json = cat.rules.ok_or_else(|| {
-                    StoreError::Invalid(format!("catalogo smart {cid} senza regole"))
-                })?;
-                let frag = rules::compile(&rules::parse(&json)?)?;
-                parts.push(frag.sql);
-                args.extend(frag.args);
-            }
+        parts.push("m.id IN (SELECT media_id FROM catalog_exclusion WHERE catalog_id=?)".into());
+        args.push(Value::Integer(cid));
+        if cat.kind == CatalogKind::Smart && f.matching_only.unwrap_or(true) {
+            let json = cat
+                .rules
+                .ok_or_else(|| StoreError::Invalid("catalogo smart senza regole".into()))?;
+            let frag = rules::compile_with(c, &rules::parse(&json)?)?;
+            parts.push(format!("({})", frag.sql));
+            args.extend(frag.args);
         }
     }
     if let Some(json) = &f.rule {
-        let frag = rules::compile(&rules::parse(json)?)?;
+        let frag = rules::compile_with(c, &rules::parse(json)?)?;
         parts.push(frag.sql);
         args.extend(frag.args);
     }
@@ -376,7 +389,19 @@ pub fn page(
     limit: u32,
 ) -> StoreResult<Page> {
     let mut w = compile_filter(c, f)?;
-    let key = sort.expr();
+    let excluded = f.excluded_from.map(|id| {
+        format!(
+            "(SELECT excluded_at FROM catalog_exclusion WHERE catalog_id={id} AND media_id=m.id)"
+        )
+    });
+    let key = if sort == SortKey::ExcludedAt {
+        excluded
+            .clone()
+            .ok_or_else(|| StoreError::Invalid("ordinamento esclusioni senza catalogo".into()))?
+    } else {
+        sort.expr().to_string()
+    };
+    let excluded_column = excluded.as_deref().unwrap_or("NULL");
     let (op, dir) = if sort.desc() {
         ("<", "DESC")
     } else {
@@ -398,7 +423,7 @@ pub fn page(
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
-                 WHERE mt.media_id = m.id)
+                 WHERE mt.media_id = m.id), {excluded_column}
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ?",
         w.sql
     );
@@ -421,6 +446,7 @@ pub fn page(
                 faces: r.get(8)?,
                 analyzed: r.get(9)?,
                 tags: split_tags(r.get(11)?),
+                excluded_at: r.get(12)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -482,6 +508,10 @@ pub struct Facets {
     pub labels: Vec<(String, FacetList)>,
     pub places: FacetList,
     pub years: FacetList,
+    /// Mesi dell'anno scelto (`AAAA-MM`), solo con un anno scelto.
+    pub months: Option<FacetList>,
+    /// Giorni del mese scelto (`AAAA-MM-GG`), solo con un mese scelto.
+    pub days: Option<FacetList>,
     pub formats: FacetList,
     pub people: FacetList,
     pub tags: FacetList,
@@ -555,12 +585,7 @@ impl FacetKey {
                 .flat_map(|l| l.values.clone())
                 .collect(),
             Self::Place => f.places.clone(),
-            Self::Year => f
-                .date_from
-                .as_deref()
-                .and_then(|d| d.get(..4))
-                .map(|y| vec![y.to_string()])
-                .unwrap_or_default(),
+            Self::Year => date_path(f).year.into_iter().collect(),
             Self::Format => f.formats.clone(),
             Self::Tag => f.tags.clone(),
         }
@@ -648,6 +673,122 @@ fn summarize(rows: Vec<FacetValue>, selected: &[String]) -> FacetList {
     FacetList { values, total }
 }
 
+/// Data scelta nel filtro come percorso anno → mese → giorno, ricavata
+/// dall'intervallo `date_from`/`date_to`: anno intero, mese intero o un
+/// giorno. Un intervallo diverso vale come scelta dell'anno di `date_from`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DatePath {
+    /// `AAAA`
+    pub year: Option<String>,
+    /// `AAAA-MM`
+    pub month: Option<String>,
+    /// `AAAA-MM-GG`
+    pub day: Option<String>,
+}
+
+/// Ultimo giorno del mese (`None` se anno o mese non sono validi).
+fn last_day(year: i32, month: u32) -> Option<u32> {
+    let next = if month == 12 {
+        chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)
+    } else {
+        chrono::NaiveDate::from_ymd_opt(year, month + 1, 1)
+    }?;
+    use chrono::Datelike;
+    Some(next.pred_opt()?.day())
+}
+
+pub fn date_path(f: &LibraryFilter) -> DatePath {
+    let Some(from) = f.date_from.as_deref().filter(|d| d.len() >= 4) else {
+        return DatePath::default();
+    };
+    let to = f.date_to.as_deref().unwrap_or("");
+    let year = Some(from[..4].to_string());
+    if from.len() == 10 && to == from {
+        return DatePath {
+            year,
+            month: Some(from[..7].to_string()),
+            day: Some(from.to_string()),
+        };
+    }
+    let whole_month = from.len() == 10
+        && to.len() == 10
+        && from.ends_with("-01")
+        && from[..7] == to[..7]
+        && match (from[..4].parse::<i32>(), from[5..7].parse::<u32>()) {
+            (Ok(y), Ok(m)) => {
+                last_day(y, m).map(|d| format!("{d:02}")) == Some(to[8..].to_string())
+            }
+            _ => false,
+        };
+    DatePath {
+        year,
+        month: whole_month.then(|| from[..7].to_string()),
+        day: None,
+    }
+}
+
+/// Intervallo inclusivo di un anno (`AAAA`) o di un mese (`AAAA-MM`).
+fn period_range(p: &str) -> Option<(String, String)> {
+    let y: i32 = p.get(..4)?.parse().ok()?;
+    match p.get(5..7) {
+        None => Some((format!("{y:04}-01-01"), format!("{y:04}-12-31"))),
+        Some(m) => {
+            let m: u32 = m.parse().ok()?;
+            Some((
+                format!("{y:04}-{m:02}-01"),
+                format!("{y:04}-{m:02}-{:02}", last_day(y, m)?),
+            ))
+        }
+    }
+}
+
+/// Mesi di un anno o giorni di un mese (`period` = `AAAA` o `AAAA-MM`) con il
+/// numero di foto, in ordine cronologico: il filtro senza la scelta della data,
+/// ristretto al periodo. La voce `selected` compare anche con 0 foto.
+fn date_list(
+    c: &Connection,
+    f: &LibraryFilter,
+    period: &str,
+    selected: Option<&str>,
+) -> StoreResult<FacetList> {
+    let Some((from, to)) = period_range(period) else {
+        return Ok(FacetList::default());
+    };
+    let g = LibraryFilter {
+        date_from: Some(from),
+        date_to: Some(to),
+        ..f.clone()
+    };
+    let w = compile_filter(c, &g)?;
+    let len = if period.len() == 4 { 7 } else { 10 };
+    let sql = format!(
+        "WITH f AS (SELECT m.id {FROM} WHERE {}) \
+         SELECT substr({LOCAL_TIME_SQL}, 1, {len}), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
+         WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1",
+        w.sql
+    );
+    let mut st = c.prepare(&sql)?;
+    let mut values: Vec<FacetValue> = st
+        .query_map(rusqlite::params_from_iter(w.args.iter()), |r| {
+            Ok(FacetValue {
+                value: r.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                count: r.get(1)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    if let Some(s) = selected {
+        if !values.iter().any(|v| v.value == s) {
+            values.push(FacetValue {
+                value: s.to_string(),
+                count: 0,
+            });
+            values.sort_by(|a, b| a.value.cmp(&b.value));
+        }
+    }
+    let total = values.len() as i64;
+    Ok(FacetList { values, total })
+}
+
 /// Conteggi per i filtri del pannello laterale. Ogni lista applica tutti i
 /// filtri tranne la propria selezione.
 pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
@@ -688,6 +829,18 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
     }
     out.places = list(FacetKey::Place)?;
     out.years = list(FacetKey::Year)?;
+    let date = date_path(f);
+    if let Some(year) = &date.year {
+        let undated = LibraryFilter {
+            date_from: None,
+            date_to: None,
+            ..f.clone()
+        };
+        out.months = Some(date_list(c, &undated, year, date.month.as_deref())?);
+        if let Some(month) = &date.month {
+            out.days = Some(date_list(c, &undated, month, date.day.as_deref())?);
+        }
+    }
     out.formats = list(FacetKey::Format)?;
     out.tags = list(FacetKey::Tag)?;
     // Persone: non mostrate nella barra laterale, con il filtro completo.
@@ -765,5 +918,81 @@ fn value_to_json(v: Value) -> serde_json::Value {
         Value::Real(f) => f.into(),
         Value::Text(s) => s.into(),
         _ => serde_json::Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod date_tests {
+    use super::*;
+
+    fn range(from: &str, to: &str) -> LibraryFilter {
+        LibraryFilter {
+            date_from: Some(from.into()),
+            date_to: Some(to.into()),
+            ..Default::default()
+        }
+    }
+
+    fn path(y: Option<&str>, m: Option<&str>, d: Option<&str>) -> DatePath {
+        DatePath {
+            year: y.map(Into::into),
+            month: m.map(Into::into),
+            day: d.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn date_path_recognizes_year_month_and_day() {
+        assert_eq!(date_path(&LibraryFilter::default()), DatePath::default());
+        assert_eq!(
+            date_path(&range("2023-01-01", "2023-12-31")),
+            path(Some("2023"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-01", "2023-05-31")),
+            path(Some("2023"), Some("2023-05"), None)
+        );
+        assert_eq!(
+            date_path(&range("2024-02-01", "2024-02-29")),
+            path(Some("2024"), Some("2024-02"), None)
+        );
+        // Il 2023 non è bisestile: 1–28 febbraio è il mese intero, 1–29 no.
+        assert_eq!(
+            date_path(&range("2023-02-01", "2023-02-28")),
+            path(Some("2023"), Some("2023-02"), None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-14", "2023-05-14")),
+            path(Some("2023"), Some("2023-05"), Some("2023-05-14"))
+        );
+    }
+
+    #[test]
+    fn other_ranges_count_as_the_year_of_the_start() {
+        assert_eq!(
+            date_path(&range("2023-05-03", "2023-05-20")),
+            path(Some("2023"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2024-02-01", "2024-02-28")),
+            path(Some("2024"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-01", "2024-01-10")),
+            path(Some("2023"), None, None)
+        );
+    }
+
+    #[test]
+    fn period_ranges() {
+        assert_eq!(
+            period_range("2023"),
+            Some(("2023-01-01".into(), "2023-12-31".into()))
+        );
+        assert_eq!(
+            period_range("2024-02"),
+            Some(("2024-02-01".into(), "2024-02-29".into()))
+        );
+        assert_eq!(period_range("xx"), None);
     }
 }

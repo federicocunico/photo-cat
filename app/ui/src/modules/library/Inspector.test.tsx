@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLibrary } from "../../store/library";
+import { CatalogFeedback } from "./catalogActions";
+import { useLive } from "../../store/live";
 import { Inspector } from "./Inspector";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -229,4 +231,30 @@ it("nuova voce dall'Inspector: Invio crea e assegna, Esc annulla, nome obbligato
   await waitFor(() =>
     expect(screen.queryByLabelText("Nome della nuova voce")).not.toBeInTheDocument(),
   );
+});
+
+it("esclude dal catalogo smart nell'Inspector", async () => {
+  const detail = await commandsMock.mediaDetail(7);
+  commandsMock.mediaDetail.mockResolvedValue({ ...detail, catalogs: ["Smart"] } as never);
+  commandsMock.startBulk.mockResolvedValue(902);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+      <CatalogFeedback />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Escludi dal catalogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      [7],
+      { action: "exclude_from_catalog", catalog: 4 },
+      false,
+    ),
+  );
+  act(() =>
+    useLive.setState({
+      jobs: { 902: { id: 902, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  await screen.findByRole("status");
 });
