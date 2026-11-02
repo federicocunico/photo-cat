@@ -2,6 +2,7 @@
 // Posizione e dimensione restano tra un'apertura e l'altra e tra i riavvii.
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { mirroredStorage } from "../lib/uiPrefs";
 
 export interface PanelRect {
   x: number;
@@ -73,7 +74,7 @@ export const useFloating = create<FloatingState>()(
     }),
     {
       name: "photo-cat.floating",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => mirroredStorage),
       partialize: (s) => ({ panels: s.panels, order: s.order }),
     },
   ),

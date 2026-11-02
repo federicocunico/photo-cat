@@ -20,6 +20,7 @@ mod settings;
 mod state;
 mod tags;
 mod timeline;
+mod ui_prefs;
 #[cfg(windows)]
 mod webview_runtime;
 
@@ -169,6 +170,8 @@ pub fn bindings() -> Builder<tauri::Wry> {
             places::recompute_places,
             open_with::open_with,
             settings::onboarding_done,
+            ui_prefs::ui_prefs_load,
+            ui_prefs::ui_prefs_save,
             settings::complete_onboarding,
             diagnostics::export_diagnostics,
             diagnostics::open_logs,
