@@ -1,4 +1,6 @@
 import type { LibraryFilter } from "../../lib/ipc";
+import { fmtPeriod } from "../../lib/format";
+import { datePath } from "./facets";
 
 /** Filtri attivi come chip rimovibili: nome e modifica che lo toglie. */
 export function activeChips(
@@ -30,8 +32,9 @@ export function activeChips(
     });
   for (const x of f.tags ?? [])
     chips.push({ name: `#${x}`, clear: { tags: (f.tags ?? []).filter((y) => y !== x) } });
-  if (f.dateFrom)
-    chips.push({ name: f.dateFrom.slice(0, 4), clear: { dateFrom: null, dateTo: null } });
+  const date = datePath(f);
+  const chosen = date.day ?? date.month ?? date.year;
+  if (chosen) chips.push({ name: fmtPeriod(chosen), clear: { dateFrom: null, dateTo: null } });
   if (f.text) chips.push({ name: `“${f.text}”`, clear: { text: null } });
   if (f.folder?.path) {
     const name = f.folder.path.split(/[\\/]/).filter(Boolean).pop() ?? f.folder.path;

@@ -536,6 +536,10 @@ export type Facets = {
 	labels: ([string, FacetList])[],
 	places: FacetList,
 	years: FacetList,
+	/**  Mesi dell'anno scelto (`AAAA-MM`), solo con un anno scelto. */
+	months: FacetList | null,
+	/**  Giorni del mese scelto (`AAAA-MM-GG`), solo con un mese scelto. */
+	days: FacetList | null,
 	formats: FacetList,
 	people: FacetList,
 	tags: FacetList,
