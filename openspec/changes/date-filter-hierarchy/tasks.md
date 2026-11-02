@@ -16,7 +16,7 @@
 ## 3. Verifica
 
 - [x] 3.1 Eseguire `cargo test` (workspace), `npm test` in `app/ui` e `make test-linux` (Docker) e correggere ogni errore
-- [ ] 3.2 Verificare sull'app reale (tauri dev con cartella dati di prova) che scegliendo un anno, un mese e un giorno la griglia e i conteggi siano corretti e che il chip mostri la data nella lingua scelta
+- [x] 3.2 Verificare sull'app reale (tauri dev con cartella dati di prova) che scegliendo un anno, un mese e un giorno la griglia e i conteggi siano corretti e che il chip mostri la data nella lingua scelta
 
 ## Workflow follow-up
 
