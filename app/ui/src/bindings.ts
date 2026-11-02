@@ -270,7 +270,7 @@ export type BulkAction = { action: "add_tag"; name: string;
 /**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
 exclusive?: string[] } | { action: "remove_tag"; name: string } | 
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
-{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "exclude_from_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "restore_to_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
 { action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
@@ -299,6 +299,7 @@ export type CatalogLoss = {
 export type CatalogSummary = {
 	catalog: Catalog,
 	items: number,
+	excluded: number,
 };
 
 export type Category = {
@@ -589,6 +590,7 @@ export type GridItem = {
 	analyzed: boolean,
 	/**  Tag utente del file (per i chip colorati della griglia). */
 	tags: string[],
+	excludedAt: number | null,
 };
 
 export type Group = {
@@ -721,6 +723,9 @@ export type Language = "it" | "en";
 export type LibraryFilter = {
 	sourceIds?: number[],
 	catalogId?: number | null,
+	excludedFrom?: number | null,
+	/**  None equivale a true. */
+	matchingOnly?: boolean | null,
 	/**  AND tra gruppi, OR tra i valori dello stesso gruppo. */
 	labels?: LabelFilter[],
 	/**  Tutte le persone indicate devono essere presenti. */
@@ -1114,7 +1119,7 @@ export type SetTag = {
 	name: string,
 };
 
-export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc";
+export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc" | "excluded_at";
 
 export type Source = {
 	id: number,

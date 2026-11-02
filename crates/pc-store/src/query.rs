@@ -31,6 +31,9 @@ pub enum Presence {
 pub struct LibraryFilter {
     pub source_ids: Vec<i64>,
     pub catalog_id: Option<i64>,
+    pub excluded_from: Option<i64>,
+    /// None equivale a true.
+    pub matching_only: Option<bool>,
     /// AND tra gruppi, OR tra i valori dello stesso gruppo.
     pub labels: Vec<LabelFilter>,
     /// Tutte le persone indicate devono essere presenti.
@@ -171,6 +174,7 @@ pub enum SortKey {
     NameAsc,
     SizeDesc,
     AddedDesc,
+    ExcludedAt,
 }
 
 /// Ora locale corretta (`AAAA-MM-GG HH:MM:SS`): istante reale più il fuso
@@ -191,10 +195,14 @@ impl SortKey {
             Self::NameAsc => "m.name COLLATE NOCASE",
             Self::SizeDesc => "m.size",
             Self::AddedDesc => "m.added_at",
+            Self::ExcludedAt => "m.added_at",
         }
     }
     fn desc(self) -> bool {
-        matches!(self, Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc)
+        matches!(
+            self,
+            Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc | Self::ExcludedAt
+        )
     }
 }
 
@@ -223,6 +231,7 @@ pub struct GridItem {
     pub analyzed: bool,
     /// Tag utente del file (per i chip colorati della griglia).
     pub tags: Vec<String>,
+    pub excluded_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -257,27 +266,31 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         ));
         args.extend(f.source_ids.iter().map(|v| Value::Integer(*v)));
     }
+    if f.catalog_id.is_some() && f.excluded_from.is_some() {
+        return Err(StoreError::Invalid(
+            "catalog_id ed excluded_from sono alternativi".into(),
+        ));
+    }
     if let Some(cid) = f.catalog_id {
+        let frag = rules::catalog_content(c, cid, &[])?;
+        parts.push(format!("({})", frag.sql));
+        args.extend(frag.args);
+    }
+    if let Some(cid) = f.excluded_from {
         let cat = repo::catalog::get(c, cid)?;
-        match cat.kind {
-            CatalogKind::Manual => {
-                parts.push(
-                    "m.id IN (SELECT media_id FROM catalog_item WHERE catalog_id = ?)".into(),
-                );
-                args.push(Value::Integer(cid));
-            }
-            CatalogKind::Smart => {
-                let json = cat.rules.ok_or_else(|| {
-                    StoreError::Invalid(format!("catalogo smart {cid} senza regole"))
-                })?;
-                let frag = rules::compile(&rules::parse(&json)?)?;
-                parts.push(frag.sql);
-                args.extend(frag.args);
-            }
+        parts.push("m.id IN (SELECT media_id FROM catalog_exclusion WHERE catalog_id=?)".into());
+        args.push(Value::Integer(cid));
+        if cat.kind == CatalogKind::Smart && f.matching_only.unwrap_or(true) {
+            let json = cat
+                .rules
+                .ok_or_else(|| StoreError::Invalid("catalogo smart senza regole".into()))?;
+            let frag = rules::compile_with(c, &rules::parse(&json)?)?;
+            parts.push(format!("({})", frag.sql));
+            args.extend(frag.args);
         }
     }
     if let Some(json) = &f.rule {
-        let frag = rules::compile(&rules::parse(json)?)?;
+        let frag = rules::compile_with(c, &rules::parse(json)?)?;
         parts.push(frag.sql);
         args.extend(frag.args);
     }
@@ -376,7 +389,19 @@ pub fn page(
     limit: u32,
 ) -> StoreResult<Page> {
     let mut w = compile_filter(c, f)?;
-    let key = sort.expr();
+    let excluded = f.excluded_from.map(|id| {
+        format!(
+            "(SELECT excluded_at FROM catalog_exclusion WHERE catalog_id={id} AND media_id=m.id)"
+        )
+    });
+    let key = if sort == SortKey::ExcludedAt {
+        excluded
+            .clone()
+            .ok_or_else(|| StoreError::Invalid("ordinamento esclusioni senza catalogo".into()))?
+    } else {
+        sort.expr().to_string()
+    };
+    let excluded_column = excluded.as_deref().unwrap_or("NULL");
     let (op, dir) = if sort.desc() {
         ("<", "DESC")
     } else {
@@ -398,7 +423,7 @@ pub fn page(
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
-                 WHERE mt.media_id = m.id)
+                 WHERE mt.media_id = m.id), {excluded_column}
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ?",
         w.sql
     );
@@ -421,6 +446,7 @@ pub fn page(
                 faces: r.get(8)?,
                 analyzed: r.get(9)?,
                 tags: split_tags(r.get(11)?),
+                excluded_at: r.get(12)?,
             })
         })?
         .collect::<Result<_, _>>()?;
