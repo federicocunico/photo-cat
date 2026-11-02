@@ -10,7 +10,8 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
-import { type GridItem, type Target } from "../../lib/ipc";
+import { useQuery } from "@tanstack/react-query";
+import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLibraryCount } from "../../lib/latest";
 import {
@@ -18,6 +19,7 @@ import {
   emptyFilter,
   idsSelection,
   rectangleSelect,
+  selCount,
   selHas,
   selIds,
   selSet,
@@ -27,6 +29,7 @@ import {
   type Selection,
 } from "../../store/library";
 import { useGridPages, windowAction } from "./gridPages";
+import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
 import { useOpenWith } from "./useOpenWith";
@@ -106,7 +109,11 @@ function Thumb({
       }}
       aria-pressed={selected}
       data-testid={`thumb-${item.id}`}
-      title={item.name}
+      title={
+        item.excludedAt
+          ? `${item.name} · ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
+          : item.name
+      }
       style={{
         width: size,
         padding: 0,
@@ -178,6 +185,20 @@ function Thumb({
               : t("library.queuedBadge")}
         </span>
         <ThumbTags tags={item.tags} color={tagColor} />
+        {item.excludedAt != null && (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              background: "var(--pc-panel)",
+              padding: 3,
+              fontSize: 11,
+            }}
+          >
+            {t("exclusions.date", { date: new Date(item.excludedAt).toLocaleDateString() })}
+          </span>
+        )}
         {selected && (
           <span
             aria-hidden="true"
@@ -246,6 +267,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     scrollTop,
     setScrollTop,
   } = useLibrary();
+  const catalogAction = useCatalogAction();
+  const catalogs = useQuery({
+    queryKey: ["catalogs"],
+    queryFn: commands.listCatalogs,
+    enabled: isTauri(),
+  });
   const size = thumbPx(thumbSize);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(initialWidth ?? 800);
@@ -343,6 +370,25 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   return (
     <div
       ref={scrollRef}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]"))
+          return;
+        const restore = filter.excludedFrom != null;
+        if (
+          (e.key === "Delete" && filter.catalogId != null && !restore) ||
+          (e.key === "Enter" && restore)
+        ) {
+          e.preventDefault();
+          const id = filter.excludedFrom ?? filter.catalogId!;
+          void catalogAction.act(
+            { target: selTarget(selection), count: selCount(selection) },
+            id,
+            catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
+            restore,
+          );
+        }
+      }}
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}

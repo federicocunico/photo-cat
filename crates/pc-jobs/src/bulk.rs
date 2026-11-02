@@ -28,7 +28,11 @@ pub enum BulkAction {
     AddCatalog {
         catalog: i64,
     },
-    RemoveCatalog {
+    #[serde(alias = "remove_catalog")]
+    ExcludeFromCatalog {
+        catalog: i64,
+    },
+    RestoreToCatalog {
         catalog: i64,
     },
     SetLabel {
@@ -54,7 +58,7 @@ pub type ThumbRemover = Arc<dyn Fn(&[String]) + Send + Sync>;
 
 impl BulkAction {
     pub fn destructive(&self) -> bool {
-        matches!(self, Self::RemoveCatalog { .. } | Self::RemoveLibrary)
+        matches!(self, Self::RemoveLibrary)
     }
     fn apply(
         &self,
@@ -84,7 +88,12 @@ impl BulkAction {
                 }
                 bulk::add_to_catalog(c, *catalog, ids)?.changed
             }
-            Self::RemoveCatalog { catalog } => bulk::remove_from_catalog(c, *catalog, ids)?.changed,
+            Self::ExcludeFromCatalog { catalog } => {
+                bulk::exclude_from_catalog(c, *catalog, ids)?.changed
+            }
+            Self::RestoreToCatalog { catalog } => {
+                bulk::restore_to_catalog(c, *catalog, ids)?.changed
+            }
             Self::SetLabel { group, value } => {
                 bulk::set_label(c, group, value.as_deref(), ids)?.changed
             }
@@ -548,5 +557,51 @@ mod tests {
             500,
             "solo le foto presenti al momento della selezione"
         );
+    }
+
+    #[test]
+    fn smart_exclusion_job_legacy_alias_and_undo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("photo.jpg");
+        std::fs::write(&file, b"original").unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let path = file.to_string_lossy().to_string();
+        let (id, cat) = db
+            .write(move |c| {
+                let id = media(c, &path)?;
+                let cat = repo::catalog::create(
+                    c,
+                    "Smart",
+                    pc_store::model::CatalogKind::Smart,
+                    Some(&serde_json::json!({"field":"format","cmp":"eq","value":"jpg"})),
+                )?;
+                Ok((id, cat))
+            })
+            .unwrap();
+        let legacy: BulkAction =
+            serde_json::from_value(serde_json::json!({"action":"remove_catalog","catalog":cat}))
+                .unwrap();
+        assert!(matches!(legacy, BulkAction::ExcludeFromCatalog { .. }));
+        assert!(!legacy.destructive());
+        assert!(!BulkAction::RestoreToCatalog { catalog: cat }.destructive());
+        let jobs = manager(&db);
+        let outcome = run(
+            &jobs,
+            serde_json::json!({"ids":[id],"operation":{"action":"exclude_from_catalog","catalog":cat},"confirmed":false}),
+        );
+        assert_eq!(outcome.state, crate::JobState::Completed);
+        db.write(move |c| {
+            let filter = pc_store::query::LibraryFilter {
+                catalog_id: Some(cat),
+                ..Default::default()
+            };
+            assert_eq!(pc_store::query::count(c, &filter)?, 0);
+            bulk::undo_last(c)?;
+            assert_eq!(pc_store::query::count(c, &filter)?, 1);
+            assert_eq!(pc_store::query::count(c, &Default::default())?, 1);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(file).unwrap(), b"original");
     }
 }

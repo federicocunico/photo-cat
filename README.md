@@ -290,3 +290,18 @@ args = ["--library", ":memory:", "{file}"]
 | `crates/pc-organize` | export CSV/JSON, organizzazione in cartelle, export della sequenza |
 | `app/src-tauri` | shell desktop Tauri |
 | `app/ui` | interfaccia React |
+
+### Esclusioni dai cataloghi
+
+Da un catalogo manuale o smart puoi escludere le foto dalla barra delle azioni,
+dal menu contestuale, dall'Inspector o premendo Canc sulla selezione nella griglia.
+L'operazione non modifica i file e non rimuove le foto dalla libreria; l'avviso
+mostra Annulla per otto secondi.
+
+Apri **Escluse (N)** nell'intestazione del catalogo per rivedere le foto, ordinate
+per data di esclusione, e reinserirle singolarmente o in gruppo (anche con Invio).
+Negli smart vengono mostrate inizialmente solo le escluse che soddisfano ancora
+le regole: l'interruttore permette di vederle tutte. Le esclusioni persistono
+anche se cambiano i metadati o viene ripetuta l'analisi. Riaggiungere una foto a
+un catalogo manuale cancella la sua esclusione. I conteggi e le regole di
+appartenenza ad altri cataloghi rispettano le esclusioni.

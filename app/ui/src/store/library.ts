@@ -9,6 +9,8 @@ import type { LibraryFilter, SelectionBase, SortKey, Target } from "../lib/ipc";
 export const emptyFilter = (): LibraryFilter => ({
   sourceIds: [],
   catalogId: null,
+  excludedFrom: null,
+  matchingOnly: true,
   labels: [],
   personIds: [],
   people: null,
@@ -131,14 +133,22 @@ export const useLibrary = create<LibraryState>()(
           selection: s.filter.folder ? keepSelection(s.selection) : s.selection,
         })),
       setFilter: (f) =>
-        set((s) => ({
-          filter: { ...s.filter, ...f },
-          scrollTop: 0,
-          selection: keepSelection(s.selection),
-        })),
+        set((s) => {
+          const filter = { ...s.filter, ...f };
+          if (f.catalogId != null || (f.catalogId === null && f.excludedFrom === undefined))
+            filter.excludedFrom = null;
+          return {
+            filter,
+            sort:
+              filter.excludedFrom == null && s.sort === "excluded_at" ? "captured_desc" : s.sort,
+            scrollTop: 0,
+            selection: keepSelection(s.selection),
+          };
+        }),
       resetFilter: () =>
         set((s) => ({
           filter: emptyFilter(),
+          sort: s.sort === "excluded_at" ? "captured_desc" : s.sort,
           scrollTop: 0,
           selection: keepSelection(s.selection),
         })),
@@ -180,7 +190,8 @@ export const useLibrary = create<LibraryState>()(
       name: "photo-cat.library",
       storage: createJSONStorage(() => mirroredStorage),
       partialize: (s) => ({
-        sort: s.sort,
+        // Il filtro non è persistito: al riavvio si apre la libreria generale.
+        sort: s.sort === "excluded_at" ? "captured_desc" : s.sort,
         thumbSize: s.thumbSize,
         folderRecursive: s.folderRecursive,
       }),

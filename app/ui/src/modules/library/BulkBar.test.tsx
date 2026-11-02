@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, it, expect, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -11,6 +11,8 @@ import {
   selSet,
   useLibrary,
 } from "../../store/library";
+import { CatalogFeedback } from "./catalogActions";
+import { useLive } from "../../store/live";
 import { BulkBar } from "./BulkBar";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(cleanup);
@@ -178,4 +180,33 @@ it("Risultati cambiati dopo la selezione: l'azione resta limitata agli elementi 
       false,
     ),
   );
+});
+
+it("reinserisce dalla vista escluse senza conferma", async () => {
+  vi.clearAllMocks();
+  useLibrary.setState({
+    filter: { ...emptyFilter(), excludedFrom: 3 },
+    selection: idsSelection([7]),
+  });
+  commandsMock.startBulk.mockResolvedValue(901);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <BulkBar />
+      <CatalogFeedback />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Reinserisci nel catalogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [7] },
+      { action: "restore_to_catalog", catalog: 3 },
+      false,
+    ),
+  );
+  act(() =>
+    useLive.setState({
+      jobs: { 901: { id: 901, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  await screen.findByRole("status");
 });

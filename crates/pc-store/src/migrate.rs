@@ -12,6 +12,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v3.sql"),
     include_str!("schema_v4.sql"),
     include_str!("schema_v5.sql"),
+    include_str!("schema_v6.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -114,6 +115,37 @@ pub(crate) fn migrate_to(conn: &mut Connection, version: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrate_v5_keeps_catalog_members() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 5);
+        c.execute_batch("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1);
+            INSERT INTO catalog(id,name,kind,created_at) VALUES (1,'Test','manual',0);
+            INSERT INTO catalog_item VALUES (1,1);").unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM catalog_item WHERE catalog_id=1 AND media_id=1",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM catalog_exclusion", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM media_item", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
 
     #[test]
     fn v4_named_people_become_identities_once() {

@@ -24,6 +24,7 @@ const item = (i: number): GridItem =>
     faces: 0,
     analyzed: true,
     tags: [],
+    excludedAt: null,
   }) as GridItem;
 
 /** Libreria simulata: il cursore è la posizione dell'elemento. */

@@ -7,11 +7,14 @@ import { useLayout } from "../../store/layout";
 import { useLive } from "../../store/live";
 import { CategoryPicker } from "./CategoryPicker";
 import { useLabelName, useTaxonomy } from "./labelName";
+import { useCatalogAction } from "./useCatalogAction";
 export function BulkBar() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const catalogAction = useCatalogAction();
   const { selection, filter, setSelection, selectAll, invertSelection } = useLibrary();
   const count = selCount(selection);
+  const items = () => ({ target: selTarget(selection), count });
   const [action, setAction] = useState("add_tag");
   const [value, setValue] = useState("");
   const [group, setGroup] = useState("subject");
@@ -75,7 +78,7 @@ export function BulkBar() {
       useLayout.getState().setModule("organize");
       return;
     }
-    const destructive = action === "remove_library" || action === "remove_catalog";
+    const destructive = action === "remove_library";
     if (destructive && !window.confirm(t("bulk.confirm", { count }))) return;
     let operation: BulkAction;
     switch (action) {
@@ -84,9 +87,13 @@ export function BulkBar() {
         operation = { action, name: value };
         break;
       case "add_catalog":
-      case "remove_catalog":
         operation = { action, catalog: Number(value) };
         break;
+      case "remove_catalog": {
+        const cat = catalogs.data?.find((c) => c.catalog.id === Number(value));
+        await catalogAction.act(items(), Number(value), cat?.catalog.name ?? "");
+        return;
+      }
       case "set_label":
         operation = { action, group, value: value || null };
         break;
@@ -115,6 +122,24 @@ export function BulkBar() {
   const done = result?.phases.reduce((n, p) => n + p.done, 0) ?? 0;
   return (
     <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--pc-border)" }}>
+      {(filter.catalogId != null || filter.excludedFrom != null) && (
+        <button
+          className="btn"
+          disabled={busy || catalogAction.busy || !count}
+          onClick={() => {
+            const id = filter.excludedFrom ?? filter.catalogId!;
+            const cat = catalogs.data?.find((c) => c.catalog.id === id);
+            void catalogAction.act(
+              items(),
+              id,
+              cat?.catalog.name ?? "",
+              filter.excludedFrom != null,
+            );
+          }}
+        >
+          {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
+        </button>
+      )}
       <div className="feature-actions" style={{ margin: 0 }}>
         <button className="btn" disabled={busy} onClick={() => void run(() => select(false))}>
           {t("bulk.selectAll")}
@@ -150,7 +175,7 @@ export function BulkBar() {
             "remove_library",
           ].map((a) => (
             <option key={a} value={a}>
-              {t(`bulk.actions.${a}`)}
+              {a === "remove_catalog" ? t("exclusions.exclude") : t(`bulk.actions.${a}`)}
             </option>
           ))}
         </select>
@@ -194,7 +219,7 @@ export function BulkBar() {
           >
             <option value="">{t("catalogs.title")}</option>
             {catalogs.data
-              ?.filter((c) => c.catalog.kind === "manual")
+              ?.filter((c) => action !== "add_catalog" || c.catalog.kind === "manual")
               .map(({ catalog: c }) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
