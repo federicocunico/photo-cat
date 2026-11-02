@@ -55,17 +55,20 @@ pub async fn delete_catalog(state: State<'_, AppState>, id: i64, confirmed: bool
 }
 #[tauri::command]
 #[specta::specta]
-pub fn start_bulk(
-    state: State<'_, AppState>,
-    ids: Vec<i64>,
+pub async fn start_bulk(
+    app: tauri::AppHandle,
+    target: pc_store::query::Target,
     operation: pc_jobs::bulk::BulkAction,
     confirmed: bool,
 ) -> AppResult<i64> {
-    let operation = crate::tags::with_set_rules(&state.app_store, operation)?;
-    state.jobs.submit(
-        pc_jobs::bulk::JOB_KIND,
-        serde_json::json!({"ids":ids,"operation":operation,"confirmed":confirmed}),
-    )
+    crate::state::blocking(app, move |_app, state| {
+        let operation = crate::tags::with_set_rules(&state.app_store, operation)?;
+        state.jobs.submit(
+            pc_jobs::bulk::JOB_KIND,
+            serde_json::json!({"target":target,"operation":operation,"confirmed":confirmed}),
+        )
+    })
+    .await
 }
 #[tauri::command]
 #[specta::specta]
@@ -91,6 +94,9 @@ pub async fn undo_bulk(state: State<'_, AppState>) -> AppResult<Option<String>> 
 }
 #[tauri::command]
 #[specta::specta]
-pub fn last_bulk_undo(state: State<'_, AppState>) -> AppResult<Option<String>> {
-    Ok(state.store.read(bulk::last_undoable)?)
+pub async fn last_bulk_undo(app: tauri::AppHandle) -> AppResult<Option<String>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(bulk::last_undoable)?)
+    })
+    .await
 }

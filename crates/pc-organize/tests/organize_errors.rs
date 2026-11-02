@@ -31,7 +31,8 @@ fn missing_source_file_completes_with_errors_logged_with_path() {
     let source = tmp.path().join("source");
     std::fs::create_dir(&source).unwrap();
     let db = Store::open(&tmp.path().join("catalog.db"), Default::default()).unwrap();
-    diag.hub().add_sink(Arc::new(DbErrorSink::new(db.clone())));
+    let db_sink = Arc::new(DbErrorSink::new(db.clone()));
+    diag.hub().add_sink(db_sink.clone());
     let files: Vec<_> = (1..=3)
         .map(|n| {
             let p = source.join(format!("IMG_000{n}.JPG"));
@@ -107,6 +108,7 @@ fn missing_source_file_completes_with_errors_logged_with_path() {
     assert!(!dest.join("Senza luogo").join("IMG_0002.JPG").exists());
 
     // Errore nel registro, con job, fase e percorso del file.
+    db_sink.flush();
     db.flush().unwrap();
     let errors = db
         .read(|c| {

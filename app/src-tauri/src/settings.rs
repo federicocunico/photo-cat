@@ -151,20 +151,26 @@ pub async fn preview_thresholds(
 }
 #[tauri::command]
 #[specta::specta]
-pub fn onboarding_done(state: State<'_, AppState>) -> AppResult<bool> {
-    Ok(state.store.read(|c| {
-        Ok(c.query_row(
-            "SELECT EXISTS(SELECT 1 FROM settings_kv WHERE key='onboarding.done' AND value='true')",
-            [],
-            |r| r.get(0),
-        )?)
-    })?)
+pub async fn onboarding_done(app: tauri::AppHandle) -> AppResult<bool> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c| {
+            Ok(c.query_row(
+                "SELECT EXISTS(SELECT 1 FROM settings_kv WHERE key='onboarding.done' AND value='true')",
+                [],
+                |r| r.get(0),
+            )?)
+        })?)
+    })
+    .await
 }
 #[tauri::command]
 #[specta::specta]
-pub fn complete_onboarding(state: State<'_, AppState>) -> AppResult<()> {
-    state.store.write(|c|{c.execute("INSERT INTO settings_kv(key,value) VALUES ('onboarding.done','true') ON CONFLICT(key) DO UPDATE SET value='true'",[])?;Ok(())})?;
-    Ok(())
+pub async fn complete_onboarding(app: tauri::AppHandle) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        state.store.write(|c|{c.execute("INSERT INTO settings_kv(key,value) VALUES ('onboarding.done','true') ON CONFLICT(key) DO UPDATE SET value='true'",[])?;Ok(())})?;
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(test)]

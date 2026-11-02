@@ -1,6 +1,7 @@
 //! Azioni di catalogo in blocchi, con un solo annullamento e diagnostica per file.
 use crate::{JobPlan, PhaseSpec, RunSummary};
 use pc_core::{AppError, AppResult};
+use pc_store::query::Target;
 use pc_store::{bulk, people, repo, Store, StoreResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -27,7 +28,11 @@ pub enum BulkAction {
     AddCatalog {
         catalog: i64,
     },
-    RemoveCatalog {
+    #[serde(alias = "remove_catalog")]
+    ExcludeFromCatalog {
+        catalog: i64,
+    },
+    RestoreToCatalog {
         catalog: i64,
     },
     SetLabel {
@@ -53,7 +58,7 @@ pub type ThumbRemover = Arc<dyn Fn(&[String]) + Send + Sync>;
 
 impl BulkAction {
     pub fn destructive(&self) -> bool {
-        matches!(self, Self::RemoveCatalog { .. } | Self::RemoveLibrary)
+        matches!(self, Self::RemoveLibrary)
     }
     fn apply(
         &self,
@@ -83,7 +88,12 @@ impl BulkAction {
                 }
                 bulk::add_to_catalog(c, *catalog, ids)?.changed
             }
-            Self::RemoveCatalog { catalog } => bulk::remove_from_catalog(c, *catalog, ids)?.changed,
+            Self::ExcludeFromCatalog { catalog } => {
+                bulk::exclude_from_catalog(c, *catalog, ids)?.changed
+            }
+            Self::RestoreToCatalog { catalog } => {
+                bulk::restore_to_catalog(c, *catalog, ids)?.changed
+            }
             Self::SetLabel { group, value } => {
                 bulk::set_label(c, group, value.as_deref(), ids)?.changed
             }
@@ -123,7 +133,11 @@ pub fn plan_full(
     remover: Option<ThumbRemover>,
     params: &serde_json::Value,
 ) -> AppResult<JobPlan> {
-    let ids: Vec<i64> = serde_json::from_value(params["ids"].clone())?;
+    // `target` (elenco o filtro con eccezioni); `ids` per i job salvati dalle versioni precedenti.
+    let target: Target = match params.get("ids").filter(|v| !v.is_null()) {
+        Some(ids) => Target::ids(serde_json::from_value(ids.clone())?),
+        None => serde_json::from_value(params["target"].clone())?,
+    };
     let action: BulkAction = serde_json::from_value(params["operation"].clone())?;
     if action.destructive() && params["confirmed"] != true {
         return Err(AppError::invalid_input("conferma richiesta"));
@@ -133,7 +147,8 @@ pub fn plan_full(
         min_memory_mb: 16,
         run: Box::new(move |ctx| {
             let phase = ctx.progress.phase("modifica");
-            phase.set_total(ids.len() as i64);
+            let total = store.read(|c| target.count(c))?;
+            phase.set_total(total);
             phase.start();
             if !ctx.control.checkpoint() {
                 return Ok(RunSummary {
@@ -146,14 +161,16 @@ pub fn plan_full(
             let mut thumbs = Vec::new();
             let cancelled = ctx.control.clone();
             let result = store.write(move|c|bulk::with_undo_group(c,"Modifica selezione",||{
-            for chunk in ids.chunks(JOB_THRESHOLD){
+            // Il target si risolve a blocchi: anche "tutta la libreria" non diventa mai un elenco unico.
+            target.for_each_chunk(c, JOB_THRESHOLD, |chunk| {
                 // Non attendere in pausa mentre si occupa il writer SQLite.
-                if control.is_cancelled(){break;}
+                if control.is_cancelled(){return Ok(());}
                 let mut valid=Vec::new();for id in chunk {
                     match repo::media::get(c,*id){Ok(_)=>valid.push(*id),Err(e)=>{failed+=1;phase.inc_failed(1);tracing::error!(job_id=ctx.job_id,phase="modifica",path=format!("media:{id}"),code="NOT_FOUND",detail=%e,"elemento non trovato");}}
                 }
                 if !valid.is_empty(){action.apply(c,&valid,resolver.as_ref(),&mut thumbs)?;phase.inc_done(valid.len() as i64);}
-            }
+                Ok(())
+            })?;
             phase.finish();Ok((failed,thumbs))
         }));
             let (failed, thumbs) = result?;
@@ -429,5 +446,162 @@ mod tests {
         // Un solo annullamento per job.
         db.write(bulk::undo_last).unwrap();
         assert_eq!(manual(&db, "Giappone", "manual"), 300);
+    }
+
+    /// Libreria sintetica di `n` elementi (inserimento diretto, veloce anche con 100.000).
+    fn seed(db: &Store, from: i64, to: i64) {
+        db.write(move |c| {
+            let mut st = c.prepare(
+                "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at)
+                 VALUES (?1, ?2, ?2, 'jpg', 1, 0, ?1, ?1)",
+            )?;
+            for id in from..=to {
+                st.execute(rusqlite::params![id, format!("f{id}.jpg")])?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn run_to_end(jobs: &JobManager, params: serde_json::Value) -> crate::JobSnapshot {
+        let id = jobs.submit(JOB_KIND, params).unwrap();
+        let until = Instant::now() + Duration::from_secs(120);
+        loop {
+            let s = jobs.snapshots().into_iter().find(|s| s.id == id).unwrap();
+            if s.state.is_terminal() {
+                return s;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn tagged(db: &Store) -> i64 {
+        db.read(|c| Ok(c.query_row("SELECT count(*) FROM media_tag", [], |r| r.get(0))?))
+            .unwrap()
+    }
+
+    #[test]
+    fn select_all_on_a_large_library_minus_three_tags_exactly_the_rest() {
+        use pc_store::query::{self, LibraryFilter};
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 100_000);
+        let jobs = JobManager::new(
+            db.clone(),
+            pc_governor::MemoryGovernor::new(256),
+            1,
+            Arc::new(Sink),
+        );
+        let st = db.clone();
+        jobs.register(JOB_KIND, Arc::new(move |p| plan(st.clone(), p)));
+        // "Seleziona tutto": solo conteggio e id massimo, nessun elenco di id.
+        let base = db
+            .read(|c| query::selection_base(c, &LibraryFilter::default()))
+            .unwrap();
+        assert_eq!((base.count, base.max_id), (100_000, 100_000));
+        let target = Target::Filter {
+            filter: LibraryFilter::default(),
+            max_id: base.max_id,
+            except: vec![7, 50_000, 99_999],
+        };
+        assert_eq!(db.read(|c| target.count(c)).unwrap(), 99_997);
+        let s = run_to_end(
+            &jobs,
+            serde_json::json!({"target": target, "operation": {"action": "add_tag", "name": "Mare"}}),
+        );
+        assert_eq!(s.failed, 0);
+        assert_eq!(tagged(&db), 99_997);
+        let excluded: i64 = db
+            .read(|c| {
+                Ok(c.query_row(
+                    "SELECT count(*) FROM media_tag WHERE media_id IN (7, 50000, 99999)",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(excluded, 0);
+    }
+
+    #[test]
+    fn items_imported_after_select_all_are_not_affected() {
+        use pc_store::query::{self, LibraryFilter};
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 500);
+        let jobs = JobManager::new(
+            db.clone(),
+            pc_governor::MemoryGovernor::new(256),
+            1,
+            Arc::new(Sink),
+        );
+        let st = db.clone();
+        jobs.register(JOB_KIND, Arc::new(move |p| plan(st.clone(), p)));
+        let base = db
+            .read(|c| query::selection_base(c, &LibraryFilter::default()))
+            .unwrap();
+        // Un import aggiunge altre foto che soddisfano il filtro.
+        seed(&db, 501, 800);
+        let target = Target::Filter {
+            filter: LibraryFilter::default(),
+            max_id: base.max_id,
+            except: vec![],
+        };
+        run_to_end(
+            &jobs,
+            serde_json::json!({"target": target, "operation": {"action": "add_tag", "name": "X"}}),
+        );
+        assert_eq!(
+            tagged(&db),
+            500,
+            "solo le foto presenti al momento della selezione"
+        );
+    }
+
+    #[test]
+    fn smart_exclusion_job_legacy_alias_and_undo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("photo.jpg");
+        std::fs::write(&file, b"original").unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let path = file.to_string_lossy().to_string();
+        let (id, cat) = db
+            .write(move |c| {
+                let id = media(c, &path)?;
+                let cat = repo::catalog::create(
+                    c,
+                    "Smart",
+                    pc_store::model::CatalogKind::Smart,
+                    Some(&serde_json::json!({"field":"format","cmp":"eq","value":"jpg"})),
+                )?;
+                Ok((id, cat))
+            })
+            .unwrap();
+        let legacy: BulkAction =
+            serde_json::from_value(serde_json::json!({"action":"remove_catalog","catalog":cat}))
+                .unwrap();
+        assert!(matches!(legacy, BulkAction::ExcludeFromCatalog { .. }));
+        assert!(!legacy.destructive());
+        assert!(!BulkAction::RestoreToCatalog { catalog: cat }.destructive());
+        let jobs = manager(&db);
+        let outcome = run(
+            &jobs,
+            serde_json::json!({"ids":[id],"operation":{"action":"exclude_from_catalog","catalog":cat},"confirmed":false}),
+        );
+        assert_eq!(outcome.state, crate::JobState::Completed);
+        db.write(move |c| {
+            let filter = pc_store::query::LibraryFilter {
+                catalog_id: Some(cat),
+                ..Default::default()
+            };
+            assert_eq!(pc_store::query::count(c, &filter)?, 0);
+            bulk::undo_last(c)?;
+            assert_eq!(pc_store::query::count(c, &filter)?, 1);
+            assert_eq!(pc_store::query::count(c, &Default::default())?, 1);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(file).unwrap(), b"original");
     }
 }

@@ -9,7 +9,7 @@ import {
   type Preview,
   type Preflight,
 } from "../../lib/ipc";
-import { useLibrary } from "../../store/library";
+import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { fmtBytes } from "../../lib/format";
 const LEVELS = [
@@ -26,7 +26,8 @@ const LEVELS = [
 export function OrganizePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { filter, selected } = useLibrary();
+  const { filter, selection } = useLibrary();
+  const selectedCount = selCount(selection);
   const [scopeName, setScope] = useState("selection");
   const [catalog, setCatalog] = useState("");
   const [destination, setDestination] = useState("");
@@ -68,10 +69,12 @@ export function OrganizePage() {
         ? { scope: "catalog", id: Number(catalog) }
         : scopeName === "filter"
           ? { scope: "filter", filter }
-          : { scope: "selection", ids: selected };
+          : selection.mode === "ids"
+            ? { scope: "selection", ids: [...selection.ids] }
+            : { scope: "target", target: selTarget(selection) };
   const options = { scope, destination, levels, method };
   const key = JSON.stringify(options);
-  const valid = scopeName !== "selection" || selected.length > 0;
+  const valid = scopeName !== "selection" || selectedCount > 0;
   const run = async (fn: () => Promise<unknown>) => {
     setError("");
     setNotice("");
@@ -118,7 +121,7 @@ export function OrganizePage() {
             {["library", "catalog", "selection", "filter"].map((s) => (
               <option key={s} value={s}>
                 {t(`organize.scopes.${s}`)}
-                {s === "selection" ? ` (${selected.length})` : ""}
+                {s === "selection" ? ` (${selectedCount})` : ""}
               </option>
             ))}
           </select>

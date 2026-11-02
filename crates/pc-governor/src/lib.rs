@@ -2,11 +2,13 @@
 //! di memoria e regola concorrenza, batch e modelli residenti.
 
 pub mod budget;
+pub mod gate;
 pub mod governor;
 pub mod monitor;
 pub mod probe;
 
 pub use budget::{compute_budget, Budget};
+pub use gate::{ConcurrencyGate, Slot};
 pub use governor::{GovernorSnapshot, MemoryGovernor, Permit, Resident};
 pub use monitor::{PressureMonitor, PressureState, ResourceSnapshot, Thresholds};
 pub use probe::{FakeProbe, SysinfoProbe, SystemProbe, SystemSnapshot};

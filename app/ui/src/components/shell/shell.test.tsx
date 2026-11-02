@@ -125,12 +125,35 @@ describe("indicatori globali", () => {
       path: null,
       detail: null,
     };
+    const count = (level: string, n: number, code = "IO") => ({
+      jobId: 4,
+      phase: "miniature",
+      code,
+      level,
+      count: n,
+    });
     act(() => {
-      emit("error", { ...base, level: "ERROR", message: "a" });
-      emit("error", { ...base, level: "WARN", message: "b" });
-      emit("error", { ...base, level: "ERROR", message: "c" });
+      emit("errorBatch", {
+        counts: [count("ERROR", 1), count("WARN", 1)],
+        recent: [
+          { ...base, level: "ERROR", message: "a" },
+          { ...base, level: "WARN", message: "b" },
+        ],
+      });
+      emit("errorBatch", {
+        counts: [count("ERROR", 1)],
+        recent: [{ ...base, level: "ERROR", message: "c" }],
+      });
     });
     expect(screen.getByTestId("error-count")).toHaveTextContent("2 errori nel log");
+    // Un lotto con migliaia di errori: un solo aggiornamento con il conteggio esatto.
+    act(() => {
+      emit("errorBatch", {
+        counts: [count("ERROR", 1240, "DECODE_FAILED"), count("ERROR", 8, "UNSUPPORTED_FORMAT")],
+        recent: [{ ...base, level: "ERROR", message: "z" }],
+      });
+    });
+    expect(screen.getByTestId("error-count")).toHaveTextContent("1250 errori nel log");
     fireEvent.click(screen.getByTestId("error-count"));
     expect(useLayout.getState().module).toBe("diagnostics");
     expect(useLayout.getState().diagFilter).toEqual({ level: "ERROR" });

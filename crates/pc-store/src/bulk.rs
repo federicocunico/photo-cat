@@ -43,6 +43,18 @@ pub enum UndoAction {
         catalog_id: i64,
         ids: Vec<MediaId>,
     },
+    Excluded {
+        catalog_id: i64,
+        ids: Vec<MediaId>,
+        manual_rows: Vec<MediaId>,
+        exclusions: Vec<(MediaId, i64)>,
+    },
+    Restored {
+        catalog_id: i64,
+        ids: Vec<MediaId>,
+        manual_rows: Vec<MediaId>,
+        exclusions: Vec<(MediaId, i64)>,
+    },
     LabelsReplaced {
         group: String,
         ids: Vec<MediaId>,
@@ -615,23 +627,61 @@ pub fn remove_tags(c: &Connection, names: &[String], ids: &[MediaId]) -> StoreRe
     })
 }
 
+fn catalog_snapshot(
+    c: &Connection,
+    catalog_id: i64,
+    ids: &[MediaId],
+    restored: bool,
+) -> StoreResult<UndoAction> {
+    let mut manual_rows = Vec::new();
+    let mut exclusions = Vec::new();
+    for id in ids {
+        if c.query_row(
+            "SELECT EXISTS(SELECT 1 FROM catalog_item WHERE catalog_id=?1 AND media_id=?2)",
+            params![catalog_id, id],
+            |r| r.get::<_, bool>(0),
+        )? {
+            manual_rows.push(*id);
+        }
+        if let Some(time) = c
+            .query_row(
+                "SELECT excluded_at FROM catalog_exclusion WHERE catalog_id=?1 AND media_id=?2",
+                params![catalog_id, id],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+        {
+            exclusions.push((*id, time));
+        }
+    }
+    Ok(if restored {
+        UndoAction::Restored {
+            catalog_id,
+            ids: ids.to_vec(),
+            manual_rows,
+            exclusions,
+        }
+    } else {
+        UndoAction::Excluded {
+            catalog_id,
+            ids: ids.to_vec(),
+            manual_rows,
+            exclusions,
+        }
+    })
+}
+
 pub fn add_to_catalog(
     c: &Connection,
     catalog_id: i64,
     ids: &[MediaId],
 ) -> StoreResult<BulkOutcome> {
     let name = catalog::get(c, catalog_id)?.name;
-    let added = catalog::add_items(c, catalog_id, ids)?;
-    record(
-        c,
-        &format!("Aggiungi a \"{name}\""),
-        &UndoAction::CatalogAdded {
-            catalog_id,
-            ids: added.clone(),
-        },
-    )?;
+    let previous = catalog_snapshot(c, catalog_id, ids, true)?;
+    let changed = catalog::add_items(c, catalog_id, ids)?.len();
+    record(c, &format!("Aggiungi a {name}"), &previous)?;
     Ok(BulkOutcome {
-        changed: added.len(),
+        changed,
         requested: ids.len(),
     })
 }
@@ -641,18 +691,50 @@ pub fn remove_from_catalog(
     catalog_id: i64,
     ids: &[MediaId],
 ) -> StoreResult<BulkOutcome> {
+    exclude_from_catalog(c, catalog_id, ids)
+}
+
+pub fn exclude_from_catalog(
+    c: &Connection,
+    catalog_id: i64,
+    ids: &[MediaId],
+) -> StoreResult<BulkOutcome> {
+    change_catalog(c, catalog_id, ids, false)
+}
+pub fn restore_to_catalog(
+    c: &Connection,
+    catalog_id: i64,
+    ids: &[MediaId],
+) -> StoreResult<BulkOutcome> {
+    change_catalog(c, catalog_id, ids, true)
+}
+fn change_catalog(
+    c: &Connection,
+    catalog_id: i64,
+    ids: &[MediaId],
+    restore: bool,
+) -> StoreResult<BulkOutcome> {
     let name = catalog::get(c, catalog_id)?.name;
-    let removed = catalog::remove_items(c, catalog_id, ids)?;
+    let previous = catalog_snapshot(c, catalog_id, ids, restore)?;
+    let changed = if restore {
+        catalog::restore(c, catalog_id, ids)?
+    } else {
+        catalog::exclude(c, catalog_id, ids)?
+    };
     record(
         c,
-        &format!("Rimuovi da \"{name}\""),
-        &UndoAction::CatalogRemoved {
-            catalog_id,
-            ids: removed.clone(),
-        },
+        &format!(
+            "{} {name}",
+            if restore {
+                "Reinserisci in"
+            } else {
+                "Escludi da"
+            }
+        ),
+        &previous,
     )?;
     Ok(BulkOutcome {
-        changed: removed.len(),
+        changed: changed.len(),
         requested: ids.len(),
     })
 }
@@ -930,6 +1012,41 @@ fn undo_action(
         UndoAction::TagsRemoved { tag_id, ids } => {
             tag::add(c, tag_id, &ids)?;
             refresh_all(c, &ids)?;
+        }
+        UndoAction::Excluded {
+            catalog_id,
+            ids,
+            manual_rows,
+            exclusions,
+        }
+        | UndoAction::Restored {
+            catalog_id,
+            ids,
+            manual_rows,
+            exclusions,
+        } => {
+            for id in ids {
+                c.execute(
+                    "DELETE FROM catalog_item WHERE catalog_id=?1 AND media_id=?2",
+                    params![catalog_id, id],
+                )?;
+                c.execute(
+                    "DELETE FROM catalog_exclusion WHERE catalog_id=?1 AND media_id=?2",
+                    params![catalog_id, id],
+                )?;
+            }
+            for id in manual_rows {
+                c.execute(
+                    "INSERT OR IGNORE INTO catalog_item VALUES (?1,?2)",
+                    params![catalog_id, id],
+                )?;
+            }
+            for (id, time) in exclusions {
+                c.execute(
+                    "INSERT INTO catalog_exclusion VALUES (?1,?2,?3)",
+                    params![catalog_id, id, time],
+                )?;
+            }
         }
         UndoAction::CatalogAdded { catalog_id, ids } => {
             catalog::remove_items(c, catalog_id, &ids)?;

@@ -143,6 +143,84 @@ pub fn records(c: &Connection, media: Option<i64>) -> StoreResult<Vec<FaceRecord
         )
         .collect()
 }
+/// Posizione dopo l'ultimo volto di una pagina (ordine: qualità decrescente, id).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FaceCursor {
+    /// Qualità come salvata nel catalogo (f64), per un confronto esatto.
+    pub quality: f64,
+    pub id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FacePage {
+    pub items: Vec<FaceView>,
+    pub next: Option<FaceCursor>,
+}
+
+/// Volti di una persona (o tutti) a pagine: con 100.000 volti l'interfaccia non riceve mai
+/// l'intera tabella.
+pub fn faces_page(
+    c: &Connection,
+    person: Option<i64>,
+    after: Option<FaceCursor>,
+    limit: u32,
+) -> StoreResult<FacePage> {
+    let limit = limit.clamp(1, 1000);
+    let mut q = c.prepare_cached(
+        "SELECT f.id,f.media_id,f.bbox,f.quality,m.thumb,f.person_id
+         FROM face f JOIN media_item m ON m.id=f.media_id
+         WHERE (?1 IS NULL OR f.person_id=?1)
+           AND (?2 IS NULL OR f.quality < ?2 OR (f.quality = ?2 AND f.id > ?3))
+         ORDER BY f.quality DESC, f.id LIMIT ?4",
+    )?;
+    let rows = q
+        .query_map(
+            params![
+                person,
+                after.map(|a| a.quality),
+                after.map(|a| a.id),
+                i64::from(limit) + 1
+            ],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, f64>(3)?,
+                    r.get::<_, Option<String>>(4)?,
+                    r.get::<_, Option<i64>>(5)?,
+                ))
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    let more = rows.len() > limit as usize;
+    let mut items = Vec::with_capacity(rows.len().min(limit as usize));
+    let mut last_quality = 0.0;
+    for (id, media_id, bbox, quality, thumb, person_id) in rows.into_iter().take(limit as usize) {
+        last_quality = quality;
+        items.push(FaceView {
+            id,
+            media_id,
+            bbox: serde_json::from_str(&bbox)?,
+            quality: quality as f32,
+            thumb,
+            person_id,
+        });
+    }
+    let next = match (more, items.last()) {
+        (true, Some(f)) => Some(FaceCursor {
+            quality: last_quality,
+            id: f.id,
+        }),
+        _ => None,
+    };
+    Ok(FacePage { items, next })
+}
+
 pub fn views(c: &Connection, person: Option<i64>) -> StoreResult<Vec<FaceView>> {
     let mut q=c.prepare("SELECT f.id,f.media_id,f.bbox,f.quality,m.thumb,f.person_id FROM face f JOIN media_item m ON m.id=f.media_id WHERE (?1 IS NULL OR f.person_id=?1) ORDER BY f.quality DESC,f.id")?;
     let rows = q

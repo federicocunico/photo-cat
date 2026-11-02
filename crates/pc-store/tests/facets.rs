@@ -378,3 +378,193 @@ fn large_library_first_page_of_tags_is_fast() {
         );
     }
 }
+
+/// Foto con data di scatto (`AAAA-MM-GG HH:MM:SS`, `None` = senza data) e un
+/// eventuale catalogazione interno/esterno.
+fn dated(c: &Connection, id: i64, captured: Option<&str>, loc: &str) {
+    c.execute(
+        "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at)
+         VALUES (?1, ?2, ?3, 'jpg', 1, 0, 0, 0)",
+        params![id, format!("/foto/{id}.jpg"), format!("{id}.jpg")],
+    )
+    .unwrap();
+    c.execute(
+        "INSERT INTO media_dates(media_id, captured_at) VALUES (?1, ?2)",
+        params![id, captured],
+    )
+    .unwrap();
+    c.execute(
+        "INSERT INTO label(media_id, grp, value, score, origin) VALUES (?1, 'location', ?2, 0.9, 'auto')",
+        params![id, loc],
+    )
+    .unwrap();
+}
+
+fn range(from: &str, to: &str) -> LibraryFilter {
+    LibraryFilter {
+        date_from: Some(from.into()),
+        date_to: Some(to.into()),
+        ..Default::default()
+    }
+}
+
+/// 2023: marzo 3 foto esterne + 1 interna, maggio 14 (2) e 20 (1) interne;
+/// 2022: una foto; due foto senza data.
+fn calendar(c: &Connection) {
+    for id in 1..=3 {
+        dated(c, id, Some("2023-03-10 10:00:00"), "esterno_urbano");
+    }
+    dated(c, 4, Some("2023-03-11 10:00:00"), "interno");
+    dated(c, 5, Some("2023-05-14 09:00:00"), "interno");
+    dated(c, 6, Some("2023-05-14 18:00:00"), "interno");
+    dated(c, 7, Some("2023-05-20 12:00:00"), "interno");
+    dated(c, 8, Some("2022-07-01 12:00:00"), "interno");
+    dated(c, 9, None, "interno");
+    dated(c, 10, None, "interno");
+}
+
+fn values(list: &query::FacetList) -> Vec<(String, i64)> {
+    list.values
+        .iter()
+        .map(|v| (v.value.clone(), v.count))
+        .collect()
+}
+
+fn owned(v: &[(&str, i64)]) -> Vec<(String, i64)> {
+    v.iter().map(|(s, n)| (s.to_string(), *n)).collect()
+}
+
+#[test]
+fn months_and_days_appear_inside_the_chosen_year_and_month() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        calendar(c);
+        Ok(())
+    })
+    .unwrap();
+    // Nessun anno scelto: solo gli anni, senza le foto senza data.
+    let none = s
+        .read(|c| query::facets(c, &LibraryFilter::default()))
+        .unwrap();
+    assert_eq!(values(&none.years), owned(&[("2023", 7), ("2022", 1)]));
+    assert!(none.months.is_none() && none.days.is_none());
+
+    let year = s
+        .read(|c| query::facets(c, &range("2023-01-01", "2023-12-31")))
+        .unwrap();
+    assert_eq!(
+        values(year.months.as_ref().unwrap()),
+        owned(&[("2023-03", 4), ("2023-05", 3)])
+    );
+    assert!(year.days.is_none());
+    // Gli altri anni restano selezionabili.
+    assert_eq!(year.years.total, 2);
+
+    let month = s
+        .read(|c| query::facets(c, &range("2023-05-01", "2023-05-31")))
+        .unwrap();
+    assert_eq!(
+        values(month.months.as_ref().unwrap()),
+        owned(&[("2023-03", 4), ("2023-05", 3)])
+    );
+    assert_eq!(
+        values(month.days.as_ref().unwrap()),
+        owned(&[("2023-05-14", 2), ("2023-05-20", 1)])
+    );
+    let page = s
+        .read(|c| {
+            query::page(
+                c,
+                &range("2023-05-01", "2023-05-31"),
+                query::SortKey::CapturedAsc,
+                None,
+                100,
+            )
+        })
+        .unwrap();
+    assert_eq!(page.items.len(), 3);
+
+    let day = s
+        .read(|c| query::facets(c, &range("2023-05-14", "2023-05-14")))
+        .unwrap();
+    // Gli altri giorni del mese restano selezionabili.
+    assert_eq!(
+        values(day.days.as_ref().unwrap()),
+        owned(&[("2023-05-14", 2), ("2023-05-20", 1)])
+    );
+    let page = s
+        .read(|c| {
+            query::page(
+                c,
+                &range("2023-05-14", "2023-05-14"),
+                query::SortKey::CapturedAsc,
+                None,
+                100,
+            )
+        })
+        .unwrap();
+    assert_eq!(page.items.len(), 2);
+}
+
+#[test]
+fn month_counts_apply_the_other_filters() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        calendar(c);
+        Ok(())
+    })
+    .unwrap();
+    let f = LibraryFilter {
+        labels: vec![LabelFilter {
+            group: "location".into(),
+            values: vec!["esterno_urbano".into()],
+        }],
+        ..range("2023-05-01", "2023-05-31")
+    };
+    let facets = s.read(move |c| query::facets(c, &f)).unwrap();
+    // Maggio non ha foto esterne ma resta (scelto, 0 foto); marzo ne ha 3.
+    assert_eq!(
+        values(facets.months.as_ref().unwrap()),
+        owned(&[("2023-03", 3), ("2023-05", 0)])
+    );
+    assert_eq!(values(facets.days.as_ref().unwrap()), owned(&[]));
+}
+
+#[test]
+fn months_use_the_corrected_local_time() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        dated(c, 1, Some("2023-05-31 23:30:00"), "interno");
+        // Istante reale 31 maggio 2023 23:30 UTC, ora mostrata a +02:00.
+        let instant = chrono::NaiveDate::from_ymd_opt(2023, 5, 31)
+            .unwrap()
+            .and_hms_opt(23, 30, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis();
+        c.execute(
+            "UPDATE media_dates SET instant_utc = ?1, local_offset_min = 120 WHERE media_id = 1",
+            params![instant],
+        )
+        .unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let year = s
+        .read(|c| query::facets(c, &range("2023-01-01", "2023-12-31")))
+        .unwrap();
+    assert_eq!(
+        values(year.months.as_ref().unwrap()),
+        owned(&[("2023-06", 1)])
+    );
+    let june = s
+        .read(|c| query::facets(c, &range("2023-06-01", "2023-06-30")))
+        .unwrap();
+    assert_eq!(
+        values(june.days.as_ref().unwrap()),
+        owned(&[("2023-06-01", 1)])
+    );
+}

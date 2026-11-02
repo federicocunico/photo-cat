@@ -2,7 +2,7 @@
 // griglia e facet al termine.
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { commands, type PlaceInput } from "../../lib/ipc";
+import { commands, type PlaceInput, type Target } from "../../lib/ipc";
 import { useLive } from "../../store/live";
 
 const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
@@ -23,10 +23,10 @@ export function usePlaceAction(onDone?: () => void) {
       done.current?.();
     }
   }, [result, qc]);
-  const apply = async (ids: number[], place: PlaceInput | null) => {
+  const apply = async (target: Target, place: PlaceInput | null) => {
     setError("");
     try {
-      setJob(await commands.startBulk(ids, { action: "set_place", place }, false));
+      setJob(await commands.startBulk(target, { action: "set_place", place }, false));
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     }

@@ -146,7 +146,7 @@ function Editor({
   });
   const libraryFaces = useQuery({
     queryKey: ["faces", row?.person],
-    queryFn: () => commands.personFaces(row!.person),
+    queryFn: () => commands.personFaces(row!.person, null, 500).then((p) => p.items),
     enabled: isTauri() && fromLibrary && row?.person != null,
   });
   const refresh = () =>

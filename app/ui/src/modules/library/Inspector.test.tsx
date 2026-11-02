@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
-import { useLibrary } from "../../store/library";
+import { idsSelection, useLibrary } from "../../store/library";
+import { CatalogFeedback } from "./catalogActions";
+import { useLive } from "../../store/live";
 import { Inspector } from "./Inspector";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -13,7 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLibrary.setState({ focused: 7, selected: [7] });
+  useLibrary.setState({ focused: 7, selection: idsSelection([7]) });
   commandsMock.mediaDetail.mockResolvedValue({
     item: {
       id: 7,
@@ -90,7 +92,7 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   fireEvent.click(screen.getByText("Correggi campo"));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       { action: "set_label", group: "subject", value: "ritratto" },
       false,
     ),
@@ -101,7 +103,7 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   fireEvent.click(screen.getByText("Aggiungi tag"));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       { action: "add_tag", name: "famiglia" },
       false,
     ),
@@ -115,7 +117,7 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   fireEvent.click(screen.getByText("Aggiungi a catalogo"));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       { action: "add_catalog", catalog: 3 },
       false,
     ),
@@ -154,7 +156,7 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
   fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       {
         action: "set_place",
         place: { name: "Gifu", country: "JP", lat: 35.42, lon: 136.76 },
@@ -167,7 +169,7 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
   fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       { action: "set_place", place: { name: "Giappone" } },
       false,
     ),
@@ -188,7 +190,7 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
   fireEvent.click(await screen.findByRole("button", { name: "Ripristina automatico" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
-      [7],
+      { kind: "ids", ids: [7] },
       { action: "set_place", place: null },
       false,
     ),
@@ -224,9 +226,38 @@ it("nuova voce dall'Inspector: Invio crea e assegna, Esc annulla, nome obbligato
   fireEvent.change(name, { target: { value: "Barche" } });
   fireEvent.keyDown(name, { key: "Enter" });
   await waitFor(() =>
-    expect(commandsMock.addCategory).toHaveBeenCalledWith("subject", "Barche", [], [7]),
+    expect(commandsMock.addCategory).toHaveBeenCalledWith("subject", "Barche", [], {
+      kind: "ids",
+      ids: [7],
+    }),
   );
   await waitFor(() =>
     expect(screen.queryByLabelText("Nome della nuova voce")).not.toBeInTheDocument(),
   );
+});
+
+it("esclude dal catalogo smart nell'Inspector", async () => {
+  const detail = await commandsMock.mediaDetail(7);
+  commandsMock.mediaDetail.mockResolvedValue({ ...detail, catalogs: ["Smart"] } as never);
+  commandsMock.startBulk.mockResolvedValue(902);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+      <CatalogFeedback />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Escludi dal catalogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [7] },
+      { action: "exclude_from_catalog", catalog: 4 },
+      false,
+    ),
+  );
+  act(() =>
+    useLive.setState({
+      jobs: { 902: { id: 902, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  await screen.findByRole("status");
 });

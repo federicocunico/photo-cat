@@ -15,11 +15,13 @@ mod open_with;
 mod organize;
 mod people;
 mod places;
+mod recovery;
 mod sequence;
 mod settings;
 mod state;
 mod tags;
 mod timeline;
+mod ui_prefs;
 #[cfg(windows)]
 mod webview_runtime;
 
@@ -46,6 +48,31 @@ use tauri_specta::{collect_commands, Builder, ErrorHandlingMode};
 
 /// Intervallo di aggiornamento delle risorse verso la UI.
 const RESOURCES_INTERVAL: Duration = Duration::from_secs(1);
+/// Ogni quanti tick delle risorse si aggiorna il marcatore di sessione (30 s).
+const SESSION_TOUCH_TICKS: u64 = 30;
+
+/// Job attivi come "id tipo" (marcatore di sessione e log dei crash).
+pub(crate) fn active_job_labels(jobs: &JobManager) -> Vec<String> {
+    jobs.snapshots()
+        .into_iter()
+        .filter(|j| {
+            matches!(
+                j.state,
+                pc_jobs::JobState::Running | pc_jobs::JobState::Paused | pc_jobs::JobState::Queued
+            )
+        })
+        .map(|j| format!("{} {}", j.id, j.kind))
+        .collect()
+}
+
+fn memory_summary(s: &pc_governor::SystemSnapshot) -> pc_diag::MemorySummary {
+    pc_diag::MemorySummary {
+        app_mb: s.process_mb,
+        webview_mb: s.webview_mb,
+        available_mb: s.available_mb,
+        total_mb: s.total_mb,
+    }
+}
 
 /// Builder dei binding: comandi più i tipi dei payload degli eventi.
 pub fn bindings() -> Builder<tauri::Wry> {
@@ -53,6 +80,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             commands::app_info,
             commands::dismiss_crash_notice,
+            commands::take_ui_recovery,
+            commands::report_long_tasks,
+            commands::dev_native_crash,
             commands::get_config,
             commands::get_resources,
             commands::list_jobs,
@@ -63,6 +93,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             commands::list_job_history,
             commands::start_demo_job,
             commands::query_errors,
+            commands::error_groups,
             commands::log_tail,
             commands::set_log_level,
             library::list_sources,
@@ -81,7 +112,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::library_count,
             library::library_facets,
             library::library_facet_values,
-            library::library_ids,
+            library::library_selection,
             library::list_folders,
             library::media_detail,
             library::list_catalogs,
@@ -169,6 +200,8 @@ pub fn bindings() -> Builder<tauri::Wry> {
             places::recompute_places,
             open_with::open_with,
             settings::onboarding_done,
+            ui_prefs::ui_prefs_load,
+            ui_prefs::ui_prefs_save,
             settings::complete_onboarding,
             diagnostics::export_diagnostics,
             diagnostics::open_logs,
@@ -178,6 +211,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_governor::ResourceSnapshot>()
         .typ::<pc_diag::LogLine>()
         .typ::<pc_diag::ErrorRecord>()
+        .typ::<pc_diag::ErrorBatch>()
         .typ::<pc_models::store::ModelStatus>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
@@ -215,10 +249,23 @@ pub fn run() {
             "config.toml non valido: uso i valori predefiniti"
         );
     }
-    let previous_crash = pc_diag::take_previous_crash(&paths.logs());
+    pc_diag::native::install(&paths.logs());
+    let (session, previous_session) =
+        pc_diag::SessionMarker::start(&paths.logs(), env!("CARGO_PKG_VERSION"));
+    let session = Arc::new(session);
+    let previous_crash = pc_diag::CrashInfo::combine(
+        pc_diag::take_previous_crash(&paths.logs()),
+        previous_session,
+    );
     if let Some(c) = &previous_crash {
+        let mem = c.memory.unwrap_or_default();
         tracing::warn!(
+            kind = ?c.kind,
             detail = c.message.as_str(),
+            last_activity = ?c.last_activity,
+            app_mb = mem.app_mb,
+            webview_mb = mem.webview_mb,
+            available_mb = mem.available_mb,
             "la sessione precedente si è chiusa in modo anomalo"
         );
     }
@@ -235,10 +282,11 @@ pub fn run() {
     #[cfg(debug_assertions)]
     export_bindings(&builder, &bindings_path());
 
-    tauri::Builder::default()
+    let setup_session = session.clone();
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .register_uri_scheme_protocol("thumb", library::thumb_protocol)
+        .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
@@ -349,7 +397,7 @@ pub fn run() {
                 store.clone(),
                 governor.clone(),
                 2,
-                Arc::new(events::TauriProgressSink(handle.clone())),
+                Arc::new(events::TauriProgressSink::new(handle.clone())),
             );
             jobs.register("demo", Arc::new(demo::plan));
             let export_store = store.clone();
@@ -500,24 +548,59 @@ pub fn run() {
                 onnx_runtime,
                 assets,
                 previous_crash: Mutex::new(previous_crash.clone()),
+                session: setup_session.clone(),
+                recovery: recovery::Recovery::default(),
+                recreating: Mutex::new(false),
+                gates: Default::default(),
                 last_resources: RwLock::new(None),
                 _monitor_handle: Mutex::new(None),
                 _ticker: Mutex::new(Some(ticker)),
             });
 
             let emit_handle = handle.clone();
+            let ticks = std::sync::atomic::AtomicU64::new(0);
             let monitor_handle = monitor.spawn(RESOURCES_INTERVAL, move |snap| {
                 if let Some(state) = emit_handle.try_state::<AppState>() {
                     *state.last_resources.write() = Some(snap.clone());
+                    let n = ticks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if n.is_multiple_of(SESSION_TOUCH_TICKS) {
+                        state.session.touch(
+                            Some(memory_summary(&snap.system)),
+                            active_job_labels(&state.jobs),
+                        );
+                    }
+                }
+                if let Some(low) = snap.ui_trim {
+                    // Memoria della WebView oltre la quota (o rientrata).
+                    recovery::set_low_memory(&emit_handle, low);
+                    if low {
+                        let _ = emit_handle.emit(recovery::TRIM_CACHES, ());
+                    }
                 }
                 let _ = emit_handle.emit(events::RESOURCES_TICK, &snap);
             });
             *app.state::<AppState>()._monitor_handle.lock() = Some(monitor_handle);
+            recovery::watch(&handle);
             library::purge_orphan_thumbs(&handle, started);
             library::restart_watcher(&handle);
             tracing::info!("photo-cat avviato");
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("errore durante l'avvio di photo-cat");
+    app.run(move |app, event| match event {
+        // La finestra viene ricreata dopo la terminazione della WebView: non è un'uscita.
+        tauri::RunEvent::ExitRequested { api, .. }
+            if app
+                .try_state::<AppState>()
+                .is_some_and(|s| *s.recreating.lock()) =>
+        {
+            api.prevent_exit();
+        }
+        tauri::RunEvent::Exit => {
+            session.finish();
+            tracing::info!("photo-cat chiuso regolarmente");
+        }
+        _ => {}
+    });
 }

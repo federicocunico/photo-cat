@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Panels } from "../../components/shell/Panels";
 import type { SortKey } from "../../lib/ipc";
-import { useLibrary } from "../../store/library";
+import { selCount, selTarget, useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
 import { LibraryGrid } from "./Grid";
@@ -10,6 +10,9 @@ import { LibrarySidebar } from "./Sidebar";
 import { BulkBar } from "./BulkBar";
 import { FacetPanels } from "./FacetPanel";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
+
+import { CatalogHeader } from "./CatalogHeader";
+import { CatalogFeedback } from "./catalogActions";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
 
@@ -33,6 +36,9 @@ function Toolbar() {
       <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {t("library.sort")}
         <select className="field" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+          {filter.excludedFrom != null && (
+            <option value="excluded_at">{t("exclusions.sort")}</option>
+          )}
           {SORTS.map((s) => (
             <option key={s} value={s}>
               {t(`library.sortKeys.${s}`)}
@@ -75,12 +81,17 @@ function Toolbar() {
 }
 
 export function LibraryPage() {
-  useTagHotkeys(() => useLibrary.getState().selected);
+  useTagHotkeys(() => {
+    const s = useLibrary.getState().selection;
+    return { target: selTarget(s), count: selCount(s) };
+  });
   return (
     <Panels
       left={<LibrarySidebar />}
       center={
         <>
+          <CatalogHeader />
+          <CatalogFeedback />
           <Toolbar />
           <BulkBar />
           <LibraryGrid />

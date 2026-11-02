@@ -9,9 +9,10 @@ use crate::formats::{support, Support};
 use crate::hash::{content_hash, quick_hash};
 use crate::metadata::{read_exif, read_tech, resolve_dates, ExifMeta};
 use crate::scan::{FoundFile, ScanRules};
-use crate::thumb::{apply_orientation, decode_reduced, fit, Decoded, ThumbCache, THUMB_SIZE};
+use crate::thumb::{apply_orientation, decode_reduced_with, fit, Decoded, ThumbCache, THUMB_SIZE};
 use parking_lot::Mutex;
 use pc_core::{AppError, AppResult, ErrorCode};
+use pc_governor::ConcurrencyGate;
 use pc_governor::MemoryGovernor;
 use pc_jobs::{JobContext, JobPlan, PhaseSpec, Pipeline, RunSummary, StageCtx, StageOutcome};
 use pc_store::model::{MediaDates, MediaId, MediaItem, MediaKind, MediaStatus, NewMedia, TechInfo};
@@ -172,9 +173,13 @@ fn stage_metadata(
     StageOutcome::Continue
 }
 
+/// Memoria stimata di un worker di decodifica (concorrenza dinamica della fase miniature).
+pub const DECODE_WORKER_MB: u64 = 160;
+
 /// Fase miniature: un'unica decodifica ridotta alimenta miniatura e (se servono) gli stadi AI.
 fn stage_thumbnail(
     deps: &ImportDeps,
+    gate: &ConcurrencyGate,
     keep_decoded: bool,
     item: &mut ImportItem,
     ctx: &StageCtx,
@@ -188,9 +193,14 @@ fn stage_thumbnail(
         item.thumb_key = Some(key);
         return StageOutcome::Continue;
     }
+    // L'anteprima dei RAW si estrae una sola volta e passa alla decodifica.
+    let mut raw_preview = None;
     if let Some(Support::MetadataOnly(kind)) = support(&item.ext) {
         let supported_heif = kind == crate::formats::MetaOnlyKind::Heif && cfg!(feature = "heif");
-        if !supported_heif && crate::thumb::embedded_preview(&item.found.path).is_none() {
+        if !supported_heif {
+            raw_preview = crate::thumb::embedded_preview(&item.found.path);
+        }
+        if !supported_heif && raw_preview.is_none() {
             // Avviso, non errore: il file entra in libreria con i soli metadati.
             let e = AppError::new(
                 ErrorCode::UnsupportedFormat,
@@ -218,7 +228,24 @@ fn stage_thumbnail(
     } else {
         THUMB_SIZE
     };
-    let decoded = match decode_reduced(&item.found.path, &item.ext, target, &deps.governor) {
+    // In pressione critica la decodifica si sospende come le fasi AI ("in pausa per memoria").
+    if !deps.governor.wait_memory(
+        || ctx.control.checkpoint(),
+        |p| ctx.phase.set_memory_paused(p),
+    ) {
+        return StageOutcome::Continue;
+    }
+    // Concorrenza dinamica: i worker ammessi seguono la capacità attuale del governor.
+    let Some(_slot) = gate.enter(|| ctx.control.checkpoint()) else {
+        return StageOutcome::Continue;
+    };
+    let decoded = match decode_reduced_with(
+        &item.found.path,
+        &item.ext,
+        raw_preview,
+        target,
+        &deps.governor,
+    ) {
         Ok(d) => d,
         Err(e) if matches!(support(&item.ext), Some(Support::MetadataOnly(_))) => {
             warn_item(ctx.job_id, PHASE_THUMB, &item.path_str(), &e);
@@ -465,6 +492,13 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
     let partial = only_paths.is_some();
     let track: Arc<Mutex<UpdateTracker>> = Arc::default();
     let (t_meta, t_thumb, t_write) = (track.clone(), track.clone(), track.clone());
+    let cores = std::thread::available_parallelism().map_or(4, std::num::NonZero::get);
+    let decode_gate = ConcurrencyGate::new(
+        deps.governor.clone(),
+        DECODE_WORKER_MB,
+        cores,
+        deps.decode_workers.max(1),
+    );
 
     let mut pipeline = Pipeline::<ImportItem>::new(job_id, ctx.progress, ctx.control.clone())
         .key(|i| i.path_str())
@@ -523,7 +557,7 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
             out
         })
         .stage(PHASE_THUMB, deps.decode_workers.max(1), move |item, ctx| {
-            stage_thumbnail(&d_thumb, keep_decoded, item, ctx, &t_thumb)
+            stage_thumbnail(&d_thumb, &decode_gate, keep_decoded, item, ctx, &t_thumb)
         });
     for stage in &deps.extra_stages {
         let s = stage.clone();

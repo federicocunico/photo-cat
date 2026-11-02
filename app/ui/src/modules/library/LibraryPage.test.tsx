@@ -4,9 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import "../../test/layoutMock";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
-import { clickSelect, emptyFilter, useLibrary } from "../../store/library";
+import {
+  clickSelect,
+  emptyFilter,
+  idsSelection,
+  selCount,
+  selIds,
+  useLibrary,
+} from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
+import { useLive } from "../../store/live";
 import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
@@ -24,6 +32,7 @@ const list = (values: { value: string; count: number }[], total = values.length)
 
 const item = (id: number): GridItem => ({
   id,
+  excludedAt: null,
   name: `IMG_${String(id).padStart(4, "0")}.JPG`,
   path: `D:\\Foto\\IMG_${id}.JPG`,
   thumb: id % 2 ? `abcdef${id}0000` : null,
@@ -42,7 +51,7 @@ beforeEach(() => {
   useLayout.setState({ leftOpen: true, rightOpen: true });
   useLibrary.setState({
     filter: emptyFilter(),
-    selected: [],
+    selection: idsSelection(),
     focused: null,
     scrollTop: 0,
     thumbSize: 3,
@@ -186,9 +195,9 @@ describe("Libreria", () => {
     expect(commandsMock.mediaDetail).toHaveBeenCalledWith(1);
 
     fireEvent.click(screen.getByTestId("thumb-4"), { shiftKey: true });
-    expect(useLibrary.getState().selected).toEqual([1, 2, 3, 4]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3, 4]);
     fireEvent.click(screen.getByTestId("thumb-2"), { ctrlKey: true });
-    expect(useLibrary.getState().selected).toEqual([1, 3, 4]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 3, 4]);
   });
 
   it("faccette e chip modificano il filtro della query", async () => {
@@ -287,10 +296,14 @@ describe("cartelle, luogo e Apri con", () => {
     });
 
     // Scenario "Seleziona tutto in una cartella".
-    commandsMock.libraryIds.mockResolvedValue([4, 5, 6]);
+    commandsMock.librarySelection.mockResolvedValue({ count: 3, maxId: 6 });
     fireEvent.click(screen.getByText("Seleziona tutto (filtro)"));
-    await waitFor(() => expect(useLibrary.getState().selected).toEqual([4, 5, 6]));
-    expect(commandsMock.libraryIds).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(3));
+    expect(useLibrary.getState().selection).toMatchObject({
+      mode: "filter",
+      filter: { folder: { path: `${trip}\\D7000`, recursive: false } },
+    });
+    expect(commandsMock.librarySelection).toHaveBeenLastCalledWith(
       expect.objectContaining({ folder: { path: `${trip}\\D7000`, recursive: false } }),
     );
     fireEvent.click(chip);
@@ -313,20 +326,20 @@ describe("cartelle, luogo e Apri con", () => {
     renderPage();
     await screen.findByTestId("thumb-1");
     // Scenario "Clic destro su miniatura non selezionata".
-    act(() => useLibrary.setState({ selected: [1, 2, 3], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2, 3]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-5"));
-    expect(useLibrary.getState().selected).toEqual([5]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([5]);
     let menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("1 foto");
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
     // Scenario "Clic destro sulla selezione".
-    act(() => useLibrary.setState({ selected: [1, 2, 3], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2, 3]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-2"));
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("3 foto");
-    expect(useLibrary.getState().selected).toEqual([1, 2, 3]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
     fireEvent.click(screen.getByRole("menuitem", { name: /Apri con ▸/ }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Lightroom" }));
     await waitFor(() =>
@@ -366,7 +379,7 @@ describe("cartelle, luogo e Apri con", () => {
   it("imposta il luogo dal menu contestuale su tutta la selezione", async () => {
     renderPage();
     await screen.findByTestId("thumb-1");
-    act(() => useLibrary.setState({ selected: [1, 2], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-1"));
     fireEvent.click(screen.getByRole("menuitem", { name: "Imposta luogo…" }));
     const menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
@@ -374,7 +387,7 @@ describe("cartelle, luogo e Apri con", () => {
     fireEvent.click(within(menu).getByRole("button", { name: "Imposta luogo" }));
     await waitFor(() =>
       expect(commandsMock.startBulk).toHaveBeenCalledWith(
-        [1, 2],
+        { kind: "ids", ids: [1, 2] },
         { action: "set_place", place: { name: "Giappone" } },
         false,
       ),
@@ -592,4 +605,167 @@ describe("elenco completo dei filtri e pannelli flottanti", () => {
       ]);
     });
   });
+});
+
+describe("filtro per data anno → mese → giorno", () => {
+  beforeEach(() => {
+    commandsMock.libraryFacets.mockImplementation((async (f: {
+      dateFrom: string | null;
+      dateTo: string | null;
+    }) => {
+      const month = f.dateFrom?.startsWith("2023-05") && f.dateTo?.startsWith("2023-05");
+      return {
+        labels: [],
+        places: list([]),
+        years: list([
+          { value: "2023", count: 7 },
+          { value: "2022", count: 1 },
+        ]),
+        months: f.dateFrom?.startsWith("2023")
+          ? list([
+              { value: "2023-03", count: 4 },
+              { value: "2023-05", count: 3 },
+            ])
+          : null,
+        days: month
+          ? list([
+              { value: "2023-05-14", count: 2 },
+              { value: "2023-05-20", count: 1 },
+            ])
+          : null,
+        formats: list([]),
+        people: list([]),
+        tags: list([]),
+      };
+    }) as never);
+  });
+  afterEach(() => i18n.changeLanguage("it"));
+
+  it("mesi sotto l'anno scelto, giorni sotto il mese, chip e risalita", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    expect(within(filters).queryByRole("checkbox", { name: /maggio/ })).toBeNull();
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /2023/ }));
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /maggio/ }));
+    await waitFor(() =>
+      expect(commandsMock.libraryPage).toHaveBeenCalledWith(
+        expect.objectContaining({ dateFrom: "2023-05-01", dateTo: "2023-05-31" }),
+        expect.anything(),
+        null,
+        expect.any(Number),
+      ),
+    );
+    expect(await screen.findByRole("button", { name: "Rimuovi filtro maggio 2023" })).toBeTruthy();
+    fireEvent.click(await within(filters).findByRole("checkbox", { name: /dom 14/ }));
+    await waitFor(() =>
+      expect(useLibrary.getState().filter).toMatchObject({
+        dateFrom: "2023-05-14",
+        dateTo: "2023-05-14",
+      }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Rimuovi filtro 14 maggio 2023" }),
+    ).toBeTruthy();
+    // Togliere la spunta al giorno torna al mese.
+    fireEvent.click(within(filters).getByRole("checkbox", { name: /dom 14/ }));
+    await waitFor(() =>
+      expect(useLibrary.getState().filter).toMatchObject({
+        dateFrom: "2023-05-01",
+        dateTo: "2023-05-31",
+      }),
+    );
+    // Il chip toglie tutto il filtro per data.
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi filtro maggio 2023" }));
+    await waitFor(() => expect(useLibrary.getState().filter.dateFrom).toBeNull());
+  });
+
+  it("nomi di mesi e chip nella lingua dell'interfaccia", async () => {
+    await i18n.changeLanguage("en");
+    useLibrary.setState({
+      filter: { ...emptyFilter(), dateFrom: "2023-05-14", dateTo: "2023-05-14" },
+    });
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filters" });
+    expect(await within(filters).findByRole("checkbox", { name: /May/ })).toBeChecked();
+    expect(within(filters).getByRole("checkbox", { name: /Sun 14/ })).toBeChecked();
+    expect(await screen.findByRole("button", { name: /14 May 2023/ })).toBeTruthy();
+  });
+});
+
+it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 5, name: "Viaggio", kind: "smart", rules: null, createdAt: 0 },
+      items: 34,
+      excluded: 6,
+    },
+  ] as never);
+  commandsMock.startBulk.mockResolvedValue(799);
+  useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 5 }, selection: idsSelection() });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Escluse (6)" }));
+  expect(useLibrary.getState().filter).toMatchObject({
+    catalogId: null,
+    excludedFrom: 5,
+    matchingOnly: true,
+  });
+  expect(useLibrary.getState().sort).toBe("excluded_at");
+  expect(JSON.parse(localStorage.getItem("photo-cat.library")!).state.sort).toBe("captured_desc");
+  fireEvent.click(screen.getByRole("checkbox", { name: /Mostra anche/ }));
+  expect(useLibrary.getState().filter.matchingOnly).toBe(false);
+  fireEvent.click(await screen.findByTestId("thumb-1"));
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Enter" });
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [1] },
+      { action: "restore_to_catalog", catalog: 5 },
+      false,
+    ),
+  );
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 5, name: "Viaggio", kind: "smart", rules: null, createdAt: 0 },
+      items: 36,
+      excluded: 4,
+    },
+  ] as never);
+  act(() =>
+    useLive.setState({
+      jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  expect(await screen.findByText(/foto reinserite/)).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
+  expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
+});
+
+it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annulla", async () => {
+  commandsMock.startBulk.mockResolvedValue(800);
+  commandsMock.undoBulk.mockResolvedValue(null);
+  const confirm = vi.spyOn(window, "confirm");
+  useLibrary.setState({ selection: idsSelection([1]), filter: emptyFilter() });
+  renderPage();
+  fireEvent.keyDown(await screen.findByTestId("grid-scroll"), { key: "Delete" });
+  expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  act(() => useLibrary.getState().setFilter({ catalogId: 5 }));
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalledTimes(1));
+  expect(commandsMock.startBulk).toHaveBeenCalledWith(
+    { kind: "ids", ids: [1] },
+    { action: "exclude_from_catalog", catalog: 5 },
+    false,
+  );
+  expect(confirm).not.toHaveBeenCalled();
+  act(() =>
+    useLive.setState({
+      jobs: { 800: { id: 800, state: "completed", phases: [], failed: 0 } as never },
+    }),
+  );
+  expect(await screen.findByText(/file non sono stati toccati/)).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+  await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
+  confirm.mockRestore();
 });

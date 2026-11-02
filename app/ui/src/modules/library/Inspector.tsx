@@ -12,6 +12,8 @@ import { PlaceEditor } from "./PlaceEditor";
 import { useLabelName } from "./labelName";
 import { CategoryPicker } from "./CategoryPicker";
 
+import { useCatalogAction } from "./useCatalogAction";
+
 function Grid2({ children }: { children: ReactNode }) {
   return (
     <div
@@ -73,7 +75,7 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const apply = async (operation: BulkAction) => {
     setError("");
     try {
-      setJob(await commands.startBulk([id], operation, false));
+      setJob(await commands.startBulk({ kind: "ids", ids: [id] }, operation, false));
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     }
@@ -100,7 +102,7 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
           value={value}
           onChange={setValue}
           onCreate={async (label) => {
-            const r = await commands.addCategory(group, label, [], [id]);
+            const r = await commands.addCategory(group, label, [], { kind: "ids", ids: [id] });
             await qc.invalidateQueries({ queryKey: ["taxonomy"] });
             setValue(r.id);
             if (r.job != null) setJob(r.job);
@@ -167,6 +169,13 @@ export function Inspector() {
   const { t } = useTranslation();
   const names = useLabelName();
   const focused = useLibrary((s) => s.focused);
+  const catalogAction = useCatalogAction();
+  const filter = useLibrary((s) => s.filter);
+  const catalogs = useQuery({
+    queryKey: ["catalogs"],
+    queryFn: commands.listCatalogs,
+    enabled: isTauri(),
+  });
   const tags = useTagOverview();
   const detail = useQuery({
     queryKey: ["media-detail", focused],
@@ -316,10 +325,43 @@ export function Inspector() {
         </div>
         {d.catalogs.length > 0 && (
           <span className="muted" style={{ fontSize: 13 }}>
-            {t("library.inspector.catalogs")}: {d.catalogs.join(", ")}
+            {t("library.inspector.catalogs")}:{" "}
+            {d.catalogs.map((name) => {
+              const cat = catalogs.data?.find((c) => c.catalog.name === name);
+              return (
+                <span key={name}>
+                  {name}{" "}
+                  {cat && (
+                    <button
+                      className="btn"
+                      disabled={catalogAction.busy}
+                      onClick={() => void catalogAction.act([d.item.id], cat.catalog.id, name)}
+                    >
+                      {t("exclusions.exclude")}
+                    </button>
+                  )}{" "}
+                </span>
+              );
+            })}
           </span>
         )}
       </section>
+      {filter.excludedFrom != null && (
+        <button
+          className="btn"
+          disabled={catalogAction.busy}
+          onClick={() =>
+            void catalogAction.act(
+              [d.item.id],
+              filter.excludedFrom!,
+              catalogs.data?.find((c) => c.catalog.id === filter.excludedFrom)?.catalog.name ?? "",
+              true,
+            )
+          }
+        >
+          {t("exclusions.restore")}
+        </button>
+      )}
       <Edits key={d.item.id} id={d.item.id} labels={d.labels} />
     </div>
   );

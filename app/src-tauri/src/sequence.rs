@@ -66,20 +66,23 @@ pub fn context(app: &AppStore, tag_set: Option<i64>) -> AppResult<ExportContext>
 
 #[tauri::command]
 #[specta::specta]
-pub fn sequence_export_defaults(state: State<'_, AppState>) -> AppResult<ExportDefaults> {
-    let app = &state.app_store;
-    let template = app
-        .kv_get(TEMPLATE_KEY)?
-        .unwrap_or_else(|| DEFAULT_TEMPLATE.to_string());
-    let tag_set = app.with(|c| {
-        let all = sets::list_sets(c)?;
-        Ok(all
-            .iter()
-            .find(|s| s.exclusive && !s.tags.is_empty())
-            .map(|s| s.id)
-            .or(sets::active_set(c)?))
-    })?;
-    Ok(ExportDefaults { template, tag_set })
+pub async fn sequence_export_defaults(app: tauri::AppHandle) -> AppResult<ExportDefaults> {
+    crate::state::blocking(app, move |_app, state| {
+        let app = &state.app_store;
+        let template = app
+            .kv_get(TEMPLATE_KEY)?
+            .unwrap_or_else(|| DEFAULT_TEMPLATE.to_string());
+        let tag_set = app.with(|c| {
+            let all = sets::list_sets(c)?;
+            Ok(all
+                .iter()
+                .find(|s| s.exclusive && !s.tags.is_empty())
+                .map(|s| s.id)
+                .or(sets::active_set(c)?))
+        })?;
+        Ok(ExportDefaults { template, tag_set })
+    })
+    .await
 }
 
 /// Nomi delle prime foto mentre si scrive il modello.

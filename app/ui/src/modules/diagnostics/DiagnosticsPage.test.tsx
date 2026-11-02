@@ -113,4 +113,80 @@ describe("schermata Diagnostica", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apri cartella log" }));
     await waitFor(() => expect(commandsMock.openLogs).toHaveBeenCalled());
   });
+
+  it("Migliaia di file non decodificabili: una riga per codice e i file con il motivo", async () => {
+    const group = {
+      jobId: 7,
+      phase: "miniature",
+      code: "DECODE_FAILED",
+      level: "ERROR",
+      count: 1240,
+      files: 1240,
+      lastTs: "2026-11-02T08:25:53Z",
+      message: "decodifica fallita",
+    };
+    commandsMock.errorGroups.mockResolvedValue([group] as never);
+    const page = (offset: number) =>
+      Array.from({ length: 50 }, (_, i) =>
+        entry({
+          id: 1000 + offset + i,
+          code: "DECODE_FAILED",
+          message: "decodifica fallita",
+          phase: "miniature",
+          path: `D:\\Foto\\IMG_${offset + i}.JPG`,
+          detail:
+            i % 2
+              ? "truncated: file danneggiato o incompleto — unexpected EOF"
+              : "unsupported_variant: variante del formato non supportata — arithmetic",
+        }),
+      );
+    commandsMock.queryErrors.mockImplementation((async (q: {
+      code: string | null;
+      offset: number;
+    }) => (q.code === "DECODE_FAILED" ? page(q.offset) : [entry({})])) as never);
+    renderPage();
+    const row = await screen.findByTestId("group-DECODE_FAILED-miniature");
+    expect(row).toHaveTextContent("DECODE_FAILED — 1240 file");
+    expect(row).toHaveTextContent("Miniature");
+    fireEvent.click(row);
+    expect(await screen.findByTestId("group-file-1001")).toHaveTextContent(
+      "File danneggiato o incompleto",
+    );
+    expect(screen.getByTestId("group-file-1000")).toHaveTextContent(
+      "Variante del formato non supportata",
+    );
+    // L'elenco è paginato: 50 file alla volta.
+    expect(screen.getAllByTestId(/^group-file-/)).toHaveLength(50);
+    fireEvent.click(screen.getByRole("button", { name: /Mostra altri/ }));
+    await waitFor(() => expect(screen.getAllByTestId(/^group-file-/)).toHaveLength(100));
+    expect(commandsMock.queryErrors).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        code: "DECODE_FAILED",
+        phase: "miniature",
+        jobId: 7,
+        limit: 50,
+        offset: 50,
+      }),
+    );
+  });
+
+  it("Errori diversi: DECODE_FAILED e UNSUPPORTED_FORMAT su due righe con i loro conteggi", async () => {
+    const g = (code: string, n: number) => ({
+      jobId: 7,
+      phase: "miniature",
+      code,
+      level: "ERROR",
+      count: n,
+      files: n,
+      lastTs: "2026-11-02T08:25:53Z",
+      message: "x",
+    });
+    commandsMock.errorGroups.mockResolvedValue([
+      g("DECODE_FAILED", 12),
+      g("UNSUPPORTED_FORMAT", 3),
+    ] as never);
+    renderPage();
+    expect(await screen.findByTestId("group-DECODE_FAILED-miniature")).toHaveTextContent("12 file");
+    expect(screen.getByTestId("group-UNSUPPORTED_FORMAT-miniature")).toHaveTextContent("3 file");
+  });
 });

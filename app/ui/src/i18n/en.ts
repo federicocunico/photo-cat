@@ -40,6 +40,16 @@ export const en: Messages = {
     comingSoon: "This section will be available soon.",
     crashNotice: "The previous session ended unexpectedly.",
     crashOpen: "Open diagnostics",
+    crashKind: {
+      panic: "Internal app error.",
+      native: "A native component failed.",
+      unclean:
+        "The app did not shut down cleanly (closed by the system, out of memory or interface terminated).",
+    },
+    crashLast: "last activity {{time}}",
+    crashMemory: "memory: app {{app}} MB, interface {{ui}} MB, free RAM {{free}} MB",
+    uiRecovered: "The interface closed and was reloaded.",
+    uiRecoveredDetail: "At {{time}}. Running jobs continue and no catalog data was lost.",
     dismiss: "Dismiss",
   },
   jobs: {
@@ -68,6 +78,7 @@ export const en: Messages = {
     cores: "Logical / physical cores",
     pressure: "Memory state",
     aiPaused: "AI analysis paused: not enough memory",
+    memoryPaused: "Paused for memory",
     phases: {
       scansione: "Scan",
       ricollegamento: "Relinking",
@@ -314,6 +325,18 @@ export const en: Messages = {
     refresh: "Refresh",
     clearFilters: "Clear filters",
     follow: "Follow",
+    byCode: "Summary by code",
+    groupTitle: "{{code}} — {{n}} files",
+    groupFiles: "Affected files",
+    moreFiles: "Show more ({{n}} left)",
+    causes: {
+      truncated: "Damaged or incomplete file",
+      corrupt: "Damaged file",
+      unsupported_variant: "Unsupported format variant",
+      no_raw_preview: "RAW without embedded preview",
+      too_large: "Image over the limits",
+      io: "Read error",
+    },
   },
   errors: {
     internal: "Internal application error.",

@@ -102,6 +102,8 @@ pub struct PhaseCounters {
     failed: AtomicI64,
     total: AtomicI64,
     total_known: AtomicBool,
+    /// I worker attendono che la memoria torni disponibile (pressione critica).
+    memory_paused: AtomicBool,
     timing: Mutex<Timing>,
 }
 
@@ -113,6 +115,7 @@ impl PhaseCounters {
             failed: AtomicI64::new(0),
             total: AtomicI64::new(0),
             total_known: AtomicBool::new(false),
+            memory_paused: AtomicBool::new(false),
             timing: Mutex::new(Timing {
                 started: None,
                 finished: None,
@@ -162,6 +165,15 @@ impl PhaseCounters {
 
     pub fn mark_total_known(&self) {
         self.total_known.store(true, Ordering::Release);
+    }
+
+    /// La fase è ferma in attesa di memoria (lo stato del job lo mostra).
+    pub fn set_memory_paused(&self, paused: bool) {
+        self.memory_paused.store(paused, Ordering::Release);
+    }
+
+    pub fn memory_paused(&self) -> bool {
+        self.memory_paused.load(Ordering::Acquire)
     }
 
     /// Ripristina i contatori (ripresa di un job persistito).
@@ -245,6 +257,7 @@ impl PhaseCounters {
             percent: fraction.map(|f| (f * 1000.0).round() / 10.0),
             rate: (state == PhaseState::Running).then_some((t.rate * 10.0).round() / 10.0),
             eta_secs,
+            memory_paused: state == PhaseState::Running && self.memory_paused(),
         }
     }
 }
@@ -264,6 +277,9 @@ pub struct PhaseSnapshot {
     /// Elementi al secondo.
     pub rate: Option<f64>,
     pub eta_secs: Option<u64>,
+    /// In pausa per memoria insufficiente (pressione critica).
+    #[serde(default)]
+    pub memory_paused: bool,
 }
 
 /// Progresso di un job: una serie ordinata di fasi.

@@ -1,5 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { exclusions } from "./exclusions";
 import { en } from "./en";
 import { it } from "./it";
 import { features } from "./features";
@@ -16,6 +17,7 @@ void i18n.use(initReactI18next).init({
     it: {
       translation: {
         ...it,
+        ...exclusions.it,
         ...features.it,
         ...screens.it,
         ...modules.it,
@@ -27,6 +29,7 @@ void i18n.use(initReactI18next).init({
     en: {
       translation: {
         ...en,
+        ...exclusions.en,
         ...features.en,
         ...screens.en,
         ...modules.en,

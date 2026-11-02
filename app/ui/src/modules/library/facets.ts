@@ -32,6 +32,60 @@ export function facetFromId(id: string): FacetKey | null {
 const toggle = (list: string[], v: string) =>
   list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 
+/** Data scelta: anno `AAAA`, mese `AAAA-MM`, giorno `AAAA-MM-GG`. */
+export interface DatePath {
+  year: string | null;
+  month: string | null;
+  day: string | null;
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Ultimo giorno del mese (mese 1–12). */
+const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/** Intervallo inclusivo di un anno, di un mese o di un giorno. */
+export function periodRange(p: string): Pick<LibraryFilter, "dateFrom" | "dateTo"> {
+  if (p.length === 10) return { dateFrom: p, dateTo: p };
+  if (p.length === 7) {
+    const [y, m] = p.split("-").map(Number);
+    return { dateFrom: `${p}-01`, dateTo: `${p}-${pad(lastDay(y, m))}` };
+  }
+  return { dateFrom: `${p}-01-01`, dateTo: `${p}-12-31` };
+}
+
+/**
+ * Data scelta ricavata dall'intervallo del filtro (anno intero, mese intero o
+ * un giorno); un intervallo diverso vale come anno di `dateFrom`. Uguale al
+ * backend (`pc_store::query::date_path`).
+ */
+export function datePath(f: Pick<LibraryFilter, "dateFrom" | "dateTo">): DatePath {
+  const from = f.dateFrom ?? "";
+  const to = f.dateTo ?? "";
+  if (from.length < 4) return { year: null, month: null, day: null };
+  const year = from.slice(0, 4);
+  if (from.length === 10 && from === to) return { year, month: from.slice(0, 7), day: from };
+  const month = from.slice(0, 7);
+  const whole =
+    from.length === 10 && periodRange(month).dateFrom === from && periodRange(month).dateTo === to;
+  return { year, month: whole ? month : null, day: null };
+}
+
+/**
+ * Sceglie o toglie un anno, un mese o un giorno: scegliere sostituisce la data
+ * precedente; togliere risale di un livello (giorno → mese → anno → nessuna).
+ */
+export function toggleDate(
+  f: Pick<LibraryFilter, "dateFrom" | "dateTo">,
+  v: string,
+): Pick<LibraryFilter, "dateFrom" | "dateTo"> {
+  const p = datePath(f);
+  const chosen = v.length === 4 ? p.year : v.length === 7 ? p.month : p.day;
+  if (chosen !== v) return periodRange(v);
+  if (v.length === 4) return { dateFrom: null, dateTo: null };
+  return periodRange(v.slice(0, v.length === 7 ? 4 : 7));
+}
+
 /** Voci selezionate nel filtro per questa lista. */
 export function selectedOf(key: FacetKey, f: LibraryFilter): string[] {
   switch (key.kind) {
@@ -40,7 +94,7 @@ export function selectedOf(key: FacetKey, f: LibraryFilter): string[] {
     case "place":
       return f.places ?? [];
     case "year":
-      return f.dateFrom ? [f.dateFrom.slice(0, 4)] : [];
+      return datePath(f).year ? [datePath(f).year!] : [];
     case "format":
       return f.formats ?? [];
     case "tag":
@@ -59,9 +113,7 @@ export function toggleIn(key: FacetKey, f: LibraryFilter, v: string): Partial<Li
     case "place":
       return { places: toggle(f.places ?? [], v) };
     case "year":
-      return (f.dateFrom ?? "").slice(0, 4) === v
-        ? { dateFrom: null, dateTo: null }
-        : { dateFrom: `${v}-01-01`, dateTo: `${v}-12-31` };
+      return toggleDate(f, v);
     case "format":
       return { formats: toggle(f.formats ?? [], v) };
     case "tag":

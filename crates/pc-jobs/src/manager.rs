@@ -58,6 +58,9 @@ pub struct JobSnapshot {
     pub eta_secs: Option<u64>,
     pub failed: i64,
     pub error: Option<String>,
+    /// Il job è fermo in attesa di memoria ("in pausa per memoria").
+    #[serde(default)]
+    pub memory_paused: bool,
 }
 
 pub trait ProgressSink: Send + Sync + 'static {
@@ -514,7 +517,6 @@ fn snapshot_of(id: i64, e: &Entry, now: Instant) -> JobSnapshot {
         id,
         kind: e.kind.clone(),
         state: e.state,
-        phases,
         overall_percent: overall,
         eta_secs: if e.state == JobState::Running {
             eta
@@ -523,5 +525,7 @@ fn snapshot_of(id: i64, e: &Entry, now: Instant) -> JobSnapshot {
         },
         failed: e.progress.failed(),
         error: e.error.clone(),
+        memory_paused: e.state == JobState::Running && phases.iter().any(|p| p.memory_paused),
+        phases,
     }
 }

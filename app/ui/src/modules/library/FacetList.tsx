@@ -1,8 +1,8 @@
 // Lista di un filtro nella barra laterale: voci principali più quelle
 // selezionate, "Mostra tutti (N)" con ricerca sul posto e "Apri in finestra".
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { FacetKey, FacetList as FacetListData } from "../../lib/ipc";
+import type { FacetKey, FacetList as FacetListData, FacetValue } from "../../lib/ipc";
 import { useLibrary } from "../../store/library";
 import {
   COMPACT,
@@ -19,10 +19,13 @@ export function FacetList({
   facetKey,
   list,
   action,
+  below,
 }: {
   facetKey: FacetKey;
   list: FacetListData;
   action?: RowAction;
+  /** Contenuto sotto una voce della lista compatta (mesi sotto l'anno scelto). */
+  below?: (v: FacetValue) => ReactNode;
 }) {
   const { t } = useTranslation();
   const filter = useLibrary((s) => s.filter);
@@ -93,14 +96,16 @@ export function FacetList({
       ) : (
         <>
           {shown.map((v) => (
-            <FacetRow
-              key={v.value}
-              value={v}
-              checked={selected.includes(v.value)}
-              onToggle={onToggle}
-              render={render}
-              action={action}
-            />
+            <div key={v.value}>
+              <FacetRow
+                value={v}
+                checked={selected.includes(v.value)}
+                onToggle={onToggle}
+                render={render}
+                action={action}
+              />
+              {below?.(v)}
+            </div>
           ))}
           {hidden && (
             <button

@@ -226,6 +226,32 @@ impl MemoryGovernor {
         self.inner.0.lock().ai_paused
     }
 
+    /// Lavoro pesante (decodifica, AI) sospeso in pressione critica: attende il rientro della
+    /// memoria. `paused` riceve `true` all'inizio dell'attesa e `false` alla fine (stato "in
+    /// pausa per memoria" del job); `keep_waiting` interrompe l'attesa (annullamento).
+    /// Restituisce `false` se l'attesa è stata interrotta.
+    pub fn wait_memory(
+        &self,
+        mut keep_waiting: impl FnMut() -> bool,
+        mut paused: impl FnMut(bool),
+    ) -> bool {
+        if !self.ai_paused() {
+            return true;
+        }
+        paused(true);
+        let resumed = loop {
+            if !self.ai_paused() {
+                break true;
+            }
+            if !keep_waiting() {
+                break false;
+            }
+            self.wait_ai_resumed(Duration::from_millis(100));
+        };
+        paused(false);
+        resumed
+    }
+
     /// Blocca finché le fasi AI sono in pausa per pressione (o fino al timeout).
     pub fn wait_ai_resumed(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;

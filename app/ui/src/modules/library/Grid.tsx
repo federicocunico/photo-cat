@@ -1,4 +1,3 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
@@ -11,15 +10,26 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
-import { commands, isTauri, type GridItem, type Page } from "../../lib/ipc";
+import { useQuery } from "@tanstack/react-query";
+import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
+import { useLibraryCount } from "../../lib/latest";
 import {
   clickSelect,
-  rectangleSelect,
   emptyFilter,
+  idsSelection,
+  rectangleSelect,
+  selCount,
+  selHas,
+  selIds,
+  selSet,
+  selTarget,
   thumbPx,
   useLibrary,
+  type Selection,
 } from "../../store/library";
+import { useGridPages, windowAction } from "./gridPages";
+import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
 import { useOpenWith } from "./useOpenWith";
@@ -55,7 +65,7 @@ export function ThumbTags({ tags, color }: { tags: string[]; color: (name: strin
   );
 }
 
-export const PAGE_SIZE = 300;
+export { PAGE_SIZE } from "./gridPages";
 const GAP = 12;
 const PAD = 16;
 const CAPTION = 26;
@@ -99,7 +109,11 @@ function Thumb({
       }}
       aria-pressed={selected}
       data-testid={`thumb-${item.id}`}
-      title={item.name}
+      title={
+        item.excludedAt
+          ? `${item.name} · ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
+          : item.name
+      }
       style={{
         width: size,
         padding: 0,
@@ -171,6 +185,20 @@ function Thumb({
               : t("library.queuedBadge")}
         </span>
         <ThumbTags tags={item.tags} color={tagColor} />
+        {item.excludedAt != null && (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              background: "var(--pc-panel)",
+              padding: 3,
+              fontSize: 11,
+            }}
+          >
+            {t("exclusions.date", { date: new Date(item.excludedAt).toLocaleDateString() })}
+          </span>
+        )}
         {selected && (
           <span
             aria-hidden="true"
@@ -205,37 +233,68 @@ function Thumb({
   );
 }
 
-/** Griglia virtualizzata: carica le pagine (keyset) man mano che si scorre. */
+/** Segnaposto di un elemento non ancora caricato (fuori dalla finestra di pagine). */
+function Placeholder({ size }: { size: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: Math.round(size * 0.75) + CAPTION + 4,
+        borderRadius: 6,
+        background: "var(--pc-panel)",
+        border: "2px solid var(--pc-raised)",
+      }}
+    />
+  );
+}
+
+/**
+ * Griglia virtualizzata a memoria limitata: l'altezza viene dal conteggio dei risultati, in
+ * memoria restano al massimo MAX_PAGES pagine attorno alla vista (gli altri elementi sono
+ * segnaposto finché non si arriva lì).
+ */
 export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const { t } = useTranslation();
-  const { filter, sort, thumbSize, selected, focused, setSelection, scrollTop, setScrollTop } =
-    useLibrary();
+  const {
+    filter,
+    sort,
+    thumbSize,
+    selection,
+    focused,
+    setSelection,
+    replaceSelection,
+    scrollTop,
+    setScrollTop,
+  } = useLibrary();
+  const catalogAction = useCatalogAction();
+  const catalogs = useQuery({
+    queryKey: ["catalogs"],
+    queryFn: commands.listCatalogs,
+    enabled: isTauri(),
+  });
   const size = thumbPx(thumbSize);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(initialWidth ?? 800);
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
+  const drag = useRef<{ x: number; y: number; initial: Selection } | null>(null);
   const tagInfo = useTagOverview().data;
   const tagColor = (name: string) => colorOf(tagInfo, name);
-  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; target: Target } | null>(
+    null,
+  );
   const openWith = useOpenWith();
   const place = usePlaceAction();
   const closeMenu = useCallback(() => setMenu(null), []);
   const actionError = openWith.error || place.error;
 
-  const pages = useInfiniteQuery({
-    queryKey: ["library", filter, sort],
-    queryFn: ({ pageParam }) => commands.libraryPage(filter, sort, pageParam, PAGE_SIZE),
-    initialPageParam: null as Page["next"],
-    getNextPageParam: (last) => last.next ?? undefined,
-    enabled: isTauri(),
-  });
-  const total = useQuery({
-    queryKey: ["library-count", filter],
-    queryFn: () => commands.libraryCount(filter),
-    enabled: isTauri(),
-  });
-  const items = useMemo(() => pages.data?.pages.flatMap((p) => p.items) ?? [], [pages.data]);
+  // Punto di partenza della finestra di pagine: cambia solo con un salto lontano.
+  const viewKey = JSON.stringify([filter, sort]);
+  const [anchor, setAnchor] = useState({ key: viewKey, at: 0 });
+  const at = anchor.key === viewKey ? anchor.at : 0;
+  const { pages, start, items } = useGridPages(filter, sort, at);
+  const count = useLibraryCount(filter);
+  const total = Math.max(count.data ?? 0, start + items.length);
   const order = useMemo(() => items.map((i) => i.id), [items]);
 
   useLayoutEffect(() => {
@@ -249,7 +308,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (size + GAP)));
   // Le colonne si allargano per riempire la riga: nessuno spazio vuoto a destra.
   const cell = Math.max(size, Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols));
-  const rows = Math.ceil(items.length / cols);
+  const rows = Math.ceil(total / cols);
   const rowHeight = Math.round(cell * 0.75) + CAPTION + 4 + GAP;
   const virt = useVirtualizer({
     count: rows,
@@ -262,27 +321,44 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   useEffect(() => virt.measure(), [rowHeight, cols, virt]);
 
   const vitems = virt.getVirtualItems();
+  const firstRow = vitems[0]?.index ?? 0;
   const lastRow = vitems[vitems.length - 1]?.index ?? 0;
   useEffect(() => {
-    if (lastRow >= rows - 3 && pages.hasNextPage && !pages.isFetchingNextPage)
-      void pages.fetchNextPage();
-  }, [lastRow, rows, pages]);
+    if (pages.isFetching || !pages.isSuccess) return;
+    const action = windowAction(
+      { from: firstRow * cols, to: (lastRow + 1) * cols },
+      { start, len: items.length, hasNext: pages.hasNextPage, hasPrev: pages.hasPreviousPage },
+      cols * 3,
+    );
+    if (action === "next") void pages.fetchNextPage();
+    else if (action === "prev") void pages.fetchPreviousPage();
+    else if (action) setAnchor({ key: viewKey, at: action.seek });
+  }, [firstRow, lastRow, cols, start, items.length, pages, viewKey]);
 
+  const explicit = selIds(selection);
   const onClick = (id: number) => (e: MouseEvent) => {
-    const next = clickSelect(order, selected, focused, id, {
-      ctrl: e.ctrlKey || e.metaKey,
-      shift: e.shiftKey,
-    });
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (selection.mode === "filter" && ctrl) {
+      // "Tutti tranne…": Ctrl+clic aggiunge o toglie un'eccezione.
+      replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
+      return;
+    }
+    const next = clickSelect(order, explicit ?? [], focused, id, { ctrl, shift: e.shiftKey });
     setSelection(next, id);
   };
   // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
   const onMenu = (id: number) => (x: number, y: number) => {
-    const ids = selected.includes(id) ? selected : [id];
-    if (!selected.includes(id)) setSelection([id], id);
-    setMenu({ x, y, ids });
+    if (selHas(selection, id)) {
+      // "Apri con" lavora sugli elementi caricati; le azioni bulk sull'intera selezione.
+      const ids = explicit ?? order.filter((i) => selHas(selection, i));
+      setMenu({ x, y, ids, target: selTarget(selection) });
+    } else {
+      setSelection([id], id);
+      setMenu({ x, y, ids: [id], target: { kind: "ids", ids: [id] } });
+    }
   };
 
-  if (pages.isSuccess && items.length === 0) {
+  if (pages.isSuccess && items.length === 0 && start === 0 && (count.data ?? 0) === 0) {
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
       <div className="muted" style={{ padding: 32 }}>
@@ -294,10 +370,29 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   return (
     <div
       ref={scrollRef}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]"))
+          return;
+        const restore = filter.excludedFrom != null;
+        if (
+          (e.key === "Delete" && filter.catalogId != null && !restore) ||
+          (e.key === "Enter" && restore)
+        ) {
+          e.preventDefault();
+          const id = filter.excludedFrom ?? filter.catalogId!;
+          void catalogAction.act(
+            { target: selTarget(selection), count: selCount(selection) },
+            id,
+            catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
+            restore,
+          );
+        }
+      }}
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
-      aria-label={t("library.count", { n: fmtInt(total.data ?? items.length) })}
+      aria-label={t("library.count", { n: fmtInt(total) })}
       role="region"
       onPointerDown={(e) => {
         if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
@@ -305,7 +400,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         drag.current = {
           x: e.clientX - r.left,
           y: e.clientY - r.top + e.currentTarget.scrollTop,
-          initial: e.ctrlKey || e.metaKey ? selected : [],
+          initial: e.ctrlKey || e.metaKey ? selection : idsSelection(),
         };
         e.currentTarget.setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -326,12 +421,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           h: Math.abs(y - d.y),
         };
         setBox(b);
-        setSelection([
-          ...new Set([
-            ...d.initial,
-            ...rectangleSelect(order, b, { cols, cell, rowHeight, gap: GAP, pad: PAD }),
-          ]),
-        ]);
+        const inside = rectangleSelect(
+          order,
+          b,
+          { cols, cell, rowHeight, gap: GAP, pad: PAD },
+          start,
+        );
+        replaceSelection(selSet(d.initial, inside, true));
       }}
       onPointerUp={() => {
         drag.current = null;
@@ -360,34 +456,46 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
             }}
           />
         )}
-        {vitems.map((row) => (
-          <div
-            key={row.key}
-            style={{
-              position: "absolute",
-              top: row.start + PAD,
-              left: PAD,
-              right: PAD,
-              display: "flex",
-              gap: GAP,
-            }}
-          >
-            {items.slice(row.index * cols, row.index * cols + cols).map((it) => (
-              <Thumb
-                key={it.id}
-                item={it}
-                size={cell}
-                selected={selected.includes(it.id)}
-                onClick={onClick(it.id)}
-                onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
-                onMenu={onMenu(it.id)}
-                tagColor={tagColor}
-              />
-            ))}
-          </div>
-        ))}
+        {vitems.map((row) => {
+          const first = row.index * cols;
+          const cells = [];
+          for (let i = first; i < Math.min(first + cols, total); i++) {
+            const it = i >= start ? items[i - start] : undefined;
+            cells.push(
+              it ? (
+                <Thumb
+                  key={it.id}
+                  item={it}
+                  size={cell}
+                  selected={selHas(selection, it.id)}
+                  onClick={onClick(it.id)}
+                  onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
+                  onMenu={onMenu(it.id)}
+                  tagColor={tagColor}
+                />
+              ) : (
+                <Placeholder key={`p${i}`} size={cell} />
+              ),
+            );
+          }
+          return (
+            <div
+              key={row.key}
+              style={{
+                position: "absolute",
+                top: row.start + PAD,
+                left: PAD,
+                right: PAD,
+                display: "flex",
+                gap: GAP,
+              }}
+            >
+              {cells}
+            </div>
+          );
+        })}
       </div>
-      {pages.isFetchingNextPage && (
+      {(pages.isFetchingNextPage || pages.isFetchingPreviousPage) && (
         <div className="muted" style={{ position: "sticky", bottom: 8, textAlign: "center" }}>
           <Icon.Spinner size={14} />
         </div>
@@ -414,8 +522,9 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           x={menu.x}
           y={menu.y}
           ids={menu.ids}
+          target={menu.target}
           onOpen={(ids, target) => void openWith.open(ids, target)}
-          onPlace={(ids, p) => void place.apply(ids, p)}
+          onPlace={(target, p) => void place.apply(target, p)}
           onClose={closeMenu}
         />
       )}

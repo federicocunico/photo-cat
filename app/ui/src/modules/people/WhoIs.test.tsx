@@ -20,7 +20,7 @@ beforeEach(() => {
   commandsMock.listPeople.mockResolvedValue([
     { id: 12, name: null, identityUid: null, photos: 3, faces: 3, cover: null },
   ] as never);
-  commandsMock.personFaces.mockResolvedValue([] as never);
+  commandsMock.personFaces.mockResolvedValue({ items: [], next: null } as never);
   // Il backend cerca su nome e alias ("Nonna" è un alias di Rita Rossi).
   commandsMock.suggestIdentities.mockImplementation(async (_p: number, q: string) =>
     all.filter((s) =>

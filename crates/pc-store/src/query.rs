@@ -31,6 +31,9 @@ pub enum Presence {
 pub struct LibraryFilter {
     pub source_ids: Vec<i64>,
     pub catalog_id: Option<i64>,
+    pub excluded_from: Option<i64>,
+    /// None equivale a true.
+    pub matching_only: Option<bool>,
     /// AND tra gruppi, OR tra i valori dello stesso gruppo.
     pub labels: Vec<LabelFilter>,
     /// Tutte le persone indicate devono essere presenti.
@@ -171,6 +174,7 @@ pub enum SortKey {
     NameAsc,
     SizeDesc,
     AddedDesc,
+    ExcludedAt,
 }
 
 /// Ora locale corretta (`AAAA-MM-GG HH:MM:SS`): istante reale più il fuso
@@ -191,10 +195,14 @@ impl SortKey {
             Self::NameAsc => "m.name COLLATE NOCASE",
             Self::SizeDesc => "m.size",
             Self::AddedDesc => "m.added_at",
+            Self::ExcludedAt => "m.added_at",
         }
     }
     fn desc(self) -> bool {
-        matches!(self, Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc)
+        matches!(
+            self,
+            Self::CapturedDesc | Self::SizeDesc | Self::AddedDesc | Self::ExcludedAt
+        )
     }
 }
 
@@ -223,6 +231,7 @@ pub struct GridItem {
     pub analyzed: bool,
     /// Tag utente del file (per i chip colorati della griglia).
     pub tags: Vec<String>,
+    pub excluded_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -230,7 +239,24 @@ pub struct GridItem {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Page {
     pub items: Vec<GridItem>,
+    /// Cursore dell'ultimo elemento, se ci sono altri elementi dopo.
     pub next: Option<Cursor>,
+    /// Cursore del primo elemento, se ci sono altri elementi prima (pagine scorse e scaricate).
+    #[serde(default)]
+    pub prev: Option<Cursor>,
+}
+
+/// Dove inizia una pagina della griglia.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum PageAt {
+    /// Dopo il cursore (scorrimento in avanti).
+    After { cursor: Cursor },
+    /// Prima del cursore (scorrimento all'indietro, pagine già scaricate).
+    Before { cursor: Cursor },
+    /// Dalla posizione `offset` (salto con la barra di scorrimento).
+    Offset { offset: u32 },
 }
 
 const FROM: &str = "FROM media_item m
@@ -257,27 +283,31 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         ));
         args.extend(f.source_ids.iter().map(|v| Value::Integer(*v)));
     }
+    if f.catalog_id.is_some() && f.excluded_from.is_some() {
+        return Err(StoreError::Invalid(
+            "catalog_id ed excluded_from sono alternativi".into(),
+        ));
+    }
     if let Some(cid) = f.catalog_id {
+        let frag = rules::catalog_content(c, cid, &[])?;
+        parts.push(format!("({})", frag.sql));
+        args.extend(frag.args);
+    }
+    if let Some(cid) = f.excluded_from {
         let cat = repo::catalog::get(c, cid)?;
-        match cat.kind {
-            CatalogKind::Manual => {
-                parts.push(
-                    "m.id IN (SELECT media_id FROM catalog_item WHERE catalog_id = ?)".into(),
-                );
-                args.push(Value::Integer(cid));
-            }
-            CatalogKind::Smart => {
-                let json = cat.rules.ok_or_else(|| {
-                    StoreError::Invalid(format!("catalogo smart {cid} senza regole"))
-                })?;
-                let frag = rules::compile(&rules::parse(&json)?)?;
-                parts.push(frag.sql);
-                args.extend(frag.args);
-            }
+        parts.push("m.id IN (SELECT media_id FROM catalog_exclusion WHERE catalog_id=?)".into());
+        args.push(Value::Integer(cid));
+        if cat.kind == CatalogKind::Smart && f.matching_only.unwrap_or(true) {
+            let json = cat
+                .rules
+                .ok_or_else(|| StoreError::Invalid("catalogo smart senza regole".into()))?;
+            let frag = rules::compile_with(c, &rules::parse(&json)?)?;
+            parts.push(format!("({})", frag.sql));
+            args.extend(frag.args);
         }
     }
     if let Some(json) = &f.rule {
-        let frag = rules::compile(&rules::parse(json)?)?;
+        let frag = rules::compile_with(c, &rules::parse(json)?)?;
         parts.push(frag.sql);
         args.extend(frag.args);
     }
@@ -375,14 +405,43 @@ pub fn page(
     after: Option<&Cursor>,
     limit: u32,
 ) -> StoreResult<Page> {
+    let at = after.map(|c| PageAt::After { cursor: c.clone() });
+    page_at(c, f, sort, at.as_ref(), limit)
+}
+
+/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
+pub fn page_at(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    at: Option<&PageAt>,
+    limit: u32,
+) -> StoreResult<Page> {
     let mut w = compile_filter(c, f)?;
-    let key = sort.expr();
-    let (op, dir) = if sort.desc() {
-        ("<", "DESC")
+    let excluded = f.excluded_from.map(|id| {
+        format!(
+            "(SELECT excluded_at FROM catalog_exclusion WHERE catalog_id={id} AND media_id=m.id)"
+        )
+    });
+    let key = if sort == SortKey::ExcludedAt {
+        excluded
+            .clone()
+            .ok_or_else(|| StoreError::Invalid("ordinamento esclusioni senza catalogo".into()))?
     } else {
-        (">", "ASC")
+        sort.expr().to_string()
     };
-    if let Some(cur) = after {
+    let excluded_column = excluded.as_deref().unwrap_or("NULL");
+    // All'indietro si legge in ordine inverso e si ribalta il risultato.
+    let backward = matches!(at, Some(PageAt::Before { .. }));
+    let (op, dir) = match (sort.desc(), backward) {
+        (true, false) | (false, true) => ("<", "DESC"),
+        _ => (">", "ASC"),
+    };
+    let cursor = match at {
+        Some(PageAt::After { cursor } | PageAt::Before { cursor }) => Some(cursor),
+        _ => None,
+    };
+    if let Some(cur) = cursor {
         w.sql.push_str(&format!(
             " AND ({key} {op} ? OR ({key} = ? AND m.id {op} ?))"
         ));
@@ -391,6 +450,10 @@ pub fn page(
         w.args.push(k);
         w.args.push(Value::Integer(cur.id));
     }
+    let offset = match at {
+        Some(PageAt::Offset { offset }) => *offset,
+        _ => 0,
+    };
     let limit = limit.clamp(1, 2000);
     let sql = format!(
         "SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
@@ -398,11 +461,12 @@ pub fn page(
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
-                 WHERE mt.media_id = m.id)
-         {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ?",
+                 WHERE mt.media_id = m.id), {excluded_column}
+         {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ? OFFSET ?",
         w.sql
     );
     w.args.push(Value::Integer(limit as i64 + 1));
+    w.args.push(Value::Integer(i64::from(offset)));
     let mut st = c.prepare(&sql)?;
     let mut keys: Vec<serde_json::Value> = Vec::new();
     let mut items: Vec<GridItem> = st
@@ -421,20 +485,174 @@ pub fn page(
                 faces: r.get(8)?,
                 analyzed: r.get(9)?,
                 tags: split_tags(r.get(11)?),
+                excluded_at: r.get(12)?,
             })
         })?
         .collect::<Result<_, _>>()?;
-    let next = if items.len() > limit as usize {
-        items.truncate(limit as usize);
-        let last = items.last().expect("pagina non vuota");
+    let more = items.len() > limit as usize;
+    items.truncate(limit as usize);
+    keys.truncate(limit as usize);
+    if backward {
+        items.reverse();
+        keys.reverse();
+    }
+    let cursor_at = |i: usize| -> Option<Cursor> {
         Some(Cursor {
-            key: keys[limit as usize - 1].clone(),
-            id: last.id,
+            key: keys.get(i)?.clone(),
+            id: items.get(i)?.id,
         })
-    } else {
-        None
     };
-    Ok(Page { items, next })
+    let last = items.len().checked_sub(1);
+    let (prev, next) = match at {
+        // Prima del cursore: dopo c'è almeno l'elemento del cursore.
+        Some(PageAt::Before { .. }) => (
+            if more { cursor_at(0) } else { None },
+            last.and_then(cursor_at),
+        ),
+        Some(PageAt::After { .. }) => (
+            cursor_at(0),
+            if more { last.and_then(cursor_at) } else { None },
+        ),
+        Some(PageAt::Offset { offset }) => (
+            if *offset > 0 { cursor_at(0) } else { None },
+            if more { last.and_then(cursor_at) } else { None },
+        ),
+        None => (None, if more { last.and_then(cursor_at) } else { None }),
+    };
+    Ok(Page { items, next, prev })
+}
+
+/// Elementi su cui agisce un'azione bulk: un elenco esplicito, oppure "tutti i risultati del
+/// filtro" (Seleziona tutto) meno le eccezioni, limitati agli elementi presenti al momento
+/// della selezione (`max_id`): un import successivo non allarga la selezione.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+// Valore di breve durata (parametro di un comando o di un job): la differenza di dimensione è irrilevante.
+#[allow(clippy::large_enum_variant)]
+pub enum Target {
+    Ids {
+        ids: Vec<MediaId>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Filter {
+        filter: LibraryFilter,
+        max_id: MediaId,
+        except: Vec<MediaId>,
+    },
+}
+
+/// Blocchi in cui si risolve un [`Target::Filter`].
+pub const TARGET_CHUNK: usize = 5_000;
+
+/// Conteggio e id massimo all'istante di "Seleziona tutto".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct SelectionBase {
+    pub count: i64,
+    pub max_id: MediaId,
+}
+
+/// Base di "Seleziona tutto": quanti elementi ha il filtro e fin dove arrivano gli id.
+pub fn selection_base(c: &Connection, f: &LibraryFilter) -> StoreResult<SelectionBase> {
+    let max_id: MediaId = c.query_row("SELECT COALESCE(MAX(id), 0) FROM media_item", [], |r| {
+        r.get(0)
+    })?;
+    Ok(SelectionBase {
+        count: count(c, f)?,
+        max_id,
+    })
+}
+
+impl Target {
+    pub fn ids(ids: Vec<MediaId>) -> Self {
+        Self::Ids { ids }
+    }
+
+    fn filter_sql(
+        c: &Connection,
+        filter: &LibraryFilter,
+        max_id: MediaId,
+        except: &[MediaId],
+    ) -> StoreResult<SqlFragment> {
+        let mut w = compile_filter(c, filter)?;
+        w.sql
+            .push_str(" AND m.id <= ? AND m.id NOT IN (SELECT value FROM json_each(?))");
+        w.args.push(Value::Integer(max_id));
+        w.args.push(Value::Text(serde_json::to_string(except)?));
+        Ok(w)
+    }
+
+    /// Numero di elementi del target.
+    pub fn count(&self, c: &Connection) -> StoreResult<i64> {
+        match self {
+            Self::Ids { ids } => Ok(ids.len() as i64),
+            Self::Filter {
+                filter,
+                max_id,
+                except,
+            } => {
+                let w = Self::filter_sql(c, filter, *max_id, except)?;
+                Ok(c.query_row(
+                    &format!("SELECT count(*) {FROM} WHERE {}", w.sql),
+                    rusqlite::params_from_iter(w.args.iter()),
+                    |r| r.get(0),
+                )?)
+            }
+        }
+    }
+
+    /// Chiama `f` sugli id del target a blocchi di al massimo `chunk` (in ordine di id per i filtri).
+    pub fn for_each_chunk(
+        &self,
+        c: &Connection,
+        chunk: usize,
+        mut f: impl FnMut(&[MediaId]) -> StoreResult<()>,
+    ) -> StoreResult<()> {
+        match self {
+            Self::Ids { ids } => ids.chunks(chunk.max(1)).try_for_each(f),
+            Self::Filter {
+                filter,
+                max_id,
+                except,
+            } => {
+                let w = Self::filter_sql(c, filter, *max_id, except)?;
+                let sql = format!(
+                    "SELECT m.id {FROM} WHERE {} AND m.id > ? ORDER BY m.id LIMIT ?",
+                    w.sql
+                );
+                let mut after: MediaId = i64::MIN;
+                loop {
+                    let mut args = w.args.clone();
+                    args.push(Value::Integer(after));
+                    args.push(Value::Integer(chunk.max(1) as i64));
+                    let ids: Vec<MediaId> = c
+                        .prepare_cached(&sql)?
+                        .query_map(rusqlite::params_from_iter(args.iter()), |r| r.get(0))?
+                        .collect::<Result<_, _>>()?;
+                    let Some(&last) = ids.last() else {
+                        return Ok(());
+                    };
+                    f(&ids)?;
+                    if ids.len() < chunk.max(1) {
+                        return Ok(());
+                    }
+                    after = last;
+                }
+            }
+        }
+    }
+
+    /// Tutti gli id del target (per le azioni che richiedono un elenco esplicito).
+    pub fn resolve(&self, c: &Connection) -> StoreResult<Vec<MediaId>> {
+        let mut out = Vec::new();
+        self.for_each_chunk(c, TARGET_CHUNK, |ids| {
+            out.extend_from_slice(ids);
+            Ok(())
+        })?;
+        Ok(out)
+    }
 }
 
 /// Tutti gli id che soddisfano il filtro (per "seleziona tutto" e azioni bulk).
@@ -482,6 +700,10 @@ pub struct Facets {
     pub labels: Vec<(String, FacetList)>,
     pub places: FacetList,
     pub years: FacetList,
+    /// Mesi dell'anno scelto (`AAAA-MM`), solo con un anno scelto.
+    pub months: Option<FacetList>,
+    /// Giorni del mese scelto (`AAAA-MM-GG`), solo con un mese scelto.
+    pub days: Option<FacetList>,
     pub formats: FacetList,
     pub people: FacetList,
     pub tags: FacetList,
@@ -555,12 +777,7 @@ impl FacetKey {
                 .flat_map(|l| l.values.clone())
                 .collect(),
             Self::Place => f.places.clone(),
-            Self::Year => f
-                .date_from
-                .as_deref()
-                .and_then(|d| d.get(..4))
-                .map(|y| vec![y.to_string()])
-                .unwrap_or_default(),
+            Self::Year => date_path(f).year.into_iter().collect(),
             Self::Format => f.formats.clone(),
             Self::Tag => f.tags.clone(),
         }
@@ -648,6 +865,122 @@ fn summarize(rows: Vec<FacetValue>, selected: &[String]) -> FacetList {
     FacetList { values, total }
 }
 
+/// Data scelta nel filtro come percorso anno → mese → giorno, ricavata
+/// dall'intervallo `date_from`/`date_to`: anno intero, mese intero o un
+/// giorno. Un intervallo diverso vale come scelta dell'anno di `date_from`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DatePath {
+    /// `AAAA`
+    pub year: Option<String>,
+    /// `AAAA-MM`
+    pub month: Option<String>,
+    /// `AAAA-MM-GG`
+    pub day: Option<String>,
+}
+
+/// Ultimo giorno del mese (`None` se anno o mese non sono validi).
+fn last_day(year: i32, month: u32) -> Option<u32> {
+    let next = if month == 12 {
+        chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)
+    } else {
+        chrono::NaiveDate::from_ymd_opt(year, month + 1, 1)
+    }?;
+    use chrono::Datelike;
+    Some(next.pred_opt()?.day())
+}
+
+pub fn date_path(f: &LibraryFilter) -> DatePath {
+    let Some(from) = f.date_from.as_deref().filter(|d| d.len() >= 4) else {
+        return DatePath::default();
+    };
+    let to = f.date_to.as_deref().unwrap_or("");
+    let year = Some(from[..4].to_string());
+    if from.len() == 10 && to == from {
+        return DatePath {
+            year,
+            month: Some(from[..7].to_string()),
+            day: Some(from.to_string()),
+        };
+    }
+    let whole_month = from.len() == 10
+        && to.len() == 10
+        && from.ends_with("-01")
+        && from[..7] == to[..7]
+        && match (from[..4].parse::<i32>(), from[5..7].parse::<u32>()) {
+            (Ok(y), Ok(m)) => {
+                last_day(y, m).map(|d| format!("{d:02}")) == Some(to[8..].to_string())
+            }
+            _ => false,
+        };
+    DatePath {
+        year,
+        month: whole_month.then(|| from[..7].to_string()),
+        day: None,
+    }
+}
+
+/// Intervallo inclusivo di un anno (`AAAA`) o di un mese (`AAAA-MM`).
+fn period_range(p: &str) -> Option<(String, String)> {
+    let y: i32 = p.get(..4)?.parse().ok()?;
+    match p.get(5..7) {
+        None => Some((format!("{y:04}-01-01"), format!("{y:04}-12-31"))),
+        Some(m) => {
+            let m: u32 = m.parse().ok()?;
+            Some((
+                format!("{y:04}-{m:02}-01"),
+                format!("{y:04}-{m:02}-{:02}", last_day(y, m)?),
+            ))
+        }
+    }
+}
+
+/// Mesi di un anno o giorni di un mese (`period` = `AAAA` o `AAAA-MM`) con il
+/// numero di foto, in ordine cronologico: il filtro senza la scelta della data,
+/// ristretto al periodo. La voce `selected` compare anche con 0 foto.
+fn date_list(
+    c: &Connection,
+    f: &LibraryFilter,
+    period: &str,
+    selected: Option<&str>,
+) -> StoreResult<FacetList> {
+    let Some((from, to)) = period_range(period) else {
+        return Ok(FacetList::default());
+    };
+    let g = LibraryFilter {
+        date_from: Some(from),
+        date_to: Some(to),
+        ..f.clone()
+    };
+    let w = compile_filter(c, &g)?;
+    let len = if period.len() == 4 { 7 } else { 10 };
+    let sql = format!(
+        "WITH f AS (SELECT m.id {FROM} WHERE {}) \
+         SELECT substr({LOCAL_TIME_SQL}, 1, {len}), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
+         WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1",
+        w.sql
+    );
+    let mut st = c.prepare(&sql)?;
+    let mut values: Vec<FacetValue> = st
+        .query_map(rusqlite::params_from_iter(w.args.iter()), |r| {
+            Ok(FacetValue {
+                value: r.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                count: r.get(1)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    if let Some(s) = selected {
+        if !values.iter().any(|v| v.value == s) {
+            values.push(FacetValue {
+                value: s.to_string(),
+                count: 0,
+            });
+            values.sort_by(|a, b| a.value.cmp(&b.value));
+        }
+    }
+    let total = values.len() as i64;
+    Ok(FacetList { values, total })
+}
+
 /// Conteggi per i filtri del pannello laterale. Ogni lista applica tutti i
 /// filtri tranne la propria selezione.
 pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
@@ -688,6 +1021,18 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
     }
     out.places = list(FacetKey::Place)?;
     out.years = list(FacetKey::Year)?;
+    let date = date_path(f);
+    if let Some(year) = &date.year {
+        let undated = LibraryFilter {
+            date_from: None,
+            date_to: None,
+            ..f.clone()
+        };
+        out.months = Some(date_list(c, &undated, year, date.month.as_deref())?);
+        if let Some(month) = &date.month {
+            out.days = Some(date_list(c, &undated, month, date.day.as_deref())?);
+        }
+    }
     out.formats = list(FacetKey::Format)?;
     out.tags = list(FacetKey::Tag)?;
     // Persone: non mostrate nella barra laterale, con il filtro completo.
@@ -765,5 +1110,81 @@ fn value_to_json(v: Value) -> serde_json::Value {
         Value::Real(f) => f.into(),
         Value::Text(s) => s.into(),
         _ => serde_json::Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod date_tests {
+    use super::*;
+
+    fn range(from: &str, to: &str) -> LibraryFilter {
+        LibraryFilter {
+            date_from: Some(from.into()),
+            date_to: Some(to.into()),
+            ..Default::default()
+        }
+    }
+
+    fn path(y: Option<&str>, m: Option<&str>, d: Option<&str>) -> DatePath {
+        DatePath {
+            year: y.map(Into::into),
+            month: m.map(Into::into),
+            day: d.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn date_path_recognizes_year_month_and_day() {
+        assert_eq!(date_path(&LibraryFilter::default()), DatePath::default());
+        assert_eq!(
+            date_path(&range("2023-01-01", "2023-12-31")),
+            path(Some("2023"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-01", "2023-05-31")),
+            path(Some("2023"), Some("2023-05"), None)
+        );
+        assert_eq!(
+            date_path(&range("2024-02-01", "2024-02-29")),
+            path(Some("2024"), Some("2024-02"), None)
+        );
+        // Il 2023 non è bisestile: 1–28 febbraio è il mese intero, 1–29 no.
+        assert_eq!(
+            date_path(&range("2023-02-01", "2023-02-28")),
+            path(Some("2023"), Some("2023-02"), None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-14", "2023-05-14")),
+            path(Some("2023"), Some("2023-05"), Some("2023-05-14"))
+        );
+    }
+
+    #[test]
+    fn other_ranges_count_as_the_year_of_the_start() {
+        assert_eq!(
+            date_path(&range("2023-05-03", "2023-05-20")),
+            path(Some("2023"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2024-02-01", "2024-02-28")),
+            path(Some("2024"), None, None)
+        );
+        assert_eq!(
+            date_path(&range("2023-05-01", "2024-01-10")),
+            path(Some("2023"), None, None)
+        );
+    }
+
+    #[test]
+    fn period_ranges() {
+        assert_eq!(
+            period_range("2023"),
+            Some(("2023-01-01".into(), "2023-12-31".into()))
+        );
+        assert_eq!(
+            period_range("2024-02"),
+            Some(("2024-02-01".into(), "2024-02-29".into()))
+        );
+        assert_eq!(period_range("xx"), None);
     }
 }

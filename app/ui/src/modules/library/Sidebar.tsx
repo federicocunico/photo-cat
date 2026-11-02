@@ -5,11 +5,13 @@ import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type FacetValue, type Source } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
+import { latestOnly, retryUnlessSuperseded } from "../../lib/latest";
 import { useLibrary } from "../../store/library";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
 import { FacetList } from "./FacetList";
+import { DateFacet } from "./DateFacet";
 
 function Row({
   label,
@@ -168,8 +170,9 @@ export function LibrarySidebar() {
   });
   const facets = useQuery({
     queryKey: ["facets", filter],
-    queryFn: () => commands.libraryFacets(filter),
+    queryFn: () => latestOnly("facets", (tag) => commands.libraryFacets(filter, tag)),
     enabled: isTauri(),
+    retry: retryUnlessSuperseded,
     placeholderData: (prev) => prev,
   });
 
@@ -290,7 +293,11 @@ export function LibrarySidebar() {
           </>
         )}
         {(facets.data?.years.total ?? 0) > 0 && (
-          <FacetList facetKey={{ kind: "year" }} list={facets.data!.years} />
+          <DateFacet
+            years={facets.data!.years}
+            months={facets.data!.months ?? null}
+            days={facets.data!.days ?? null}
+          />
         )}
         {(facets.data?.formats.total ?? 0) > 0 && (
           <FacetList facetKey={{ kind: "format" }} list={facets.data!.formats} />
