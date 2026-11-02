@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
+import "../../test/layoutMock";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import type { GridItem } from "../../lib/ipc";
 import { emptyFilter, idsSelection, selIds, useLibrary } from "../../store/library";
@@ -66,11 +67,7 @@ describe("griglia raggruppata", () => {
   function setup() {
     // 8 foto del gruppo 7 rappresentate dalla principale (id 2), più due foto singole.
     commandsMock.libraryPage.mockResolvedValue({
-      items: [
-        item(1),
-        item(2, { similarGroup: 7, similarCover: true, similarCount: 8 }),
-        item(10),
-      ],
+      items: [item(1), item(2, { similarGroup: 7, similarCover: true, similarCount: 8 }), item(10)],
       next: null,
       prev: null,
     } as never);
@@ -85,7 +82,7 @@ describe("griglia raggruppata", () => {
     } as never);
   }
 
-  it("Gruppo chiuso: una sola miniatura con \"8\" e il conteggio sulle foto", async () => {
+  it('Gruppo chiuso: una sola miniatura con "8" e il conteggio sulle foto', async () => {
     setup();
     wrap(<LibraryGrid initialWidth={1200} />);
     const badge = await screen.findByTestId("group-badge-2");
@@ -98,7 +95,7 @@ describe("griglia raggruppata", () => {
       300,
     );
     // Il conteggio dei risultati resta sulle 10 foto.
-    expect(screen.getByRole("region")).toHaveAttribute("aria-label", "10 foto");
+    expect(screen.getByRole("region")).toHaveAttribute("aria-label", "10 elementi");
     // Selezionare il gruppo chiuso seleziona tutte le sue foto.
     fireEvent.click(screen.getByTestId("thumb-2"));
     await waitFor(() =>
@@ -111,7 +108,8 @@ describe("griglia raggruppata", () => {
     wrap(<LibraryGrid initialWidth={1200} />);
     fireEvent.click(await screen.findByTestId("group-badge-2"));
     expect(await screen.findByTestId("thumb-9")).toBeInTheDocument();
-    for (const id of [2, 3, 4, 5, 6, 7, 8, 9]) expect(screen.getByTestId(`thumb-${id}`)).toBeInTheDocument();
+    for (const id of [2, 3, 4, 5, 6, 7, 8, 9])
+      expect(screen.getByTestId(`thumb-${id}`)).toBeInTheDocument();
     expect(screen.getByTestId("cover-2")).toHaveTextContent("Principale");
     // Ordine: dopo la principale, prima della foto singola successiva.
     const ids = screen
@@ -166,8 +164,30 @@ describe("unione manuale", () => {
     useLibrary.setState({ selection: idsSelection([4, 8, 15]) });
     wrap(<BulkBar />);
     fireEvent.click(screen.getByTestId("group-together"));
-    await waitFor(() =>
-      expect(commandsMock.similarGroupTogether).toHaveBeenCalledWith([4, 8, 15]),
-    );
+    await waitFor(() => expect(commandsMock.similarGroupTogether).toHaveBeenCalledWith([4, 8, 15]));
+  });
+});
+
+describe("Sequenza", () => {
+  it("raggruppa gli elementi caricati: principale o prima foto, con il numero; aperto resta intero", async () => {
+    const { collapseLoaded } = await import("./similarView");
+    const it = (id: number, g: number | null, cover = false) => ({
+      id,
+      similarGroup: g,
+      similarCover: cover,
+    });
+    const items = [it(1, null), it(2, 7), it(3, 7, true), it(4, 7), it(5, 9), it(6, 9)];
+    expect(collapseLoaded(items, new Set()).map((s) => [s.item.id, s.count])).toEqual([
+      [1, null],
+      [3, 3],
+      [5, 2],
+    ]);
+    expect(collapseLoaded(items, new Set([7])).map((s) => [s.item.id, s.count])).toEqual([
+      [1, null],
+      [2, null],
+      [3, 3],
+      [4, null],
+      [5, 2],
+    ]);
   });
 });

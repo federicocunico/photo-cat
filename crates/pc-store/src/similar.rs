@@ -16,7 +16,9 @@ pub const EDGE_FLOOR: f32 = 0.6;
 pub fn edges(c: &Connection) -> StoreResult<Vec<(MediaId, MediaId, f32)>> {
     let mut q = c.prepare_cached("SELECT a, b, ssim FROM similar_edge")?;
     let rows = q
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, f64>(2)? as f32)))?
+        .query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get::<_, f64>(2)? as f32))
+        })?
         .collect::<Result<_, _>>()?;
     Ok(rows)
 }
@@ -144,8 +146,8 @@ pub fn embeddings_of(
     model: &str,
     ids: &[MediaId],
 ) -> StoreResult<HashMap<MediaId, Vec<f32>>> {
-    let mut q = c
-        .prepare_cached("SELECT vector FROM embedding WHERE media_id = ?1 AND model_ver = ?2")?;
+    let mut q =
+        c.prepare_cached("SELECT vector FROM embedding WHERE media_id = ?1 AND model_ver = ?2")?;
     let mut out = HashMap::new();
     for id in ids {
         if let Some(b) = q
@@ -210,7 +212,9 @@ pub fn members_with(c: &Connection, media: MediaId) -> StoreResult<Option<(i64, 
 
 pub fn group_members(c: &Connection, group: i64) -> StoreResult<Vec<MediaId>> {
     let rows = c
-        .prepare_cached("SELECT media_id FROM similar_member WHERE group_id = ?1 ORDER BY media_id")?
+        .prepare_cached(
+            "SELECT media_id FROM similar_member WHERE group_id = ?1 ORDER BY media_id",
+        )?
         .query_map([group], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
     Ok(rows)
@@ -260,7 +264,10 @@ pub fn dissolve(c: &Connection, group: i64) -> StoreResult<Vec<MediaId>> {
         .collect::<Result<_, _>>()?;
     for (a, b) in musts {
         if set.contains(&a) && set.contains(&b) {
-            c.execute("DELETE FROM similar_link WHERE a = ?1 AND b = ?2", params![a, b])?;
+            c.execute(
+                "DELETE FROM similar_link WHERE a = ?1 AND b = ?2",
+                params![a, b],
+            )?;
         }
     }
     Ok(members)
@@ -283,9 +290,8 @@ pub fn set_cover(c: &Connection, group: i64, media: MediaId) -> StoreResult<()> 
 
 /// Misure per la principale: (nitidezza, esposizione).
 fn quality(c: &Connection, ids: &[MediaId]) -> StoreResult<HashMap<MediaId, (f32, f32)>> {
-    let mut q = c.prepare_cached(
-        "SELECT sharpness, exposure FROM similar_done WHERE media_id = ?1",
-    )?;
+    let mut q =
+        c.prepare_cached("SELECT sharpness, exposure FROM similar_done WHERE media_id = ?1")?;
     let mut out = HashMap::new();
     for id in ids {
         if let Some(v) = q
@@ -308,7 +314,11 @@ pub fn cover_scores(c: &Connection, members: &[MediaId]) -> StoreResult<HashMap<
         .iter()
         .map(|m| {
             let (s, e) = q.get(m).copied().unwrap_or((0.0, 1.0));
-            let s = if max > 0.0 { (s / max).clamp(0.0, 1.0) } else { 0.0 };
+            let s = if max > 0.0 {
+                (s / max).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             (*m, 0.7 * s + 0.3 * e.clamp(0.0, 1.0))
         })
         .collect())
@@ -499,6 +509,39 @@ pub fn group_view(c: &Connection, media: MediaId) -> StoreResult<Option<SimilarG
     }))
 }
 
+/// Foto da selezionare con "Seleziona tutte tranne la principale": i membri dei gruppi presenti
+/// nei risultati, esclusa la principale di ciascun gruppo (o la migliore, se la principale non è
+/// tra i risultati).
+pub fn non_covers(
+    c: &Connection,
+    filter: &crate::query::LibraryFilter,
+) -> StoreResult<Vec<MediaId>> {
+    let f = crate::query::LibraryFilter {
+        similar_only: true,
+        group_similar: false,
+        ..filter.clone()
+    };
+    let w = crate::query::compile_filter(c, &f)?;
+    let sql = format!(
+        "WITH r AS (SELECT m.id, sm.group_id, sm.score, (g.cover_media_id = m.id) AS cover
+           FROM media_item m
+           LEFT JOIN media_dates d ON d.media_id = m.id
+           LEFT JOIN media_tech t ON t.media_id = m.id
+           JOIN similar_member sm ON sm.media_id = m.id
+           JOIN similar_group g ON g.id = sm.group_id
+           WHERE {}),
+         keep AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY group_id
+           ORDER BY cover DESC, score DESC, id) AS rn FROM r)
+         SELECT id FROM keep WHERE rn > 1 ORDER BY id",
+        w.sql
+    );
+    let mut st = c.prepare(&sql)?;
+    let ids = st
+        .query_map(rusqlite::params_from_iter(w.args.iter()), |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(ids)
+}
+
 /// Numero di gruppi salvati.
 pub fn group_count(c: &Connection) -> StoreResult<i64> {
     Ok(c.query_row("SELECT count(*) FROM similar_group", [], |r| r.get(0))?)
@@ -550,20 +593,79 @@ mod tests {
     }
 
     #[test]
+    fn cleaning_a_catalog_selects_all_but_the_main_photo_and_touches_no_file() {
+        let c = db(6);
+        let tmp = tempfile::tempdir().unwrap();
+        for i in 1..=6 {
+            let p = tmp.path().join(format!("{i}.jpg"));
+            std::fs::write(&p, b"foto").unwrap();
+            c.execute(
+                "UPDATE media_item SET path = ?2 WHERE id = ?1",
+                params![i, p.display().to_string()],
+            )
+            .unwrap();
+        }
+        c.execute(
+            "INSERT INTO catalog(id, name, kind, created_at) VALUES (1, 'Vacanze', 'manual', 0)",
+            [],
+        )
+        .unwrap();
+        for i in 1..=6 {
+            c.execute(
+                "INSERT INTO catalog_item(catalog_id, media_id) VALUES (1, ?1)",
+                [i],
+            )
+            .unwrap();
+        }
+        mark_done(&c, 2, "p", 90.0, 1.0).unwrap();
+        mark_done(&c, 5, "p", 90.0, 1.0).unwrap();
+        apply_groups(&c, &[vec![1, 2, 3], vec![4, 5]], "p").unwrap();
+        let filter = crate::query::LibraryFilter {
+            catalog_id: Some(1),
+            similar_only: true,
+            ..Default::default()
+        };
+        let ids = non_covers(&c, &filter).unwrap();
+        assert_eq!(ids, vec![1, 3, 4], "tutte tranne le principali 2 e 5");
+        // "Escludi dal catalogo" su quelle foto: resta solo la principale di ogni gruppo.
+        for id in &ids {
+            c.execute(
+                "INSERT INTO catalog_exclusion(catalog_id, media_id, excluded_at) VALUES (1, ?1, 0)",
+                [id],
+            )
+            .unwrap();
+        }
+        let left = crate::query::count(&c, &filter).unwrap();
+        assert_eq!(left, 2);
+        for i in 1..=6 {
+            assert_eq!(
+                std::fs::read(tmp.path().join(format!("{i}.jpg"))).unwrap(),
+                b"foto"
+            );
+        }
+    }
+
+    #[test]
     fn corrections_are_stored_as_constraints() {
         let c = db(5);
         apply_groups(&c, &[vec![1, 2, 3]], "p").unwrap();
         remove_from_group(&c, 3).unwrap();
         group_together(&c, &[4, 5]).unwrap();
         let (links, _) = constraints(&c).unwrap();
-        assert!(links.contains(&(1, 3, false, links[0].3)) || links.iter().any(|l| l.0 == 1 && l.1 == 3 && !l.2));
+        assert!(
+            links.contains(&(1, 3, false, links[0].3))
+                || links.iter().any(|l| l.0 == 1 && l.1 == 3 && !l.2)
+        );
         assert!(links.iter().any(|l| l.0 == 4 && l.1 == 5 && l.2));
         let (g, _) = members_with(&c, 1).unwrap().unwrap();
         group_together(&c, &[1, 2]).unwrap();
         let members = dissolve(&c, g).unwrap();
         assert_eq!(members, vec![1, 2, 3]);
         let (links, dissolved) = constraints(&c).unwrap();
-        assert!(!links.iter().any(|l| l.0 == 1 && l.1 == 2 && l.2), "unione annullata");
+        assert!(
+            !links.iter().any(|l| l.0 == 1 && l.1 == 2 && l.2),
+            "unione annullata"
+        );
         assert_eq!(dissolved.len(), 3);
         assert!(set_cover(&c, g, 5).is_err());
     }

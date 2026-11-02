@@ -369,8 +369,10 @@ pub fn run_similar(
     control: &pc_jobs::JobControl,
     phase: &pc_jobs::PhaseCounters,
 ) -> AppResult<()> {
-    let (Some(thumbs), Ok(entry)) = (&deps.thumbs, deps.resources.entry(Role::ClassificationImage))
-    else {
+    let (Some(thumbs), Ok(entry)) = (
+        &deps.thumbs,
+        deps.resources.entry(Role::ClassificationImage),
+    ) else {
         phase.set_total(0);
         phase.finish();
         return Ok(());
@@ -418,7 +420,13 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
             let runnable = deps.runnable_models();
             if runnable.is_empty() && runnable.over_budget {
                 // Requisiti minimi: nessuna fase AI entra nel budget, il job termina senza analisi.
-                for p in [PHASE_CLIP, PHASE_PERSONS, PHASE_FACES, PHASE_CLUSTER, PHASE_SIMILAR] {
+                for p in [
+                    PHASE_CLIP,
+                    PHASE_PERSONS,
+                    PHASE_FACES,
+                    PHASE_CLUSTER,
+                    PHASE_SIMILAR,
+                ] {
                     ctx.progress.phase(p).set_total(0);
                     ctx.progress.phase(p).finish();
                 }

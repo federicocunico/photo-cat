@@ -158,12 +158,20 @@ pub(crate) mod tests {
                 0 => {
                     let circle = ((fx - 0.4).powi(2) + (fy - 0.5).powi(2)).sqrt() < 0.25;
                     let stripes = ((x / 24 + y / 36) % 2) as f32 * 40.0;
-                    if circle { 220.0 - stripes } else { 60.0 + 80.0 * fx + stripes }
+                    if circle {
+                        220.0 - stripes
+                    } else {
+                        60.0 + 80.0 * fx + stripes
+                    }
                 }
                 1 => {
                     let rect = fx > 0.55 && fx < 0.9 && fy > 0.1 && fy < 0.7;
                     let checks = (((x / 44) + (y / 44)) % 2) as f32 * 90.0;
-                    if rect { 30.0 + checks } else { 200.0 - 120.0 * fy }
+                    if rect {
+                        30.0 + checks
+                    } else {
+                        200.0 - 120.0 * fy
+                    }
                 }
                 _ => 128.0 + 100.0 * ((fx * 23.0).sin() * (fy * 17.0).cos()),
             };

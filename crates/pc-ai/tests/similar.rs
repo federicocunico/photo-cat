@@ -159,7 +159,13 @@ fn photos_without_date_are_grouped_by_content_and_exact_copies_always() {
     lib.add(2, &burst_frame(2, 1), embedding(3, 0.01), None, None);
     // Copie esatte con embedding lontani (es. modello diverso): unite comunque.
     lib.add(3, &scene(512, 384, 1), embedding(9, 0.0), None, Some("abc"));
-    lib.add(4, &scene(512, 384, 1), embedding(30, 0.0), None, Some("abc"));
+    lib.add(
+        4,
+        &scene(512, 384, 1),
+        embedding(30, 0.0),
+        None,
+        Some("abc"),
+    );
     lib.run(0.80);
     assert_eq!(lib.group_of(1), Some(vec![1, 2]), "senza data");
     assert_eq!(lib.group_of(3), Some(vec![3, 4]), "copie esatte");
@@ -192,10 +198,22 @@ fn sharpest_photo_is_proposed_and_user_choice_survives_reanalysis() {
 fn corrections_are_respected_by_later_analyses() {
     let lib = Lib::new();
     for i in 0..5 {
-        lib.add(i + 1, &burst_frame(0, i as u32), embedding(1, 0.0), Some(("A", i * 300)), None);
+        lib.add(
+            i + 1,
+            &burst_frame(0, i as u32),
+            embedding(1, 0.0),
+            Some(("A", i * 300)),
+            None,
+        );
     }
     for i in 0..3 {
-        lib.add(10 + i, &burst_frame(1, 0), embedding(40 + i as usize * 7, 0.0), None, None);
+        lib.add(
+            10 + i,
+            &burst_frame(1, 0),
+            embedding(40 + i as usize * 7, 0.0),
+            None,
+            None,
+        );
     }
     lib.run(0.80);
     assert_eq!(lib.group_of(1).unwrap().len(), 5);
@@ -205,12 +223,16 @@ fn corrections_are_respected_by_later_analyses() {
     regroup(&lib.store, 0.80, &key).unwrap();
     assert_eq!(lib.group_of(5), None);
     // Unione manuale di 3 foto non raggruppate (embedding lontani).
-    lib.store.write(|c| db::group_together(c, &[10, 11, 12])).unwrap();
+    lib.store
+        .write(|c| db::group_together(c, &[10, 11, 12]))
+        .unwrap();
     regroup(&lib.store, 0.80, &key).unwrap();
     assert_eq!(lib.group_of(10), Some(vec![10, 11, 12]));
     // Gruppo sciolto.
     let (g, _) = lib.store.read(|c| db::members_with(c, 1)).unwrap().unwrap();
-    lib.store.write(move |c| db::dissolve(c, g).map(|_| ())).unwrap();
+    lib.store
+        .write(move |c| db::dissolve(c, g).map(|_| ()))
+        .unwrap();
     regroup(&lib.store, 0.80, &key).unwrap();
     // Nuova analisi completa: le correzioni restano.
     lib.store
@@ -227,16 +249,34 @@ fn corrections_are_respected_by_later_analyses() {
 fn new_import_compares_only_new_photos_and_keeps_other_groups() {
     let lib = Lib::new();
     for i in 0..4 {
-        lib.add(i + 1, &burst_frame(0, i as u32), embedding(1, 0.0), Some(("A", i * 300)), None);
+        lib.add(
+            i + 1,
+            &burst_frame(0, i as u32),
+            embedding(1, 0.0),
+            Some(("A", i * 300)),
+            None,
+        );
     }
     for i in 0..3 {
-        lib.add(10 + i, &burst_frame(2, i as u32), embedding(20, 0.0), Some(("B", i * 300)), None);
+        lib.add(
+            10 + i,
+            &burst_frame(2, i as u32),
+            embedding(20, 0.0),
+            Some(("B", i * 300)),
+            None,
+        );
     }
     let first = lib.run(0.80);
     assert_eq!(first.groups.created, 2);
     // Due foto nuove della prima raffica.
     for i in 4..6 {
-        lib.add(i + 1, &burst_frame(0, i as u32), embedding(1, 0.0), Some(("A", i * 300)), None);
+        lib.add(
+            i + 1,
+            &burst_frame(0, i as u32),
+            embedding(1, 0.0),
+            Some(("A", i * 300)),
+            None,
+        );
     }
     let second = lib.run(0.80);
     assert_eq!(second.processed, 2, "solo le foto nuove");
@@ -250,7 +290,13 @@ fn interrupted_analysis_resumes_with_the_remaining_photos() {
     let lib = Lib::new();
     let n = 60;
     for i in 0..n {
-        lib.add(i + 1, &burst_frame(i as u32 % 3, (i % 7) as u32), embedding(i as usize, 0.0), None, None);
+        lib.add(
+            i + 1,
+            &burst_frame(i as u32 % 3, (i % 7) as u32),
+            embedding(i as usize, 0.0),
+            None,
+            None,
+        );
     }
     let progress = JobProgress::new(&[PhaseSpec::new("similar", 1.0)]);
     let phase = progress.phase("similar");
@@ -281,20 +327,37 @@ fn interrupted_analysis_resumes_with_the_remaining_photos() {
         .len() as i64;
     assert!(left < n && left > 0, "rimaste {left}");
     let resumed = lib.run(0.8);
-    assert_eq!(resumed.processed as i64, left, "solo le foto non completate");
+    assert_eq!(
+        resumed.processed as i64, left,
+        "solo le foto non completate"
+    );
 }
 
 #[test]
 fn stricter_threshold_regroups_from_saved_edges_without_thumbnails() {
     let lib = Lib::new();
     for i in 0..6 {
-        lib.add(i + 1, &burst_frame(0, i as u32), embedding(1, 0.0), Some(("A", i * 300)), None);
+        lib.add(
+            i + 1,
+            &burst_frame(0, i as u32),
+            embedding(1, 0.0),
+            Some(("A", i * 300)),
+            None,
+        );
     }
     lib.run(0.70);
     let loose = lib.group_of(1).unwrap().len();
     // Senza miniature: il ricalcolo usa solo gli archi salvati.
-    std::fs::remove_dir_all(lib.thumbs.path_of("0000000000000001").unwrap().parent().unwrap().parent().unwrap())
-        .unwrap();
+    std::fs::remove_dir_all(
+        lib.thumbs
+            .path_of("0000000000000001")
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap(),
+    )
+    .unwrap();
     let edges = lib.store.read(db::edges).unwrap();
     let strict = edges.iter().map(|e| e.2).fold(0.0f32, f32::max) - 0.001;
     let preview = preview_count(&lib.store, strict).unwrap();
@@ -304,7 +367,10 @@ fn stricter_threshold_regroups_from_saved_edges_without_thumbnails() {
     let saved = lib.store.read(db::group_count).unwrap() as usize;
     assert_eq!(saved, preview);
     let total_after: usize = after.iter().map(Vec::len).sum();
-    assert!(total_after < loose, "le foto meno simili escono: {total_after} < {loose}");
+    assert!(
+        total_after < loose,
+        "le foto meno simili escono: {total_after} < {loose}"
+    );
 }
 
 /// 100.000 embedding: l'indice dei vicini si costruisce entro il budget e la memoria torna libera.
@@ -337,13 +403,16 @@ fn hundred_thousand_embeddings_within_the_governor_budget() {
     let gov = MemoryGovernor::new(4096);
     let targets: Vec<MediaId> = (1..=3_000).collect();
     let started = std::time::Instant::now();
-    let found =
-        similar::semantic_neighbours(&lib.store, &gov, MODEL, &targets, &JobControl::new())
-            .unwrap();
+    let found = similar::semantic_neighbours(&lib.store, &gov, MODEL, &targets, &JobControl::new())
+        .unwrap();
     let elapsed = started.elapsed();
     assert_eq!(found.len(), targets.len());
     assert!(found.values().filter(|v| !v.is_empty()).count() > 2_500);
     assert!(gov.snapshot().peak_mb <= 4096, "entro il budget");
-    assert_eq!(gov.snapshot().in_use_mb, 0, "memoria dell'indice restituita");
+    assert_eq!(
+        gov.snapshot().in_use_mb,
+        0,
+        "memoria dell'indice restituita"
+    );
     assert!(elapsed < Duration::from_secs(180), "{elapsed:?}");
 }

@@ -61,6 +61,8 @@ export const commands = {
 	libraryPage: (filter: LibraryFilter, sort: SortKey, at: PageAt | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, at, limit }),
 	/**  Numero di elementi del filtro; `None` se la richiesta è stata superata. */
 	libraryCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_count", { filter, request }),
+	/**  Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili). */
+	libraryGridCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_grid_count", { filter, request }),
 	libraryFacets: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<Facets | null>("library_facets", { filter, request }),
 	/**  Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine). */
 	libraryFacetValues: (filter: LibraryFilter, facet: FacetKey, search: string | null, sort: FacetSort, offset: number, limit: number) => __TAURI_INVOKE<FacetPage>("library_facet_values", { filter, facet, search, sort, offset, limit }),
@@ -161,6 +163,30 @@ export const commands = {
 	sequenceExportPreflight: (options: SequenceExportOptions) => __TAURI_INVOKE<ExportPreflight>("sequence_export_preflight", { options }),
 	/**  Avvia l'export come job annullabile e ricorda il modello usato. */
 	startSequenceExport: (options: SequenceExportOptions) => __TAURI_INVOKE<number>("start_sequence_export", { options }),
+	/**  Gruppo della foto (Inspector), se c'è. */
+	similarGroup: (media: number) => __TAURI_INVOKE<SimilarGroupView | null>("similar_group", { media }),
+	/**  "Togli dal gruppo": la foto non torna nel gruppo nelle analisi successive. */
+	similarRemove: (media: number) => __TAURI_INVOKE<null>("similar_remove", { media }),
+	/**  "Raggruppa come simili": le foto restano unite anche dopo nuove analisi. */
+	similarGroupTogether: (ids: number[]) => __TAURI_INVOKE<null>("similar_group_together", { ids }),
+	/**  "Sciogli gruppo": le foto tornano singole e non si raggruppano più tra loro da sole. */
+	similarDissolve: (group: number) => __TAURI_INVOKE<null>("similar_dissolve", { group }),
+	/**  Imposta la foto principale del gruppo (prevale sulle analisi successive). */
+	similarSetCover: (group: number, media: number) => __TAURI_INVOKE<null>("similar_set_cover", { group, media }),
+	/**  Foto del gruppo presenti nei risultati del filtro (espansione nella griglia). */
+	similarGroupMembers: (group: number, filter: LibraryFilter, sort: SortKey) => __TAURI_INVOKE<Page>("similar_group_members", { group, filter, sort }),
+	/**
+	 *  Foto da selezionare con "Seleziona tutte tranne la principale": i membri dei gruppi presenti
+	 *  nei risultati, esclusa la principale di ciascun gruppo (o la migliore, se la principale non
+	 *  è tra i risultati).
+	 */
+	similarNonCovers: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("similar_non_covers", { filter }),
+	/**  Anteprima per le Impostazioni: gruppi con la soglia `threshold` (dagli archi salvati). */
+	similarPreview: (threshold: number | null) => __TAURI_INVOKE<number>("similar_preview", { threshold }),
+	/**  Foto analizzate con CLIP ma non ancora elaborate per i gruppi (librerie esistenti). */
+	similarPending: () => __TAURI_INVOKE<number>("similar_pending"),
+	/**  Accoda l'analisi dei gruppi (librerie esistenti: proposta, non automatica). */
+	startSimilarAnalysis: () => __TAURI_INVOKE<number>("start_similar_analysis"),
 	exportFields: () => __TAURI_INVOKE<string[]>("export_fields"),
 	startExport: (options: ExportOptions) => __TAURI_INVOKE<number>("start_export", { options }),
 	organizePreview: (options: OrganizeOptions) => __TAURI_INVOKE<Preview>("organize_preview", { options }),
@@ -245,6 +271,8 @@ export type AiThresholds = {
 	face_detection?: number | null,
 	/**  Somiglianza coseno minima tra due volti della stessa persona. */
 	face_similarity?: number | null,
+	/**  Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili. */
+	similar_photos?: number | null,
 };
 
 /**
@@ -666,6 +694,12 @@ export type GridItem = {
 	/**  Tag utente del file (per i chip colorati della griglia). */
 	tags: string[],
 	excludedAt: number | null,
+	/**  Gruppo di foto simili della foto, se c'è. */
+	similarGroup: number | null,
+	/**  È la principale del suo gruppo. */
+	similarCover: boolean,
+	/**  Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta). */
+	similarCount: number | null,
 };
 
 export type Group = {
@@ -824,6 +858,10 @@ export type LibraryFilter = {
 	folder?: FolderFilter | null,
 	/**  Solo questi elementi (collegamenti dal riepilogo di un aggiornamento). */
 	ids?: number[] | null,
+	/**  Solo le foto che fanno parte di un gruppo di foto simili. */
+	similarOnly?: boolean,
+	/**  Griglia raggruppata: un elemento per gruppo di foto simili (non cambia i conteggi). */
+	groupSimilar?: boolean,
 };
 
 export type Location = {
@@ -1208,6 +1246,10 @@ export type SequenceItem = {
 	session: number,
 	/**  Tag del file che appartengono al set indicato. */
 	tags: string[],
+	/**  Gruppo di foto simili della foto, se c'è. */
+	similarGroup: number | null,
+	/**  È la principale del suo gruppo. */
+	similarCover: boolean,
 };
 
 export type SequenceOverview = {
@@ -1241,6 +1283,20 @@ export type SetTag = {
 	/**  Tasto rapido (1–9). */
 	key: number,
 	name: string,
+};
+
+/**  Foto simili mostrate nell'Inspector. */
+export type SimilarGroupView = {
+	id: number,
+	cover: number | null,
+	coverManual: boolean,
+	members: SimilarMember[],
+};
+
+export type SimilarMember = {
+	id: number,
+	name: string,
+	thumb: string | null,
 };
 
 export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc" | "excluded_at";
@@ -1385,6 +1441,9 @@ export type ThresholdImpact = {
 	reanalysisPersons: number,
 	/**  File salvati con un minimo di volti più alto della nuova soglia. */
 	reanalysisFaces: number,
+	/**  Gruppi di foto simili con la soglia attuale e con quella nuova. */
+	similarGroupsCurrent?: number,
+	similarGroups?: number,
 };
 
 /**

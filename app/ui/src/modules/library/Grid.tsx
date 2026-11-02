@@ -404,9 +404,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   // Selezionare un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
   const selectGroup = (it: GridItem) => {
     if (it.similarGroup == null) return;
-    void commands
-      .similarGroupMembers(it.similarGroup, filter, sort)
-      .then((page) => setSelection(page.items.map((m) => m.id), it.id));
+    void commands.similarGroupMembers(it.similarGroup, filter, sort).then((page) =>
+      setSelection(
+        page.items.map((m) => m.id),
+        it.id,
+      ),
+    );
   };
 
   useLayoutEffect(() => {
@@ -507,7 +510,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
-      aria-label={t("library.count", { n: fmtInt(total) })}
+      aria-label={t("library.count", { n: fmtInt(count.data ?? total) })}
       role="region"
       onPointerDown={(e) => {
         if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
@@ -599,7 +602,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                   cover={open && it.similarCover}
                   onClick={
                     grouped && !open
-                      ? (e) => (e.ctrlKey || e.metaKey || e.shiftKey ? onClick(it.id)(e) : selectGroup(it))
+                      ? (e) =>
+                          e.ctrlKey || e.metaKey || e.shiftKey ? onClick(it.id)(e) : selectGroup(it)
                       : onClick(it.id)
                   }
                   onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}

@@ -435,7 +435,7 @@ pub fn page_at(
     // rappresentante (la principale se è nei risultati, altrimenti la migliore presente).
     let (with, count_column) = if f.group_similar {
         let with = format!(
-            "WITH f AS (SELECT m.id FROM {FROM} WHERE {}),
+            "WITH f AS (SELECT m.id {FROM} WHERE {}),
              rep AS (SELECT sm.group_id, COUNT(*) AS cnt,
                 COALESCE(MAX(CASE WHEN g.cover_media_id = sm.media_id THEN sm.media_id END),
                   (SELECT sm2.media_id FROM similar_member sm2 JOIN f f2 ON f2.id = sm2.media_id

@@ -14,6 +14,7 @@ import {
 } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { clickSelect, selIds, useLibrary } from "../../store/library";
+import { collapseLoaded } from "../library/similarView";
 
 const EMPTY: number[] = [];
 import { offsetText, parseShift, shiftText, timeOf, useSequence } from "../../store/sequence";
@@ -58,6 +59,8 @@ function Toolbar({ gap }: { gap: number }) {
   const setScope = useSequence((s) => s.setScope);
   // Una selezione "tutti i risultati" della Libreria non diventa un elenco di id qui.
   const libSelection = useLibrary((s) => selIds(s.selection)) ?? EMPTY;
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const setGroupSimilar = useLibrary((s) => s.setGroupSimilar);
   const tags = useTagOverview().data;
   const set = activeSet(tags);
   const catalogs = useQuery({
@@ -113,6 +116,14 @@ function Toolbar({ gap }: { gap: number }) {
         <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
       </span>
       <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={groupSimilar}
+          onChange={(e) => setGroupSimilar(e.target.checked)}
+        />
+        {t("similar.group")}
+      </label>
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {t("sequence.gap")}
         <input
           className="field"
@@ -160,9 +171,12 @@ function Card({
   tagColor,
   onClick,
   onDropUndated,
+  group,
 }: {
   item: SequenceItem;
   selected: boolean;
+  /** Gruppo di foto simili rappresentato (numero di foto, aperto o chiuso). */
+  group?: { count: number; open: boolean; onToggle: () => void };
   color: string;
   tagColor: (n: string) => string;
   onClick: (e: MouseEvent) => void;
@@ -227,6 +241,42 @@ function Card({
             <TagChip name={item.tags[0]} color={tagColor(item.tags[0])} compact />
           </span>
         )}
+        {group && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-expanded={group.open}
+            aria-label={t(group.open ? "similar.collapse" : "similar.expand", {
+              count: group.count,
+            })}
+            data-testid={`seq-group-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              group.onToggle();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                group.onToggle();
+              }
+            }}
+            style={{
+              position: "absolute",
+              right: 6,
+              top: 6,
+              padding: "1px 7px",
+              borderRadius: 10,
+              background: "var(--pc-accent)",
+              color: "var(--pc-on-accent, #fff)",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {group.open ? "−" : ""}
+            {group.count}
+          </span>
+        )}
       </div>
       <div aria-hidden="true" style={{ height: 4, background: color }} />
       <div
@@ -285,19 +335,38 @@ function SessionsGrid({
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL + GAP)));
+  // "Raggruppa foto simili" (stessa preferenza della Libreria): un elemento per gruppo.
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const shown = useMemo(
+    () =>
+      groupSimilar
+        ? collapseLoaded(items, open)
+        : items.map((item) => ({ item, count: null as number | null })),
+    [items, open, groupSimilar],
+  );
+  const counts = useMemo(() => new Map(shown.map((s) => [s.item.id, s.count])), [shown]);
+  const toggle = (g: number) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
   const rows = useMemo(() => {
     const out: Row[] = [];
     let i = 0;
+    const visible = shown.map((s) => s.item);
     for (const s of sessions) {
       const members: SequenceItem[] = [];
-      while (i < items.length && items[i].session === s.index) members.push(items[i++]);
-      if (!members.length && i >= items.length) break;
+      while (i < visible.length && visible[i].session === s.index) members.push(visible[i++]);
+      if (!members.length && i >= visible.length) break;
       out.push({ kind: "header", session: s });
       for (let k = 0; k < members.length; k += cols)
         out.push({ kind: "cards", items: members.slice(k, k + cols) });
     }
     return out;
-  }, [sessions, items, cols]);
+  }, [sessions, shown, cols]);
   const order = useMemo(() => items.map((i) => i.id), [items]);
   const color = (g: number | null) =>
     deviceColorVar(
@@ -373,6 +442,15 @@ function SessionsGrid({
                     color={color(it.groupId)}
                     tagColor={(n) => colorOf(tags, n)}
                     onDropUndated={(media) => onPlace(media, it.id)}
+                    group={
+                      counts.get(it.id) != null && it.similarGroup != null
+                        ? {
+                            count: counts.get(it.id)!,
+                            open: open.has(it.similarGroup),
+                            onToggle: () => toggle(it.similarGroup!),
+                          }
+                        : undefined
+                    }
                     onClick={(e) =>
                       setSelection(
                         clickSelect(order, selected, focused, it.id, {

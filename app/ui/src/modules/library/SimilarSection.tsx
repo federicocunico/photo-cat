@@ -62,13 +62,21 @@ export function SimilarSection({ id }: { id: number }) {
                 overflow: "hidden",
                 cursor: "pointer",
                 border: `2px solid ${
-                  m.id === g.cover ? "var(--pc-warn)" : m.id === id ? "var(--pc-accent)" : "transparent"
+                  m.id === g.cover
+                    ? "var(--pc-warn)"
+                    : m.id === id
+                      ? "var(--pc-accent)"
+                      : "transparent"
                 }`,
                 background: "var(--pc-thumb-bg)",
               }}
             >
               {url && (
-                <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img
+                  src={url}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               )}
             </button>
           );
@@ -84,7 +92,11 @@ export function SimilarSection({ id }: { id: number }) {
             {t("similar.setCover")}
           </button>
         )}
-        <button type="button" className="btn" onClick={() => void run(() => commands.similarRemove(id))}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void run(() => commands.similarRemove(id))}
+        >
           {t("similar.remove")}
         </button>
         <button

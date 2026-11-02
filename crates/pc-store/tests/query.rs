@@ -528,3 +528,43 @@ fn pages_go_forward_backward_and_seek_without_gaps() {
         assert_eq!(after.items[0].id, forward[550]);
     }
 }
+
+/// Griglia raggruppata su 100.000 foto (20.000 gruppi da 5): prima pagina entro 1 s.
+#[test]
+fn grouped_first_page_on_100k_photos_within_one_second() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        seed(c, 100_000);
+        let groups: Vec<Vec<i64>> = (0..20_000)
+            .map(|g| (1..=5).map(|k| g * 5 + k).collect())
+            .collect();
+        pc_store::similar::apply_groups(c, &groups, "p")?;
+        Ok(())
+    })
+    .unwrap();
+    let f = LibraryFilter {
+        group_similar: true,
+        ..Default::default()
+    };
+    let started = Instant::now();
+    let page = s
+        .read(|c| query::page(c, &f, SortKey::CapturedDesc, None, 300))
+        .unwrap();
+    let elapsed = started.elapsed();
+    assert_eq!(page.items.len(), 300);
+    assert!(page.items.iter().all(|i| i.similar_count == Some(5)));
+    assert!(elapsed.as_millis() < 1000, "prima pagina in {elapsed:?}");
+    // Le pagine successive non ripetono i gruppi.
+    let second = s
+        .read(|c| query::page(c, &f, SortKey::CapturedDesc, page.next.as_ref(), 300))
+        .unwrap();
+    let groups: std::collections::HashSet<_> = page
+        .items
+        .iter()
+        .chain(&second.items)
+        .map(|i| i.similar_group)
+        .collect();
+    assert_eq!(groups.len(), 600);
+    assert_eq!(s.read(|c| query::grid_count(c, &f)).unwrap(), 20_000);
+}

@@ -110,7 +110,12 @@ const fullConfig = {
   ai: {
     ...config.ai,
     ignored_folder_names: [],
-    thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363, similar_photos: 0.8 },
+    thresholds: {
+      person_detection: 0.4,
+      face_detection: 0.8,
+      face_similarity: 0.363,
+      similar_photos: 0.8,
+    },
   },
   ui: { ...config.ui, double_click: "system" },
   external_apps: [],

@@ -373,7 +373,10 @@ mod tests {
         assert_eq!(cfg.ai.thresholds.person_detection, 0.4);
         assert_eq!(cfg.ai.thresholds.face_detection, 0.8);
         assert_eq!(cfg.ai.thresholds.face_similarity, 0.363);
-        assert_eq!(cfg.ai.thresholds.similar_photos, 0.80, "campo assente: predefinito");
+        assert_eq!(
+            cfg.ai.thresholds.similar_photos, 0.80,
+            "campo assente: predefinito"
+        );
         assert!(cfg.ai.ignored_folder_names.is_empty());
         assert!(cfg.external_apps.is_empty());
         assert_eq!(cfg.ui.double_click, "system");

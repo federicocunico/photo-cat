@@ -157,7 +157,11 @@ mod tests {
         }
         c.execute("DELETE FROM media_item WHERE id=1", []).unwrap();
         let cover: Option<i64> = c
-            .query_row("SELECT cover_media_id FROM similar_group WHERE id=1", [], |r| r.get(0))
+            .query_row(
+                "SELECT cover_media_id FROM similar_group WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(cover, None, "principale rimossa");
     }

@@ -74,7 +74,9 @@ pub fn semantic_neighbours(
     let total = store.read(|c| analysis::embedding_count(c, model))? as usize;
     let dims = target_vecs.values().next().map_or(512, Vec::len);
     // Indice in memoria per molte foto nuove (prima analisi), se il governor concede il budget.
-    let index_mb = ((total * dims * 4) as u64 * 3 / 2).div_ceil(1024 * 1024).max(1);
+    let index_mb = ((total * dims * 4) as u64 * 3 / 2)
+        .div_ceil(1024 * 1024)
+        .max(1);
     let permit = (targets.len() >= INDEX_FROM)
         .then(|| gov.acquire_timeout(index_mb, Some(std::time::Duration::from_secs(5))))
         .flatten();
@@ -88,7 +90,9 @@ pub fn semantic_neighbours(
                 return Err(AppError::cancelled());
             }
             let page = store.read(|c| analysis::embeddings(c, model, after, SCAN_BLOCK))?;
-            let Some(last) = page.last().map(|p| p.0) else { break };
+            let Some(last) = page.last().map(|p| p.0) else {
+                break;
+            };
             after = last;
             all.extend(page);
         }
@@ -118,7 +122,9 @@ pub fn semantic_neighbours(
             return Err(AppError::cancelled());
         }
         let page = store.read(|c| analysis::embeddings(c, model, after, SCAN_BLOCK))?;
-        let Some(last) = page.last().map(|p| p.0) else { break };
+        let Some(last) = page.last().map(|p| p.0) else {
+            break;
+        };
         after = last;
         for (id, v) in &target_vecs {
             let best = out.entry(*id).or_default();
@@ -163,9 +169,9 @@ impl ThumbLoader {
         if let Some(t) = self.loaded.get(&id) {
             return Ok(t.clone());
         }
-        if !self.keys.contains_key(&id) {
+        if let std::collections::hash_map::Entry::Vacant(slot) = self.keys.entry(id) {
             let f = store.read(|c| similar::facts(c, &[id]))?;
-            self.keys.insert(id, f.get(&id).and_then(|f| f.thumb.clone()));
+            slot.insert(f.get(&id).and_then(|f| f.thumb.clone()));
         }
         let t = self.rgb(id).map(|i| Arc::new(SsimThumb::from_rgb(&i)));
         if self.order.len() >= THUMB_CACHE {
@@ -234,18 +240,19 @@ pub fn run(
             // Raffica: stesso dispositivo entro la finestra, con un coseno più permissivo.
             if let (Some(dev), Some(t)) = (&f.device, f.instant_utc) {
                 let (dev, idc) = (dev.clone(), *id);
-                let near = store.read(move |c| {
-                    similar::burst_neighbours(c, idc, &dev, t, BURST_WINDOW_MS)
-                })?;
+                let near = store
+                    .read(move |c| similar::burst_neighbours(c, idc, &dev, t, BURST_WINDOW_MS))?;
                 if !near.is_empty() {
                     let mut ids = near.clone();
                     ids.push(*id);
                     let m = model.to_string();
                     let vecs = store.read(move |c| similar::embeddings_of(c, &m, &ids))?;
                     if let Some(v) = vecs.get(id) {
-                        candidates.extend(near.into_iter().filter(|n| {
-                            vecs.get(n).is_some_and(|w| cosine(v, w) >= COSINE_BURST)
-                        }));
+                        candidates.extend(
+                            near.into_iter().filter(|n| {
+                                vecs.get(n).is_some_and(|w| cosine(v, w) >= COSINE_BURST)
+                            }),
+                        );
                     }
                 }
             }
@@ -310,11 +317,7 @@ fn flush(
     edges: &mut Vec<(MediaId, MediaId, f32)>,
     done: &mut Vec<(MediaId, f32, f32)>,
 ) -> AppResult<()> {
-    let (e, d, k) = (
-        std::mem::take(edges),
-        std::mem::take(done),
-        key.to_string(),
-    );
+    let (e, d, k) = (std::mem::take(edges), std::mem::take(done), key.to_string());
     store.write(move |c| {
         similar::save_edges(c, &e)?;
         for (id, s, x) in &d {
@@ -368,10 +371,7 @@ pub fn plan(
     _params: &serde_json::Value,
 ) -> AppResult<pc_jobs::JobPlan> {
     Ok(pc_jobs::JobPlan {
-        phases: vec![pc_jobs::PhaseSpec::new(
-            crate::analyze::PHASE_SIMILAR,
-            1.0,
-        )],
+        phases: vec![pc_jobs::PhaseSpec::new(crate::analyze::PHASE_SIMILAR, 1.0)],
         min_memory_mb: 128,
         run: Box::new(move |ctx| {
             let phase = ctx.progress.phase(crate::analyze::PHASE_SIMILAR);

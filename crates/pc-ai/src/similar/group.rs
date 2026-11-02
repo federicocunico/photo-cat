@@ -265,14 +265,22 @@ mod tests {
     fn most_recent_correction_wins_a_conflict() {
         // A must B, B must C, poi A cannot C (più recente): la catena si interrompe.
         let c = Constraints {
-            links: vec![link(1, 2, true, 1), link(2, 3, true, 2), link(1, 3, false, 3)],
+            links: vec![
+                link(1, 2, true, 1),
+                link(2, 3, true, 2),
+                link(1, 3, false, 3),
+            ],
             ..Default::default()
         };
         let g = build_groups(&[], 0.8, &c);
         assert_eq!(g, vec![vec![2, 3]], "il must più vecchio cede");
         // Al contrario: il cannot è vecchio, il must più recente lo supera.
         let c = Constraints {
-            links: vec![link(1, 3, false, 1), link(1, 2, true, 2), link(2, 3, true, 3)],
+            links: vec![
+                link(1, 3, false, 1),
+                link(1, 2, true, 2),
+                link(2, 3, true, 3),
+            ],
             ..Default::default()
         };
         assert_eq!(build_groups(&[], 0.8, &c), vec![vec![1, 2, 3]]);

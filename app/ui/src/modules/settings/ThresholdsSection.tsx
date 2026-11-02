@@ -244,7 +244,10 @@ export function ThresholdsSection({
           />
         </label>
         {(pending.data ?? 0) > 0 && (
-          <div data-testid="similar-propose" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div
+            data-testid="similar-propose"
+            style={{ display: "flex", gap: 8, alignItems: "center" }}
+          >
             <span className="muted">{t("similar.propose")}</span>
             <button
               className="btn"

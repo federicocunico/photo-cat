@@ -29,7 +29,9 @@ pub async fn similar_group(app: AppHandle, media: MediaId) -> AppResult<Option<S
 #[specta::specta]
 pub async fn similar_remove(app: AppHandle, media: MediaId) -> AppResult<()> {
     blocking(app, move |_app, state| {
-        state.store.write(move |c| similar::remove_from_group(c, media))?;
+        state
+            .store
+            .write(move |c| similar::remove_from_group(c, media))?;
         regroup(state)
     })
     .await
@@ -43,7 +45,9 @@ pub async fn similar_group_together(app: AppHandle, ids: Vec<MediaId>) -> AppRes
         return Err(pc_core::AppError::invalid_input("servono almeno due foto"));
     }
     blocking(app, move |_app, state| {
-        state.store.write(move |c| similar::group_together(c, &ids))?;
+        state
+            .store
+            .write(move |c| similar::group_together(c, &ids))?;
         regroup(state)
     })
     .await
@@ -107,33 +111,7 @@ pub async fn similar_group_members(
 #[specta::specta]
 pub async fn similar_non_covers(app: AppHandle, filter: LibraryFilter) -> AppResult<Vec<MediaId>> {
     blocking(app, move |_app, state| {
-        Ok(state.store.read(|c| {
-            let f = LibraryFilter {
-                similar_only: true,
-                group_similar: false,
-                ..filter
-            };
-            let w = query::compile_filter(c, &f)?;
-            let sql = format!(
-                "WITH r AS (SELECT m.id, sm.group_id, sm.score,
-                    (g.cover_media_id = m.id) AS cover
-                  FROM media_item m
-                  LEFT JOIN media_dates d ON d.media_id = m.id
-                  LEFT JOIN media_tech t ON t.media_id = m.id
-                  JOIN similar_member sm ON sm.media_id = m.id
-                  JOIN similar_group g ON g.id = sm.group_id
-                  WHERE {}),
-                 keep AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY group_id
-                    ORDER BY cover DESC, score DESC, id) AS rn FROM r)
-                 SELECT id FROM keep WHERE rn > 1 ORDER BY id",
-                w.sql
-            );
-            let mut st = c.prepare(&sql)?;
-            let ids = st
-                .query_map(rusqlite::params_from_iter(w.args.iter()), |r| r.get(0))?
-                .collect::<Result<_, _>>()?;
-            Ok(ids)
-        })?)
+        Ok(state.store.read(|c| similar::non_covers(c, &filter))?)
     })
     .await
 }
@@ -218,8 +196,16 @@ mod tests {
         let cover = p.items.iter().find(|i| i.id == 2).unwrap();
         assert_eq!(cover.similar_count, Some(4));
         assert!(cover.similar_cover);
-        assert_eq!(query::count(&c, &all).unwrap(), 6, "il conteggio resta sulle foto");
-        assert_eq!(query::grid_count(&c, &all).unwrap(), 3, "elementi della griglia");
+        assert_eq!(
+            query::count(&c, &all).unwrap(),
+            6,
+            "il conteggio resta sulle foto"
+        );
+        assert_eq!(
+            query::grid_count(&c, &all).unwrap(),
+            3,
+            "elementi della griglia"
+        );
         // Filtro che include solo 3 foto del gruppo, principale esclusa.
         let partial = LibraryFilter {
             ids: Some(vec![1, 3, 4, 5]),
