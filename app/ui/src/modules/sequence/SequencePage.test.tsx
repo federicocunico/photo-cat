@@ -27,6 +27,8 @@ const item = (id: number, time: string, group: number, session: number): Sequenc
   device: group === XT5 ? "Fujifilm X-T5" : "Apple iPhone 17 Pro Max",
   session,
   tags: id === 1 ? ["Paesaggi"] : [],
+  similarGroup: null,
+  similarCover: false,
 });
 
 const items = [

@@ -147,6 +147,38 @@ export function BulkBar() {
         <button className="btn" disabled={busy} onClick={() => void run(() => select(true))}>
           {t("bulk.invert")}
         </button>
+        <button
+          className="btn"
+          disabled={busy}
+          data-testid="select-non-covers"
+          onClick={() =>
+            void run(async () => {
+              // Sulla selezione esplicita, altrimenti su tutti i risultati del filtro.
+              const explicit = selection.mode === "ids" && count > 0 ? [...selection.ids] : null;
+              const ids = await commands.similarNonCovers(
+                explicit ? { ...filter, ids: explicit } : filter,
+              );
+              setSelection(ids, ids[0] ?? null);
+            })
+          }
+        >
+          {t("similar.nonCovers")}
+        </button>
+        <button
+          className="btn"
+          disabled={busy || selection.mode !== "ids" || count < 2}
+          data-testid="group-together"
+          onClick={() =>
+            void run(async () => {
+              if (selection.mode !== "ids") return;
+              await commands.similarGroupTogether([...selection.ids]);
+              await qc.invalidateQueries({ queryKey: ["library"] });
+              await qc.invalidateQueries({ queryKey: ["similar-group"] });
+            })
+          }
+        >
+          {t("similar.together")}
+        </button>
         <button className="btn" onClick={() => setSelection([])}>
           {t("bulk.clear")}
         </button>

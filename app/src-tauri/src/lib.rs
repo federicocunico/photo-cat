@@ -18,6 +18,7 @@ mod places;
 mod recovery;
 mod sequence;
 mod settings;
+mod similar;
 mod state;
 mod tags;
 mod timeline;
@@ -110,6 +111,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::last_relink,
             library::library_page,
             library::library_count,
+            library::library_grid_count,
             library::library_facets,
             library::library_facet_values,
             library::library_selection,
@@ -180,6 +182,16 @@ pub fn bindings() -> Builder<tauri::Wry> {
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
             sequence::start_sequence_export,
+            similar::similar_group,
+            similar::similar_remove,
+            similar::similar_group_together,
+            similar::similar_dissolve,
+            similar::similar_set_cover,
+            similar::similar_group_members,
+            similar::similar_non_covers,
+            similar::similar_preview,
+            similar::similar_pending,
+            similar::start_similar_analysis,
             organize::export_fields,
             organize::start_export,
             organize::organize_preview,
@@ -391,6 +403,7 @@ pub fn run() {
                 face_policy: face_policy.clone(),
                 analysis_lock: Arc::default(),
                 app_store: Some(app_store.clone()),
+                thumbs: Some(ThumbCache::new(paths.thumbnails())),
             };
 
             let jobs = JobManager::new(
@@ -453,6 +466,11 @@ pub fn run() {
                     });
                     pc_jobs::bulk::plan_full(bulk_store.clone(), Some(r), Some(remover), p)
                 }),
+            );
+            let similar_deps = ai_deps.clone();
+            jobs.register(
+                pc_ai::similar::JOB_KIND,
+                Arc::new(move |p| pc_ai::similar::plan(similar_deps.clone(), p)),
             );
             let retune_deps = ai_deps.clone();
             jobs.register(

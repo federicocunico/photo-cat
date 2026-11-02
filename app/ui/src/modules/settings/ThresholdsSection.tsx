@@ -2,10 +2,11 @@
 // categorie CLIP (tassonomia), con anteprima dell'effetto calcolata dai
 // risultati salvati e applicazione senza rianalisi.
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   commands,
+  isTauri,
   type AiThresholds,
   type Settings,
   type Taxonomy,
@@ -19,6 +20,7 @@ const DEFAULTS = {
   person_detection: 0.4,
   face_detection: 0.8,
   face_similarity: 0.363,
+  similar_photos: 0.8,
   face_min_size_px: 40,
   group: 0.25,
 };
@@ -31,6 +33,7 @@ function thresholdsOf(cfg: Settings): Full {
     person_detection: t.person_detection ?? DEFAULTS.person_detection,
     face_detection: t.face_detection ?? DEFAULTS.face_detection,
     face_similarity: t.face_similarity ?? DEFAULTS.face_similarity,
+    similar_photos: t.similar_photos ?? DEFAULTS.similar_photos,
   };
 }
 
@@ -117,6 +120,12 @@ export function ThresholdsSection({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const th = thresholdsOf(cfg);
+  // Librerie analizzate prima dei gruppi di foto simili: l'analisi si propone, non parte da sola.
+  const pending = useQuery({
+    queryKey: ["similar-pending"],
+    queryFn: commands.similarPending,
+    enabled: isTauri(),
+  });
   const [impact, setImpact] = useState<ThresholdImpact | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -168,6 +177,7 @@ export function ThresholdsSection({
           person_detection: DEFAULTS.person_detection,
           face_detection: DEFAULTS.face_detection,
           face_similarity: DEFAULTS.face_similarity,
+          similar_photos: DEFAULTS.similar_photos,
         },
       },
     });
@@ -225,6 +235,34 @@ export function ThresholdsSection({
             onValid={(v) => setTh({ face_similarity: v ?? DEFAULTS.face_similarity })}
           />
         </label>
+        <label title={t("similar.thresholdHint")}>
+          {t("similar.threshold")}{" "}
+          <ThresholdInput
+            label={t("similar.threshold")}
+            value={th.similar_photos}
+            onValid={(v) => setTh({ similar_photos: v ?? DEFAULTS.similar_photos })}
+          />
+        </label>
+        {(pending.data ?? 0) > 0 && (
+          <div
+            data-testid="similar-propose"
+            style={{ display: "flex", gap: 8, alignItems: "center" }}
+          >
+            <span className="muted">{t("similar.propose")}</span>
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await commands.startSimilarAnalysis();
+                  setNotice(t("similar.started"));
+                })
+              }
+            >
+              {t("similar.start")}
+            </button>
+          </div>
+        )}
         {tax && (
           <table style={{ borderCollapse: "collapse", fontSize: 13 }}>
             <caption style={{ textAlign: "left", fontWeight: 600, padding: "6px 0" }}>
@@ -310,6 +348,12 @@ export function ThresholdsSection({
             {impact.personsAffectedEstimate > 0 && (
               <li>{t("thresholds.personsEstimate", { count: impact.personsAffectedEstimate })}</li>
             )}
+            <li data-testid="similar-preview">
+              {t("similar.preview", {
+                n: impact.similarGroups,
+                current: impact.similarGroupsCurrent,
+              })}
+            </li>
           </ul>
         )}
         {belowFloor > 0 && (

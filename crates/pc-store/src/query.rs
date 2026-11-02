@@ -55,6 +55,10 @@ pub struct LibraryFilter {
     pub folder: Option<FolderFilter>,
     /// Solo questi elementi (collegamenti dal riepilogo di un aggiornamento).
     pub ids: Option<Vec<MediaId>>,
+    /// Solo le foto che fanno parte di un gruppo di foto simili.
+    pub similar_only: bool,
+    /// Griglia raggruppata: un elemento per gruppo di foto simili (non cambia i conteggi).
+    pub group_similar: bool,
 }
 
 /// Filtro per cartella sul percorso dei file.
@@ -232,6 +236,12 @@ pub struct GridItem {
     /// Tag utente del file (per i chip colorati della griglia).
     pub tags: Vec<String>,
     pub excluded_at: Option<i64>,
+    /// Gruppo di foto simili della foto, se c'è.
+    pub similar_group: Option<i64>,
+    /// È la principale del suo gruppo.
+    pub similar_cover: bool,
+    /// Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta).
+    pub similar_count: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -385,6 +395,9 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         parts.push("m.status = ?".into());
         args.push(Value::Text(status.as_str().into()));
     }
+    if f.similar_only {
+        parts.push("m.id IN (SELECT media_id FROM similar_member)".into());
+    }
     if f.duplicates_only {
         parts.push(
             "m.content_hash IS NOT NULL AND EXISTS (SELECT 1 FROM media_item m2 WHERE m2.content_hash = m.content_hash AND m2.id <> m.id)"
@@ -418,6 +431,26 @@ pub fn page_at(
     limit: u32,
 ) -> StoreResult<Page> {
     let mut w = compile_filter(c, f)?;
+    // Griglia raggruppata: i risultati filtrati diventano una CTE; di ogni gruppo resta un
+    // rappresentante (la principale se è nei risultati, altrimenti la migliore presente).
+    let (with, count_column) = if f.group_similar {
+        let with = format!(
+            "WITH f AS (SELECT m.id {FROM} WHERE {}),
+             rep AS (SELECT sm.group_id, COUNT(*) AS cnt,
+                COALESCE(MAX(CASE WHEN g.cover_media_id = sm.media_id THEN sm.media_id END),
+                  (SELECT sm2.media_id FROM similar_member sm2 JOIN f f2 ON f2.id = sm2.media_id
+                   WHERE sm2.group_id = sm.group_id ORDER BY sm2.score DESC, sm2.media_id LIMIT 1)) AS rep_id
+              FROM similar_member sm JOIN f ON f.id = sm.media_id
+              JOIN similar_group g ON g.id = sm.group_id GROUP BY sm.group_id) ",
+            w.sql
+        );
+        w.sql = "m.id IN (SELECT id FROM f) AND (m.id NOT IN (SELECT media_id FROM similar_member)
+                 OR m.id IN (SELECT rep_id FROM rep))"
+            .into();
+        (with, "(SELECT cnt FROM rep WHERE rep.rep_id = m.id)")
+    } else {
+        (String::new(), "NULL")
+    };
     let excluded = f.excluded_from.map(|id| {
         format!(
             "(SELECT excluded_at FROM catalog_exclusion WHERE catalog_id={id} AND media_id=m.id)"
@@ -456,12 +489,15 @@ pub fn page_at(
     };
     let limit = limit.clamp(1, 2000);
     let sql = format!(
-        "SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
+        "{with}SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
                 (SELECT count(*) FROM face fc WHERE fc.media_id = m.id),
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
-                 WHERE mt.media_id = m.id), {excluded_column}
+                 WHERE mt.media_id = m.id), {excluded_column},
+                (SELECT group_id FROM similar_member WHERE media_id = m.id),
+                EXISTS (SELECT 1 FROM similar_group g WHERE g.cover_media_id = m.id),
+                {count_column}
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ? OFFSET ?",
         w.sql
     );
@@ -486,6 +522,9 @@ pub fn page_at(
                 analyzed: r.get(9)?,
                 tags: split_tags(r.get(11)?),
                 excluded_at: r.get(12)?,
+                similar_group: r.get(13)?,
+                similar_cover: r.get(14)?,
+                similar_count: r.get(15)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -663,6 +702,26 @@ pub fn ids(c: &Connection, f: &LibraryFilter) -> StoreResult<Vec<MediaId>> {
         .query_map(rusqlite::params_from_iter(w.args.iter()), |r| r.get(0))?
         .collect::<Result<_, _>>()?;
     Ok(rows)
+}
+
+/// Elementi della griglia: le foto, oppure con la griglia raggruppata un elemento per gruppo di
+/// foto simili (i conteggi dei risultati restano sulle foto: vedi [`count`]).
+pub fn grid_count(c: &Connection, f: &LibraryFilter) -> StoreResult<i64> {
+    let photos = count(c, f)?;
+    if !f.group_similar {
+        return Ok(photos);
+    }
+    let w = compile_filter(c, f)?;
+    let hidden: i64 = c.query_row(
+        &format!(
+            "SELECT COALESCE(SUM(n - 1), 0) FROM (SELECT COUNT(*) AS n FROM similar_member sm
+             WHERE sm.media_id IN (SELECT m.id {FROM} WHERE {}) GROUP BY sm.group_id)",
+            w.sql
+        ),
+        rusqlite::params_from_iter(w.args.iter()),
+        |r| r.get(0),
+    )?;
+    Ok(photos - hidden)
 }
 
 pub fn count(c: &Connection, f: &LibraryFilter) -> StoreResult<i64> {

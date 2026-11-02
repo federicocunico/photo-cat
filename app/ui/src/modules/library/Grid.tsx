@@ -13,7 +13,7 @@ import { Icon } from "../../components/icons";
 import { useQuery } from "@tanstack/react-query";
 import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
-import { useLibraryCount } from "../../lib/latest";
+import { latestOnly, retryUnlessSuperseded, useLibraryCount } from "../../lib/latest";
 import {
   clickSelect,
   emptyFilter,
@@ -29,6 +29,7 @@ import {
   type Selection,
 } from "../../store/library";
 import { useGridPages, windowAction } from "./gridPages";
+import { byBase, displayTotal, locate, toBase, type Expansion } from "./similarView";
 import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
@@ -78,10 +79,16 @@ function Thumb({
   onDoubleClick,
   onMenu,
   tagColor,
+  group,
+  cover,
 }: {
   item: GridItem;
   size: number;
   selected: boolean;
+  /** Elemento che rappresenta un gruppo di foto simili (griglia raggruppata). */
+  group?: { count: number; expanded: boolean; onToggle: () => void };
+  /** Foto principale di un gruppo aperto. */
+  cover?: boolean;
   onClick: (e: MouseEvent) => void;
   onDoubleClick?: () => void;
   /** Menu contestuale alle coordinate indicate (clic destro, tasto Menu, Maiusc+F10). */
@@ -123,7 +130,7 @@ function Thumb({
         cursor: "pointer",
         textAlign: "left",
         background: "var(--pc-panel)",
-        border: `2px solid ${selected ? "var(--pc-accent)" : "var(--pc-raised)"}`,
+        border: `2px solid ${selected ? "var(--pc-accent)" : cover ? "var(--pc-warn)" : "var(--pc-raised)"}`,
         color: "inherit",
       }}
     >
@@ -185,6 +192,59 @@ function Thumb({
               : t("library.queuedBadge")}
         </span>
         <ThumbTags tags={item.tags} color={tagColor} />
+        {group && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-expanded={group.expanded}
+            aria-label={t(group.expanded ? "similar.collapse" : "similar.expand", {
+              count: group.count,
+            })}
+            data-testid={`group-badge-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              group.onToggle();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                group.onToggle();
+              }
+            }}
+            style={{
+              position: "absolute",
+              left: 6,
+              bottom: 6,
+              padding: "1px 7px",
+              borderRadius: 10,
+              background: "var(--pc-accent)",
+              color: "var(--pc-on-accent, #fff)",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {group.expanded ? "−" : ""}
+            {group.count}
+          </span>
+        )}
+        {cover && (
+          <span
+            data-testid={`cover-${item.id}`}
+            style={{
+              position: "absolute",
+              left: 6,
+              top: 30,
+              padding: "1px 6px",
+              borderRadius: 4,
+              background: "rgba(20,20,22,0.85)",
+              color: "var(--pc-warn)",
+              fontSize: 11,
+            }}
+          >
+            {t("similar.cover")}
+          </span>
+        )}
         {item.excludedAt != null && (
           <span
             style={{
@@ -289,13 +349,68 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const actionError = openWith.error || place.error;
 
   // Punto di partenza della finestra di pagine: cambia solo con un salto lontano.
-  const viewKey = JSON.stringify([filter, sort]);
+  // Griglia raggruppata: un elemento per gruppo di foto simili (i conteggi restano sulle foto).
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const viewFilter = useMemo(() => ({ ...filter, groupSimilar }), [filter, groupSimilar]);
+  const viewKey = JSON.stringify([viewFilter, sort]);
   const [anchor, setAnchor] = useState({ key: viewKey, at: 0 });
   const at = anchor.key === viewKey ? anchor.at : 0;
-  const { pages, start, items } = useGridPages(filter, sort, at);
+  const { pages, start, items } = useGridPages(viewFilter, sort, at);
   const count = useLibraryCount(filter);
-  const total = Math.max(count.data ?? 0, start + items.length);
+  const gridCount = useQuery({
+    queryKey: ["library-grid-count", viewFilter],
+    queryFn: () =>
+      latestOnly("library-grid-count", (tag) => commands.libraryGridCount(viewFilter, tag)),
+    enabled: isTauri() && groupSimilar,
+    retry: retryUnlessSuperseded,
+  });
+  const baseTotal = Math.max(
+    (groupSimilar ? gridCount.data : count.data) ?? 0,
+    start + items.length,
+  );
+  // Gruppi aperti: le loro foto compaiono dopo l'elemento che li rappresenta.
+  const [opened, setOpened] = useState<{ key: string; list: Expansion[] }>({
+    key: viewKey,
+    list: [],
+  });
+  const expansions = useMemo(
+    () => (opened.key === viewKey && groupSimilar ? byBase(opened.list) : []),
+    [opened, viewKey, groupSimilar],
+  );
+  const total = displayTotal(baseTotal, expansions);
+  const at_ = (d: number): { item?: GridItem; member?: boolean } => {
+    const s = locate(d, expansions);
+    if ("member" in s) return { item: s.member, member: true };
+    return { item: s.base >= start ? items[s.base - start] : undefined };
+  };
   const order = useMemo(() => items.map((i) => i.id), [items]);
+  const toggleGroup = (it: GridItem, base: number) => {
+    const group = it.similarGroup;
+    if (group == null) return;
+    const list = opened.key === viewKey ? opened.list : [];
+    if (list.some((e) => e.group === group)) {
+      setOpened({ key: viewKey, list: list.filter((e) => e.group !== group) });
+      return;
+    }
+    void commands.similarGroupMembers(group, filter, sort).then((page) => {
+      // La principale resta al suo posto: dopo di lei le altre foto del gruppo.
+      const members = page.items.filter((m) => m.id !== it.id);
+      setOpened((o) => ({
+        key: viewKey,
+        list: [...(o.key === viewKey ? o.list : []), { group, base, members }],
+      }));
+    });
+  };
+  // Selezionare un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
+  const selectGroup = (it: GridItem) => {
+    if (it.similarGroup == null) return;
+    void commands.similarGroupMembers(it.similarGroup, filter, sort).then((page) =>
+      setSelection(
+        page.items.map((m) => m.id),
+        it.id,
+      ),
+    );
+  };
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -326,14 +441,17 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   useEffect(() => {
     if (pages.isFetching || !pages.isSuccess) return;
     const action = windowAction(
-      { from: firstRow * cols, to: (lastRow + 1) * cols },
+      {
+        from: toBase(firstRow * cols, expansions),
+        to: toBase(Math.min((lastRow + 1) * cols, total) - 1, expansions) + 1,
+      },
       { start, len: items.length, hasNext: pages.hasNextPage, hasPrev: pages.hasPreviousPage },
       cols * 3,
     );
     if (action === "next") void pages.fetchNextPage();
     else if (action === "prev") void pages.fetchPreviousPage();
     else if (action) setAnchor({ key: viewKey, at: action.seek });
-  }, [firstRow, lastRow, cols, start, items.length, pages, viewKey]);
+  }, [firstRow, lastRow, cols, start, items.length, pages, viewKey, expansions, total]);
 
   const explicit = selIds(selection);
   const onClick = (id: number) => (e: MouseEvent) => {
@@ -392,7 +510,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
-      aria-label={t("library.count", { n: fmtInt(total) })}
+      aria-label={t("library.count", { n: fmtInt(count.data ?? total) })}
       role="region"
       onPointerDown={(e) => {
         if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
@@ -460,7 +578,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           const first = row.index * cols;
           const cells = [];
           for (let i = first; i < Math.min(first + cols, total); i++) {
-            const it = i >= start ? items[i - start] : undefined;
+            const { item: it, member } = at_(i);
+            const base = toBase(i, expansions);
+            const grouped =
+              groupSimilar && !member && it?.similarGroup != null && (it.similarCount ?? 1) > 1;
+            const open = grouped && expansions.some((e) => e.group === it?.similarGroup);
             cells.push(
               it ? (
                 <Thumb
@@ -468,7 +590,22 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                   item={it}
                   size={cell}
                   selected={selHas(selection, it.id)}
-                  onClick={onClick(it.id)}
+                  group={
+                    grouped
+                      ? {
+                          count: it.similarCount ?? 1,
+                          expanded: open,
+                          onToggle: () => toggleGroup(it, base),
+                        }
+                      : undefined
+                  }
+                  cover={open && it.similarCover}
+                  onClick={
+                    grouped && !open
+                      ? (e) =>
+                          e.ctrlKey || e.metaKey || e.shiftKey ? onClick(it.id)(e) : selectGroup(it)
+                      : onClick(it.id)
+                  }
                   onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
                   onMenu={onMenu(it.id)}
                   tagColor={tagColor}

@@ -282,6 +282,20 @@ pub async fn library_count(
     .await
 }
 
+/// Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili).
+#[tauri::command]
+#[specta::specta]
+pub async fn library_grid_count(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    request: Option<RequestTag>,
+) -> AppResult<Option<i64>> {
+    crate::state::blocking(app, move |_app, state| {
+        gated(state, request.as_ref(), |c| query::grid_count(c, &filter))
+    })
+    .await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn library_facets(

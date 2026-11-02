@@ -25,6 +25,9 @@ const item = (i: number): GridItem =>
     analyzed: true,
     tags: [],
     excludedAt: null,
+    similarGroup: null,
+    similarCover: false,
+    similarCount: null,
   }) as GridItem;
 
 /** Libreria simulata: il cursore è la posizione dell'elemento. */

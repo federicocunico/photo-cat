@@ -115,6 +115,7 @@ fn budget_below_smallest_model_disables_ai_and_import_completes() {
         face_policy: Arc::new(pc_ai::face_policy::FacePolicy::new(true)),
         analysis_lock: Arc::default(),
         app_store: None,
+        thumbs: None,
     };
     let r = deps.runnable_models();
     assert!(r.is_empty() && r.over_budget, "{r:?}");

@@ -13,6 +13,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v4.sql"),
     include_str!("schema_v5.sql"),
     include_str!("schema_v6.sql"),
+    include_str!("schema_v7.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -115,6 +116,55 @@ pub(crate) fn migrate_to(conn: &mut Connection, version: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrate_v6_adds_similar_groups_with_cascading_members() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 6);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES
+                (1,'a.jpg','a.jpg','jpg',1,1,1,1),(2,'b.jpg','b.jpg','jpg',1,1,1,1);",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        let n: i64 = c
+            .query_row("SELECT count(*) FROM media_item", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 2, "foto esistenti conservate");
+        c.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             INSERT INTO similar_group(id,cover_media_id,params,updated_at) VALUES (1,1,'{}',0);
+             INSERT INTO similar_member(media_id,group_id,score) VALUES (1,1,0.9),(2,1,0.8);
+             INSERT INTO similar_edge(a,b,ssim) VALUES (1,2,0.91);
+             INSERT INTO similar_link(a,b,kind,created_at) VALUES (1,2,'cannot',0);
+             INSERT INTO similar_done(media_id,params) VALUES (1,'p'),(2,'p');
+             INSERT INTO similar_dissolved(media_id,token,created_at) VALUES (2,5,0);
+             DELETE FROM media_item WHERE id=2;",
+        )
+        .unwrap();
+        for (table, expected) in [
+            ("similar_member", 1),
+            ("similar_edge", 0),
+            ("similar_link", 0),
+            ("similar_done", 1),
+            ("similar_dissolved", 0),
+        ] {
+            let n: i64 = c
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, expected, "{table}");
+        }
+        c.execute("DELETE FROM media_item WHERE id=1", []).unwrap();
+        let cover: Option<i64> = c
+            .query_row(
+                "SELECT cover_media_id FROM similar_group WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cover, None, "principale rimossa");
+    }
 
     #[test]
     fn migrate_v5_keeps_catalog_members() {

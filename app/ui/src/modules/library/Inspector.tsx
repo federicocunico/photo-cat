@@ -9,6 +9,7 @@ import { thumbUrl } from "./thumbUrl";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { PlaceEditor } from "./PlaceEditor";
+import { SimilarSection } from "./SimilarSection";
 import { useLabelName } from "./labelName";
 import { CategoryPicker } from "./CategoryPicker";
 
@@ -285,6 +286,7 @@ export function Inspector() {
           source={d.location?.source ?? null}
         />
       </section>
+      <SimilarSection id={d.item.id} />
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h3 className="section-title">{t("library.inspector.ai")}</h3>
         {ai.length === 0 && d.peopleCount == null && (

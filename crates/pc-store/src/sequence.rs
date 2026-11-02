@@ -41,6 +41,10 @@ pub struct SequenceItem {
     pub session: i64,
     /// Tag del file che appartengono al set indicato.
     pub tags: Vec<String>,
+    /// Gruppo di foto simili della foto, se c'è.
+    pub similar_group: Option<i64>,
+    /// È la principale del suo gruppo.
+    pub similar_cover: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -153,7 +157,9 @@ pub fn page(
         "{} SELECT q.id, m.name, m.thumb, q.instant_utc, COALESCE(d.local_offset_min, 0), d.instant_presumed,
                   d.group_id, g.device, q.session,
                   (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
-                    WHERE mt.media_id = q.id AND tg.name IN (SELECT value FROM json_each(?)))
+                    WHERE mt.media_id = q.id AND tg.name IN (SELECT value FROM json_each(?))),
+                  (SELECT group_id FROM similar_member WHERE media_id = q.id),
+                  EXISTS (SELECT 1 FROM similar_group sg WHERE sg.cover_media_id = q.id)
            FROM q JOIN media_item m ON m.id = q.id JOIN media_dates d ON d.media_id = q.id
            LEFT JOIN source_group g ON g.id = d.group_id
            WHERE {cond}
@@ -180,6 +186,8 @@ pub fn page(
                 tags: tags
                     .map(|s| s.split(char::from(0x1f)).map(str::to_string).collect())
                     .unwrap_or_default(),
+                similar_group: r.get(10)?,
+                similar_cover: r.get(11)?,
             })
         })?
         .collect::<Result<_, _>>()?;
