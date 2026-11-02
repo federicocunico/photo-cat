@@ -1,6 +1,5 @@
-import { QueryView } from "../../components/feedback/QueryView";
-import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
@@ -15,7 +14,10 @@ import {
   type UndatedItem,
 } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
-import { clickSelect, useLibrary } from "../../store/library";
+import { clickSelect, selIds, useLibrary } from "../../store/library";
+import { collapseLoaded } from "../library/similarView";
+
+const EMPTY: number[] = [];
 import { offsetText, parseShift, shiftText, timeOf, useSequence } from "../../store/sequence";
 import { deviceColorVar } from "../../theme/tokens";
 import { thumbUrl } from "../library/thumbUrl";
@@ -56,7 +58,10 @@ function Toolbar({ gap }: { gap: number }) {
   const qc = useQueryClient();
   const scope = useSequence((s) => s.scope);
   const setScope = useSequence((s) => s.setScope);
-  const libSelection = useLibrary((s) => s.selected);
+  // Una selezione "tutti i risultati" della Libreria non diventa un elenco di id qui.
+  const libSelection = useLibrary((s) => selIds(s.selection)) ?? EMPTY;
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const setGroupSimilar = useLibrary((s) => s.setGroupSimilar);
   const tags = useTagOverview().data;
   const set = activeSet(tags);
   const catalogs = useQuery({
@@ -67,93 +72,96 @@ function Toolbar({ gap }: { gap: number }) {
   const value =
     scope.scope === "catalog" ? `c${scope.id}` : scope.scope === "selection" ? "sel" : "lib";
   return (
-    <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 14,
+        padding: "10px 16px",
+        borderBottom: "1px solid var(--pc-border)",
+        background: "var(--pc-toolbar)",
+      }}
+    >
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {t("sequence.scope")}
+        <select
+          className="field"
+          value={value}
+          onChange={(e) => {
+            const v = e.target.value;
+            const next: SequenceScope =
+              v === "lib"
+                ? { scope: "library" }
+                : v === "sel"
+                  ? { scope: "selection", ids: libSelection }
+                  : { scope: "catalog", id: Number(v.slice(1)) };
+            setScope(next);
+          }}
+        >
+          <option value="lib">{t("sequence.scopeLibrary")}</option>
+          {catalogs.data?.map(({ catalog: c, items }) => (
+            <option key={c.id} value={`c${c.id}`}>
+              {t("sequence.scopeCatalog", { name: c.name, count: items })}
+            </option>
+          ))}
+          <option value="sel" disabled={!libSelection.length && scope.scope !== "selection"}>
+            {t("sequence.scopeSelection", {
+              count: scope.scope === "selection" ? scope.ids.length : libSelection.length,
+            })}
+          </option>
+        </select>
+      </label>
+      <span className="muted">
+        {t("sequence.order")}{" "}
+        <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
+      </span>
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={groupSimilar}
+          onChange={(e) => setGroupSimilar(e.target.checked)}
+        />
+        {t("similar.group")}
+      </label>
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {t("sequence.gap")}
+        <input
+          className="field"
+          type="number"
+          min={1}
+          aria-label={t("sequence.gap")}
+          defaultValue={gap}
+          key={gap}
+          style={{ width: 72 }}
+          onBlur={(e) => {
+            const n = Number(e.target.value);
+            if (n > 0 && n !== gap) void commands.setSessionGap(n).then(() => refreshSequence(qc));
+          }}
+        />
+      </label>
+      {set && (
         <div
+          role="group"
+          aria-label={t("sequence.hotkeys")}
           style={{
+            marginLeft: "auto",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
-            gap: 14,
-            padding: "10px 16px",
-            borderBottom: "1px solid var(--pc-border)",
-            background: "var(--pc-toolbar)",
+            gap: 8,
           }}
         >
-          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {t("sequence.scope")}
-            <select
-              className="field"
-              value={value}
-              onChange={(e) => {
-                const v = e.target.value;
-                const next: SequenceScope =
-                  v === "lib"
-                    ? { scope: "library" }
-                    : v === "sel"
-                      ? { scope: "selection", ids: libSelection }
-                      : { scope: "catalog", id: Number(v.slice(1)) };
-                setScope(next);
-              }}
-            >
-              <option value="lib">{t("sequence.scopeLibrary")}</option>
-              {catalogs.data?.map(({ catalog: c, items }) => (
-                <option key={c.id} value={`c${c.id}`}>
-                  {t("sequence.scopeCatalog", { name: c.name, count: items })}
-                </option>
-              ))}
-              <option value="sel" disabled={!libSelection.length && scope.scope !== "selection"}>
-                {t("sequence.scopeSelection", {
-                  count: scope.scope === "selection" ? scope.ids.length : libSelection.length,
-                })}
-              </option>
-            </select>
-          </label>
-          <span className="muted">
-            {t("sequence.order")}{" "}
-            <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
-          </span>
-          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {t("sequence.gap")}
-            <input
-              className="field"
-              type="number"
-              min={1}
-              aria-label={t("sequence.gap")}
-              defaultValue={gap}
-              key={gap}
-              style={{ width: 72 }}
-              onBlur={(e) => {
-                const n = Number(e.target.value);
-                if (n > 0 && n !== gap)
-                  void commands.setSessionGap(n).then(() => refreshSequence(qc));
-              }}
-            />
-          </label>
-          {set && (
-            <div
-              role="group"
-              aria-label={t("sequence.hotkeys")}
-              style={{
-                marginLeft: "auto",
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span className="muted">{t("sequence.activeSet", { name: set.name })}</span>
-              {set.tags.map((x) => (
-                <span key={x.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <kbd className="mono">{x.key}</kbd>
-                  <TagChip name={x.name} color={colorOf(tags, x.name)} />
-                </span>
-              ))}
-            </div>
-          )}
+          <span className="muted">{t("sequence.activeSet", { name: set.name })}</span>
+          {set.tags.map((x) => (
+            <span key={x.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <kbd className="mono">{x.key}</kbd>
+              <TagChip name={x.name} color={colorOf(tags, x.name)} />
+            </span>
+          ))}
         </div>
       )}
-    </QueryView>
+    </div>
   );
 }
 
@@ -164,9 +172,12 @@ function Card({
   tagColor,
   onClick,
   onDropUndated,
+  group,
 }: {
   item: SequenceItem;
   selected: boolean;
+  /** Gruppo di foto simili rappresentato (numero di foto, aperto o chiuso). */
+  group?: { count: number; open: boolean; onToggle: () => void };
   color: string;
   tagColor: (n: string) => string;
   onClick: (e: MouseEvent) => void;
@@ -231,6 +242,42 @@ function Card({
             <TagChip name={item.tags[0]} color={tagColor(item.tags[0])} compact />
           </span>
         )}
+        {group && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-expanded={group.open}
+            aria-label={t(group.open ? "similar.collapse" : "similar.expand", {
+              count: group.count,
+            })}
+            data-testid={`seq-group-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              group.onToggle();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                group.onToggle();
+              }
+            }}
+            style={{
+              position: "absolute",
+              right: 6,
+              top: 6,
+              padding: "1px 7px",
+              borderRadius: 10,
+              background: "var(--pc-accent)",
+              color: "var(--pc-on-accent, #fff)",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {group.open ? "−" : ""}
+            {group.count}
+          </span>
+        )}
       </div>
       <div aria-hidden="true" style={{ height: 4, background: color }} />
       <div
@@ -289,19 +336,38 @@ function SessionsGrid({
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL + GAP)));
+  // "Raggruppa foto simili" (stessa preferenza della Libreria): un elemento per gruppo.
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const shown = useMemo(
+    () =>
+      groupSimilar
+        ? collapseLoaded(items, open)
+        : items.map((item) => ({ item, count: null as number | null })),
+    [items, open, groupSimilar],
+  );
+  const counts = useMemo(() => new Map(shown.map((s) => [s.item.id, s.count])), [shown]);
+  const toggle = (g: number) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
   const rows = useMemo(() => {
     const out: Row[] = [];
     let i = 0;
+    const visible = shown.map((s) => s.item);
     for (const s of sessions) {
       const members: SequenceItem[] = [];
-      while (i < items.length && items[i].session === s.index) members.push(items[i++]);
-      if (!members.length && i >= items.length) break;
+      while (i < visible.length && visible[i].session === s.index) members.push(visible[i++]);
+      if (!members.length && i >= visible.length) break;
       out.push({ kind: "header", session: s });
       for (let k = 0; k < members.length; k += cols)
         out.push({ kind: "cards", items: members.slice(k, k + cols) });
     }
     return out;
-  }, [sessions, items, cols]);
+  }, [sessions, shown, cols]);
   const order = useMemo(() => items.map((i) => i.id), [items]);
   const color = (g: number | null) =>
     deviceColorVar(
@@ -363,7 +429,7 @@ function SessionsGrid({
                   <BusyButton
                     className="btn"
                     style={{ marginLeft: "auto" }}
-                    onClick={async () => await selectSession(row.session.index)}
+                    onClick={() => selectSession(row.session.index)}
                   >
                     {t("sequence.selectSession")}
                   </BusyButton>
@@ -377,6 +443,15 @@ function SessionsGrid({
                     color={color(it.groupId)}
                     tagColor={(n) => colorOf(tags, n)}
                     onDropUndated={(media) => onPlace(media, it.id)}
+                    group={
+                      counts.get(it.id) != null && it.similarGroup != null
+                        ? {
+                            count: counts.get(it.id)!,
+                            open: open.has(it.similarGroup),
+                            onToggle: () => toggle(it.similarGroup!),
+                          }
+                        : undefined
+                    }
                     onClick={(e) =>
                       setSelection(
                         clickSelect(order, selected, focused, it.id, {
@@ -454,7 +529,7 @@ function Undated({
                 style={{ minHeight: 26, fontSize: 12, padding: "0 6px" }}
                 onClick={() => {
                   setMenu(u.id);
-                  return setAfter(String(focused ?? candidates[0]?.id ?? ""));
+                  setAfter(String(focused ?? candidates[0]?.id ?? ""));
                 }}
               >
                 {t("sequence.placeAfter")}
@@ -488,7 +563,7 @@ function Undated({
             disabled={!after}
             onClick={() => {
               onPlace(menu, Number(after));
-              return setMenu(null);
+              setMenu(null);
             }}
           >
             {t("sequence.place")}
@@ -671,11 +746,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           </div>
         );
       })}
-      <BusyButton
-        className="btn"
-        disabled={selected.length !== 2}
-        onClick={async () => await align()}
-      >
+      <BusyButton className="btn" disabled={selected.length !== 2} onClick={() => align()}>
         {t("sequence.align")}
       </BusyButton>
       {selected.length !== 2 && (
@@ -695,16 +766,12 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           disabled={!dirty.length}
           onClick={() => {
             setStaged({});
-            return setPreviews({});
+            setPreviews({});
           }}
         >
           {t("sequence.discard")}
         </BusyButton>
-        <BusyButton
-          className="btn btn-primary"
-          disabled={!dirty.length}
-          onClick={async () => await apply()}
-        >
+        <BusyButton className="btn btn-primary" disabled={!dirty.length} onClick={() => apply()}>
           {t("sequence.apply", { count: dirty.length })}
         </BusyButton>
       </div>
@@ -773,7 +840,10 @@ export function SequencePage() {
         sessions: o.sessions.length,
       });
   }, [o, setStats]);
-  useTagHotkeys(() => useSequence.getState().selected, view === "sequence");
+  useTagHotkeys(() => {
+    const ids = useSequence.getState().selected;
+    return { target: { kind: "ids", ids }, count: ids.length };
+  }, view === "sequence");
   useEffect(() => {
     if (view !== "sequence") return;
     const onKey = (e: KeyboardEvent) => {
@@ -804,105 +874,84 @@ export function SequencePage() {
       setError(errorText(e));
     }
   };
-  if (view === "export")
-    return (
-      <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
-        {() => (
-          <QueryView query={pages} enabled={isTauri()} isEmpty={() => false}>
-            {() => <SequenceExport />}
-          </QueryView>
-        )}
-      </QueryView>
-    );
+  if (view === "export") return <SequenceExport />;
   return (
-    <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <QueryView query={pages} enabled={isTauri()} isEmpty={() => false}>
-          {() => (
-            <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
-              <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                <Toolbar gap={o?.gapMin ?? 120} />
-                {o?.suggestions.map((s) => {
-                  const g = o.groups.find((x) => x.id === s.group);
-                  return (
-                    <div
-                      key={s.group}
-                      role="alert"
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 16px",
-                        background: "var(--pc-warn-bg)",
-                        color: "var(--pc-warn)",
-                        borderBottom: "1px solid var(--pc-border)",
-                      }}
-                    >
-                      <span style={{ flex: 1, color: "var(--pc-text)" }}>
-                        {t("sequence.suggestion", {
-                          device: groupName(g, t),
-                          count: s.count,
-                          current: offsetText(s.currentOffsetMin),
-                          offset: offsetText(s.offsetMin),
-                        })}
-                      </span>
-                      <BusyButton
-                        className="btn btn-primary"
-                        onClick={async () =>
-                          await commands
-                            .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
-                            .then(() => refreshSequence(qc))
-                            .catch((e) => setError(errorText(e)))
-                        }
-                      >
-                        {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
-                      </BusyButton>
-                      <BusyButton
-                        className="btn"
-                        onClick={async () =>
-                          await commands
-                            .ignoreTzSuggestion(s.group, s.offsetMin)
-                            .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
-                        }
-                      >
-                        {t("sequence.ignore")}
-                      </BusyButton>
-                    </div>
-                  );
+    <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
+      <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <Toolbar gap={o?.gapMin ?? 120} />
+        {o?.suggestions.map((s) => {
+          const g = o.groups.find((x) => x.id === s.group);
+          return (
+            <div
+              key={s.group}
+              role="alert"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 16px",
+                background: "var(--pc-warn-bg)",
+                color: "var(--pc-warn)",
+                borderBottom: "1px solid var(--pc-border)",
+              }}
+            >
+              <span style={{ flex: 1, color: "var(--pc-text)" }}>
+                {t("sequence.suggestion", {
+                  device: groupName(g, t),
+                  count: s.count,
+                  current: offsetText(s.currentOffsetMin),
+                  offset: offsetText(s.offsetMin),
                 })}
-                {error && (
-                  <p role="alert" style={{ margin: "8px 16px" }}>
-                    {error}
-                  </p>
-                )}
-                {o && !o.total && !o.undated.length ? (
-                  <p className="muted" style={{ padding: 32 }}>
-                    {t("sequence.empty")}
-                  </p>
-                ) : (
-                  <SessionsGrid
-                    sessions={o?.sessions ?? []}
-                    items={items}
-                    groups={o?.groups ?? []}
-                    hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
-                    loadMore={() => void pages.fetchNextPage()}
-                    onPlace={(m, a) => void place(m, a)}
-                  />
-                )}
-                <Undated
-                  items={o?.undated ?? []}
-                  candidates={items}
-                  onPlace={(m, a) => void place(m, a)}
-                />
-              </section>
-              <SourcesPanel groups={o?.groups ?? []} />
-              {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
+              </span>
+              <BusyButton
+                className="btn btn-primary"
+                onClick={() =>
+                  void commands
+                    .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
+                    .then(() => refreshSequence(qc))
+                    .catch((e) => setError(errorText(e)))
+                }
+              >
+                {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
+              </BusyButton>
+              <BusyButton
+                className="btn"
+                onClick={() =>
+                  void commands
+                    .ignoreTzSuggestion(s.group, s.offsetMin)
+                    .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
+                }
+              >
+                {t("sequence.ignore")}
+              </BusyButton>
             </div>
-          )}
-        </QueryView>
-      )}
-    </QueryView>
+          );
+        })}
+        {error && (
+          <p role="alert" style={{ margin: "8px 16px" }}>
+            {error}
+          </p>
+        )}
+        {o && !o.total && !o.undated.length ? (
+          <p className="muted" style={{ padding: 32 }}>
+            {t("sequence.empty")}
+          </p>
+        ) : (
+          <SessionsGrid
+            sessions={o?.sessions ?? []}
+            items={items}
+            groups={o?.groups ?? []}
+            hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
+            loadMore={() => void pages.fetchNextPage()}
+            onPlace={(m, a) => void place(m, a)}
+          />
+        )}
+        <Undated items={o?.undated ?? []} candidates={items} onPlace={(m, a) => void place(m, a)} />
+      </section>
+      <SourcesPanel groups={o?.groups ?? []} />
+      {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
+    </div>
   );
 }
 

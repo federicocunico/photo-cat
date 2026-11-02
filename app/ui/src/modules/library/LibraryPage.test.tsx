@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import "../../test/layoutMock";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
-import { clickSelect, emptyFilter, useLibrary } from "../../store/library";
+import {
+  clickSelect,
+  emptyFilter,
+  idsSelection,
+  selCount,
+  selIds,
+  useLibrary,
+} from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
 import { useLive } from "../../store/live";
@@ -90,6 +97,9 @@ const item = (id: number): GridItem => ({
   faces: id === 2 ? 3 : 0,
   analyzed: id % 3 === 0,
   tags: id === 1 ? ["Tramonti"] : [],
+  similarGroup: null,
+  similarCover: false,
+  similarCount: null,
 });
 
 beforeEach(() => {
@@ -98,7 +108,7 @@ beforeEach(() => {
   useLayout.setState({ leftOpen: true, rightOpen: true });
   useLibrary.setState({
     filter: emptyFilter(),
-    selected: [],
+    selection: idsSelection(),
     focused: null,
     scrollTop: 0,
     thumbSize: 3,
@@ -242,9 +252,9 @@ describe("Libreria", () => {
     expect(commandsMock.mediaDetail).toHaveBeenCalledWith(1);
 
     fireEvent.click(screen.getByTestId("thumb-4"), { shiftKey: true });
-    expect(useLibrary.getState().selected).toEqual([1, 2, 3, 4]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3, 4]);
     fireEvent.click(screen.getByTestId("thumb-2"), { ctrlKey: true });
-    expect(useLibrary.getState().selected).toEqual([1, 3, 4]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 3, 4]);
   });
 
   it("faccette e chip modificano il filtro della query", async () => {
@@ -343,10 +353,14 @@ describe("cartelle, luogo e Apri con", () => {
     });
 
     // Scenario "Seleziona tutto in una cartella".
-    commandsMock.libraryIds.mockResolvedValue([4, 5, 6]);
+    commandsMock.librarySelection.mockResolvedValue({ count: 3, maxId: 6 });
     fireEvent.click(screen.getByText("Seleziona tutto (filtro)"));
-    await waitFor(() => expect(useLibrary.getState().selected).toEqual([4, 5, 6]));
-    expect(commandsMock.libraryIds).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(3));
+    expect(useLibrary.getState().selection).toMatchObject({
+      mode: "filter",
+      filter: { folder: { path: `${trip}\\D7000`, recursive: false } },
+    });
+    expect(commandsMock.librarySelection).toHaveBeenLastCalledWith(
       expect.objectContaining({ folder: { path: `${trip}\\D7000`, recursive: false } }),
     );
     fireEvent.click(chip);
@@ -369,20 +383,20 @@ describe("cartelle, luogo e Apri con", () => {
     renderPage();
     await screen.findByTestId("thumb-1");
     // Scenario "Clic destro su miniatura non selezionata".
-    act(() => useLibrary.setState({ selected: [1, 2, 3], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2, 3]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-5"));
-    expect(useLibrary.getState().selected).toEqual([5]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([5]);
     let menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("1 foto");
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
     // Scenario "Clic destro sulla selezione".
-    act(() => useLibrary.setState({ selected: [1, 2, 3], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2, 3]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-2"));
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("3 foto");
-    expect(useLibrary.getState().selected).toEqual([1, 2, 3]);
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
     fireEvent.click(screen.getByRole("menuitem", { name: /Apri con ▸/ }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Lightroom" }));
     await waitFor(() =>
@@ -422,7 +436,7 @@ describe("cartelle, luogo e Apri con", () => {
   it("imposta il luogo dal menu contestuale su tutta la selezione", async () => {
     renderPage();
     await screen.findByTestId("thumb-1");
-    act(() => useLibrary.setState({ selected: [1, 2], focused: 1 }));
+    act(() => useLibrary.setState({ selection: idsSelection([1, 2]), focused: 1 }));
     fireEvent.contextMenu(screen.getByTestId("thumb-1"));
     fireEvent.click(screen.getByRole("menuitem", { name: "Imposta luogo…" }));
     const menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
@@ -430,7 +444,7 @@ describe("cartelle, luogo e Apri con", () => {
     fireEvent.click(within(menu).getByRole("button", { name: "Imposta luogo" }));
     await waitFor(() =>
       expect(commandsMock.startBulk).toHaveBeenCalledWith(
-        [1, 2],
+        { kind: "ids", ids: [1, 2] },
         { action: "set_place", place: { name: "Giappone" } },
         false,
       ),
@@ -744,7 +758,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
     },
   ] as never);
   commandsMock.startBulk.mockResolvedValue(799);
-  useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 5 }, selected: [] });
+  useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 5 }, selection: idsSelection() });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Escluse (6)" }));
   expect(useLibrary.getState().filter).toMatchObject({
@@ -762,7 +776,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
   fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Enter" });
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
-      [1],
+      { kind: "ids", ids: [1] },
       { action: "restore_to_catalog", catalog: 5 },
       false,
     ),
@@ -788,7 +802,7 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
   commandsMock.startBulk.mockResolvedValue(800);
   commandsMock.undoBulk.mockResolvedValue(null);
   const confirm = vi.spyOn(window, "confirm");
-  useLibrary.setState({ selected: [1], filter: emptyFilter() });
+  useLibrary.setState({ selection: idsSelection([1]), filter: emptyFilter() });
   renderPage();
   fireEvent.keyDown(await screen.findByTestId("grid-scroll"), { key: "Delete" });
   expect(commandsMock.startBulk).not.toHaveBeenCalled();
@@ -797,7 +811,7 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
   fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
   await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalledTimes(1));
   expect(commandsMock.startBulk).toHaveBeenCalledWith(
-    [1],
+    { kind: "ids", ids: [1] },
     { action: "exclude_from_catalog", catalog: 5 },
     false,
   );

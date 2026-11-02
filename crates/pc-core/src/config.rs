@@ -105,12 +105,15 @@ pub struct AiThresholds {
     pub face_detection: f32,
     /// Somiglianza coseno minima tra due volti della stessa persona.
     pub face_similarity: f32,
+    /// Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili.
+    pub similar_photos: f32,
 }
 
 impl AiThresholds {
     pub const DEFAULT_PERSON_DETECTION: f32 = 0.4;
     pub const DEFAULT_FACE_DETECTION: f32 = 0.8;
     pub const DEFAULT_FACE_SIMILARITY: f32 = 0.363;
+    pub const DEFAULT_SIMILAR_PHOTOS: f32 = 0.80;
 }
 
 impl Default for AiThresholds {
@@ -119,6 +122,7 @@ impl Default for AiThresholds {
             person_detection: Self::DEFAULT_PERSON_DETECTION,
             face_detection: Self::DEFAULT_FACE_DETECTION,
             face_similarity: Self::DEFAULT_FACE_SIMILARITY,
+            similar_photos: Self::DEFAULT_SIMILAR_PHOTOS,
         }
     }
 }
@@ -265,6 +269,7 @@ impl Config {
             ("person_detection", t.person_detection),
             ("face_detection", t.face_detection),
             ("face_similarity", t.face_similarity),
+            ("similar_photos", t.similar_photos),
         ] {
             if !(0.0..=1.0).contains(&v) {
                 return bad(format!(
@@ -341,6 +346,7 @@ mod tests {
             "[unknown]\nx = 1\n",
             "[ai.thresholds]\nperson_detection = 1.5\n",
             "[ai.thresholds]\nface_similarity = -0.1\n",
+            "[ai.thresholds]\nsimilar_photos = 1.2\n",
             "[ui]\ndouble_click = \"lightroom\"\n",
             "[[external_apps]]\nid = \"a\"\nname = \"A\"\npath = \"/a\"\n[[external_apps]]\nid = \"a\"\nname = \"B\"\npath = \"/b\"\n",
         ] {
@@ -367,6 +373,10 @@ mod tests {
         assert_eq!(cfg.ai.thresholds.person_detection, 0.4);
         assert_eq!(cfg.ai.thresholds.face_detection, 0.8);
         assert_eq!(cfg.ai.thresholds.face_similarity, 0.363);
+        assert_eq!(
+            cfg.ai.thresholds.similar_photos, 0.80,
+            "campo assente: predefinito"
+        );
         assert!(cfg.ai.ignored_folder_names.is_empty());
         assert!(cfg.external_apps.is_empty());
         assert_eq!(cfg.ui.double_click, "system");

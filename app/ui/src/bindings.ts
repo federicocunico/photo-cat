@@ -12,6 +12,15 @@ export const commands = {
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**  Segna come letto l'avviso di chiusura anomala. */
 	dismissCrashNotice: () => __TAURI_INVOKE<void>("dismiss_crash_notice"),
+	/**  Terminazione dell'interfaccia da segnalare dopo la ricarica (una volta sola). */
+	takeUiRecovery: () => __TAURI_INVOKE<UiRecovery | null>("take_ui_recovery"),
+	/**
+	 *  Long task dell'interfaccia (≥ 50 ms) degli ultimi secondi, registrati in modalità
+	 *  diagnostica (livello debug) per il test di carico.
+	 */
+	reportLongTasks: (count: number, maxMs: number | null, totalMs: number | null) => __TAURI_INVOKE<void>("report_long_tasks", { count, maxMs, totalMs }),
+	/**  Solo sviluppo: provoca un abort nativo per verificare log, minidump e avviso al riavvio. */
+	devNativeCrash: () => __TAURI_INVOKE<null>("dev_native_crash"),
 	getConfig: () => __TAURI_INVOKE<Config>("get_config"),
 	getResources: () => __TAURI_INVOKE<ResourceSnapshot>("get_resources"),
 	listJobs: () => __TAURI_INVOKE<JobSnapshot[]>("list_jobs"),
@@ -24,6 +33,8 @@ export const commands = {
 	/**  Job dimostrativo (solo build di sviluppo) per verificare la schermata Job. */
 	startDemoJob: (items: number, failEvery: number) => __TAURI_INVOKE<number>("start_demo_job", { items, failEvery }),
 	queryErrors: (query: ErrorQuery) => __TAURI_INVOKE<ErrorEntry[]>("query_errors", { query }),
+	/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
+	errorGroups: (query: ErrorQuery) => __TAURI_INVOKE<ErrorGroup[]>("error_groups", { query }),
 	logTail: () => __TAURI_INVOKE<LogLine[]>("log_tail"),
 	setLogLevel: (level: LogLevel) => __TAURI_INVOKE<null>("set_log_level", { level }),
 	listSources: () => __TAURI_INVOKE<SourceSummary[]>("list_sources"),
@@ -50,13 +61,19 @@ export const commands = {
 	importUpdates: () => __TAURI_INVOKE<UpdateSummary[]>("import_updates"),
 	/**  Esito dell'ultimo ricollegamento della sorgente. */
 	lastRelink: (sourceId: number) => __TAURI_INVOKE<RelinkSummary | null>("last_relink", { sourceId }),
-	libraryPage: (filter: LibraryFilter, sort: SortKey, after: Cursor | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, after, limit }),
-	libraryCount: (filter: LibraryFilter) => __TAURI_INVOKE<number>("library_count", { filter }),
-	libraryFacets: (filter: LibraryFilter) => __TAURI_INVOKE<Facets>("library_facets", { filter }),
+	libraryPage: (filter: LibraryFilter, sort: SortKey, at: PageAt | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, at, limit }),
+	/**  Numero di elementi del filtro; `None` se la richiesta è stata superata. */
+	libraryCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_count", { filter, request }),
+	/**  Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili). */
+	libraryGridCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_grid_count", { filter, request }),
+	libraryFacets: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<Facets | null>("library_facets", { filter, request }),
 	/**  Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine). */
 	libraryFacetValues: (filter: LibraryFilter, facet: FacetKey, search: string | null, sort: FacetSort, offset: number, limit: number) => __TAURI_INVOKE<FacetPage>("library_facet_values", { filter, facet, search, sort, offset, limit }),
-	/**  Tutti gli id del filtro corrente ("Seleziona tutto"). */
-	libraryIds: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("library_ids", { filter }),
+	/**
+	 *  Base di "Seleziona tutto": numero di risultati e id massimo in quell'istante. La selezione
+	 *  resta "filtro più eccezioni" e non porta mai nell'interfaccia l'elenco di tutti gli id.
+	 */
+	librarySelection: (filter: LibraryFilter) => __TAURI_INVOKE<SelectionBase>("library_selection", { filter }),
 	/**  Sottocartelle di una sorgente (o di `parent`), un livello alla volta. */
 	listFolders: (sourceId: number, parent: string | null) => __TAURI_INVOKE<FolderNode[]>("list_folders", { sourceId, parent }),
 	mediaDetail: (id: number) => __TAURI_INVOKE<MediaDetail>("media_detail", { id }),
@@ -72,17 +89,17 @@ export const commands = {
 	installModelFile: (id: string, path: string) => __TAURI_INVOKE<number>("install_model_file", { id, path }),
 	setExecutionProvider: (provider: ExecutionProvider) => __TAURI_INVOKE<null>("set_execution_provider", { provider }),
 	/**  Rianalizza con l'AI: `ids` vuoto = tutta la libreria (solo gli elementi non aggiornati). */
-	reanalyze: (ids: number[]) => __TAURI_INVOKE<number>("reanalyze", { ids }),
+	reanalyze: (target: Target) => __TAURI_INVOKE<number>("reanalyze", { target }),
 	setResourceProfile: (profile: ResourceProfile) => __TAURI_INVOKE<null>("set_resource_profile", { profile }),
 	listPeople: () => __TAURI_INVOKE<PersonView[]>("list_people"),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
-	personFaces: (person: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person }),
+	personFaces: (person: number | null, after: FaceCursor | null, limit: number) => __TAURI_INVOKE<FacePage>("person_faces", { person, after, limit }),
 	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
 	/**  Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati. */
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
 	deleteCatalog: (id: number, confirmed: boolean) => __TAURI_INVOKE<null>("delete_catalog", { id, confirmed }),
-	startBulk: (ids: number[], operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { ids, operation, confirmed }),
+	startBulk: (target: Target, operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { target, operation, confirmed }),
 	undoBulk: () => __TAURI_INVOKE<string | null>("undo_bulk"),
 	lastBulkUndo: () => __TAURI_INVOKE<string | null>("last_bulk_undo"),
 	tagOverview: () => __TAURI_INVOKE<TagOverview>("tag_overview"),
@@ -149,6 +166,30 @@ export const commands = {
 	sequenceExportPreflight: (options: SequenceExportOptions) => __TAURI_INVOKE<ExportPreflight>("sequence_export_preflight", { options }),
 	/**  Avvia l'export come job annullabile e ricorda il modello usato. */
 	startSequenceExport: (options: SequenceExportOptions) => __TAURI_INVOKE<number>("start_sequence_export", { options }),
+	/**  Gruppo della foto (Inspector), se c'è. */
+	similarGroup: (media: number) => __TAURI_INVOKE<SimilarGroupView | null>("similar_group", { media }),
+	/**  "Togli dal gruppo": la foto non torna nel gruppo nelle analisi successive. */
+	similarRemove: (media: number) => __TAURI_INVOKE<null>("similar_remove", { media }),
+	/**  "Raggruppa come simili": le foto restano unite anche dopo nuove analisi. */
+	similarGroupTogether: (ids: number[]) => __TAURI_INVOKE<null>("similar_group_together", { ids }),
+	/**  "Sciogli gruppo": le foto tornano singole e non si raggruppano più tra loro da sole. */
+	similarDissolve: (group: number) => __TAURI_INVOKE<null>("similar_dissolve", { group }),
+	/**  Imposta la foto principale del gruppo (prevale sulle analisi successive). */
+	similarSetCover: (group: number, media: number) => __TAURI_INVOKE<null>("similar_set_cover", { group, media }),
+	/**  Foto del gruppo presenti nei risultati del filtro (espansione nella griglia). */
+	similarGroupMembers: (group: number, filter: LibraryFilter, sort: SortKey) => __TAURI_INVOKE<Page>("similar_group_members", { group, filter, sort }),
+	/**
+	 *  Foto da selezionare con "Seleziona tutte tranne la principale": i membri dei gruppi presenti
+	 *  nei risultati, esclusa la principale di ciascun gruppo (o la migliore, se la principale non
+	 *  è tra i risultati).
+	 */
+	similarNonCovers: (filter: LibraryFilter) => __TAURI_INVOKE<number[]>("similar_non_covers", { filter }),
+	/**  Anteprima per le Impostazioni: gruppi con la soglia `threshold` (dagli archi salvati). */
+	similarPreview: (threshold: number | null) => __TAURI_INVOKE<number>("similar_preview", { threshold }),
+	/**  Foto analizzate con CLIP ma non ancora elaborate per i gruppi (librerie esistenti). */
+	similarPending: () => __TAURI_INVOKE<number>("similar_pending"),
+	/**  Accoda l'analisi dei gruppi (librerie esistenti: proposta, non automatica). */
+	startSimilarAnalysis: () => __TAURI_INVOKE<number>("start_similar_analysis"),
 	exportFields: () => __TAURI_INVOKE<string[]>("export_fields"),
 	startExport: (options: ExportOptions) => __TAURI_INVOKE<number>("start_export", { options }),
 	organizePreview: (options: OrganizeOptions) => __TAURI_INVOKE<Preview>("organize_preview", { options }),
@@ -163,7 +204,7 @@ export const commands = {
 	 *  "Nuova voce…": crea nel gruppo una voce con questo nome (o riusa quella
 	 *  con lo stesso nome) e, con `assign_to`, la assegna come correzione manuale.
 	 */
-	addCategory: (group: string, label: string, prompts: string[], assignTo: number[] | null) => __TAURI_INVOKE<CategoryRef>("add_category", { group, label, prompts, assignTo }),
+	addCategory: (group: string, label: string, prompts: string[], assignTo: Target | null) => __TAURI_INVOKE<CategoryRef>("add_category", { group, label, prompts, assignTo }),
 	/**  Foto a cui è assegnata la voce (per la conferma dell'eliminazione). */
 	categoryUsage: (group: string, id: string) => __TAURI_INVOKE<number>("category_usage", { group, id }),
 	/**
@@ -233,6 +274,8 @@ export type AiThresholds = {
 	face_detection?: number | null,
 	/**  Somiglianza coseno minima tra due volti della stessa persona. */
 	face_similarity?: number | null,
+	/**  Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili. */
+	similar_photos?: number | null,
 };
 
 /**
@@ -360,11 +403,29 @@ export type Config = {
 export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number };
 
 export type CrashInfo = {
-	ts: string,
+	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */
+	ts?: string,
 	message: string,
 	location: string | null,
 	thread: string | null,
+	kind?: CrashKind,
+	/**  Ultima attività registrata dal marcatore di sessione. */
+	lastActivity?: string | null,
+	/**  Memoria all'ultimo aggiornamento del marcatore di sessione. */
+	memory?: MemorySummary | null,
 };
+
+/**  Causa della chiusura anomala. */
+export type CrashKind = 
+/**  Panic Rust (messaggio e posizione nel log). */
+"panic" | 
+/**  Eccezione o segnale nativo (abort, accesso non valido). */
+"native" | 
+/**
+ *  Sessione non chiusa regolarmente senza altre informazioni (chiusura forzata,
+ *  crash della WebView, memoria esaurita...).
+ */
+"unclean";
 
 /**  Posizione dopo l'ultimo elemento della pagina precedente. */
 export type Cursor = {
@@ -394,11 +455,26 @@ export type Entry = {
 	license: string,
 };
 
+/**  Payload dell'evento `errors://batch`. */
+export type ErrorBatch = {
+	counts: ErrorCount[],
+	/**  Ultimi record completi (al massimo [`BATCH_RECENT`]). */
+	recent: ErrorRecord[],
+};
+
 /**
  *  Codici errore stabili: compaiono nei log, nel registro errori e nell'export
  *  diagnostico, quindi non vanno rinominati.
  */
 export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED";
+
+export type ErrorCount = {
+	jobId: number | null,
+	phase: string | null,
+	code: string | null,
+	level: string,
+	count: number,
+};
 
 export type ErrorEntry = {
 	id: number,
@@ -411,6 +487,21 @@ export type ErrorEntry = {
 	phase: string | null,
 	path: string | null,
 	detail: string | null,
+};
+
+/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
+export type ErrorGroup = {
+	jobId: number | null,
+	phase: string | null,
+	code: string | null,
+	level: string,
+	/**  Numero di righe (errori) del gruppo. */
+	count: number,
+	/**  File distinti coinvolti. */
+	files: number,
+	lastTs: string,
+	/**  Messaggio dell'errore più recente del gruppo. */
+	message: string,
 };
 
 export type ErrorQuery = {
@@ -507,6 +598,18 @@ export type FaceChoice = {
 	bbox: [(number | null), (number | null), (number | null), (number | null)],
 };
 
+/**  Posizione dopo l'ultimo volto di una pagina (ordine: qualità decrescente, id). */
+export type FaceCursor = {
+	/**  Qualità come salvata nel catalogo (f64), per un confronto esatto. */
+	quality: number | null,
+	id: number,
+};
+
+export type FacePage = {
+	items: FaceView[],
+	next: FaceCursor | null,
+};
+
 export type FaceView = {
 	id: number,
 	mediaId: number,
@@ -601,6 +704,12 @@ export type GridItem = {
 	/**  Tag utente del file (per i chip colorati della griglia). */
 	tags: string[],
 	excludedAt: number | null,
+	/**  Gruppo di foto simili della foto, se c'è. */
+	similarGroup: number | null,
+	/**  È la principale del suo gruppo. */
+	similarCover: boolean,
+	/**  Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta). */
+	similarCount: number | null,
 };
 
 export type Group = {
@@ -700,6 +809,8 @@ export type JobSnapshot = {
 	etaSecs: number | null,
 	failed: number,
 	error: string | null,
+	/**  Il job è fermo in attesa di memoria ("in pausa per memoria"). */
+	memoryPaused?: boolean,
 };
 
 export type JobState = "queued" | "running" | "paused" | "completed" | "completed_with_errors" | "cancelled" | "interrupted" | "failed";
@@ -757,6 +868,10 @@ export type LibraryFilter = {
 	folder?: FolderFilter | null,
 	/**  Solo questi elementi (collegamenti dal riepilogo di un aggiornamento). */
 	ids?: number[] | null,
+	/**  Solo le foto che fanno parte di un gruppo di foto simili. */
+	similarOnly?: boolean,
+	/**  Griglia raggruppata: un elemento per gruppo di foto simili (non cambia i conteggi). */
+	groupSimilar?: boolean,
 };
 
 export type Location = {
@@ -833,6 +948,17 @@ export type MediaKind = "photo";
 
 export type MediaStatus = "ok" | "missing";
 
+/**  Memoria al momento dell'ultimo aggiornamento del marcatore. */
+export type MemorySummary = {
+	/**  Memoria residente del processo dell'app. */
+	appMb: number,
+	/**  Memoria residente dei processi dell'interfaccia (WebView). */
+	webviewMb: number,
+	/**  RAM disponibile nel sistema. */
+	availableMb: number,
+	totalMb: number,
+};
+
 export type Method = "symlink" | "hardlink" | "copy";
 
 export type ModelState = { state: "missing" } | { state: "downloading"; done_bytes: number; total_bytes: number; bytes_per_second?: number } | { state: "verified" } | { state: "error"; code: string; message: string } | { state: "self_test_failed"; message: string } | { state: "update_available" };
@@ -904,8 +1030,20 @@ export type OrganizeOptions = {
 
 export type Page = {
 	items: GridItem[],
+	/**  Cursore dell'ultimo elemento, se ci sono altri elementi dopo. */
 	next: Cursor | null,
+	/**  Cursore del primo elemento, se ci sono altri elementi prima (pagine scorse e scaricate). */
+	prev?: Cursor | null,
 };
+
+/**  Dove inizia una pagina della griglia. */
+export type PageAt = 
+/**  Dopo il cursore (scorrimento in avanti). */
+{ kind: "after"; cursor: Cursor } | 
+/**  Prima del cursore (scorrimento all'indietro, pagine già scaricate). */
+{ kind: "before"; cursor: Cursor } | 
+/**  Dalla posizione `offset` (salto con la barra di scorrimento). */
+{ kind: "offset"; offset: number };
 
 export type PersonView = {
 	id: number,
@@ -929,6 +1067,8 @@ export type PhaseSnapshot = {
 	/**  Elementi al secondo. */
 	rate: number | null,
 	etaSecs: number | null,
+	/**  In pausa per memoria insufficiente (pressione critica). */
+	memoryPaused?: boolean,
 };
 
 export type PhaseState = "pending" | "running" | "done";
@@ -1029,6 +1169,15 @@ export type RenameOutcome = { outcome: "renamed" } |
 /**  Esiste già un tag con quel nome: va confermata l'unione. */
 { outcome: "needsMerge"; target: string };
 
+/**
+ *  Etichetta di una richiesta della UI: le richieste più vecchie dello stesso canale vengono
+ *  scartate o interrotte (filtro cambiato mentre il motore calcolava).
+ */
+export type RequestTag = {
+	channel: string,
+	id: number,
+};
+
 export type ResourceProfile = "light" | "balanced" | "performance";
 
 /**  Payload dell'evento `resources://tick`. */
@@ -1036,6 +1185,11 @@ export type ResourceSnapshot = {
 	system: SystemSnapshot,
 	governor: GovernorSnapshot,
 	state: PressureState,
+	/**
+	 *  Solo al cambio: `Some(true)` quando la memoria della WebView supera la quota
+	 *  (l'interfaccia deve liberare le cache), `Some(false)` quando rientra.
+	 */
+	uiTrim?: boolean | null,
 };
 
 export type ResourcesConfig = {
@@ -1046,7 +1200,15 @@ export type ResourcesConfig = {
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
 
-export type Scope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] } | { scope: "filter"; filter: LibraryFilter };
+export type Scope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] } | { scope: "filter"; filter: LibraryFilter } | 
+/**  Selezione della Libreria come insieme ("tutti tranne…"), risolta qui. */
+{ scope: "target"; target: Target };
+
+/**  Conteggio e id massimo all'istante di "Seleziona tutto". */
+export type SelectionBase = {
+	count: number,
+	maxId: number,
+};
 
 export type SelfTestResult = {
 	passed: boolean,
@@ -1094,6 +1256,10 @@ export type SequenceItem = {
 	session: number,
 	/**  Tag del file che appartengono al set indicato. */
 	tags: string[],
+	/**  Gruppo di foto simili della foto, se c'è. */
+	similarGroup: number | null,
+	/**  È la principale del suo gruppo. */
+	similarCover: boolean,
 };
 
 export type SequenceOverview = {
@@ -1127,6 +1293,20 @@ export type SetTag = {
 	/**  Tasto rapido (1–9). */
 	key: number,
 	name: string,
+};
+
+/**  Foto simili mostrate nell'Inspector. */
+export type SimilarGroupView = {
+	id: number,
+	cover: number | null,
+	coverManual: boolean,
+	members: SimilarMember[],
+};
+
+export type SimilarMember = {
+	id: number,
+	name: string,
+	thumb: string | null,
 };
 
 export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc" | "excluded_at";
@@ -1176,6 +1356,11 @@ export type SystemSnapshot = {
 	availableMb: number,
 	/**  Memoria residente del processo di photo-cat. */
 	processMb: number,
+	/**
+	 *  Memoria residente dei processi dell'interfaccia (WebView2 o WebKitGTK) discendenti
+	 *  dell'app; 0 dove non misurabile (macOS) o nei test.
+	 */
+	webviewMb?: number,
 	logicalCores: number,
 	physicalCores: number,
 };
@@ -1209,6 +1394,13 @@ export type TagSetView = {
 	/**  File della libreria con almeno un tag del set. */
 	tagged: number,
 } & TagSet;
+
+/**
+ *  Elementi su cui agisce un'azione bulk: un elenco esplicito, oppure "tutti i risultati del
+ *  filtro" (Seleziona tutto) meno le eccezioni, limitati agli elementi presenti al momento
+ *  della selezione (`max_id`): un import successivo non allarga la selezione.
+ */
+export type Target = { kind: "ids"; ids: number[] } | { kind: "filter"; filter: LibraryFilter; maxId: number; except: number[] };
 
 export type Taxonomy = {
 	/**  Versione delle modifiche (concorrenza ottimistica): cresce a ogni salvataggio. */
@@ -1259,6 +1451,9 @@ export type ThresholdImpact = {
 	reanalysisPersons: number,
 	/**  File salvati con un minimo di volti più alto della nuova soglia. */
 	reanalysisFaces: number,
+	/**  Gruppi di foto simili con la soglia attuale e con quella nuova. */
+	similarGroupsCurrent?: number,
+	similarGroups?: number,
 };
 
 /**
@@ -1282,6 +1477,15 @@ export type UiConfig = {
 	language?: Language,
 	/**  `system`, `none` o l'id di un'applicazione esterna. */
 	double_click?: string,
+};
+
+/**  Ultima terminazione dell'interfaccia, mostrata dall'UI dopo la ricarica. */
+export type UiRecovery = {
+	ts: string,
+	/**  Processo terminato e motivo, come li riporta la WebView. */
+	reason: string,
+	/**  Terminazioni negli ultimi 5 minuti. */
+	count: number,
 };
 
 export type UnavailableProvider = {

@@ -38,6 +38,14 @@ pub struct AppState {
     pub assets: crate::models::AssetPaths,
     pub watcher: Mutex<Option<SourceWatcher>>,
     pub previous_crash: Mutex<Option<CrashInfo>>,
+    /// Marcatore della sessione in corso (aggiornato dal monitor, cancellato all'uscita).
+    pub session: Arc<pc_diag::SessionMarker>,
+    /// Terminazioni della WebView in questa sessione.
+    pub recovery: crate::recovery::Recovery,
+    /// La finestra principale viene ricreata: la sua chiusura non è un'uscita.
+    pub recreating: Mutex<bool>,
+    /// Richieste di conteggi e facet della UI (scarto e interruzione di quelle superate).
+    pub gates: pc_store::gate::Gates,
     pub last_resources: RwLock<Option<ResourceSnapshot>>,
     pub(crate) _monitor_handle: Mutex<Option<MonitorHandle>>,
     pub(crate) _ticker: Mutex<Option<TickerHandle>>,
@@ -50,4 +58,20 @@ impl AppState {
         *self.config.write() = cfg;
         Ok(())
     }
+}
+
+/// Esegue `f` su un thread del pool bloccante: i comandi che leggono il catalogo non devono
+/// mai occupare il thread principale, che ospita la WebView.
+pub async fn blocking<T, F>(app: tauri::AppHandle, f: F) -> AppResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&tauri::AppHandle, &AppState) -> AppResult<T> + Send + 'static,
+{
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        f(&app, &state)
+    })
+    .await
+    .map_err(|e| pc_core::AppError::internal(e.to_string()))?
 }

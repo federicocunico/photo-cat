@@ -17,10 +17,14 @@ pub async fn add_category(
     group: String,
     label: String,
     prompts: Vec<String>,
-    assign_to: Option<Vec<MediaId>>,
+    assign_to: Option<pc_store::query::Target>,
 ) -> AppResult<CategoryRef> {
     let (db, jobs) = (state.store.clone(), state.jobs.clone());
     tauri::async_runtime::spawn_blocking(move || {
+        let assign_to: Option<Vec<MediaId>> = match assign_to {
+            Some(t) => Some(db.read(|c| t.resolve(c))?),
+            None => None,
+        };
         entries::add_and_assign(&db, &jobs, &group, &label, prompts, assign_to)
     })
     .await
@@ -30,8 +34,11 @@ pub async fn add_category(
 /// Foto a cui è assegnata la voce (per la conferma dell'eliminazione).
 #[tauri::command]
 #[specta::specta]
-pub fn category_usage(state: State<'_, AppState>, group: String, id: String) -> AppResult<i64> {
-    entries::usage(&state.store, &group, &id)
+pub async fn category_usage(app: tauri::AppHandle, group: String, id: String) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        entries::usage(&state.store, &group, &id)
+    })
+    .await
 }
 
 /// Elimina la voce e la toglie dalle foto (annullabile). Se era automatica,

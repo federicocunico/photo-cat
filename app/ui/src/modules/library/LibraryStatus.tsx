@@ -1,19 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri } from "../../lib/ipc";
+import { useLibraryCount } from "../../lib/latest";
 import { fmtInt } from "../../lib/format";
-import { useLibrary } from "../../store/library";
+import { selCount, useLibrary } from "../../store/library";
 
 /** Conteggi della Libreria nella barra di stato. */
 export function LibraryStatus() {
   const { t } = useTranslation();
   const filter = useLibrary((s) => s.filter);
-  const selected = useLibrary((s) => s.selected.length);
-  const count = useQuery({
-    queryKey: ["library-count", filter],
-    queryFn: () => commands.libraryCount(filter),
-    enabled: isTauri(),
-  });
+  const selected = useLibrary((s) => selCount(s.selection));
+  const count = useLibraryCount(filter);
   return (
     <>
       <span data-testid="status-count">

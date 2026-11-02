@@ -11,6 +11,7 @@ import { thumbUrl } from "./thumbUrl";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { PlaceEditor } from "./PlaceEditor";
+import { SimilarSection } from "./SimilarSection";
 import { useLabelName } from "./labelName";
 import { CategoryPicker } from "./CategoryPicker";
 
@@ -77,103 +78,91 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const apply = async (operation: BulkAction) => {
     setError("");
     try {
-      setJob(await commands.startBulk([id], operation, false));
+      setJob(await commands.startBulk({ kind: "ids", ids: [id] }, operation, false));
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     }
   };
   return (
-    <QueryView query={taxonomy} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
-          {() => (
-            <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <h3 className="section-title">{t("library.inspector.edit")}</h3>
-              <div className="feature-actions" style={{ margin: 0 }}>
-                <select
-                  className="field"
-                  aria-label={t("library.inspector.group")}
-                  value={group}
-                  onChange={(e) => setGroup(e.target.value)}
-                >
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {names.group(g.id)}
-                    </option>
-                  ))}
-                </select>
-                <CategoryPicker
-                  ariaLabel={t("library.inspector.value")}
-                  group={groups.find((g) => g.id === group)}
-                  value={value}
-                  onChange={setValue}
-                  onCreate={async (label) => {
-                    const r = await commands.addCategory(group, label, [], [id]);
-                    await qc.invalidateQueries({ queryKey: ["taxonomy"] });
-                    setValue(r.id);
-                    if (r.job != null) setJob(r.job);
-                  }}
-                />
-                <BusyButton
-                  className="btn"
-                  disabled={value === current}
-                  onClick={async () =>
-                    await apply({ action: "set_label", group, value: value || null })
-                  }
-                >
-                  {t("bulk.actions.set_label")}
-                </BusyButton>
-              </div>
-              <div className="feature-actions" style={{ margin: 0 }}>
-                <input
-                  className="field"
-                  aria-label={t("library.inspector.tag")}
-                  value={tag}
-                  onChange={(e) => setTag(e.target.value)}
-                />
-                <BusyButton
-                  className="btn"
-                  disabled={!tag.trim()}
-                  onClick={async () => {
-                    await apply({ action: "add_tag", name: tag.trim() });
-                    return setTag("");
-                  }}
-                >
-                  {t("bulk.actions.add_tag")}
-                </BusyButton>
-              </div>
-              <div className="feature-actions" style={{ margin: 0 }}>
-                <select
-                  className="field"
-                  aria-label={t("library.inspector.catalog")}
-                  value={catalog}
-                  onChange={(e) => setCatalog(e.target.value)}
-                >
-                  <option value="">{t("catalogs.title")}</option>
-                  {catalogs.data
-                    ?.filter((c) => c.catalog.kind === "manual")
-                    .map(({ catalog: c }) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-                <BusyButton
-                  className="btn"
-                  disabled={!catalog}
-                  onClick={async () =>
-                    await apply({ action: "add_catalog", catalog: Number(catalog) })
-                  }
-                >
-                  {t("bulk.actions.add_catalog")}
-                </BusyButton>
-              </div>
-              {error && <p role="alert">{error}</p>}
-            </section>
-          )}
-        </QueryView>
-      )}
-    </QueryView>
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <h3 className="section-title">{t("library.inspector.edit")}</h3>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <select
+          className="field"
+          aria-label={t("library.inspector.group")}
+          value={group}
+          onChange={(e) => setGroup(e.target.value)}
+        >
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {names.group(g.id)}
+            </option>
+          ))}
+        </select>
+        <CategoryPicker
+          ariaLabel={t("library.inspector.value")}
+          group={groups.find((g) => g.id === group)}
+          value={value}
+          onChange={setValue}
+          onCreate={async (label) => {
+            const r = await commands.addCategory(group, label, [], { kind: "ids", ids: [id] });
+            await qc.invalidateQueries({ queryKey: ["taxonomy"] });
+            setValue(r.id);
+            if (r.job != null) setJob(r.job);
+          }}
+        />
+        <BusyButton
+          className="btn"
+          disabled={value === current}
+          onClick={() => apply({ action: "set_label", group, value: value || null })}
+        >
+          {t("bulk.actions.set_label")}
+        </BusyButton>
+      </div>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <input
+          className="field"
+          aria-label={t("library.inspector.tag")}
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+        />
+        <BusyButton
+          className="btn"
+          disabled={!tag.trim()}
+          onClick={() => {
+            void apply({ action: "add_tag", name: tag.trim() });
+            setTag("");
+          }}
+        >
+          {t("bulk.actions.add_tag")}
+        </BusyButton>
+      </div>
+      <div className="feature-actions" style={{ margin: 0 }}>
+        <select
+          className="field"
+          aria-label={t("library.inspector.catalog")}
+          value={catalog}
+          onChange={(e) => setCatalog(e.target.value)}
+        >
+          <option value="">{t("catalogs.title")}</option>
+          {catalogs.data
+            ?.filter((c) => c.catalog.kind === "manual")
+            .map(({ catalog: c }) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </select>
+        <BusyButton
+          className="btn"
+          disabled={!catalog}
+          onClick={() => apply({ action: "add_catalog", catalog: Number(catalog) })}
+        >
+          {t("bulk.actions.add_catalog")}
+        </BusyButton>
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </section>
   );
 }
 
@@ -197,26 +186,17 @@ export function Inspector() {
     enabled: isTauri() && focused !== null,
   });
   const d = detail.data;
-  if (focused === null || !d) {
+  if (focused === null) {
     return (
-      <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
-        {() => (
-          <QueryView query={tags} enabled={isTauri()} isEmpty={() => false}>
-            {() => (
-              <QueryView
-                query={detail}
-                enabled={isTauri() && focused !== null}
-                isEmpty={() => false}
-              >
-                {() => (
-                  <p className="muted" style={{ padding: "48px 16px 16px" }}>
-                    {t("library.inspector.none")}
-                  </p>
-                )}
-              </QueryView>
-            )}
-          </QueryView>
-        )}
+      <p className="muted" style={{ padding: "48px 16px 16px" }}>
+        {t("library.inspector.none")}
+      </p>
+    );
+  }
+  if (!d) {
+    return (
+      <QueryView query={detail} enabled={isTauri()} isEmpty={() => false}>
+        {() => null}
       </QueryView>
     );
   }
@@ -224,211 +204,176 @@ export function Inspector() {
   const tech = d.tech;
   const ai = d.labels.filter((l) => l.origin === "auto" || l.origin === "manual");
   return (
-    <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <QueryView query={tags} enabled={isTauri()} isEmpty={() => false}>
-          {() => (
-            <QueryView query={detail} enabled={isTauri() && focused !== null} isEmpty={() => false}>
-              {() => (
-                <div
-                  style={{
-                    padding: "48px 16px 16px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 16,
-                  }}
-                  data-testid="inspector"
-                >
-                  <div
-                    style={{
-                      aspectRatio: "3 / 2",
-                      background: "var(--pc-thumb-bg)",
-                      borderRadius: 4,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {url ? (
-                      <img
-                        src={url}
-                        alt={d.item.name}
-                        style={{ maxWidth: "100%", maxHeight: "100%" }}
-                      />
-                    ) : (
-                      <span className="muted">{d.item.name}</span>
-                    )}
-                  </div>
-                  <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <h3 className="section-title">{t("library.inspector.file")}</h3>
-                    <div
-                      className="mono"
-                      style={{ fontSize: 11, color: "var(--pc-text-soft)", wordBreak: "break-all" }}
-                    >
-                      {d.item.path}
-                    </div>
-                    <Grid2>
-                      <Field label={t("library.inspector.format")} value={tech?.format} />
-                      <Field
-                        label={t("library.inspector.size")}
-                        value={
-                          tech?.width ? `${fmtInt(tech.width)} × ${fmtInt(tech.height ?? 0)}` : null
-                        }
-                      />
-                      <Field
-                        label={t("library.inspector.resolution")}
-                        value={
-                          tech?.dpiX
-                            ? t("library.inspector.dpi", {
-                                x: fmtInt(tech.dpiX),
-                                y: fmtInt(tech.dpiY ?? tech.dpiX),
-                              })
-                            : null
-                        }
-                      />
-                      <Field
-                        label={t("library.inspector.depth")}
-                        value={
-                          tech?.bitDepth ? t("library.inspector.bits", { n: tech.bitDepth }) : null
-                        }
-                      />
-                      <Field label={t("library.inspector.weight")} value={fmtBytes(d.item.size)} />
-                      {d.exif?.cameraModel && (
-                        <Field
-                          label={t("library.inspector.camera")}
-                          value={[d.exif.cameraMake, d.exif.cameraModel].filter(Boolean).join(" ")}
-                        />
-                      )}
-                    </Grid2>
-                    {d.duplicates.length > 0 && (
-                      <span style={{ color: "var(--pc-warn)", fontSize: 13 }}>
-                        {t("library.inspector.duplicates", { count: d.duplicates.length })}
-                      </span>
-                    )}
-                  </section>
-                  <section>
-                    <h3 className="section-title">{t("library.inspector.datesPlace")}</h3>
-                    <Grid2>
-                      <Field
-                        label={t("library.inspector.captured")}
-                        value={fmtCaptured(d.dates?.capturedAt)}
-                      />
-                      <Field
-                        label={t("library.inspector.dateSource")}
-                        value={
-                          d.dates?.capturedSource
-                            ? t(`library.inspector.dateSources.${d.dates.capturedSource}`)
-                            : null
-                        }
-                      />
-                      <Field
-                        label={t("library.inspector.modified")}
-                        value={fmtCaptured(d.dates?.modifiedAt)}
-                      />
-                      <Field label={t("library.inspector.place")} value={d.location?.name} />
-                      {d.location && (
-                        <Field
-                          label={t("library.inspector.placeSource")}
-                          value={t(`library.inspector.placeSources.${d.location.source}`)}
-                        />
-                      )}
-                    </Grid2>
-                    <PlaceEditor
-                      id={d.item.id}
-                      name={d.location?.name ?? null}
-                      source={d.location?.source ?? null}
-                    />
-                  </section>
-                  <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <h3 className="section-title">{t("library.inspector.ai")}</h3>
-                    {ai.length === 0 && d.peopleCount == null && (
-                      <span className="muted">{t("library.inspector.noAi")}</span>
-                    )}
-                    {ai.map((l) => (
-                      <div key={`${l.group}/${l.value}`}>
-                        <div
-                          style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}
-                        >
-                          <span>
-                            {names.group(l.group)}: {names.label(l.group, l.value)}
-                          </span>
-                          <span className="mono muted">{fmtDec(l.score ?? 0, 2)}</span>
-                        </div>
-                        <div className="bar" style={{ marginTop: 4 }}>
-                          <span style={{ width: `${Math.round((l.score ?? 0) * 100)}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                    {d.peopleCount != null && (
-                      <span style={{ fontSize: 13 }}>
-                        {t("library.inspector.peopleCount", { n: d.peopleCount })}
-                      </span>
-                    )}
-                  </section>
-                  <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <h3 className="section-title">{t("library.inspector.peopleTags")}</h3>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {d.people.map((p) => (
-                        <span key={p} className="chip">
-                          {p}
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {d.tags.map((tag) => (
-                        <TagChip key={tag} name={tag} color={colorOf(tags.data, tag)} />
-                      ))}
-                    </div>
-                    {d.catalogs.length > 0 && (
-                      <span className="muted" style={{ fontSize: 13 }}>
-                        {t("library.inspector.catalogs")}:{" "}
-                        {d.catalogs.map((name) => {
-                          const cat = catalogs.data?.find((c) => c.catalog.name === name);
-                          return (
-                            <span key={name}>
-                              {name}{" "}
-                              {cat && (
-                                <BusyButton
-                                  className="btn"
-                                  disabled={catalogAction.busy}
-                                  onClick={async () =>
-                                    await catalogAction.act([d.item.id], cat.catalog.id, name)
-                                  }
-                                >
-                                  {t("exclusions.exclude")}
-                                </BusyButton>
-                              )}{" "}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    )}
-                  </section>
-                  {filter.excludedFrom != null && (
+    <div
+      style={{ padding: "48px 16px 16px", display: "flex", flexDirection: "column", gap: 16 }}
+      data-testid="inspector"
+    >
+      <div
+        style={{
+          aspectRatio: "3 / 2",
+          background: "var(--pc-thumb-bg)",
+          borderRadius: 4,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+        {url ? (
+          <img src={url} alt={d.item.name} style={{ maxWidth: "100%", maxHeight: "100%" }} />
+        ) : (
+          <span className="muted">{d.item.name}</span>
+        )}
+      </div>
+      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <h3 className="section-title">{t("library.inspector.file")}</h3>
+        <div
+          className="mono"
+          style={{ fontSize: 11, color: "var(--pc-text-soft)", wordBreak: "break-all" }}
+        >
+          {d.item.path}
+        </div>
+        <Grid2>
+          <Field label={t("library.inspector.format")} value={tech?.format} />
+          <Field
+            label={t("library.inspector.size")}
+            value={tech?.width ? `${fmtInt(tech.width)} × ${fmtInt(tech.height ?? 0)}` : null}
+          />
+          <Field
+            label={t("library.inspector.resolution")}
+            value={
+              tech?.dpiX
+                ? t("library.inspector.dpi", {
+                    x: fmtInt(tech.dpiX),
+                    y: fmtInt(tech.dpiY ?? tech.dpiX),
+                  })
+                : null
+            }
+          />
+          <Field
+            label={t("library.inspector.depth")}
+            value={tech?.bitDepth ? t("library.inspector.bits", { n: tech.bitDepth }) : null}
+          />
+          <Field label={t("library.inspector.weight")} value={fmtBytes(d.item.size)} />
+          {d.exif?.cameraModel && (
+            <Field
+              label={t("library.inspector.camera")}
+              value={[d.exif.cameraMake, d.exif.cameraModel].filter(Boolean).join(" ")}
+            />
+          )}
+        </Grid2>
+        {d.duplicates.length > 0 && (
+          <span style={{ color: "var(--pc-warn)", fontSize: 13 }}>
+            {t("library.inspector.duplicates", { count: d.duplicates.length })}
+          </span>
+        )}
+      </section>
+      <section>
+        <h3 className="section-title">{t("library.inspector.datesPlace")}</h3>
+        <Grid2>
+          <Field label={t("library.inspector.captured")} value={fmtCaptured(d.dates?.capturedAt)} />
+          <Field
+            label={t("library.inspector.dateSource")}
+            value={
+              d.dates?.capturedSource
+                ? t(`library.inspector.dateSources.${d.dates.capturedSource}`)
+                : null
+            }
+          />
+          <Field label={t("library.inspector.modified")} value={fmtCaptured(d.dates?.modifiedAt)} />
+          <Field label={t("library.inspector.place")} value={d.location?.name} />
+          {d.location && (
+            <Field
+              label={t("library.inspector.placeSource")}
+              value={t(`library.inspector.placeSources.${d.location.source}`)}
+            />
+          )}
+        </Grid2>
+        <PlaceEditor
+          id={d.item.id}
+          name={d.location?.name ?? null}
+          source={d.location?.source ?? null}
+        />
+      </section>
+      <SimilarSection id={d.item.id} />
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3 className="section-title">{t("library.inspector.ai")}</h3>
+        {ai.length === 0 && d.peopleCount == null && (
+          <span className="muted">{t("library.inspector.noAi")}</span>
+        )}
+        {ai.map((l) => (
+          <div key={`${l.group}/${l.value}`}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span>
+                {names.group(l.group)}: {names.label(l.group, l.value)}
+              </span>
+              <span className="mono muted">{fmtDec(l.score ?? 0, 2)}</span>
+            </div>
+            <div className="bar" style={{ marginTop: 4 }}>
+              <span style={{ width: `${Math.round((l.score ?? 0) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+        {d.peopleCount != null && (
+          <span style={{ fontSize: 13 }}>
+            {t("library.inspector.peopleCount", { n: d.peopleCount })}
+          </span>
+        )}
+      </section>
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3 className="section-title">{t("library.inspector.peopleTags")}</h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {d.people.map((p) => (
+            <span key={p} className="chip">
+              {p}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {d.tags.map((tag) => (
+            <TagChip key={tag} name={tag} color={colorOf(tags.data, tag)} />
+          ))}
+        </div>
+        {d.catalogs.length > 0 && (
+          <span className="muted" style={{ fontSize: 13 }}>
+            {t("library.inspector.catalogs")}:{" "}
+            {d.catalogs.map((name) => {
+              const cat = catalogs.data?.find((c) => c.catalog.name === name);
+              return (
+                <span key={name}>
+                  {name}{" "}
+                  {cat && (
                     <BusyButton
                       className="btn"
                       disabled={catalogAction.busy}
-                      onClick={async () =>
-                        await catalogAction.act(
-                          [d.item.id],
-                          filter.excludedFrom!,
-                          catalogs.data?.find((c) => c.catalog.id === filter.excludedFrom)?.catalog
-                            .name ?? "",
-                          true,
-                        )
-                      }
+                      onClick={() => catalogAction.act([d.item.id], cat.catalog.id, name)}
                     >
-                      {t("exclusions.restore")}
+                      {t("exclusions.exclude")}
                     </BusyButton>
-                  )}
-                  <Edits key={d.item.id} id={d.item.id} labels={d.labels} />
-                </div>
-              )}
-            </QueryView>
-          )}
-        </QueryView>
+                  )}{" "}
+                </span>
+              );
+            })}
+          </span>
+        )}
+      </section>
+      {filter.excludedFrom != null && (
+        <BusyButton
+          className="btn"
+          disabled={catalogAction.busy}
+          onClick={() =>
+            void catalogAction.act(
+              [d.item.id],
+              filter.excludedFrom!,
+              catalogs.data?.find((c) => c.catalog.id === filter.excludedFrom)?.catalog.name ?? "",
+              true,
+            )
+          }
+        >
+          {t("exclusions.restore")}
+        </BusyButton>
       )}
-    </QueryView>
+      <Edits key={d.item.id} id={d.item.id} labels={d.labels} />
+    </div>
   );
 }

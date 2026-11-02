@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "./i18n";
-import { commandsMock, ipcMockModule } from "./test/ipcMock";
+import { commandsMock, emit, ipcMockModule } from "./test/ipcMock";
 import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
@@ -176,5 +176,47 @@ describe("cattura dei crash", () => {
       screen.queryByText("La sessione precedente si è chiusa in modo anomalo."),
     ).not.toBeInTheDocument();
     expect(commandsMock.dismissCrashNotice).toHaveBeenCalled();
+  });
+
+  it("una sessione non chiusa regolarmente mostra ultima attività e memoria", async () => {
+    commandsMock.appInfo.mockResolvedValue(
+      info({
+        ts: "2026-11-02T08:25:53Z",
+        message: "",
+        location: null,
+        thread: null,
+        kind: "unclean",
+        lastActivity: "2026-11-02T08:25:53Z",
+        memory: { appMb: 900, webviewMb: 2100, availableMb: 925, totalMb: 16000 },
+      }) as never,
+    );
+    renderApp();
+    expect(
+      await screen.findByText(/L'app non si è chiusa regolarmente/, { exact: false }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/interfaccia 2100 MB, RAM libera 925 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/ultima attività/)).toBeInTheDocument();
+  });
+});
+
+describe("recupero dell'interfaccia", () => {
+  it("dopo app://ui-recovered mostra l'avviso con il motivo e il collegamento alla diagnostica", async () => {
+    renderApp();
+    await waitFor(() => expect(commandsMock.takeUiRecovery).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId("ui-recovered")).not.toBeInTheDocument();
+    commandsMock.takeUiRecovery.mockResolvedValueOnce({
+      ts: "2026-11-02T08:25:53Z",
+      reason: "processo render, motivo 1, codice di uscita 0xc0000005",
+      count: 1,
+    } as never);
+    act(() => emit("uiRecovered", undefined));
+    const banner = await screen.findByTestId("ui-recovered");
+    expect(banner).toHaveTextContent("L'interfaccia si è chiusa ed è stata ricaricata.");
+    expect(banner).toHaveTextContent("I job in corso continuano");
+    expect(banner).toHaveTextContent("processo render");
+    fireEvent.click(within(banner).getByRole("button", { name: "Apri diagnostica" }));
+    expect(useLayout.getState().module).toBe("diagnostics");
+    fireEvent.click(within(banner).getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByTestId("ui-recovered")).not.toBeInTheDocument();
   });
 });

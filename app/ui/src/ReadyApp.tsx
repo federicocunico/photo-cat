@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { AppShell, CrashBanner } from "./components/shell/AppShell";
+import { AppShell, CrashBanner, UiRecoveredBanner } from "./components/shell/AppShell";
 import { StatusBar } from "./components/shell/StatusBar";
 import { setLanguage } from "./i18n";
-import { commands, type CrashInfo } from "./lib/ipc";
+import { commands, events, isTauri, type CrashInfo, type UiRecovery } from "./lib/ipc";
+import { startLongTaskReporter } from "./lib/longTasks";
 import { DiagnosticsPage } from "./modules/diagnostics/DiagnosticsPage";
 import { ImportPage } from "./modules/import/ImportPage";
 import { JobsPage } from "./modules/jobs/JobsPage";
@@ -20,7 +21,7 @@ import { ActiveSetStatus, TagsStatus } from "./modules/tags/TagStatus";
 import { Onboarding } from "./modules/onboarding/Onboarding";
 import { Placeholder } from "./modules/Placeholder";
 import { useLayout, type ModuleId } from "./store/layout";
-import { useLiveEvents } from "./store/live";
+import { useLiveEvents, useTrimCaches } from "./store/live";
 import { useImportRefresh } from "./modules/import/sourceActions";
 import { ToastHost } from "./components/feedback/ToastHost";
 import { applyTheme } from "./theme/tokens";
@@ -63,9 +64,24 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   const theme = useLayout((s) => s.theme);
   const language = useLayout((s) => s.language);
   const [crash, setCrash] = useState<CrashInfo | null>(startup.info.previousCrash);
+  const [recovery, setRecovery] = useState<UiRecovery | null>(null);
   const [onboarding, setOnboarding] = useState(startup.onboarding);
   useLiveEvents();
+  useTrimCaches();
   useImportRefresh();
+  useEffect(() => startLongTaskReporter(), []);
+  useEffect(() => {
+    const check = () =>
+      void commands
+        .takeUiRecovery()
+        .then((r) => r && setRecovery(r))
+        .catch(() => {});
+    if (isTauri()) check();
+    const off = events.onUiRecovered(check);
+    return () => {
+      void off.then((f) => f());
+    };
+  }, []);
   useEffect(() => {
     // Solo sviluppo: VITE_START_MODULE=jobs apre direttamente un modulo.
     const start = import.meta.env.VITE_START_MODULE as ModuleId | undefined;
@@ -85,7 +101,14 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
       </>
     );
   return (
-    <AppShell banner={crash && <CrashBanner crash={crash} onDismiss={dismiss} />}>
+    <AppShell
+      banner={
+        <>
+          {crash && <CrashBanner crash={crash} onDismiss={dismiss} />}
+          {recovery && <UiRecoveredBanner info={recovery} onDismiss={() => setRecovery(null)} />}
+        </>
+      }
+    >
       <ModuleView module={module} />
       <ToastHost />
       <StatusBar>

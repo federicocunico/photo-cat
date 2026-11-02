@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commands } from "../../lib/ipc";
+import { commands, type Target } from "../../lib/ipc";
 
 export const useCatalogOperation = create<{
   busy: boolean;
@@ -21,19 +21,28 @@ export const useCatalogOperation = create<{
 
 export function useCatalogAction() {
   const busy = useCatalogOperation((s) => s.busy);
-  const act = async (ids: number[], catalog: number, name: string, restore = false) => {
-    if (useCatalogOperation.getState().busy || !ids.length) return;
+  /** `items`: id espliciti, oppure il bersaglio di una selezione "tutti tranne…" con il conteggio. */
+  const act = async (
+    items: number[] | { target: Target; count: number },
+    catalog: number,
+    name: string,
+    restore = false,
+  ) => {
+    const { target, count } = Array.isArray(items)
+      ? { target: { kind: "ids", ids: items } as Target, count: items.length }
+      : items;
+    if (useCatalogOperation.getState().busy || !count) return;
     useCatalogOperation.setState({
       busy: true,
       job: null,
       catalog: name,
-      count: ids.length,
+      count,
       restore,
       message: "",
     });
     try {
       const job = await commands.startBulk(
-        ids,
+        target,
         {
           action: restore ? "restore_to_catalog" : "exclude_from_catalog",
           catalog,

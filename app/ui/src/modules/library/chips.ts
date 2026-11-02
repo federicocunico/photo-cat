@@ -36,6 +36,7 @@ export function activeChips(
   const chosen = date.day ?? date.month ?? date.year;
   if (chosen) chips.push({ name: fmtPeriod(chosen), clear: { dateFrom: null, dateTo: null } });
   if (f.text) chips.push({ name: `“${f.text}”`, clear: { text: null } });
+  if (f.similarOnly) chips.push({ name: t("similar.only"), clear: { similarOnly: false } });
   if (f.folder?.path) {
     const name = f.folder.path.split(/[\\/]/).filter(Boolean).pop() ?? f.folder.path;
     chips.push({

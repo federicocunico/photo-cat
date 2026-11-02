@@ -1,7 +1,7 @@
 //! Comandi per le correzioni delle identità; non espongono embedding alla UI.
 use crate::state::AppState;
 use pc_core::{AppError, AppResult};
-use pc_store::people::{self, FaceView, PersonView};
+use pc_store::people::{self, PersonView};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -25,29 +25,39 @@ pub async fn list_people(state: State<'_, AppState>) -> AppResult<Vec<PersonView
 }
 #[tauri::command]
 #[specta::specta]
-pub fn face_count(state: State<'_, AppState>) -> AppResult<i64> {
-    Ok(state
-        .store
-        .read(|c| Ok(c.query_row("SELECT count(*) FROM face", [], |r| r.get(0))?))?)
+pub async fn face_count(app: tauri::AppHandle) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .store
+            .read(|c| Ok(c.query_row("SELECT count(*) FROM face", [], |r| r.get(0))?))?)
+    })
+    .await
 }
 #[tauri::command]
 #[specta::specta]
 pub async fn person_faces(
     state: State<'_, AppState>,
     person: Option<i64>,
-) -> AppResult<Vec<FaceView>> {
+    after: Option<people::FaceCursor>,
+    limit: u32,
+) -> AppResult<people::FacePage> {
     let db = state.store.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        db.read(|c| people::views(c, person)).map_err(Into::into)
+        db.read(|c| people::faces_page(c, person, after, limit))
+            .map_err(Into::into)
     })
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 #[tauri::command]
 #[specta::specta]
-pub async fn correct_person(state: State<'_, AppState>, correction: Correction) -> AppResult<()> {
+pub async fn correct_person(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    correction: Correction,
+) -> AppResult<()> {
     let db = state.store.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let res = tauri::async_runtime::spawn_blocking(move || {
         db.write(move |c| {
             match correction {
                 Correction::Rename { person, name } => people::rename(c, person, &name)?,
@@ -64,12 +74,14 @@ pub async fn correct_person(state: State<'_, AppState>, correction: Correction) 
         .map_err(Into::into)
     })
     .await
-    .map_err(|e| AppError::internal(e.to_string()))?
+    .map_err(|e| AppError::internal(e.to_string()))?;
+    crate::events::faces_changed(&app);
+    res
 }
 /// Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati.
 #[tauri::command]
 #[specta::specta]
-pub async fn purge_faces(state: State<'_, AppState>) -> AppResult<()> {
+pub async fn purge_faces(app: tauri::AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let mut cfg = state.config.read().clone();
     cfg.ai.faces_enabled = false;
     state.save_config(cfg)?;
@@ -88,7 +100,9 @@ pub async fn purge_faces(state: State<'_, AppState>) -> AppResult<()> {
         Ok::<_, pc_core::AppError>(())
     })
     .await
-    .map_err(|e| AppError::internal(e.to_string()))?
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    crate::events::faces_changed(&app);
+    Ok(())
 }
 
 /// `face://<id>`: ritaglio del volto generato dall'originale (vedi `pc_ai::face_crop`),

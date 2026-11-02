@@ -1,4 +1,4 @@
-//! Shell Tauri di photo-cat: avvio dei servizi, comandi IPC, eventi verso la UI.
+﻿//! Shell Tauri di photo-cat: avvio dei servizi, comandi IPC, eventi verso la UI.
 
 mod boot;
 mod catalogs;
@@ -16,8 +16,10 @@ mod open_with;
 mod organize;
 mod people;
 mod places;
+mod recovery;
 mod sequence;
 mod settings;
+mod similar;
 mod state;
 mod tags;
 mod timeline;
@@ -48,8 +50,33 @@ use tauri_specta::{collect_commands, Builder, ErrorHandlingMode};
 
 /// Intervallo di aggiornamento delle risorse verso la UI.
 const RESOURCES_INTERVAL: Duration = Duration::from_secs(1);
+/// Ogni quanti tick delle risorse si aggiorna il marcatore di sessione (30 s).
+const SESSION_TOUCH_TICKS: u64 = 30;
 
-/// Builder dei binding: comandi più i tipi dei payload degli eventi.
+/// Job attivi come "id tipo" (marcatore di sessione e log dei crash).
+pub(crate) fn active_job_labels(jobs: &JobManager) -> Vec<String> {
+    jobs.snapshots()
+        .into_iter()
+        .filter(|j| {
+            matches!(
+                j.state,
+                pc_jobs::JobState::Running | pc_jobs::JobState::Paused | pc_jobs::JobState::Queued
+            )
+        })
+        .map(|j| format!("{} {}", j.id, j.kind))
+        .collect()
+}
+
+fn memory_summary(s: &pc_governor::SystemSnapshot) -> pc_diag::MemorySummary {
+    pc_diag::MemorySummary {
+        app_mb: s.process_mb,
+        webview_mb: s.webview_mb,
+        available_mb: s.available_mb,
+        total_mb: s.total_mb,
+    }
+}
+
+/// Builder dei binding: comandi piÃ¹ i tipi dei payload degli eventi.
 pub fn bindings() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
@@ -58,6 +85,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
             boot::boot_choose_folder,
             commands::app_info,
             commands::dismiss_crash_notice,
+            commands::take_ui_recovery,
+            commands::report_long_tasks,
+            commands::dev_native_crash,
             commands::get_config,
             commands::get_resources,
             commands::list_jobs,
@@ -68,6 +98,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             commands::list_job_history,
             commands::start_demo_job,
             commands::query_errors,
+            commands::error_groups,
             commands::log_tail,
             commands::set_log_level,
             library::list_sources,
@@ -84,9 +115,10 @@ pub fn bindings() -> Builder<tauri::Wry> {
             library::last_relink,
             library::library_page,
             library::library_count,
+            library::library_grid_count,
             library::library_facets,
             library::library_facet_values,
-            library::library_ids,
+            library::library_selection,
             library::list_folders,
             library::media_detail,
             library::list_catalogs,
@@ -154,6 +186,16 @@ pub fn bindings() -> Builder<tauri::Wry> {
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
             sequence::start_sequence_export,
+            similar::similar_group,
+            similar::similar_remove,
+            similar::similar_group_together,
+            similar::similar_dissolve,
+            similar::similar_set_cover,
+            similar::similar_group_members,
+            similar::similar_non_covers,
+            similar::similar_preview,
+            similar::similar_pending,
+            similar::start_similar_analysis,
             organize::export_fields,
             organize::start_export,
             organize::organize_preview,
@@ -185,6 +227,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_governor::ResourceSnapshot>()
         .typ::<pc_diag::LogLine>()
         .typ::<pc_diag::ErrorRecord>()
+        .typ::<pc_diag::ErrorBatch>()
         .typ::<pc_models::store::ModelStatus>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
@@ -212,17 +255,40 @@ pub fn run() {
     let primary_logs = paths.as_ref().ok().map(AppPaths::logs);
     let fallback_logs = std::env::temp_dir().join("photo-cat-boot-logs");
     let logs = primary_logs
+        .clone()
         .filter(|p| std::fs::create_dir_all(p).is_ok())
         .unwrap_or(fallback_logs);
-    let diagnostics =
-        Arc::new(pc_diag::init(&logs, &Config::default().logging).expect("inizializzazione log"));
-    let previous_crash = pc_diag::take_previous_crash(&logs);
+    let logging = paths
+        .as_ref()
+        .ok()
+        .and_then(|p| Config::load(&p.config_file()).ok())
+        .map(|c| c.logging)
+        .unwrap_or_default();
+    let diagnostics = Arc::new(pc_diag::init(&logs, &logging).expect("inizializzazione log"));
+    pc_diag::native::install(&logs);
+    let (session, previous_session) =
+        pc_diag::SessionMarker::start(&logs, env!("CARGO_PKG_VERSION"));
+    let session = Arc::new(session);
+    let previous_crash =
+        pc_diag::CrashInfo::combine(pc_diag::take_previous_crash(&logs), previous_session);
+    if let Some(c) = &previous_crash {
+        let mem = c.memory.unwrap_or_default();
+        tracing::warn!(
+            kind = ?c.kind,
+            detail = c.message.as_str(),
+            last_activity = ?c.last_activity,
+            app_mb = mem.app_mb,
+            webview_mb = mem.webview_mb,
+            available_mb = mem.available_mb,
+            "la sessione precedente si Ã¨ chiusa in modo anomalo"
+        );
+    }
 
     #[cfg(windows)]
     if let Some(dir) = webview_runtime::ensure() {
         tracing::warn!(
             folder = %dir.display(),
-            "runtime WebView2 non trovato tramite il registro: uso la cartella installata più recente"
+            "runtime WebView2 non trovato tramite il registro: uso la cartella installata piÃ¹ recente"
         );
     }
 
@@ -230,23 +296,45 @@ pub fn run() {
     #[cfg(debug_assertions)]
     export_bindings(&builder, &bindings_path());
 
-    tauri::Builder::default()
+    let setup_session = session.clone();
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .register_uri_scheme_protocol("thumb", library::thumb_protocol)
+        .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
-            app.manage(boot::Boot::new(paths, diagnostics, logs, previous_crash));
+            app.manage(boot::Boot::new(
+                paths,
+                diagnostics,
+                logs,
+                previous_crash,
+                setup_session,
+            ));
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
             }
             boot::start(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("errore durante l'avvio di photo-cat");
+    app.run(move |app, event| match event {
+        // La finestra viene ricreata dopo la terminazione della WebView: non Ã¨ un'uscita.
+        tauri::RunEvent::ExitRequested { api, .. }
+            if app
+                .try_state::<AppState>()
+                .is_some_and(|s| *s.recreating.lock()) =>
+        {
+            api.prevent_exit();
+        }
+        tauri::RunEvent::Exit => {
+            session.finish();
+            tracing::info!("photo-cat chiuso regolarmente");
+        }
+        _ => {}
+    });
 }
 
 fn initialize(
@@ -264,6 +352,7 @@ fn initialize(
     let diagnostics = boot.diagnostics.clone();
     diagnostics.set_level(config.logging.level)?;
     let previous_crash = &boot.previous_crash;
+    let session = boot.session.clone();
     tracing::info!(path = %paths.app_store().display(), "archivio dell'app aperto");
     identities::on_library_open(&store, &app_store);
     diagnostics
@@ -505,19 +594,39 @@ fn initialize(
         onnx_runtime,
         assets,
         previous_crash: Mutex::new(previous_crash.clone()),
+        session,
+        recovery: recovery::Recovery::default(),
+        recreating: Mutex::new(false),
+        gates: Default::default(),
         last_resources: RwLock::new(None),
         _monitor_handle: Mutex::new(None),
         _ticker: Mutex::new(Some(ticker)),
     });
 
     let emit_handle = handle.clone();
+    let ticks = std::sync::atomic::AtomicU64::new(0);
     let monitor_handle = monitor.spawn(RESOURCES_INTERVAL, move |snap| {
         if let Some(state) = emit_handle.try_state::<AppState>() {
             *state.last_resources.write() = Some(snap.clone());
+            let n = ticks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n.is_multiple_of(SESSION_TOUCH_TICKS) {
+                state.session.touch(
+                    Some(memory_summary(&snap.system)),
+                    active_job_labels(&state.jobs),
+                );
+            }
+        }
+        if let Some(low) = snap.ui_trim {
+            // Memoria della WebView oltre la quota (o rientrata).
+            recovery::set_low_memory(&emit_handle, low);
+            if low {
+                let _ = emit_handle.emit(recovery::TRIM_CACHES, ());
+            }
         }
         let _ = emit_handle.emit(events::RESOURCES_TICK, &snap);
     });
     *handle.state::<AppState>()._monitor_handle.lock() = Some(monitor_handle);
+    recovery::watch(handle);
     library::purge_orphan_thumbs(handle, started);
     library::restart_watcher(handle);
     tracing::info!("photo-cat avviato");

@@ -1,8 +1,6 @@
-import { QueryView } from "../../components/feedback/QueryView";
+﻿import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import { RefreshBar } from "../../components/feedback/RefreshBar";
-import { BusyButton } from "../../components/feedback/BusyButton";
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
@@ -15,15 +13,27 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
-import { commands, isTauri, type GridItem, type Page } from "../../lib/ipc";
+import { useQuery } from "@tanstack/react-query";
+import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
+import { latestOnly, retryUnlessSuperseded, useLibraryCount } from "../../lib/latest";
 import {
   clickSelect,
-  rectangleSelect,
   emptyFilter,
+  idsSelection,
+  rectangleSelect,
+  selCount,
+  selHas,
+  selIds,
+  selSet,
+  selTarget,
   thumbPx,
   useLibrary,
+  type Selection,
 } from "../../store/library";
+import { useGridPages, windowAction } from "./gridPages";
+import { byBase, displayTotal, locate, toBase, type Expansion } from "./similarView";
+import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
 import { useOpenWith } from "./useOpenWith";
@@ -59,7 +69,7 @@ export function ThumbTags({ tags, color }: { tags: string[]; color: (name: strin
   );
 }
 
-export const PAGE_SIZE = 300;
+export { PAGE_SIZE } from "./gridPages";
 const GAP = 12;
 const PAD = 16;
 const CAPTION = 26;
@@ -72,10 +82,16 @@ function Thumb({
   onDoubleClick,
   onMenu,
   tagColor,
+  group,
+  cover,
 }: {
   item: GridItem;
   size: number;
   selected: boolean;
+  /** Elemento che rappresenta un gruppo di foto simili (griglia raggruppata). */
+  group?: { count: number; expanded: boolean; onToggle: () => void };
+  /** Foto principale di un gruppo aperto. */
+  cover?: boolean;
   onClick: (e: MouseEvent) => void;
   onDoubleClick?: () => void;
   /** Menu contestuale alle coordinate indicate (clic destro, tasto Menu, Maiusc+F10). */
@@ -86,7 +102,7 @@ function Thumb({
   const url = thumbUrl(item.thumb);
   const [failed, setFailed] = useState(false);
   return (
-    <BusyButton
+    <button
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -105,7 +121,7 @@ function Thumb({
       data-testid={`thumb-${item.id}`}
       title={
         item.excludedAt
-          ? `${item.name} · ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
+          ? `${item.name} Â· ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
           : item.name
       }
       style={{
@@ -117,7 +133,7 @@ function Thumb({
         cursor: "pointer",
         textAlign: "left",
         background: "var(--pc-panel)",
-        border: `2px solid ${selected ? "var(--pc-accent)" : "var(--pc-raised)"}`,
+        border: `2px solid ${selected ? "var(--pc-accent)" : cover ? "var(--pc-warn)" : "var(--pc-raised)"}`,
         color: "inherit",
       }}
     >
@@ -179,6 +195,59 @@ function Thumb({
               : t("library.queuedBadge")}
         </span>
         <ThumbTags tags={item.tags} color={tagColor} />
+        {group && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-expanded={group.expanded}
+            aria-label={t(group.expanded ? "similar.collapse" : "similar.expand", {
+              count: group.count,
+            })}
+            data-testid={`group-badge-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              group.onToggle();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                group.onToggle();
+              }
+            }}
+            style={{
+              position: "absolute",
+              left: 6,
+              bottom: 6,
+              padding: "1px 7px",
+              borderRadius: 10,
+              background: "var(--pc-accent)",
+              color: "var(--pc-on-accent, #fff)",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {group.expanded ? "âˆ’" : ""}
+            {group.count}
+          </span>
+        )}
+        {cover && (
+          <span
+            data-testid={`cover-${item.id}`}
+            style={{
+              position: "absolute",
+              left: 6,
+              top: 30,
+              padding: "1px 6px",
+              borderRadius: 4,
+              background: "rgba(20,20,22,0.85)",
+              color: "var(--pc-warn)",
+              fontSize: 11,
+            }}
+          >
+            {t("similar.cover")}
+          </span>
+        )}
         {item.excludedAt != null && (
           <span
             style={{
@@ -223,17 +292,44 @@ function Thumb({
       >
         {item.name}
       </div>
-    </BusyButton>
+    </button>
   );
 }
 
-/** Griglia virtualizzata: carica le pagine (keyset) man mano che si scorre. */
-import { useCatalogAction } from "./useCatalogAction";
+/** Segnaposto di un elemento non ancora caricato (fuori dalla finestra di pagine). */
+function Placeholder({ size }: { size: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: Math.round(size * 0.75) + CAPTION + 4,
+        borderRadius: 6,
+        background: "var(--pc-panel)",
+        border: "2px solid var(--pc-raised)",
+      }}
+    />
+  );
+}
 
+/**
+ * Griglia virtualizzata a memoria limitata: l'altezza viene dal conteggio dei risultati, in
+ * memoria restano al massimo MAX_PAGES pagine attorno alla vista (gli altri elementi sono
+ * segnaposto finchÃ© non si arriva lÃ¬).
+ */
 export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const { t } = useTranslation();
-  const { filter, sort, thumbSize, selected, focused, setSelection, scrollTop, setScrollTop } =
-    useLibrary();
+  const {
+    filter,
+    sort,
+    thumbSize,
+    selection,
+    focused,
+    setSelection,
+    replaceSelection,
+    scrollTop,
+    setScrollTop,
+  } = useLibrary();
   const catalogAction = useCatalogAction();
   const catalogs = useQuery({
     queryKey: ["catalogs"],
@@ -244,30 +340,80 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(initialWidth ?? 800);
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
+  const drag = useRef<{ x: number; y: number; initial: Selection } | null>(null);
   const tagInfo = useTagOverview().data;
   const tagColor = (name: string) => colorOf(tagInfo, name);
-  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; target: Target } | null>(
+    null,
+  );
   const openWith = useOpenWith();
   const place = usePlaceAction();
   const closeMenu = useCallback(() => setMenu(null), []);
   const actionError = openWith.error || place.error;
 
-  const pages = useInfiniteQuery({
-    queryKey: ["library", filter, sort],
-    queryFn: ({ pageParam }) => commands.libraryPage(filter, sort, pageParam, PAGE_SIZE),
-    initialPageParam: null as Page["next"],
-    getNextPageParam: (last) => last.next ?? undefined,
-    placeholderData: keepPreviousData,
-    enabled: isTauri(),
+  // Punto di partenza della finestra di pagine: cambia solo con un salto lontano.
+  // Griglia raggruppata: un elemento per gruppo di foto simili (i conteggi restano sulle foto).
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const viewFilter = useMemo(() => ({ ...filter, groupSimilar }), [filter, groupSimilar]);
+  const viewKey = JSON.stringify([viewFilter, sort]);
+  const [anchor, setAnchor] = useState({ key: viewKey, at: 0 });
+  const at = anchor.key === viewKey ? anchor.at : 0;
+  const { pages, start, items } = useGridPages(viewFilter, sort, at);
+  const count = useLibraryCount(filter);
+  const gridCount = useQuery({
+    queryKey: ["library-grid-count", viewFilter],
+    queryFn: () =>
+      latestOnly("library-grid-count", (tag) => commands.libraryGridCount(viewFilter, tag)),
+    enabled: isTauri() && groupSimilar,
+    retry: retryUnlessSuperseded,
   });
-  const total = useQuery({
-    queryKey: ["library-count", filter],
-    queryFn: () => commands.libraryCount(filter),
-    enabled: isTauri(),
+  const baseTotal = Math.max(
+    (groupSimilar ? gridCount.data : count.data) ?? 0,
+    start + items.length,
+  );
+  // Gruppi aperti: le loro foto compaiono dopo l'elemento che li rappresenta.
+  const [opened, setOpened] = useState<{ key: string; list: Expansion[] }>({
+    key: viewKey,
+    list: [],
   });
-  const items = useMemo(() => pages.data?.pages.flatMap((p) => p.items) ?? [], [pages.data]);
+  const expansions = useMemo(
+    () => (opened.key === viewKey && groupSimilar ? byBase(opened.list) : []),
+    [opened, viewKey, groupSimilar],
+  );
+  const total = displayTotal(baseTotal, expansions);
+  const at_ = (d: number): { item?: GridItem; member?: boolean } => {
+    const s = locate(d, expansions);
+    if ("member" in s) return { item: s.member, member: true };
+    return { item: s.base >= start ? items[s.base - start] : undefined };
+  };
   const order = useMemo(() => items.map((i) => i.id), [items]);
+  const toggleGroup = (it: GridItem, base: number) => {
+    const group = it.similarGroup;
+    if (group == null) return;
+    const list = opened.key === viewKey ? opened.list : [];
+    if (list.some((e) => e.group === group)) {
+      setOpened({ key: viewKey, list: list.filter((e) => e.group !== group) });
+      return;
+    }
+    void commands.similarGroupMembers(group, filter, sort).then((page) => {
+      // La principale resta al suo posto: dopo di lei le altre foto del gruppo.
+      const members = page.items.filter((m) => m.id !== it.id);
+      setOpened((o) => ({
+        key: viewKey,
+        list: [...(o.key === viewKey ? o.list : []), { group, base, members }],
+      }));
+    });
+  };
+  // Selezionare un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
+  const selectGroup = (it: GridItem) => {
+    if (it.similarGroup == null) return;
+    void commands.similarGroupMembers(it.similarGroup, filter, sort).then((page) =>
+      setSelection(
+        page.items.map((m) => m.id),
+        it.id,
+      ),
+    );
+  };
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -280,7 +426,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (size + GAP)));
   // Le colonne si allargano per riempire la riga: nessuno spazio vuoto a destra.
   const cell = Math.max(size, Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols));
-  const rows = Math.ceil(items.length / cols);
+  const rows = Math.ceil(total / cols);
   const rowHeight = Math.round(cell * 0.75) + CAPTION + 4 + GAP;
   const virt = useVirtualizer({
     count: rows,
@@ -293,34 +439,55 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   useEffect(() => virt.measure(), [rowHeight, cols, virt]);
 
   const vitems = virt.getVirtualItems();
+  const firstRow = vitems[0]?.index ?? 0;
   const lastRow = vitems[vitems.length - 1]?.index ?? 0;
   useEffect(() => {
-    if (lastRow >= rows - 3 && pages.hasNextPage && !pages.isFetchingNextPage)
-      void pages.fetchNextPage();
-  }, [lastRow, rows, pages]);
+    if (pages.isFetching || !pages.isSuccess) return;
+    const action = windowAction(
+      {
+        from: toBase(firstRow * cols, expansions),
+        to: toBase(Math.min((lastRow + 1) * cols, total) - 1, expansions) + 1,
+      },
+      { start, len: items.length, hasNext: pages.hasNextPage, hasPrev: pages.hasPreviousPage },
+      cols * 3,
+    );
+    if (action === "next") void pages.fetchNextPage();
+    else if (action === "prev") void pages.fetchPreviousPage();
+    else if (action) setAnchor({ key: viewKey, at: action.seek });
+  }, [firstRow, lastRow, cols, start, items.length, pages, viewKey, expansions, total]);
 
+  const explicit = selIds(selection);
   const onClick = (id: number) => (e: MouseEvent) => {
-    const next = clickSelect(order, selected, focused, id, {
-      ctrl: e.ctrlKey || e.metaKey,
-      shift: e.shiftKey,
-    });
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (selection.mode === "filter" && ctrl) {
+      // "Tutti tranne…€¦": Ctrl+clic aggiunge o toglie un'eccezione.
+      replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
+      return;
+    }
+    const next = clickSelect(order, explicit ?? [], focused, id, { ctrl, shift: e.shiftKey });
     setSelection(next, id);
   };
   // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
   const onMenu = (id: number) => (x: number, y: number) => {
-    const ids = selected.includes(id) ? selected : [id];
-    if (!selected.includes(id)) setSelection([id], id);
-    setMenu({ x, y, ids });
+    if (selHas(selection, id)) {
+      // "Apri con" lavora sugli elementi caricati; le azioni bulk sull'intera selezione.
+      const ids = explicit ?? order.filter((i) => selHas(selection, i));
+      setMenu({ x, y, ids, target: selTarget(selection) });
+    } else {
+      setSelection([id], id);
+      setMenu({ x, y, ids: [id], target: { kind: "ids", ids: [id] } });
+    }
   };
 
-  if (isTauri() && (pages.isPending || (pages.isError && !pages.data)))
+  if (isTauri() && (pages.isPending || (pages.isError && !pages.data))) {
     return (
       <QueryView query={pages} skeleton={<Skeleton kind="thumbnail" count={24} />}>
         {() => null}
       </QueryView>
     );
+  }
 
-  if (pages.isSuccess && items.length === 0) {
+  if (pages.isSuccess && items.length === 0 && start === 0 && (count.data ?? 0) === 0) {
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
       <div className="muted" style={{ padding: 32 }}>
@@ -346,7 +513,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           e.preventDefault();
           const id = filter.excludedFrom ?? filter.catalogId!;
           void catalogAction.act(
-            selected,
+            { target: selTarget(selection), count: selCount(selection) },
             id,
             catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
             restore,
@@ -357,9 +524,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
       aria-label={
-        total.isPending
-          ? t("feedback.calculating")
-          : t("library.count", { n: fmtInt(total.data ?? 0) })
+        count.isPending ? t("feedback.calculating") : t("library.count", { n: fmtInt(count.data ?? total) })
       }
       role="region"
       onPointerDown={(e) => {
@@ -368,7 +533,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         drag.current = {
           x: e.clientX - r.left,
           y: e.clientY - r.top + e.currentTarget.scrollTop,
-          initial: e.ctrlKey || e.metaKey ? selected : [],
+          initial: e.ctrlKey || e.metaKey ? selection : idsSelection(),
         };
         e.currentTarget.setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -389,12 +554,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           h: Math.abs(y - d.y),
         };
         setBox(b);
-        setSelection([
-          ...new Set([
-            ...d.initial,
-            ...rectangleSelect(order, b, { cols, cell, rowHeight, gap: GAP, pad: PAD }),
-          ]),
-        ]);
+        const inside = rectangleSelect(
+          order,
+          b,
+          { cols, cell, rowHeight, gap: GAP, pad: PAD },
+          start,
+        );
+        replaceSelection(selSet(d.initial, inside, true));
       }}
       onPointerUp={() => {
         drag.current = null;
@@ -425,34 +591,65 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
             }}
           />
         )}
-        {vitems.map((row) => (
-          <div
-            key={row.key}
-            style={{
-              position: "absolute",
-              top: row.start + PAD,
-              left: PAD,
-              right: PAD,
-              display: "flex",
-              gap: GAP,
-            }}
-          >
-            {items.slice(row.index * cols, row.index * cols + cols).map((it) => (
-              <Thumb
-                key={it.id}
-                item={it}
-                size={cell}
-                selected={selected.includes(it.id)}
-                onClick={onClick(it.id)}
-                onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
-                onMenu={onMenu(it.id)}
-                tagColor={tagColor}
-              />
-            ))}
-          </div>
-        ))}
+        {vitems.map((row) => {
+          const first = row.index * cols;
+          const cells = [];
+          for (let i = first; i < Math.min(first + cols, total); i++) {
+            const { item: it, member } = at_(i);
+            const base = toBase(i, expansions);
+            const grouped =
+              groupSimilar && !member && it?.similarGroup != null && (it.similarCount ?? 1) > 1;
+            const open = grouped && expansions.some((e) => e.group === it?.similarGroup);
+            cells.push(
+              it ? (
+                <Thumb
+                  key={it.id}
+                  item={it}
+                  size={cell}
+                  selected={selHas(selection, it.id)}
+                  group={
+                    grouped
+                      ? {
+                          count: it.similarCount ?? 1,
+                          expanded: open,
+                          onToggle: () => toggleGroup(it, base),
+                        }
+                      : undefined
+                  }
+                  cover={open && it.similarCover}
+                  onClick={
+                    grouped && !open
+                      ? (e) =>
+                          e.ctrlKey || e.metaKey || e.shiftKey ? onClick(it.id)(e) : selectGroup(it)
+                      : onClick(it.id)
+                  }
+                  onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
+                  onMenu={onMenu(it.id)}
+                  tagColor={tagColor}
+                />
+              ) : (
+                <Placeholder key={`p${i}`} size={cell} />
+              ),
+            );
+          }
+          return (
+            <div
+              key={row.key}
+              style={{
+                position: "absolute",
+                top: row.start + PAD,
+                left: PAD,
+                right: PAD,
+                display: "flex",
+                gap: GAP,
+              }}
+            >
+              {cells}
+            </div>
+          );
+        })}
       </div>
-      {pages.isFetchingNextPage && (
+      {(pages.isFetchingNextPage || pages.isFetchingPreviousPage) && (
         <div className="muted" style={{ position: "sticky", bottom: 8, textAlign: "center" }}>
           <Icon.Spinner size={14} />
         </div>
@@ -479,8 +676,9 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           x={menu.x}
           y={menu.y}
           ids={menu.ids}
-          onOpen={(ids, target) => openWith.open(ids, target)}
-          onPlace={(ids, p) => place.apply(ids, p)}
+          target={menu.target}
+          onOpen={(ids, target) => void openWith.open(ids, target)}
+          onPlace={(target, p) => void place.apply(target, p)}
           onClose={closeMenu}
         />
       )}

@@ -5,7 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   BootStatus,
   Config,
-  ErrorRecord,
+  ErrorBatch,
   JobSnapshot,
   LogLine,
   ModelStatus,
@@ -38,8 +38,11 @@ export const EVENTS = {
   jobProgress: "job://progress",
   resources: "resources://tick",
   logLines: "log://lines",
-  error: "log://error",
+  errorBatch: "errors://batch",
   models: "models://status",
+  uiRecovered: "app://ui-recovered",
+  trimCaches: "app://trim-caches",
+  facesChanged: "faces://changed",
 } as const;
 
 export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -55,6 +58,9 @@ export const events = {
   onJobProgress: (cb: (s: JobSnapshot) => void) => on(EVENTS.jobProgress, cb),
   onResources: (cb: (s: ResourceSnapshot) => void) => on(EVENTS.resources, cb),
   onLogLines: (cb: (l: LogLine[]) => void) => on(EVENTS.logLines, cb),
-  onError: (cb: (e: ErrorRecord) => void) => on(EVENTS.error, cb),
+  onErrorBatch: (cb: (b: ErrorBatch) => void) => on(EVENTS.errorBatch, cb),
   onModels: (cb: (m: ModelStatus[]) => void) => on(EVENTS.models, cb),
+  onUiRecovered: (cb: () => void) => on(EVENTS.uiRecovered, cb),
+  onTrimCaches: (cb: () => void) => on(EVENTS.trimCaches, cb),
+  onFacesChanged: (cb: () => void) => on(EVENTS.facesChanged, cb),
 };

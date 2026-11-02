@@ -1,4 +1,3 @@
-import { BusyButton } from "../../components/feedback/BusyButton";
 // Menu contestuale della griglia: agisce sulla selezione (o sulla sola
 // miniatura cliccata). Navigabile con le frecce, Invio ed Esc.
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +9,7 @@ import {
   type OpenTarget,
   type PlaceInput,
   type PlaceSuggestion,
+  type Target,
 } from "../../lib/ipc";
 import { PlaceField } from "./PlaceEditor";
 
@@ -32,15 +32,22 @@ export function GridContextMenu({
   x,
   y,
   ids,
+  target,
+  count = ids.length,
   onOpen,
   onPlace,
   onClose,
 }: {
   x: number;
   y: number;
+  /** Elementi caricati su cui agisce "Apri con". */
   ids: number[];
-  onOpen: (ids: number[], target: OpenTarget) => unknown;
-  onPlace: (ids: number[], place: PlaceInput | null) => unknown;
+  /** Bersaglio delle azioni bulk (anche una selezione "tutti tranne…"). */
+  target: Target;
+  /** Elementi del bersaglio. */
+  count?: number;
+  onOpen: (ids: number[], target: OpenTarget) => void;
+  onPlace: (target: Target, place: PlaceInput | null) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -72,8 +79,8 @@ export function GridContextMenu({
     return () => document.removeEventListener("mousedown", away);
   }, [onClose]);
 
-  const act = (fn: () => unknown) => async () => {
-    await fn();
+  const act = (fn: () => void) => () => {
+    fn();
     onClose();
   };
   const onKeyDown = (e: KeyboardEvent) => {
@@ -186,7 +193,7 @@ export function GridContextMenu({
           disabled={catalogAction.busy}
           onClick={act(() => {
             const id = filter.excludedFrom ?? filter.catalogId!;
-            return catalogAction.act(
+            void catalogAction.act(
               ids,
               id,
               catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
@@ -200,7 +207,7 @@ export function GridContextMenu({
       <hr style={{ border: 0, borderTop: "1px solid var(--pc-border)", margin: "4px 0" }} />
       {placing ? (
         <div style={{ padding: "4px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>{t("place.dialogCount", { count: ids.length })}</span>
+          <span style={{ fontSize: 12 }}>{t("place.dialogCount", { count })}</span>
           <div style={{ display: "flex", gap: 6 }}>
             <PlaceField
               value={place}
@@ -215,15 +222,15 @@ export function GridContextMenu({
               type="button"
               className="btn"
               disabled={!place.trim()}
-              onClick={async () => {
+              onClick={() => {
                 const name = place.trim();
-                await onPlace(
-                  ids,
+                onPlace(
+                  target,
                   picked && picked.name === name
                     ? { name, country: picked.country, lat: picked.lat, lon: picked.lon }
                     : { name },
                 );
-                return onClose();
+                onClose();
               }}
             >
               {t("place.set")}
@@ -235,19 +242,14 @@ export function GridContextMenu({
           {t("externalApps.setPlace")}
         </BusyButton>
       )}
-      <BusyButton
-        type="button"
-        role="menuitem"
-        style={item}
-        onClick={act(() => onPlace(ids, null))}
-      >
+      <BusyButton type="button" role="menuitem" style={item} onClick={act(() => onPlace(target, null))}>
         {t("externalApps.resetPlace")}
       </BusyButton>
       <BusyButton
         type="button"
         role="menuitem"
         style={item}
-        onClick={act(() => commands.reanalyze(ids))}
+        onClick={act(() => void commands.reanalyze(target))}
       >
         {t("externalApps.reanalyze")}
       </BusyButton>

@@ -128,12 +128,15 @@ export function PlaceEditor({
         <BusyButton
           className="btn"
           disabled={!trimmed || (trimmed === (name ?? "") && source === "manual")}
-          onClick={async () => await apply([id], input())}
+          onClick={async () => await apply({ kind: "ids", ids: [id] }, input())}
         >
           {t("place.set")}
         </BusyButton>
         {source === "manual" && (
-          <BusyButton className="btn" onClick={async () => await apply([id], null)}>
+          <BusyButton
+            className="btn"
+            onClick={async () => await apply({ kind: "ids", ids: [id] }, null)}
+          >
             {t("place.reset")}
           </BusyButton>
         )}

@@ -25,6 +25,7 @@ pub struct Boot {
     running: AtomicBool,
     pub diagnostics: Arc<pc_diag::Diagnostics>,
     pub previous_crash: Option<pc_diag::CrashInfo>,
+    pub session: Arc<pc_diag::SessionMarker>,
 }
 
 impl Boot {
@@ -33,6 +34,7 @@ impl Boot {
         diagnostics: Arc<pc_diag::Diagnostics>,
         logs: std::path::PathBuf,
         previous_crash: Option<pc_diag::CrashInfo>,
+        session: Arc<pc_diag::SessionMarker>,
     ) -> Self {
         Self {
             status: Mutex::new(BootStatus {
@@ -45,6 +47,7 @@ impl Boot {
             running: AtomicBool::new(false),
             diagnostics,
             previous_crash,
+            session,
         }
     }
 

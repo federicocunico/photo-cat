@@ -1,11 +1,12 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
-import { commands, isTauri, type ErrorEntry, type LogLevel } from "../../lib/ipc";
+import { commands, events, isTauri, type ErrorEntry, type LogLevel } from "../../lib/ipc";
 import { toQuery, useErrorText } from "./errors";
+import { ErrorGroups } from "./ErrorGroups";
 import { fmtDateTime, fmtTime } from "../../lib/format";
 import { useLayout, type DiagFilter } from "../../store/layout";
 import { useLive } from "../../store/live";
@@ -175,11 +176,21 @@ export function DiagnosticsPage() {
   }, []);
 
   const query = useMemo(() => toQuery(filter), [filter]);
+  const qc = useQueryClient();
+  // Aggiornamento sui lotti di errori del backend, non a intervalli.
+  useEffect(() => {
+    const off = events.onErrorBatch(() => {
+      void qc.invalidateQueries({ queryKey: ["errors"] });
+      void qc.invalidateQueries({ queryKey: ["error-groups"] });
+    });
+    return () => {
+      void off.then((f) => f());
+    };
+  }, [qc]);
   const errors = useQuery({
     queryKey: ["errors", query],
     queryFn: () => commands.queryErrors(query),
     enabled: isTauri(),
-    refetchInterval: 3000,
   });
   const rows = errors.data ?? [];
   const current = rows.find((r) => r.id === selected) ?? rows[0];
@@ -338,6 +349,7 @@ export function DiagnosticsPage() {
           {t("diag.clearFilters")}
         </BusyButton>
       </div>
+      <ErrorGroups query={query} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
         <section
           style={{

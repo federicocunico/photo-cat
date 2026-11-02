@@ -57,11 +57,17 @@ struct StoreInner {
     readers_cv: Condvar,
 }
 
+/// Righe scritte tra due checkpoint espliciti del WAL (oltre all'autocheckpoint di SQLite).
+pub const CHECKPOINT_EVERY_ROWS: u64 = 5_000;
+/// Dimensione a cui il file WAL viene riportato dopo un checkpoint.
+pub const WAL_SIZE_LIMIT: i64 = 64 * 1024 * 1024;
+
 fn configure(conn: &Connection) -> Result<(), StoreError> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     conn.pragma_update(None, "temp_store", "MEMORY")?;
+    conn.pragma_update(None, "journal_size_limit", WAL_SIZE_LIMIT)?;
     conn.busy_timeout(Duration::from_secs(10))?;
     Ok(())
 }
@@ -94,6 +100,8 @@ impl Store {
             )?;
             c.busy_timeout(Duration::from_secs(10))?;
             c.pragma_update(None, "query_only", "ON")?;
+            // Ordinamenti e raggruppamenti grandi (libreria da 100.000 foto) su disco, non in RAM.
+            c.pragma_update(None, "temp_store", "FILE")?;
             readers.push(c);
         }
 
@@ -226,6 +234,7 @@ impl Drop for StoreInner {
 }
 
 fn writer_loop(mut conn: Connection, rx: Receiver<Msg>, batch_ops: usize, window: Duration) {
+    let mut checkpoint = Checkpointer::new(&conn);
     let mut pending: Vec<Op> = Vec::new();
     let mut waiters: Vec<Sender<bool>> = Vec::new();
     let mut deadline: Option<Instant> = None;
@@ -291,6 +300,7 @@ fn writer_loop(mut conn: Connection, rx: Receiver<Msg>, batch_ops: usize, window
             for w in waiters.drain(..) {
                 let _ = w.send(ok);
             }
+            checkpoint.after_commit(&conn);
         }
         if stop {
             break;
@@ -300,6 +310,32 @@ fn writer_loop(mut conn: Connection, rx: Receiver<Msg>, batch_ops: usize, window
 
 /// Esegue le operazioni in un'unica transazione, ciascuna nel proprio savepoint.
 /// Restituisce `false` se il commit della transazione fallisce.
+/// Checkpoint `PASSIVE` del WAL ogni [`CHECKPOINT_EVERY_ROWS`] righe scritte: durante un import
+/// lungo, con l'interfaccia che legge di continuo, il WAL non cresce senza limiti.
+struct Checkpointer {
+    last: u64,
+}
+
+impl Checkpointer {
+    fn new(conn: &Connection) -> Self {
+        Self {
+            last: conn.total_changes(),
+        }
+    }
+
+    fn after_commit(&mut self, conn: &Connection) {
+        let now = conn.total_changes();
+        if now.saturating_sub(self.last) < CHECKPOINT_EVERY_ROWS {
+            return;
+        }
+        self.last = now;
+        if let Err(e) = conn.query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |r| r.get::<_, i64>(0))
+        {
+            tracing::debug!(detail = %e, "checkpoint del WAL non eseguito");
+        }
+    }
+}
+
 fn commit_batch(conn: &mut Connection, pending: &mut Vec<Op>) -> bool {
     if pending.is_empty() {
         return true;

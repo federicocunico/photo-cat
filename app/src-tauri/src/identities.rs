@@ -207,21 +207,30 @@ pub async fn merge_identities(
 
 #[tauri::command]
 #[specta::specta]
-pub fn identity_faces(state: State<'_, AppState>, uid: String) -> AppResult<Vec<RefFaceView>> {
-    Ok(state.app_store.with(|c| ids::faces(c, &uid))?)
+pub async fn identity_faces(app: tauri::AppHandle, uid: String) -> AppResult<Vec<RefFaceView>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.with(|c| ids::faces(c, &uid))?)
+    })
+    .await
 }
 
 /// Ritaglio di un volto di riferimento (data URL PNG).
 #[tauri::command]
 #[specta::specta]
-pub fn identity_face_image(state: State<'_, AppState>, id: i64) -> AppResult<String> {
-    Ok(data_url(&state.app_store.with(|c| ids::face_crop(c, id))?))
+pub async fn identity_face_image(app: tauri::AppHandle, id: i64) -> AppResult<String> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(data_url(&state.app_store.with(|c| ids::face_crop(c, id))?))
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn remove_identity_face(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    Ok(state.app_store.with(|c| ids::remove_face(c, id))?)
+pub async fn remove_identity_face(app: tauri::AppHandle, id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.app_store.with(|c| ids::remove_face(c, id))?)
+    })
+    .await
 }
 
 fn faces_ready(state: &AppState) -> AppResult<()> {

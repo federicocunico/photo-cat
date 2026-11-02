@@ -98,3 +98,58 @@ fn data_persists_after_reopen() {
         .unwrap();
     assert_eq!(n, 1);
 }
+
+/// Import sintetico di 20.000 elementi con un lettore che interroga di continuo (l'interfaccia):
+/// il file WAL resta sotto la soglia grazie ai checkpoint periodici.
+#[test]
+fn wal_stays_bounded_during_a_large_import() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("catalog.db");
+    let store = pc_store::Store::open(&db, pc_store::StoreOptions::default()).unwrap();
+    let wal = tmp.path().join("catalog.db-wal");
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let (s2, stop2) = (store.clone(), stop.clone());
+    let reader = std::thread::spawn(move || {
+        while !stop2.load(Ordering::Relaxed) {
+            let _ = s2.read(|c| {
+                Ok(c.query_row("SELECT count(*) FROM media_item", [], |r| {
+                    r.get::<_, i64>(0)
+                })?)
+            });
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    });
+    let padding = "x".repeat(1500);
+    let mut max_wal = 0u64;
+    for i in 0..20_000i64 {
+        let path = format!("/foto/{padding}/IMG_{i:06}.JPG");
+        store
+            .submit(move |c| {
+                c.execute(
+                    "INSERT INTO media_item(path, name, ext, size, mtime, added_at, updated_at)
+                     VALUES (?1, 'IMG.JPG', 'jpg', 1, 0, 0, 0)",
+                    [&path],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        if i % 1000 == 999 {
+            store.flush().unwrap();
+            max_wal = max_wal.max(std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0));
+        }
+    }
+    store.flush().unwrap();
+    stop.store(true, Ordering::Relaxed);
+    reader.join().unwrap();
+    let limit = pc_store::db::WAL_SIZE_LIMIT as u64;
+    assert!(max_wal > 0, "il WAL è stato usato");
+    assert!(
+        max_wal <= limit,
+        "WAL arrivato a {max_wal} byte (soglia {limit})"
+    );
+    let n: i64 = store
+        .read(|c| Ok(c.query_row("SELECT count(*) FROM media_item", [], |r| r.get(0))?))
+        .unwrap();
+    assert_eq!(n, 20_000);
+}

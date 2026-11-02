@@ -39,6 +39,16 @@ export const it = {
     comingSoon: "Questa sezione sarà disponibile a breve.",
     crashNotice: "La sessione precedente si è chiusa in modo anomalo.",
     crashOpen: "Apri diagnostica",
+    crashKind: {
+      panic: "Errore interno dell'app.",
+      native: "Errore di un componente nativo.",
+      unclean:
+        "L'app non si è chiusa regolarmente (chiusa dal sistema, memoria esaurita o interfaccia terminata).",
+    },
+    crashLast: "ultima attività {{time}}",
+    crashMemory: "memoria: app {{app}} MB, interfaccia {{ui}} MB, RAM libera {{free}} MB",
+    uiRecovered: "L'interfaccia si è chiusa ed è stata ricaricata.",
+    uiRecoveredDetail: "Alle {{time}}. I job in corso continuano e il catalogo non ha perso dati.",
     dismiss: "Chiudi",
   },
   jobs: {
@@ -67,6 +77,7 @@ export const it = {
     cores: "Core logici / fisici",
     pressure: "Stato memoria",
     aiPaused: "Analisi AI in pausa per memoria insufficiente",
+    memoryPaused: "In pausa per memoria",
     phases: {
       scansione: "Scansione",
       ricollegamento: "Ricollegamento",
@@ -313,6 +324,18 @@ export const it = {
     refresh: "Aggiorna",
     clearFilters: "Azzera filtri",
     follow: "Segui",
+    byCode: "Riepilogo per codice",
+    groupTitle: "{{code}} — {{n}} file",
+    groupFiles: "File coinvolti",
+    moreFiles: "Mostra altri ({{n}} restanti)",
+    causes: {
+      truncated: "File danneggiato o incompleto",
+      corrupt: "File danneggiato",
+      unsupported_variant: "Variante del formato non supportata",
+      no_raw_preview: "RAW senza anteprima incorporata",
+      too_large: "Immagine oltre i limiti",
+      io: "Errore di lettura",
+    },
   },
   errors: {
     internal: "Errore interno dell'applicazione.",

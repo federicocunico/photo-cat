@@ -1,9 +1,9 @@
-import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useState } from "react";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type BulkAction } from "../../lib/ipc";
-import { useLibrary } from "../../store/library";
+import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { useLive } from "../../store/live";
 import { CategoryPicker } from "./CategoryPicker";
@@ -13,7 +13,9 @@ export function BulkBar() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const catalogAction = useCatalogAction();
-  const { selected, filter, setSelection } = useLibrary();
+  const { selection, filter, setSelection, selectAll, invertSelection } = useLibrary();
+  const count = selCount(selection);
+  const items = () => ({ target: selTarget(selection), count });
   const [action, setAction] = useState("add_tag");
   const [value, setValue] = useState("");
   const [group, setGroup] = useState("subject");
@@ -62,14 +64,15 @@ export function BulkBar() {
       setBusy(false);
     }
   };
+  // Solo conteggio e id massimo: la selezione resta "filtro più eccezioni".
   const select = async (invert: boolean) => {
-    const ids = await commands.libraryIds(filter);
-    const s = new Set(selected);
-    setSelection(invert ? ids.filter((id) => !s.has(id)) : ids);
+    const base = await commands.librarySelection(filter);
+    if (invert) invertSelection(base);
+    else selectAll(base);
   };
   const submit = async () => {
     if (action === "reanalyze") {
-      setJob(await commands.reanalyze(selected));
+      setJob(await commands.reanalyze(selTarget(selection)));
       return;
     }
     if (action === "export" || action === "organize") {
@@ -77,7 +80,7 @@ export function BulkBar() {
       return;
     }
     const destructive = action === "remove_library";
-    if (destructive && !window.confirm(t("bulk.confirm", { count: selected.length }))) return;
+    if (destructive && !window.confirm(t("bulk.confirm", { count }))) return;
     let operation: BulkAction;
     switch (action) {
       case "add_tag":
@@ -89,7 +92,7 @@ export function BulkBar() {
         break;
       case "remove_catalog": {
         const cat = catalogs.data?.find((c) => c.catalog.id === Number(value));
-        await catalogAction.act(selected, Number(value), cat?.catalog.name ?? "");
+        await catalogAction.act(items(), Number(value), cat?.catalog.name ?? "");
         return;
       }
       case "set_label":
@@ -107,7 +110,7 @@ export function BulkBar() {
       default:
         operation = { action: "remove_library" };
     }
-    setJob(await commands.startBulk(selected, operation, destructive));
+    setJob(await commands.startBulk(selTarget(selection), operation, destructive));
   };
   const needsValue = [
     "add_tag",
@@ -123,12 +126,12 @@ export function BulkBar() {
       {(filter.catalogId != null || filter.excludedFrom != null) && (
         <BusyButton
           className="btn"
-          disabled={busy || catalogAction.busy || !selected.length}
-          onClick={async () => {
+          disabled={busy || catalogAction.busy || !count}
+          onClick={() => {
             const id = filter.excludedFrom ?? filter.catalogId!;
             const cat = catalogs.data?.find((c) => c.catalog.id === id);
-            return await catalogAction.act(
-              selected,
+            void catalogAction.act(
+              items(),
               id,
               cat?.catalog.name ?? "",
               filter.excludedFrom != null,
@@ -139,24 +142,48 @@ export function BulkBar() {
         </BusyButton>
       )}
       <div className="feature-actions" style={{ margin: 0 }}>
-        <BusyButton
-          className="btn"
-          disabled={busy}
-          onClick={async () => await run(() => select(false))}
-        >
+        <BusyButton className="btn" disabled={busy} onClick={() => run(() => select(false))}>
           {t("bulk.selectAll")}
+        </BusyButton>
+        <BusyButton className="btn" disabled={busy} onClick={() => run(() => select(true))}>
+          {t("bulk.invert")}
         </BusyButton>
         <BusyButton
           className="btn"
           disabled={busy}
-          onClick={async () => await run(() => select(true))}
+          data-testid="select-non-covers"
+          onClick={() =>
+            void run(async () => {
+              // Sulla selezione esplicita, altrimenti su tutti i risultati del filtro.
+              const explicit = selection.mode === "ids" && count > 0 ? [...selection.ids] : null;
+              const ids = await commands.similarNonCovers(
+                explicit ? { ...filter, ids: explicit } : filter,
+              );
+              setSelection(ids, ids[0] ?? null);
+            })
+          }
         >
-          {t("bulk.invert")}
+          {t("similar.nonCovers")}
+        </BusyButton>
+        <BusyButton
+          className="btn"
+          disabled={busy || selection.mode !== "ids" || count < 2}
+          data-testid="group-together"
+          onClick={() =>
+            void run(async () => {
+              if (selection.mode !== "ids") return;
+              await commands.similarGroupTogether([...selection.ids]);
+              await qc.invalidateQueries({ queryKey: ["library"] });
+              await qc.invalidateQueries({ queryKey: ["similar-group"] });
+            })
+          }
+        >
+          {t("similar.together")}
         </BusyButton>
         <BusyButton className="btn" onClick={() => setSelection([])}>
           {t("bulk.clear")}
         </BusyButton>
-        <span>{t("people.selected", { count: selected.length })}</span>
+        <span data-testid="bulk-count">{t("people.selected", { count })}</span>
         <select
           className="field"
           aria-label={t("bulk.action")}
@@ -208,7 +235,7 @@ export function BulkBar() {
               value={value}
               onChange={setValue}
               onCreate={async (label) => {
-                const r = await commands.addCategory(group, label, [], selected);
+                const r = await commands.addCategory(group, label, [], selTarget(selection));
                 await qc.invalidateQueries({ queryKey: ["taxonomy"] });
                 setValue(r.id);
                 if (r.job != null) setJob(r.job);
@@ -258,8 +285,8 @@ export function BulkBar() {
         )}
         <BusyButton
           className="btn"
-          disabled={busy || !selected.length || (needsValue && !value.trim())}
-          onClick={async () => await run(submit)}
+          disabled={busy || !count || (needsValue && !value.trim())}
+          onClick={() => run(submit)}
         >
           {t("bulk.apply")}
         </BusyButton>
@@ -267,8 +294,8 @@ export function BulkBar() {
           className="btn"
           disabled={busy || !undo.data}
           title={undo.data ?? ""}
-          onClick={async () =>
-            await run(async () => {
+          onClick={() =>
+            void run(async () => {
               await commands.undoBulk();
               await qc.invalidateQueries();
             })

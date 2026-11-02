@@ -6,7 +6,7 @@ use pc_ingest::watch::SourceWatcher;
 use pc_ingest::{import, manage, relink};
 use pc_store::detail::{self, CatalogSummary, MediaDetail, SourceSummary};
 use pc_store::model::{MediaId, NewSource, Source};
-use pc_store::query::{self, Cursor, Facets, LibraryFilter, Page, SortKey};
+use pc_store::query::{self, Facets, LibraryFilter, Page, PageAt, SortKey};
 use pc_store::repo;
 use pc_store::sources::{self, RemovalSummary, UpdateSummary};
 use std::path::Path;
@@ -15,47 +15,59 @@ use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 #[specta::specta]
-pub fn list_sources(state: State<'_, AppState>) -> AppResult<Vec<SourceSummary>> {
-    Ok(state.store.read(detail::source_summaries)?)
+pub async fn list_sources(app: tauri::AppHandle) -> AppResult<Vec<SourceSummary>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(detail::source_summaries)?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn add_source(app: AppHandle, state: State<'_, AppState>, source: NewSource) -> AppResult<i64> {
-    if !Path::new(&source.path).is_dir() {
-        return Err(AppError::new(
-            ErrorCode::NotFound,
-            format!("cartella non trovata: {}", source.path),
-        ));
-    }
-    let mut source = source;
-    source.path = dunce_path(Path::new(&source.path));
-    let id = state.store.write(move |c| {
-        let id = repo::source::insert(c, &source)?;
-        // File ricollegati in questa cartella prima che fosse una sorgente.
-        sources::adopt_strays(c, id)?;
+pub async fn add_source(app: tauri::AppHandle, source: NewSource) -> AppResult<i64> {
+    crate::state::blocking(app, move |app, state| {
+        if !Path::new(&source.path).is_dir() {
+            return Err(AppError::new(
+                ErrorCode::NotFound,
+                format!("cartella non trovata: {}", source.path),
+            ));
+        }
+        let mut source = source;
+        source.path = dunce_path(Path::new(&source.path));
+        let id = state.store.write(move |c| {
+            let id = repo::source::insert(c, &source)?;
+            // File ricollegati in questa cartella prima che fosse una sorgente.
+            sources::adopt_strays(c, id)?;
+            Ok(id)
+        })?;
+        tracing::info!(source_id = id, "sorgente aggiunta");
+        restart_watcher(app);
         Ok(id)
-    })?;
-    tracing::info!(source_id = id, "sorgente aggiunta");
-    restart_watcher(&app);
-    Ok(id)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_source(app: AppHandle, state: State<'_, AppState>, source: Source) -> AppResult<()> {
-    state
-        .store
-        .write(move |c| repo::source::update(c, &source))?;
-    restart_watcher(&app);
-    Ok(())
+pub async fn update_source(app: tauri::AppHandle, source: Source) -> AppResult<()> {
+    crate::state::blocking(app, move |app, state| {
+        state
+            .store
+            .write(move |c| repo::source::update(c, &source))?;
+        restart_watcher(app);
+        Ok(())
+    })
+    .await
 }
 
 /// Cosa comporta la rimozione di una sorgente (mostrato prima della conferma).
 #[tauri::command]
 #[specta::specta]
-pub fn source_removal_summary(state: State<'_, AppState>, id: i64) -> AppResult<RemovalSummary> {
-    manage::removal_summary(&state.jobs, &state.store, id)
+pub async fn source_removal_summary(app: tauri::AppHandle, id: i64) -> AppResult<RemovalSummary> {
+    crate::state::blocking(app, move |_app, state| {
+        manage::removal_summary(&state.jobs, &state.store, id)
+    })
+    .await
 }
 
 /// Rimuove la sorgente e i suoi elementi dalla libreria (mai i file dal disco):
@@ -80,102 +92,118 @@ pub async fn remove_source(app: AppHandle, state: State<'_, AppState>, id: i64) 
 /// Aggiorna la sorgente o solo una sua cartella (`folder`).
 #[tauri::command]
 #[specta::specta]
-pub fn start_import(
-    state: State<'_, AppState>,
+pub async fn start_import(
+    app: tauri::AppHandle,
     source_id: i64,
     folder: Option<String>,
 ) -> AppResult<i64> {
-    let mut params = serde_json::json!({ "sourceId": source_id });
-    if let Some(f) = folder.filter(|f| !f.trim().is_empty()) {
-        params["folder"] = f.into();
-    }
-    state.jobs.submit(import::JOB_KIND, params)
+    crate::state::blocking(app, move |_app, state| {
+        let mut params = serde_json::json!({ "sourceId": source_id });
+        if let Some(f) = folder.filter(|f| !f.trim().is_empty()) {
+            params["folder"] = f.into();
+        }
+        state.jobs.submit(import::JOB_KIND, params)
+    })
+    .await
 }
 
 /// Riepiloghi dell'ultimo aggiornamento di ogni sorgente.
 #[tauri::command]
 #[specta::specta]
-pub fn import_updates(state: State<'_, AppState>) -> AppResult<Vec<UpdateSummary>> {
-    Ok(state.store.read(sources::updates)?)
+pub async fn import_updates(app: tauri::AppHandle) -> AppResult<Vec<UpdateSummary>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(sources::updates)?)
+    })
+    .await
 }
 
 /// Cartella comune più profonda dei mancanti (proposta per "Ricollega").
 #[tauri::command]
 #[specta::specta]
-pub fn missing_folder(state: State<'_, AppState>, source_id: i64) -> AppResult<Option<String>> {
-    let paths: Vec<String> = state
-        .store
-        .read(|c| sources::missing(c, source_id, None))?
-        .into_iter()
-        .map(|(_, p)| p)
-        .collect();
-    Ok(sources::common_folder(&paths))
+pub async fn missing_folder(app: tauri::AppHandle, source_id: i64) -> AppResult<Option<String>> {
+    crate::state::blocking(app, move |_app, state| {
+        let paths: Vec<String> = state
+            .store
+            .read(|c| sources::missing(c, source_id, None))?
+            .into_iter()
+            .map(|(_, p)| p)
+            .collect();
+        Ok(sources::common_folder(&paths))
+    })
+    .await
 }
 
 /// Ricollega i mancanti sotto `old_folder` cercandoli in `new_folder` (job).
 #[tauri::command]
 #[specta::specta]
-pub fn relink_missing(
-    state: State<'_, AppState>,
+pub async fn relink_missing(
+    app: tauri::AppHandle,
     source_id: i64,
     old_folder: String,
     new_folder: String,
 ) -> AppResult<i64> {
-    state.jobs.submit(
-        relink::JOB_KIND,
-        serde_json::json!({ "sourceId": source_id, "oldFolder": old_folder, "newFolder": new_folder }),
-    )
+    crate::state::blocking(app, move |_app, state| {
+        state.jobs.submit(
+            relink::JOB_KIND,
+            serde_json::json!({ "sourceId": source_id, "oldFolder": old_folder, "newFolder": new_folder }),
+        )
+    })
+    .await
 }
 
 /// Esito dell'ultimo ricollegamento della sorgente.
 #[tauri::command]
 #[specta::specta]
-pub fn last_relink(
-    state: State<'_, AppState>,
+pub async fn last_relink(
+    app: tauri::AppHandle,
     source_id: i64,
 ) -> AppResult<Option<relink::RelinkSummary>> {
-    relink::last(&state.store, source_id)
+    crate::state::blocking(app, move |_app, state| {
+        relink::last(&state.store, source_id)
+    })
+    .await
 }
 
 /// Rimuove dalla libreria tutti i mancanti della sorgente; restituisce quanti.
 #[tauri::command]
 #[specta::specta]
-pub fn remove_missing(
-    state: State<'_, AppState>,
+pub async fn remove_missing(
+    app: tauri::AppHandle,
     source_id: i64,
     confirmed: bool,
 ) -> AppResult<u32> {
-    if !confirmed {
-        return Err(AppError::invalid_input("conferma richiesta"));
-    }
-    let removed = manage::remove_missing(&state.store, &state.thumbs, source_id)?;
-    Ok(removed.items as u32)
+    crate::state::blocking(app, move |_app, state| {
+        if !confirmed {
+            return Err(AppError::invalid_input("conferma richiesta"));
+        }
+        let removed = manage::remove_missing(&state.store, &state.thumbs, source_id)?;
+        Ok(removed.items as u32)
+    })
+    .await
 }
 
 /// Sposta la sorgente su una nuova cartella (dopo un ricollegamento completo).
 #[tauri::command]
 #[specta::specta]
-pub fn move_source(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: i64,
-    path: String,
-) -> AppResult<()> {
-    if !Path::new(&path).is_dir() {
-        return Err(AppError::new(
-            ErrorCode::NotFound,
-            format!("cartella non trovata: {path}"),
-        ));
-    }
-    let path = dunce_path(Path::new(&path));
-    state.store.write(move |c| {
-        sources::set_source_path(c, id, &path)?;
-        sources::adopt_strays(c, id)?;
+pub async fn move_source(app: tauri::AppHandle, id: i64, path: String) -> AppResult<()> {
+    crate::state::blocking(app, move |app, state| {
+        if !Path::new(&path).is_dir() {
+            return Err(AppError::new(
+                ErrorCode::NotFound,
+                format!("cartella non trovata: {path}"),
+            ));
+        }
+        let path = dunce_path(Path::new(&path));
+        state.store.write(move |c| {
+            sources::set_source_path(c, id, &path)?;
+            sources::adopt_strays(c, id)?;
+            Ok(())
+        })?;
+        tracing::info!(source_id = id, "cartella della sorgente cambiata");
+        restart_watcher(app);
         Ok(())
-    })?;
-    tracing::info!(source_id = id, "cartella della sorgente cambiata");
-    restart_watcher(&app);
-    Ok(())
+    })
+    .await
 }
 
 /// Pulizia una tantum delle miniature orfane, in background.
@@ -202,28 +230,83 @@ pub fn purge_orphan_thumbs(app: &AppHandle, started: std::time::SystemTime) {
 
 #[tauri::command]
 #[specta::specta]
-pub fn library_page(
-    state: State<'_, AppState>,
+pub async fn library_page(
+    app: tauri::AppHandle,
     filter: LibraryFilter,
     sort: SortKey,
-    after: Option<Cursor>,
+    at: Option<PageAt>,
     limit: u32,
 ) -> AppResult<Page> {
-    Ok(state
-        .store
-        .read(|c| query::page(c, &filter, sort, after.as_ref(), limit))?)
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state
+            .store
+            .read(|c| query::page_at(c, &filter, sort, at.as_ref(), limit))?)
+    })
+    .await
+}
+
+/// Etichetta di una richiesta della UI: le richieste più vecchie dello stesso canale vengono
+/// scartate o interrotte (filtro cambiato mentre il motore calcolava).
+#[derive(Debug, Clone, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestTag {
+    pub channel: String,
+    pub id: u32,
+}
+
+/// Esegue la lettura, o la scarta se `request` è stata superata (`None`).
+fn gated<T>(
+    state: &AppState,
+    request: Option<&RequestTag>,
+    f: impl FnOnce(&rusqlite::Connection) -> Result<T, pc_store::StoreError>,
+) -> AppResult<Option<T>> {
+    Ok(match request {
+        Some(r) => state
+            .gates
+            .run(&state.store, &r.channel, u64::from(r.id), f)?,
+        None => Some(state.store.read(f)?),
+    })
+}
+
+/// Numero di elementi del filtro; `None` se la richiesta è stata superata.
+#[tauri::command]
+#[specta::specta]
+pub async fn library_count(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    request: Option<RequestTag>,
+) -> AppResult<Option<i64>> {
+    crate::state::blocking(app, move |_app, state| {
+        gated(state, request.as_ref(), |c| query::count(c, &filter))
+    })
+    .await
+}
+
+/// Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili).
+#[tauri::command]
+#[specta::specta]
+pub async fn library_grid_count(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    request: Option<RequestTag>,
+) -> AppResult<Option<i64>> {
+    crate::state::blocking(app, move |_app, state| {
+        gated(state, request.as_ref(), |c| query::grid_count(c, &filter))
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn library_count(state: State<'_, AppState>, filter: LibraryFilter) -> AppResult<i64> {
-    Ok(state.store.read(|c| query::count(c, &filter))?)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn library_facets(state: State<'_, AppState>, filter: LibraryFilter) -> AppResult<Facets> {
-    Ok(state.store.read(|c| query::facets(c, &filter))?)
+pub async fn library_facets(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    request: Option<RequestTag>,
+) -> AppResult<Option<Facets>> {
+    crate::state::blocking(app, move |_app, state| {
+        gated(state, request.as_ref(), |c| query::facets(c, &filter))
+    })
+    .await
 }
 
 /// Elenco completo dei valori di una lista di filtro (ricerca, ordinamento, pagine).
@@ -247,11 +330,18 @@ pub async fn library_facet_values(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
-/// Tutti gli id del filtro corrente ("Seleziona tutto").
+/// Base di "Seleziona tutto": numero di risultati e id massimo in quell'istante. La selezione
+/// resta "filtro più eccezioni" e non porta mai nell'interfaccia l'elenco di tutti gli id.
 #[tauri::command]
 #[specta::specta]
-pub fn library_ids(state: State<'_, AppState>, filter: LibraryFilter) -> AppResult<Vec<MediaId>> {
-    Ok(state.store.read(|c| query::ids(c, &filter))?)
+pub async fn library_selection(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+) -> AppResult<query::SelectionBase> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c| query::selection_base(c, &filter))?)
+    })
+    .await
 }
 
 /// Sottocartelle di una sorgente (o di `parent`), un livello alla volta.
@@ -273,14 +363,20 @@ pub async fn list_folders(
 
 #[tauri::command]
 #[specta::specta]
-pub fn media_detail(state: State<'_, AppState>, id: MediaId) -> AppResult<MediaDetail> {
-    Ok(state.store.read(|c| detail::media_detail(c, id))?)
+pub async fn media_detail(app: tauri::AppHandle, id: MediaId) -> AppResult<MediaDetail> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c| detail::media_detail(c, id))?)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn list_catalogs(state: State<'_, AppState>) -> AppResult<Vec<CatalogSummary>> {
-    Ok(state.store.read(detail::catalog_summaries)?)
+pub async fn list_catalogs(app: tauri::AppHandle) -> AppResult<Vec<CatalogSummary>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(detail::catalog_summaries)?)
+    })
+    .await
 }
 
 /// Percorso assoluto senza prefisso `\\?\` (come lo mostra Esplora risorse).
@@ -336,35 +432,68 @@ pub fn restart_watcher(app: &AppHandle) {
     }
 }
 
-/// Serve `thumb://localhost/<chiave>` dalla cache delle miniature.
+/// Cache della WebView per le miniature: un giorno, senza `immutable` (la WebView può
+/// liberarle sotto pressione e una miniatura rigenerata viene riletta).
+pub const THUMB_CACHE_CONTROL: &str = "max-age=86400";
+
+/// Risposta di `thumb://` per il file di `path` (letto qui: chiamare fuori dal thread principale).
+pub fn thumb_response(path: Option<std::path::PathBuf>) -> tauri::http::Response<Vec<u8>> {
+    match path.map(std::fs::read) {
+        Some(Ok(bytes)) => tauri::http::Response::builder()
+            .header("Content-Type", "image/jpeg")
+            .header("Cache-Control", THUMB_CACHE_CONTROL)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(bytes),
+        _ => tauri::http::Response::builder()
+            .status(404)
+            .body(Vec::new()),
+    }
+    .expect("risposta miniatura")
+}
+
+/// Serve `thumb://localhost/<chiave>` dalla cache delle miniature, leggendo il file su un
+/// thread del pool di I/O: il thread principale (che ospita la WebView) non attende mai il disco.
 pub fn thumb_protocol(
     ctx: tauri::UriSchemeContext<'_, tauri::Wry>,
     request: tauri::http::Request<Vec<u8>>,
-) -> tauri::http::Response<Vec<u8>> {
-    let not_found = || {
-        tauri::http::Response::builder()
-            .status(404)
-            .body(Vec::new())
-            .expect("risposta 404")
-    };
-    let Some(state) = ctx.app_handle().try_state::<AppState>() else {
-        return tauri::http::Response::builder()
-            .status(503)
-            .header("Retry-After", "1")
-            .body(Vec::new())
-            .expect("risposta avvio");
-    };
-    let key = request.uri().path().trim_start_matches('/');
-    let Some(path) = state.thumbs.path_of(key) else {
-        return not_found();
-    };
-    match std::fs::read(path) {
-        Ok(bytes) => tauri::http::Response::builder()
-            .header("Content-Type", "image/jpeg")
-            .header("Cache-Control", "max-age=31536000, immutable")
-            .header("Access-Control-Allow-Origin", "*")
-            .body(bytes)
-            .expect("risposta miniatura"),
-        Err(_) => not_found(),
+    responder: tauri::UriSchemeResponder,
+) {
+    if ctx.app_handle().try_state::<AppState>().is_none() {
+        responder.respond(
+            tauri::http::Response::builder()
+                .status(503)
+                .header("Retry-After", "1")
+                .body(Vec::new())
+                .expect("risposta avvio"),
+        );
+        return;
+    }
+    let path = ctx.app_handle().try_state::<AppState>().and_then(|state| {
+        let key = request.uri().path().trim_start_matches('/');
+        state.thumbs.path_of(key)
+    });
+    tauri::async_runtime::spawn_blocking(move || responder.respond(thumb_response(path)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thumbnails_are_cached_without_immutable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("t.jpg");
+        std::fs::write(&p, b"jpeg").unwrap();
+        let r = thumb_response(Some(p));
+        assert_eq!(r.status(), 200);
+        let cc = r.headers()["Cache-Control"].to_str().unwrap();
+        assert!(!cc.contains("immutable"), "{cc}");
+        assert_eq!(cc, "max-age=86400");
+        assert_eq!(r.body(), b"jpeg");
+        assert_eq!(
+            thumb_response(Some(tmp.path().join("assente"))).status(),
+            404
+        );
+        assert_eq!(thumb_response(None).status(), 404);
     }
 }

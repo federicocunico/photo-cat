@@ -127,6 +127,11 @@ export function JobCard({ job }: { job: JobSnapshot }) {
           </strong>
           <span className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={badgeStyle(job.state)}>{t(`jobs.states.${job.state}`)}</span>
+            {job.memoryPaused && (
+              <span style={{ color: "var(--pc-warn)" }} data-testid={`memory-paused-${job.id}`}>
+                {t("jobs.memoryPaused")}
+              </span>
+            )}
             {job.etaSecs != null && t("jobs.eta", { eta: fmtEta(job.etaSecs) })}
           </span>
         </div>

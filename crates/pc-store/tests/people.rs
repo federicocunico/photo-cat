@@ -353,3 +353,58 @@ fn person_count_follows_threshold_without_reanalysis() {
     assert_eq!(count(&c), 2);
     assert!(analysis::recount_people(&c, 0.6, true).unwrap().is_empty());
 }
+
+/// Volti a pagine: niente duplicati né buchi, anche con molte qualità uguali.
+#[test]
+fn faces_are_paged_without_duplicates_or_gaps() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = pc_store::Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+    s.write(|c| {
+        c.execute(
+            "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at)
+             VALUES (1, 'a.jpg', 'a.jpg', 'jpg', 1, 0, 0, 0)",
+            [],
+        )?;
+        c.execute(
+            "INSERT INTO person(id, created_at) VALUES (1, 0), (2, 0)",
+            [],
+        )?;
+        let mut st = c.prepare(
+            "INSERT INTO face(media_id, bbox, quality, person_id) VALUES (1, '[0,0,1,1]', ?1, ?2)",
+        )?;
+        for i in 0..2_500 {
+            // Qualità ripetute (10 valori) e con decimali non rappresentabili in f32.
+            let q = 0.1 + f64::from(i % 10) * 0.0731;
+            st.execute(rusqlite::params![q, if i % 3 == 0 { 2 } else { 1 }])?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    for person in [None, Some(1)] {
+        let mut seen = std::collections::HashSet::new();
+        let mut after = None;
+        let mut pages = 0;
+        let mut last_q = f32::INFINITY;
+        loop {
+            let page = s
+                .read(|c| people::faces_page(c, person, after, 300))
+                .unwrap();
+            pages += 1;
+            for f in &page.items {
+                assert!(seen.insert(f.id), "volto {} ripetuto", f.id);
+                assert!(f.quality <= last_q + 1e-6, "ordine per qualità");
+                last_q = f.quality;
+                if let Some(p) = person {
+                    assert_eq!(f.person_id, Some(p));
+                }
+            }
+            match page.next {
+                Some(n) => after = Some(n),
+                None => break,
+            }
+        }
+        let expected = if person.is_some() { 1_666 } else { 2_500 };
+        assert_eq!(seen.len(), expected);
+        assert_eq!(pages, expected.div_ceil(300));
+    }
+}
