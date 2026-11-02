@@ -16,7 +16,7 @@ pub struct AppState {
     pub paths: AppPaths,
     pub config: Arc<RwLock<Config>>,
     pub face_policy: Arc<pc_ai::face_policy::FacePolicy>,
-    pub diagnostics: Diagnostics,
+    pub diagnostics: Arc<Diagnostics>,
     pub store: Store,
     /// Archivio dell'app (`app.db`): identità e set di tag, indipendente dalla libreria.
     pub app_store: AppStore,

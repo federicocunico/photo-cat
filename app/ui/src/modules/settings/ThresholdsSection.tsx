@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Sezione "Soglie AI": soglie dei modelli (configurazione) e di gruppi e
 // categorie CLIP (tassonomia), con anteprima dell'effetto calcolata dai
 // risultati salvati e applicazione senza rianalisi.
@@ -274,32 +275,32 @@ export function ThresholdsSection({
           </table>
         )}
         <div className="feature-actions" style={{ margin: 0 }}>
-          <button
+          <BusyButton
             className="btn"
             disabled={busy}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 setImpact(await commands.previewThresholds(th, taxChanged && tax ? tax : null));
               })
             }
           >
             {t("thresholds.preview")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             className="btn"
             disabled={busy || (!cfgChanged && !taxChanged)}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 await apply();
                 setNotice(t("thresholds.applied"));
               })
             }
           >
             {t("thresholds.apply")}
-          </button>
-          <button className="btn btn-ghost" disabled={busy} onClick={restore}>
+          </BusyButton>
+          <BusyButton className="btn btn-ghost" disabled={busy} onClick={restore}>
             {t("thresholds.defaults")}
-          </button>
+          </BusyButton>
         </div>
         {busy && !impact && <span className="muted">{t("thresholds.previewing")}</span>}
         {impact && (
@@ -315,11 +316,11 @@ export function ThresholdsSection({
         {belowFloor > 0 && (
           <div style={{ color: "var(--pc-warn)" }}>
             {t("thresholds.belowFloor", { count: belowFloor })}{" "}
-            <button
+            <BusyButton
               className="btn"
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
+              onClick={async () =>
+                await run(async () => {
                   await apply();
                   await commands.reanalyzeBelowFloor();
                   setNotice(t("thresholds.reanalyzeStarted"));
@@ -327,7 +328,7 @@ export function ThresholdsSection({
               }
             >
               {t("thresholds.reanalyze")}
-            </button>
+            </BusyButton>
           </div>
         )}
         {error && <p role="alert">{error}</p>}

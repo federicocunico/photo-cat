@@ -5,6 +5,25 @@ import "../../i18n";
 import type { IdentitiesView, IdentityRow } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { IdentitiesPage } from "./IdentitiesPage";
+import { deferred } from "../../test/deferred";
+
+it("Doppio clic su Salva: form submissions share a synchronous lock", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByText("+ Nuova identità"));
+  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
+    target: { value: "Test identity" },
+  });
+  const pending = deferred<string>();
+  commandsMock.saveIdentity.mockImplementationOnce(() => pending.promise);
+  const save = screen.getByRole("button", { name: "Crea identità" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  fireEvent.submit(save.closest("form")!);
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
+  expect(save).toHaveAttribute("aria-busy", "true");
+  pending.resolve("new-uid");
+  await waitFor(() => expect(commandsMock.listIdentities.mock.calls.length).toBeGreaterThan(1));
+});
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(async () => "D:\\ref.jpg"),
@@ -97,7 +116,7 @@ it("finds an identity by alias", async () => {
     target: { value: "Nonna Rita" },
   });
   await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita"));
-  const table = screen.getByRole("table", { name: "Identità" });
+  const table = await screen.findByRole("table", { name: "Identità" });
   await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
   expect(within(table).getByText("Rita Rossi")).toBeInTheDocument();
 });
@@ -150,7 +169,7 @@ it("asks which face to use when the reference image has several", async () => {
     .mockResolvedValueOnce({ outcome: "added", id: 9 });
   renderPage();
   fireEvent.click(await screen.findByText("Giulia Bianchi"));
-  fireEvent.click(screen.getByRole("button", { name: "+ Da file…" }));
+  fireEvent.click(await screen.findByRole("button", { name: "+ Da file…" }));
   const group = await screen.findByRole("group", { name: /più volti/ });
   expect(within(group).getAllByRole("button")).toHaveLength(3);
   fireEvent.click(within(group).getByRole("button", { name: "Volto 2" }));

@@ -1,3 +1,4 @@
+import { feedback } from "./feedback";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { exclusions } from "./exclusions";
@@ -18,6 +19,7 @@ void i18n.use(initReactI18next).init({
       translation: {
         ...it,
         ...exclusions.it,
+        ...feedback.it,
         ...features.it,
         ...screens.it,
         ...modules.it,
@@ -30,6 +32,7 @@ void i18n.use(initReactI18next).init({
       translation: {
         ...en,
         ...exclusions.en,
+        ...feedback.en,
         ...features.en,
         ...screens.en,
         ...modules.en,

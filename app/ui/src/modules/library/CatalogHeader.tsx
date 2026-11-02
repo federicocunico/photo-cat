@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri } from "../../lib/ipc";
@@ -25,26 +27,30 @@ export function CatalogHeader() {
     setSort(excluded ? "captured_desc" : "excluded_at");
   };
   return (
-    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--pc-border)" }}>
-      {excluded
-        ? t("exclusions.banner", { name: summary.catalog.name })
-        : `${summary.catalog.name} · ${summary.items}`}{" "}
-      <button className="btn" onClick={navigate}>
-        {excluded ? t("exclusions.back") : t("exclusions.view", { count: summary.excluded })}
-      </button>
-      {excluded && summary.catalog.kind === "smart" && (
-        <label style={{ marginLeft: 12 }}>
-          <input
-            type="checkbox"
-            checked={filter.matchingOnly === false}
-            onChange={(e) => {
-              setSelection([], null);
-              setFilter({ matchingOnly: !e.target.checked });
-            }}
-          />{" "}
-          {t("exclusions.all")}
-        </label>
+    <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--pc-border)" }}>
+          {excluded
+            ? t("exclusions.banner", { name: summary.catalog.name })
+            : `${summary.catalog.name} · ${summary.items}`}{" "}
+          <BusyButton className="btn" onClick={navigate}>
+            {excluded ? t("exclusions.back") : t("exclusions.view", { count: summary.excluded })}
+          </BusyButton>
+          {excluded && summary.catalog.kind === "smart" && (
+            <label style={{ marginLeft: 12 }}>
+              <input
+                type="checkbox"
+                checked={filter.matchingOnly === false}
+                onChange={(e) => {
+                  setSelection([], null);
+                  setFilter({ matchingOnly: !e.target.checked });
+                }}
+              />{" "}
+              {t("exclusions.all")}
+            </label>
+          )}
+        </div>
       )}
-    </div>
+    </QueryView>
   );
 }

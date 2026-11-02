@@ -3,6 +3,7 @@
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  BootStatus,
   Config,
   ErrorRecord,
   JobSnapshot,
@@ -11,7 +12,15 @@ import type {
   ResourceSnapshot,
 } from "../bindings";
 
-export { commands } from "../bindings";
+import { commands as generated } from "../bindings";
+import { trackCommand } from "../store/pending";
+export const commands: typeof generated = new Proxy(generated, {
+  get(target, key: keyof typeof generated) {
+    const command = target[key];
+    return (...args: unknown[]) =>
+      trackCommand(key, () => (command as (...args: unknown[]) => Promise<unknown>)(...args));
+  },
+});
 export type * from "../bindings";
 
 /**
@@ -41,6 +50,8 @@ function on<T>(name: string, cb: (payload: T) => void): Promise<UnlistenFn> {
 }
 
 export const events = {
+  onBootPhase: (cb: (s: BootStatus) => void) => on("boot://phase", cb),
+  onBootReady: (cb: (s: BootStatus) => void) => on("boot://ready", cb),
   onJobProgress: (cb: (s: JobSnapshot) => void) => on(EVENTS.jobProgress, cb),
   onResources: (cb: (s: ResourceSnapshot) => void) => on(EVENTS.resources, cb),
   onLogLines: (cb: (l: LogLine[]) => void) => on(EVENTS.logLines, cb),

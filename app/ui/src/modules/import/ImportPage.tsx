@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -69,41 +71,41 @@ function SourcesList({ sources }: { sources: SourceSummary[] }) {
                 {t("import.watch")}
               </label>
               <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <button
+                <BusyButton
                   type="button"
                   className="btn"
                   onClick={run(() => commands.startImport(source.id, null))}
                 >
                   {t("import.rescan")}
-                </button>
-                <button type="button" className="btn" onClick={run(() => updateFolder(source))}>
+                </BusyButton>
+                <BusyButton type="button" className="btn" onClick={run(() => updateFolder(source))}>
                   {t("sources.updateFolder")}
-                </button>
+                </BusyButton>
                 {missing > 0 && (
                   <>
-                    <button
+                    <BusyButton
                       type="button"
                       className="btn"
                       onClick={() => setDialog({ kind: "relink", summary })}
                     >
                       {t("sources.relink")}
-                    </button>
-                    <button
+                    </BusyButton>
+                    <BusyButton
                       type="button"
                       className="btn"
                       onClick={() => setDialog({ kind: "missing", summary })}
                     >
                       {t("sources.removeMissing")}
-                    </button>
+                    </BusyButton>
                   </>
                 )}
-                <button
+                <BusyButton
                   type="button"
                   className="btn btn-danger"
                   onClick={() => setDialog({ kind: "remove", summary })}
                 >
                   {t("import.remove")}
-                </button>
+                </BusyButton>
               </div>
             </div>
             {last && (
@@ -172,14 +174,14 @@ function ScanSummary() {
         <span className="muted">{t("jobs.phases.metadati")}</span>
         <span className="mono">{meta?.percent != null ? `${Math.floor(meta.percent)}%` : "—"}</span>
       </div>
-      <button
+      <BusyButton
         type="button"
         className="btn btn-ghost"
         style={{ alignSelf: "flex-start" }}
         onClick={() => setModule("jobs")}
       >
         {t("import.openJob")}
-      </button>
+      </BusyButton>
     </section>
   );
 }
@@ -268,7 +270,7 @@ export function ImportPage() {
                 placeholder="D:\Foto"
                 onChange={(e) => setPath(e.target.value)}
               />
-              <button
+              <BusyButton
                 type="button"
                 className="btn"
                 style={{ minHeight: 40 }}
@@ -278,7 +280,7 @@ export function ImportPage() {
                 }}
               >
                 {t("import.browse")}
-              </button>
+              </BusyButton>
             </div>
           </div>
           <div
@@ -346,7 +348,7 @@ export function ImportPage() {
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-            <button
+            <BusyButton
               type="button"
               className="btn btn-primary"
               style={{ minHeight: 44, padding: "0 20px" }}
@@ -354,7 +356,7 @@ export function ImportPage() {
               onClick={start}
             >
               {t("import.start")}
-            </button>
+            </BusyButton>
           </div>
         </section>
         <div
@@ -369,7 +371,9 @@ export function ImportPage() {
           <ScanSummary />
         </div>
       </div>
-      <SourcesList sources={sources.data ?? []} />
+      <QueryView query={sources} isEmpty={() => false}>
+        {() => <SourcesList sources={sources.data ?? []} />}
+      </QueryView>
     </div>
   );
 }

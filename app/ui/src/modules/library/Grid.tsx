@@ -1,4 +1,8 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { QueryView } from "../../components/feedback/QueryView";
+import { Skeleton } from "../../components/feedback/Skeleton";
+import { RefreshBar } from "../../components/feedback/RefreshBar";
+import { BusyButton } from "../../components/feedback/BusyButton";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
@@ -82,7 +86,7 @@ function Thumb({
   const url = thumbUrl(item.thumb);
   const [failed, setFailed] = useState(false);
   return (
-    <button
+    <BusyButton
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -219,7 +223,7 @@ function Thumb({
       >
         {item.name}
       </div>
-    </button>
+    </BusyButton>
   );
 }
 
@@ -254,6 +258,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     queryFn: ({ pageParam }) => commands.libraryPage(filter, sort, pageParam, PAGE_SIZE),
     initialPageParam: null as Page["next"],
     getNextPageParam: (last) => last.next ?? undefined,
+    placeholderData: keepPreviousData,
     enabled: isTauri(),
   });
   const total = useQuery({
@@ -308,6 +313,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     setMenu({ x, y, ids });
   };
 
+  if (isTauri() && (pages.isPending || (pages.isError && !pages.data)))
+    return (
+      <QueryView query={pages} skeleton={<Skeleton kind="thumbnail" count={24} />}>
+        {() => null}
+      </QueryView>
+    );
+
   if (pages.isSuccess && items.length === 0) {
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
@@ -319,6 +331,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
 
   return (
     <div
+      aria-busy={pages.isFetching || undefined}
+      data-refreshing={pages.isPlaceholderData || undefined}
       ref={scrollRef}
       tabIndex={0}
       onKeyDown={(e) => {
@@ -342,7 +356,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
-      aria-label={t("library.count", { n: fmtInt(total.data ?? items.length) })}
+      aria-label={
+        total.isPending
+          ? t("feedback.calculating")
+          : t("library.count", { n: fmtInt(total.data ?? 0) })
+      }
       role="region"
       onPointerDown={(e) => {
         if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
@@ -387,6 +405,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         setBox(null);
       }}
     >
+      <RefreshBar active={pages.isFetching && !pages.isPending} />
+      {pages.isError && <QueryView query={pages}>{() => null}</QueryView>}
       <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
         {box && (
           <div
@@ -459,8 +479,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           x={menu.x}
           y={menu.y}
           ids={menu.ids}
-          onOpen={(ids, target) => void openWith.open(ids, target)}
-          onPlace={(ids, p) => void place.apply(ids, p)}
+          onOpen={(ids, target) => openWith.open(ids, target)}
+          onPlace={(ids, p) => place.apply(ids, p)}
           onClose={closeMenu}
         />
       )}

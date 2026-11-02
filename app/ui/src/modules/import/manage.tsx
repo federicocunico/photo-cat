@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Gestione delle importazioni, condivisa tra Libreria e pagina Import:
 // rimozione con riepilogo, riepilogo dell'aggiornamento, ricollegamento e
 // rimozione dei mancanti, aggiornamento di una cartella.
@@ -102,47 +104,59 @@ export function RemoveSourceDialog({
   };
   const title = t("sources.removal.title", { path: source.path });
   return (
-    <Modal label={title} onClose={busy ? () => {} : onClose}>
-      <strong style={{ wordBreak: "break-all" }}>{title}</strong>
-      {summary.error && <p role="alert">{errorText(summary.error)}</p>}
-      {s && (
-        <ul
-          style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}
-        >
-          <li>{t("sources.removal.items", { count: s.items, n: fmtInt(s.items) })}</li>
-          {s.edited > 0 && <li>{t("sources.removal.edited", { count: s.edited })}</li>}
-          {s.catalogs.length > 0 && (
-            <li>
-              {t("sources.removal.catalogs")}{" "}
-              {s.catalogs
-                .map((c) => t("sources.removal.catalogItems", { name: c.name, n: fmtInt(c.items) }))
-                .join(", ")}
-            </li>
+    <QueryView query={summary} enabled={true} isEmpty={() => false}>
+      {() => (
+        <Modal label={title} onClose={busy ? () => {} : onClose}>
+          <strong style={{ wordBreak: "break-all" }}>{title}</strong>
+          {summary.error && <p role="alert">{errorText(summary.error)}</p>}
+          {s && (
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: 18,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              <li>{t("sources.removal.items", { count: s.items, n: fmtInt(s.items) })}</li>
+              {s.edited > 0 && <li>{t("sources.removal.edited", { count: s.edited })}</li>}
+              {s.catalogs.length > 0 && (
+                <li>
+                  {t("sources.removal.catalogs")}{" "}
+                  {s.catalogs
+                    .map((c) =>
+                      t("sources.removal.catalogItems", { name: c.name, n: fmtInt(c.items) }),
+                    )
+                    .join(", ")}
+                </li>
+              )}
+              {s.orphanedPeople.length > 0 && (
+                <li>{t("sources.removal.people", { names: s.orphanedPeople.join(", ") })}</li>
+              )}
+              {s.jobs > 0 && <li>{t("sources.removal.jobs", { count: s.jobs })}</li>}
+            </ul>
           )}
-          {s.orphanedPeople.length > 0 && (
-            <li>{t("sources.removal.people", { names: s.orphanedPeople.join(", ") })}</li>
-          )}
-          {s.jobs > 0 && <li>{t("sources.removal.jobs", { count: s.jobs })}</li>}
-        </ul>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {t("sources.removal.disk")}
+          </span>
+          {error && <p role="alert">{error}</p>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <BusyButton type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+              {t("sources.cancel")}
+            </BusyButton>
+            <BusyButton
+              type="button"
+              className="btn btn-danger"
+              disabled={busy || !s}
+              onClick={async () => await remove()}
+            >
+              {busy ? t("sources.removal.busy") : t("sources.removal.confirm")}
+            </BusyButton>
+          </div>
+        </Modal>
       )}
-      <span className="muted" style={{ fontSize: 13 }}>
-        {t("sources.removal.disk")}
-      </span>
-      {error && <p role="alert">{error}</p>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
-          {t("sources.cancel")}
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger"
-          disabled={busy || !s}
-          onClick={() => void remove()}
-        >
-          {busy ? t("sources.removal.busy") : t("sources.removal.confirm")}
-        </button>
-      </div>
-    </Modal>
+    </QueryView>
   );
 }
 
@@ -177,7 +191,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
         const label = t(`sources.summary.${g}`, { n: fmtInt(grp.count) });
         const complete = grp.ids.length === grp.count;
         return complete ? (
-          <button
+          <BusyButton
             key={g}
             type="button"
             className="btn btn-ghost"
@@ -190,7 +204,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
             onClick={() => show(grp.ids)}
           >
             {label}
-          </button>
+          </BusyButton>
         ) : (
           <span key={g}>{label}</span>
         );
@@ -249,18 +263,18 @@ export function RemoveMissingDialog({
       )}
       {error && <p role="alert">{error}</p>}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
+        <BusyButton type="button" className="btn btn-ghost" onClick={onClose}>
           {done === null ? t("sources.cancel") : t("sources.close")}
-        </button>
+        </BusyButton>
         {done === null && (
-          <button
+          <BusyButton
             type="button"
             className="btn btn-danger"
             disabled={busy}
-            onClick={() => void remove()}
+            onClick={async () => await remove()}
           >
             {t("sources.missingDialog.confirm")}
-          </button>
+          </BusyButton>
         )}
       </div>
     </Modal>
@@ -361,7 +375,7 @@ export function RelinkDialog({
           disabled={jobId !== null}
           onChange={(e) => setNewFolder(e.target.value)}
         />
-        <button
+        <BusyButton
           type="button"
           className="btn"
           disabled={jobId !== null}
@@ -371,7 +385,7 @@ export function RelinkDialog({
           }}
         >
           {t("sources.relinkDialog.browse")}
-        </button>
+        </BusyButton>
       </div>
       {jobId !== null && !r && <span role="status">{t("sources.relinkDialog.running")}</span>}
       {r && (
@@ -397,13 +411,13 @@ export function RelinkDialog({
           {r.outsideSources && !note && (
             <div style={{ display: "flex", gap: 8 }}>
               {r.sourceComplete && sameRoot(r.oldFolder, source.path) ? (
-                <button type="button" className="btn" onClick={() => void moveSource()}>
+                <BusyButton type="button" className="btn" onClick={async () => await moveSource()}>
                   {t("sources.relinkDialog.moveSource")}
-                </button>
+                </BusyButton>
               ) : (
-                <button type="button" className="btn" onClick={() => void addSource()}>
+                <BusyButton type="button" className="btn" onClick={async () => await addSource()}>
                   {t("sources.relinkDialog.addSource")}
-                </button>
+                </BusyButton>
               )}
             </div>
           )}
@@ -412,18 +426,18 @@ export function RelinkDialog({
       )}
       {error && <p role="alert">{error}</p>}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
+        <BusyButton type="button" className="btn btn-ghost" onClick={onClose}>
           {jobId === null ? t("sources.cancel") : t("sources.close")}
-        </button>
+        </BusyButton>
         {jobId === null && (
-          <button
+          <BusyButton
             type="button"
             className="btn btn-primary"
             disabled={!newFolder.trim() || !old.trim()}
-            onClick={() => void start()}
+            onClick={async () => await start()}
           >
             {t("sources.relinkDialog.start")}
-          </button>
+          </BusyButton>
         )}
       </div>
     </Modal>

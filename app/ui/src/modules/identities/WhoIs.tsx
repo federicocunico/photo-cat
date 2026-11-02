@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
+import { useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type IdentitySuggestion } from "../../lib/ipc";
@@ -50,7 +52,10 @@ export function WhoIs({
     ]);
     onLinked(p);
   };
+  const locked = useRef(false);
   const run = async (fn: () => Promise<number>) => {
+    if (locked.current) return;
+    locked.current = true;
     setBusy(true);
     setError("");
     try {
@@ -58,6 +63,7 @@ export function WhoIs({
     } catch (e) {
       setError(errorText(e));
     } finally {
+      locked.current = false;
       setBusy(false);
     }
   };
@@ -110,15 +116,20 @@ export function WhoIs({
           style={{ minWidth: 260 }}
         />
         {linked && (
-          <button
+          <BusyButton
             className="btn"
             disabled={busy}
-            onClick={() => void run(() => commands.linkPersonIdentity(person, null))}
+            onClick={async () => await run(() => commands.linkPersonIdentity(person, null))}
           >
             {t("identities.unlink")}
-          </button>
+          </BusyButton>
         )}
       </div>
+      {open && query.length > 0 && (
+        <QueryView query={suggestions} isEmpty={() => false}>
+          {() => null}
+        </QueryView>
+      )}
       {open && options.length > 0 && (
         <ul
           id={listId}

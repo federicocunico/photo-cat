@@ -8,8 +8,8 @@
 
 ## 1. Componenti comuni
 
-- [ ] 1.1 Creare `components/feedback/` con `Spinner`, `Skeleton`, `QueryView`, `RefreshBar`, `BusyButton`, `Toast`/`useToast` (design §1), con stili dai token e `prefers-reduced-motion`. Verifica: test in `components/feedback/*.test.tsx` per i tre stati di `QueryView` (incluso "Riprova" che richiama `refetch`), `BusyButton` che ignora il secondo clic e imposta `aria-busy`, e `Toast` con azione e chiusura automatica.
-- [ ] 1.2 Proxy su `commands` con lo store `store/pending.ts`, indicatore nel `TopBar` dopo 300 ms, esclusione dei comandi di polling, e `JobPill` animato solo con job attivi (design §2). Verifica: test in `shell.test.tsx` per "Richiesta lenta" (con `ipcMock` ritardato) e "Nessun job attivo".
+- [x] 1.1 Creare `components/feedback/` con `Spinner`, `Skeleton`, `QueryView`, `RefreshBar`, `BusyButton`, `Toast`/`useToast` (design §1), con stili dai token e `prefers-reduced-motion`. Verifica: test in `components/feedback/*.test.tsx` per i tre stati di `QueryView` (incluso "Riprova" che richiama `refetch`), `BusyButton` che ignora il secondo clic e imposta `aria-busy`, e `Toast` con azione e chiusura automatica.
+- [x] 1.2 Proxy su `commands` con lo store `store/pending.ts`, indicatore nel `TopBar` dopo 300 ms, esclusione dei comandi di polling, e `JobPill` animato solo con job attivi (design §2). Verifica: test in `shell.test.tsx` per "Richiesta lenta" (con `ipcMock` ritardato) e "Nessun job attivo".
 
 ## 2. Libreria
 
@@ -25,7 +25,7 @@
 
 ## 4. Avvio
 
-- [ ] 4.1 Verifica tecnica: `app.manage` dopo `setup` e comandi con `State<AppState>` chiamati prima della registrazione, con la versione di Tauri in uso; annotare l'esito in Open Questions del design e scegliere tra la soluzione principale e il ripiego (design §4). Verifica: un test o un prototipo in un ramo locale che dimostra il comportamento, descritto nel design.
+- [x] 4.1 Verifica tecnica: `app.manage` dopo `setup` e comandi con `State<AppState>` chiamati prima della registrazione, con la versione di Tauri in uso; annotare l'esito in Open Questions del design e scegliere tra la soluzione principale e il ripiego (design §4). Verifica: un test o un prototipo in un ramo locale che dimostra il comportamento, descritto nel design.
 - [ ] 4.2 Stato `Boot` con fasi ed eventi `boot://phase`/`boot://ready`, inizializzazione su thread, protocolli `thumb://`/`face://` che rispondono 503 prima di `ready`, comando `boot_status`. Verifica: test Rust dell'avanzamento delle fasi con un catalogo da migrare in una cartella temporanea, e avvio manuale dell'app con un catalogo grande.
 - [ ] 4.3 Schermata statica in `index.html`, `BootScreen` in React con fasi ed errore ("Riprova", "Scegli un'altra cartella dati"), e scelta tra onboarding e Libreria solo dopo `ready` e lettura della configurazione. Verifica: test in `App.test.tsx` per "Primo avvio" (nessun render della Libreria prima dell'onboarding) ed "Errore all'avvio".
 

@@ -1,113 +1,89 @@
-import { useEffect, useState } from "react";
-import { AppShell, CrashBanner } from "./components/shell/AppShell";
-import { StatusBar } from "./components/shell/StatusBar";
-import { setLanguage } from "./i18n";
-import { commands, isTauri, type CrashInfo, type Settings } from "./lib/ipc";
-import { DiagnosticsPage } from "./modules/diagnostics/DiagnosticsPage";
-import { ImportPage } from "./modules/import/ImportPage";
-import { JobsPage } from "./modules/jobs/JobsPage";
-import { LibraryPage } from "./modules/library/LibraryPage";
-import { LibraryStatus } from "./modules/library/LibraryStatus";
-import { ModelsPage } from "./modules/models/ModelsPage";
-import { PeoplePage } from "./modules/people/PeoplePage";
-import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
-import { OrganizePage } from "./modules/organize/OrganizePage";
-import { SettingsPage } from "./modules/settings/SettingsPage";
-import { TagsPage } from "./modules/tags/TagsPage";
-import { IdentitiesPage } from "./modules/identities/IdentitiesPage";
-import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
-import { ActiveSetStatus, TagsStatus } from "./modules/tags/TagStatus";
-import { Onboarding } from "./modules/onboarding/Onboarding";
-import { Placeholder } from "./modules/Placeholder";
-import { useLayout, type ModuleId } from "./store/layout";
-import { useLiveEvents } from "./store/live";
-import { useImportRefresh } from "./modules/import/sourceActions";
-import { applyTheme } from "./theme/tokens";
+import { useEffect, useState, type ComponentType } from "react";
+import { BootScreen } from "./components/feedback/BootScreen";
+import { commands, events, isTauri, type BootStatus, type Settings } from "./lib/ipc";
+import { restoreUiPrefs } from "./lib/uiPrefs";
+import type { StartupData } from "./ReadyApp";
 
-function ModuleView({ module }: { module: ModuleId }) {
-  switch (module) {
-    case "library":
-      return <LibraryPage />;
-    case "import":
-      return <ImportPage />;
-    case "jobs":
-      return <JobsPage />;
-    case "models":
-      return <ModelsPage />;
-    case "people":
-      return <PeoplePage />;
-    case "identities":
-      return <IdentitiesPage />;
-    case "catalogs":
-      return <CatalogsPage />;
-    case "tags":
-      return <TagsPage />;
-    case "sequence":
-      return <SequencePage />;
-    case "organize":
-      return <OrganizePage />;
-    case "settings":
-      return <SettingsPage />;
-    case "diagnostics":
-      return <DiagnosticsPage />;
-    default:
-      return <Placeholder module={module} />;
-  }
-}
-
+const initial: BootStatus = { phase: "opening", ready: false, error: null, logsPath: "" };
 export function App() {
-  const module = useLayout((s) => s.module);
-  const theme = useLayout((s) => s.theme);
-  const language = useLayout((s) => s.language);
-  const [crash, setCrash] = useState<CrashInfo | null>(null);
-  const [onboarding, setOnboarding] = useState(false);
-  useLiveEvents();
-  useImportRefresh();
+  const [status, setStatus] = useState(initial);
+  const [loaded, setLoaded] = useState<{
+    View: ComponentType<{ startup: StartupData }>;
+    data: StartupData;
+  } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    // Solo sviluppo: VITE_START_MODULE=jobs apre direttamente un modulo.
-    const start = import.meta.env.VITE_START_MODULE as ModuleId | undefined;
-    if (import.meta.env.DEV && start) useLayout.getState().setModule(start);
-  }, []);
-  useEffect(() => applyTheme(theme), [theme]);
-  useEffect(() => setLanguage(language), [language]);
-  useEffect(() => {
-    if (isTauri()) {
-      void commands.onboardingDone().then((done) => setOnboarding(!done));
-      void commands.getConfig().then((c) => {
-        const cfg = c as Settings;
-        useLayout.getState().setTheme(cfg.ui.theme);
-        useLayout.getState().setLanguage(cfg.ui.language);
-      });
-    }
-    if (isTauri())
-      commands
-        .appInfo()
-        .then((i) => setCrash(i.previousCrash))
-        .catch(() => {});
-  }, []);
-  const dismiss = () => {
-    setCrash(null);
-    void commands.dismissCrashNotice();
-  };
+    let cancelled = false,
+      preparing = false;
+    const update = async (next: BootStatus) => {
+      if (cancelled || preparing) return;
+      setStatus(next);
+      if (!next.ready) return;
+      preparing = true;
+      setStatus({ ...next, ready: false, phase: "configuration" });
+      try {
+        // Keep the preference restore before importing any persisted stores.
+        await restoreUiPrefs();
+        const [data, { ReadyApp }, { useLayout }] = await Promise.all([
+          isTauri()
+            ? Promise.all([commands.onboardingDone(), commands.getConfig(), commands.appInfo()])
+            : Promise.resolve([true, null, { previousCrash: null }] as const),
+          import("./ReadyApp"),
+          import("./store/layout"),
+        ]);
+        const [done, config, info] = data;
+        if (cancelled) return;
+        if (config) {
+          const cfg = config as Settings;
+          useLayout.getState().setTheme(cfg.ui.theme);
+          useLayout.getState().setLanguage(cfg.ui.language);
+        }
+        setLoaded({ View: ReadyApp, data: { onboarding: !done, info } });
+      } catch (e) {
+        preparing = false;
+        if (!cancelled)
+          setStatus({
+            ...next,
+            ready: false,
+            error: (e as { detail?: string })?.detail ?? String(e),
+          });
+      }
+    };
+    const read = () => {
+      if (cancelled || preparing) return;
+      if (isTauri())
+        void commands
+          .bootStatus()
+          .then(update)
+          .catch((e: unknown) => {
+            if (!cancelled) setStatus((s) => ({ ...s, error: String(e) }));
+          });
+      else void update({ ...initial, ready: true });
+    };
+    const subscriptions = [
+      events.onBootPhase((s) => void update(s)),
+      events.onBootReady((s) => void update(s)),
+    ];
+    read();
+    const timer = setInterval(read, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      subscriptions.forEach((p) => void p.then((off) => off()));
+    };
+  }, [attempt]);
+  if (loaded) return <loaded.View startup={loaded.data} />;
   return (
-    <AppShell banner={crash && <CrashBanner crash={crash} onDismiss={dismiss} />}>
-      <ModuleView module={module} />
-      {onboarding && <Onboarding onDone={() => setOnboarding(false)} />}
-      <StatusBar>
-        {module === "library" && (
-          <>
-            <LibraryStatus />
-            <ActiveSetStatus />
-          </>
-        )}
-        {module === "tags" && <TagsStatus />}
-        {module === "sequence" && (
-          <>
-            <SequenceStatus />
-            <ActiveSetStatus />
-          </>
-        )}
-      </StatusBar>
-    </AppShell>
+    <BootScreen
+      status={status}
+      retry={async () => {
+        await commands.bootRetry();
+        setAttempt((a) => a + 1);
+      }}
+      choose={async () => {
+        await commands.bootChooseFolder();
+        setAttempt((a) => a + 1);
+      }}
+    />
   );
 }

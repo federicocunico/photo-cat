@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -53,13 +54,13 @@ export function CatalogFeedback() {
     <Toast key={state.message} onClose={closeToast}>
       {state.message}{" "}
       {state.undoable && (
-        <button
+        <BusyButton
           className="btn"
           disabled={state.busy}
-          onClick={() => {
+          onClick={async () => {
             if (useAction.getState().busy) return;
             useAction.setState({ busy: true });
-            void commands
+            return await commands
               .undoBulk()
               .then(() => {
                 refresh();
@@ -71,7 +72,7 @@ export function CatalogFeedback() {
           }}
         >
           {t("exclusions.undo")}
-        </button>
+        </BusyButton>
       )}
     </Toast>
   );

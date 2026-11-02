@@ -7,6 +7,44 @@ import { useLive, useLiveEvents } from "../../store/live";
 import { Panels } from "./Panels";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
+import { trackCommand, usePending } from "../../store/pending";
+import { commandsMock } from "../../test/ipcMock";
+
+it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes", async () => {
+  vi.useFakeTimers();
+  let finish!: () => void;
+  commandsMock.listSources.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([]);
+      }),
+  );
+  render(<TopBar />);
+  let request!: Promise<unknown>;
+  act(() => {
+    request = trackCommand("listSources", () => commandsMock.listSources());
+  });
+  act(() => {
+    vi.advanceTimersByTime(299);
+  });
+  expect(screen.queryByTestId("pending-ipc")).not.toBeInTheDocument();
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(screen.getByTestId("pending-ipc")).toHaveAttribute("title", "1 richieste in corso");
+  await act(async () => {
+    finish();
+    await request;
+  });
+  expect(screen.queryByTestId("pending-ipc")).not.toBeInTheDocument();
+  expect(usePending.getState().count).toBe(0);
+  vi.useRealTimers();
+});
+
+it("Nessun job attivo: idle job pill contains no animated spinner", () => {
+  render(<TopBar />);
+  expect(screen.getByTestId("job-pill").querySelector(".feedback-spinner")).toBeNull();
+});
 
 vi.mock("../../lib/ipc", () => ipcMockModule());
 

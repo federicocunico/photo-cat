@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -131,25 +133,25 @@ export function JobCard({ job }: { job: JobSnapshot }) {
         {live && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             {running && (
-              <button type="button" className="btn" onClick={() => commands.pauseJob(job.id)}>
+              <BusyButton type="button" className="btn" onClick={() => commands.pauseJob(job.id)}>
                 <Icon.Pause size={14} />
                 {t("jobs.pause")}
-              </button>
+              </BusyButton>
             )}
             {paused && (
-              <button type="button" className="btn" onClick={() => commands.resumeJob(job.id)}>
+              <BusyButton type="button" className="btn" onClick={() => commands.resumeJob(job.id)}>
                 <Icon.Play size={14} />
                 {t("jobs.resume")}
-              </button>
+              </BusyButton>
             )}
-            <button
+            <BusyButton
               type="button"
               className="btn btn-danger"
               onClick={() => commands.cancelJob(job.id)}
             >
               <Icon.Stop size={14} />
               {t("jobs.cancel")}
-            </button>
+            </BusyButton>
           </div>
         )}
       </div>
@@ -195,14 +197,14 @@ export function JobCard({ job }: { job: JobSnapshot }) {
         </table>
       </div>
       {job.failed > 0 && (
-        <button
+        <BusyButton
           type="button"
           className="btn btn-ghost"
           style={{ alignSelf: "flex-start", color: "var(--pc-danger)", border: 0, padding: 0 }}
           onClick={() => openDiagnostics({ jobId: job.id })}
         >
           {t("jobs.failed", { count: job.failed })} · {t("jobs.showErrors")}
-        </button>
+        </BusyButton>
       )}
       {job.error && <div style={{ color: "var(--pc-danger)" }}>{job.error}</div>}
       <JobUpdateSummary jobId={job.id} kind={job.kind} />
@@ -241,17 +243,17 @@ function History({ rows, liveIds }: { rows: JobRow[]; liveIds: Set<number> }) {
           </span>
           <JobUpdateSummary jobId={r.id} kind={r.kind} />
           {r.state === "interrupted" && (
-            <button
+            <BusyButton
               type="button"
               className="btn"
               style={{ marginLeft: "auto" }}
               onClick={async () => {
                 await commands.resumeInterruptedJob(r.id);
-                await qc.invalidateQueries({ queryKey: ["job-history"] });
+                return await qc.invalidateQueries({ queryKey: ["job-history"] });
               }}
             >
               {t("jobs.resumeInterrupted")}
-            </button>
+            </BusyButton>
           )}
         </div>
       ))}
@@ -347,56 +349,60 @@ export function JobsPage() {
     .sort((a, b) => b.id - a.id);
   const shown = [...live, ...finished.slice(0, 3)];
   return (
-    <div
-      style={{
-        flex: 1,
-        overflow: "auto",
-        padding: "24px 32px",
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 24,
-        alignContent: "flex-start",
-      }}
-    >
-      <div
-        style={{
-          flex: "999 1 560px",
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("jobs.title")}</h1>
-          {import.meta.env.DEV && isTauri() && (
-            <button
-              type="button"
-              className="btn"
-              style={{ marginLeft: "auto" }}
-              onClick={() => commands.startDemoJob(3000, 400)}
-            >
-              {t("jobs.demo")}
-            </button>
-          )}
+    <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <div
+          style={{
+            flex: 1,
+            overflow: "auto",
+            padding: "24px 32px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 24,
+            alignContent: "flex-start",
+          }}
+        >
+          <div
+            style={{
+              flex: "999 1 560px",
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("jobs.title")}</h1>
+              {import.meta.env.DEV && isTauri() && (
+                <BusyButton
+                  type="button"
+                  className="btn"
+                  style={{ marginLeft: "auto" }}
+                  onClick={() => commands.startDemoJob(3000, 400)}
+                >
+                  {t("jobs.demo")}
+                </BusyButton>
+              )}
+            </div>
+            {shown.length === 0 && <p className="muted">{t("jobs.empty")}</p>}
+            {shown.map((j) => (
+              <JobCard key={j.id} job={j} />
+            ))}
+            <History rows={history.data ?? []} liveIds={new Set(shown.map((j) => j.id))} />
+          </div>
+          <aside
+            style={{
+              flex: "1 1 300px",
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            <ResourcesPanel res={resources} />
+          </aside>
         </div>
-        {shown.length === 0 && <p className="muted">{t("jobs.empty")}</p>}
-        {shown.map((j) => (
-          <JobCard key={j.id} job={j} />
-        ))}
-        <History rows={history.data ?? []} liveIds={new Set(shown.map((j) => j.id))} />
-      </div>
-      <aside
-        style={{
-          flex: "1 1 300px",
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <ResourcesPanel res={resources} />
-      </aside>
-    </div>
+      )}
+    </QueryView>
   );
 }

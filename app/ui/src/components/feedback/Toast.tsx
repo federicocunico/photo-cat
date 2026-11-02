@@ -1,26 +1,30 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 /** Avviso non modale, condiviso dalle operazioni reversibili. */
 export function Toast({
   children,
   onClose,
   duration = 8000,
+  stacked = false,
 }: {
   children: ReactNode;
   onClose: () => void;
   duration?: number;
+  stacked?: boolean;
 }) {
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const timer = setTimeout(onClose, duration);
+    const timer = setTimeout(() => close.current(), duration);
     return () => clearTimeout(timer);
-  }, [onClose, duration]);
+  }, [duration]);
   return (
     <div
       role="status"
       style={{
-        position: "fixed",
-        right: 24,
-        bottom: 48,
+        position: stacked ? "relative" : "fixed",
+        right: stacked ? undefined : 24,
+        bottom: stacked ? undefined : 48,
         zIndex: 40,
         padding: 12,
         background: "var(--pc-raised)",

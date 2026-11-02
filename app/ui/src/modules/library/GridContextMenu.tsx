@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Menu contestuale della griglia: agisce sulla selezione (o sulla sola
 // miniatura cliccata). Navigabile con le frecce, Invio ed Esc.
 import { useQuery } from "@tanstack/react-query";
@@ -38,8 +39,8 @@ export function GridContextMenu({
   x: number;
   y: number;
   ids: number[];
-  onOpen: (ids: number[], target: OpenTarget) => void;
-  onPlace: (ids: number[], place: PlaceInput | null) => void;
+  onOpen: (ids: number[], target: OpenTarget) => unknown;
+  onPlace: (ids: number[], place: PlaceInput | null) => unknown;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -71,8 +72,8 @@ export function GridContextMenu({
     return () => document.removeEventListener("mousedown", away);
   }, [onClose]);
 
-  const act = (fn: () => void) => () => {
-    fn();
+  const act = (fn: () => unknown) => async () => {
+    await fn();
     onClose();
   };
   const onKeyDown = (e: KeyboardEvent) => {
@@ -123,7 +124,7 @@ export function GridContextMenu({
       <div className="muted" style={{ padding: "4px 10px", fontSize: 12 }}>
         {t("externalApps.actsOn", { count: ids.length })}
       </div>
-      <button
+      <BusyButton
         type="button"
         role="menuitem"
         aria-haspopup="menu"
@@ -132,7 +133,7 @@ export function GridContextMenu({
         onClick={() => setSub(!sub)}
       >
         {t("externalApps.openWith")} ▸
-      </button>
+      </BusyButton>
       {sub && (
         <div
           role="menu"
@@ -141,7 +142,7 @@ export function GridContextMenu({
           style={{ paddingLeft: 12 }}
         >
           {apps.map((a) => (
-            <button
+            <BusyButton
               key={a.id}
               type="button"
               role="menuitem"
@@ -149,43 +150,43 @@ export function GridContextMenu({
               onClick={act(() => onOpen(ids, { kind: "app", id: a.id ?? "" }))}
             >
               {a.name}
-            </button>
+            </BusyButton>
           ))}
-          <button
+          <BusyButton
             type="button"
             role="menuitem"
             style={item}
             onClick={act(() => onOpen(ids, { kind: "system" }))}
           >
             {t("externalApps.system")}
-          </button>
+          </BusyButton>
         </div>
       )}
-      <button
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
         onClick={act(() => onOpen(ids, { kind: "system" }))}
       >
         {t("externalApps.openDefault")}
-      </button>
-      <button
+      </BusyButton>
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
         onClick={act(() => onOpen(ids, { kind: "reveal" }))}
       >
         {t("externalApps.reveal")}
-      </button>
+      </BusyButton>
       {(filter.catalogId != null || filter.excludedFrom != null) && (
-        <button
+        <BusyButton
           type="button"
           role="menuitem"
           style={item}
           disabled={catalogAction.busy}
           onClick={act(() => {
             const id = filter.excludedFrom ?? filter.catalogId!;
-            void catalogAction.act(
+            return catalogAction.act(
               ids,
               id,
               catalogs.data?.find((c) => c.catalog.id === id)?.catalog.name ?? "",
@@ -194,7 +195,7 @@ export function GridContextMenu({
           })}
         >
           {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
-        </button>
+        </BusyButton>
       )}
       <hr style={{ border: 0, borderTop: "1px solid var(--pc-border)", margin: "4px 0" }} />
       {placing ? (
@@ -210,41 +211,46 @@ export function GridContextMenu({
                 setPicked(s);
               }}
             />
-            <button
+            <BusyButton
               type="button"
               className="btn"
               disabled={!place.trim()}
-              onClick={() => {
+              onClick={async () => {
                 const name = place.trim();
-                onPlace(
+                await onPlace(
                   ids,
                   picked && picked.name === name
                     ? { name, country: picked.country, lat: picked.lat, lon: picked.lon }
                     : { name },
                 );
-                onClose();
+                return onClose();
               }}
             >
               {t("place.set")}
-            </button>
+            </BusyButton>
           </div>
         </div>
       ) : (
-        <button type="button" role="menuitem" style={item} onClick={() => setPlacing(true)}>
+        <BusyButton type="button" role="menuitem" style={item} onClick={() => setPlacing(true)}>
           {t("externalApps.setPlace")}
-        </button>
+        </BusyButton>
       )}
-      <button type="button" role="menuitem" style={item} onClick={act(() => onPlace(ids, null))}>
-        {t("externalApps.resetPlace")}
-      </button>
-      <button
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
-        onClick={act(() => void commands.reanalyze(ids))}
+        onClick={act(() => onPlace(ids, null))}
+      >
+        {t("externalApps.resetPlace")}
+      </BusyButton>
+      <BusyButton
+        type="button"
+        role="menuitem"
+        style={item}
+        onClick={act(() => commands.reanalyze(ids))}
       >
         {t("externalApps.reanalyze")}
-      </button>
+      </BusyButton>
     </div>
   );
 }

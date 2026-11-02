@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Rinomina di un luogo dal facet "Luogo": conferma con il numero di foto e
 // avviso di unione se il nuovo nome esiste già.
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,16 +78,16 @@ export function RenamePlaceDialog({
       )}
       {error && <p role="alert">{error}</p>}
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button
+        <BusyButton
           className="btn"
           disabled={busy || !target || target === from}
-          onClick={() => void confirm()}
+          onClick={async () => await confirm()}
         >
           {t("place.renameConfirm")}
-        </button>
-        <button className="btn btn-ghost" onClick={onClose}>
+        </BusyButton>
+        <BusyButton className="btn btn-ghost" onClick={onClose}>
           {t("place.cancel")}
-        </button>
+        </BusyButton>
       </div>
     </div>
   );

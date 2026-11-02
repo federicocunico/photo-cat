@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -86,129 +88,139 @@ export function PeoplePage() {
     setSelected([]);
   };
   return (
-    <section style={{ overflow: "auto", padding: 24, flex: 1 }}>
-      <h1>{t("people.title")}</h1>
-      {error && <p role="alert">{error}</p>}
-      {!detail ? (
-        <>
-          <button className="btn" onClick={() => open(null)}>
-            {t("people.all")}
-          </button>
-          {!people.data?.length && <p className="muted">{t("people.empty")}</p>}
-          <div className="feature-grid">
-            {people.data?.map((p) => (
-              <button className="feature-card" key={p.id} onClick={() => open(p.id)}>
-                {p.cover && <FaceCrop face={p.cover} />}
-                <strong>{p.name ?? `${t("people.unnamed")} ${p.id}`}</strong>
-                <span>{t("people.photos", { count: p.photos })}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <button className="btn" onClick={() => setDetail(false)}>
-            {t("people.back")}
-          </button>
-          <h2>{active?.name ?? t("people.all")}</h2>
-          <div className="feature-actions">
-            {person !== null && (
-              <WhoIs
-                person={person}
-                linked={active?.identityUid ? (active.name ?? null) : null}
-                onLinked={(p) => setPerson(p)}
-              />
-            )}
-            <select
-              className="field"
-              aria-label={t("people.target")}
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-            >
-              <option value="">{t("people.target")}</option>
-              {people.data
-                ?.filter((p) => p.id !== person)
-                .map((p) => (
-                  <option value={p.id} key={p.id}>
-                    {p.name ?? `${t("people.unnamed")} ${p.id}`}
-                  </option>
-                ))}
-            </select>
-            {person !== null && (
-              <button
-                className="btn"
-                disabled={busy || !target}
-                onClick={() =>
-                  void correct({ action: "merge", from: person, to: Number(target) }).then(() =>
-                    open(Number(target)),
-                  )
-                }
-              >
-                {t("people.merge")}
-              </button>
-            )}
-            <button
-              className="btn"
-              disabled={busy || !target || !selected.length}
-              onClick={() =>
-                void correct({ action: "assign", person: Number(target), faces: selected })
-              }
-            >
-              {t("people.assign")}
-            </button>
-            {person !== null && (
-              <button
-                className="btn"
-                disabled={busy || !selected.length}
-                onClick={() => void correct({ action: "separate", person, faces: selected })}
-              >
-                {t("people.separate")}
-              </button>
-            )}
-            <span>{t("people.selected", { count: selected.length })}</span>
-          </div>
-          <div className="feature-grid">
-            {faces.data?.map((f) => (
-              <article className="feature-card" key={f.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    aria-label={`#${f.id}`}
-                    checked={selected.includes(f.id)}
-                    onChange={(e) =>
-                      setSelected((s) =>
-                        e.target.checked ? [...s, f.id] : s.filter((id) => id !== f.id),
-                      )
-                    }
-                  />
-                  <FaceCrop face={f} />
-                </label>
-                {f.personId !== null && (
-                  <button
-                    className="btn"
-                    disabled={busy}
-                    onClick={() =>
-                      void correct({ action: "reject", person: f.personId!, face: f.id })
-                    }
-                  >
-                    {t("people.reject")}
-                  </button>
-                )}
-                <button
-                  className="btn"
-                  disabled={busy}
-                  onClick={() => {
-                    if (window.confirm(t("people.removeConfirm")))
-                      void correct({ action: "remove", face: f.id });
-                  }}
-                >
-                  {t("people.remove")}
-                </button>
-              </article>
-            ))}
-          </div>
-        </>
+    <QueryView query={people} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <QueryView query={faces} enabled={isTauri() && detail} isEmpty={() => false}>
+          {() => (
+            <section style={{ overflow: "auto", padding: 24, flex: 1 }}>
+              <h1>{t("people.title")}</h1>
+              {error && <p role="alert">{error}</p>}
+              {!detail ? (
+                <>
+                  <BusyButton className="btn" onClick={() => open(null)}>
+                    {t("people.all")}
+                  </BusyButton>
+                  {!people.data?.length && <p className="muted">{t("people.empty")}</p>}
+                  <div className="feature-grid">
+                    {people.data?.map((p) => (
+                      <BusyButton className="feature-card" key={p.id} onClick={() => open(p.id)}>
+                        {p.cover && <FaceCrop face={p.cover} />}
+                        <strong>{p.name ?? `${t("people.unnamed")} ${p.id}`}</strong>
+                        <span>{t("people.photos", { count: p.photos })}</span>
+                      </BusyButton>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <BusyButton className="btn" onClick={() => setDetail(false)}>
+                    {t("people.back")}
+                  </BusyButton>
+                  <h2>{active?.name ?? t("people.all")}</h2>
+                  <div className="feature-actions">
+                    {person !== null && (
+                      <WhoIs
+                        person={person}
+                        linked={active?.identityUid ? (active.name ?? null) : null}
+                        onLinked={(p) => setPerson(p)}
+                      />
+                    )}
+                    <select
+                      className="field"
+                      aria-label={t("people.target")}
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value)}
+                    >
+                      <option value="">{t("people.target")}</option>
+                      {people.data
+                        ?.filter((p) => p.id !== person)
+                        .map((p) => (
+                          <option value={p.id} key={p.id}>
+                            {p.name ?? `${t("people.unnamed")} ${p.id}`}
+                          </option>
+                        ))}
+                    </select>
+                    {person !== null && (
+                      <BusyButton
+                        className="btn"
+                        disabled={busy || !target}
+                        onClick={async () =>
+                          await correct({ action: "merge", from: person, to: Number(target) }).then(
+                            () => open(Number(target)),
+                          )
+                        }
+                      >
+                        {t("people.merge")}
+                      </BusyButton>
+                    )}
+                    <BusyButton
+                      className="btn"
+                      disabled={busy || !target || !selected.length}
+                      onClick={async () =>
+                        await correct({ action: "assign", person: Number(target), faces: selected })
+                      }
+                    >
+                      {t("people.assign")}
+                    </BusyButton>
+                    {person !== null && (
+                      <BusyButton
+                        className="btn"
+                        disabled={busy || !selected.length}
+                        onClick={async () =>
+                          await correct({ action: "separate", person, faces: selected })
+                        }
+                      >
+                        {t("people.separate")}
+                      </BusyButton>
+                    )}
+                    <span>{t("people.selected", { count: selected.length })}</span>
+                  </div>
+                  <div className="feature-grid">
+                    {faces.data?.map((f) => (
+                      <article className="feature-card" key={f.id}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            aria-label={`#${f.id}`}
+                            checked={selected.includes(f.id)}
+                            onChange={(e) =>
+                              setSelected((s) =>
+                                e.target.checked ? [...s, f.id] : s.filter((id) => id !== f.id),
+                              )
+                            }
+                          />
+                          <FaceCrop face={f} />
+                        </label>
+                        {f.personId !== null && (
+                          <BusyButton
+                            className="btn"
+                            disabled={busy}
+                            onClick={async () =>
+                              await correct({ action: "reject", person: f.personId!, face: f.id })
+                            }
+                          >
+                            {t("people.reject")}
+                          </BusyButton>
+                        )}
+                        <BusyButton
+                          className="btn"
+                          disabled={busy}
+                          onClick={async () => {
+                            if (window.confirm(t("people.removeConfirm")))
+                              await correct({ action: "remove", face: f.id });
+                          }}
+                        >
+                          {t("people.remove")}
+                        </BusyButton>
+                      </article>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+        </QueryView>
       )}
-    </section>
+    </QueryView>
   );
 }

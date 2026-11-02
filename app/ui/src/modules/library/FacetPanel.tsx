@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Pannelli flottanti delle liste di filtro: ricerca, ordinamento, numero di
 // voci, elenco completo con caselle e "Deseleziona tutto". Leggono e
 // scrivono il filtro della libreria, quindi restano allineati a barra
@@ -34,7 +36,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
   const action =
     facetKey.kind === "place"
       ? (f: FacetValue) => (
-          <button
+          <BusyButton
             type="button"
             className="btn btn-ghost"
             style={{ padding: "0 4px", fontSize: 12 }}
@@ -43,7 +45,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
             onClick={() => setRenaming(f)}
           >
             ✎
-          </button>
+          </BusyButton>
         )
       : undefined;
   return (
@@ -76,9 +78,11 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
           <option value="name">{t("library.facets.sortName")}</option>
         </select>
         <span className="muted" role="status">
-          {t("library.facets.count", { count: list.total })}
+          {list.query.isPending
+            ? t("feedback.calculating")
+            : t("library.facets.count", { count: list.total })}
         </span>
-        <button
+        <BusyButton
           type="button"
           className="btn btn-ghost"
           style={{ marginLeft: "auto" }}
@@ -86,7 +90,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
           onClick={() => setFilter(clearIn(facetKey, filter))}
         >
           {t("library.facets.clearAll")}
-        </button>
+        </BusyButton>
       </div>
       {renaming && (
         <RenamePlaceDialog
@@ -97,17 +101,24 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
           onClose={() => setRenaming(null)}
         />
       )}
-      <FacetValuesList
-        values={list.values}
-        hasMore={list.hasMore}
-        loadMore={list.loadMore}
-        loading={list.loading}
-        selected={selected}
-        onToggle={(v) => setFilter(toggleIn(facetKey, filter, v))}
-        render={render}
-        action={action}
-        fill
-      />
+      <QueryView
+        query={{ ...list.query, data: list.query.data === undefined ? undefined : list.values }}
+        isEmpty={() => false}
+      >
+        {() => (
+          <FacetValuesList
+            values={list.values}
+            hasMore={list.hasMore}
+            loadMore={list.loadMore}
+            loading={list.loading}
+            selected={selected}
+            onToggle={(v) => setFilter(toggleIn(facetKey, filter, v))}
+            render={render}
+            action={action}
+            fill
+          />
+        )}
+      </QueryView>
     </div>
   );
 }

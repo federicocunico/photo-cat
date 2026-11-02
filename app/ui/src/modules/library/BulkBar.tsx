@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -120,13 +121,13 @@ export function BulkBar() {
   return (
     <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--pc-border)" }}>
       {(filter.catalogId != null || filter.excludedFrom != null) && (
-        <button
+        <BusyButton
           className="btn"
           disabled={busy || catalogAction.busy || !selected.length}
-          onClick={() => {
+          onClick={async () => {
             const id = filter.excludedFrom ?? filter.catalogId!;
             const cat = catalogs.data?.find((c) => c.catalog.id === id);
-            void catalogAction.act(
+            return await catalogAction.act(
               selected,
               id,
               cat?.catalog.name ?? "",
@@ -135,18 +136,26 @@ export function BulkBar() {
           }}
         >
           {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
-        </button>
+        </BusyButton>
       )}
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button className="btn" disabled={busy} onClick={() => void run(() => select(false))}>
+        <BusyButton
+          className="btn"
+          disabled={busy}
+          onClick={async () => await run(() => select(false))}
+        >
           {t("bulk.selectAll")}
-        </button>
-        <button className="btn" disabled={busy} onClick={() => void run(() => select(true))}>
+        </BusyButton>
+        <BusyButton
+          className="btn"
+          disabled={busy}
+          onClick={async () => await run(() => select(true))}
+        >
           {t("bulk.invert")}
-        </button>
-        <button className="btn" onClick={() => setSelection([])}>
+        </BusyButton>
+        <BusyButton className="btn" onClick={() => setSelection([])}>
           {t("bulk.clear")}
-        </button>
+        </BusyButton>
         <span>{t("people.selected", { count: selected.length })}</span>
         <select
           className="field"
@@ -247,38 +256,38 @@ export function BulkBar() {
             />
           )
         )}
-        <button
+        <BusyButton
           className="btn"
           disabled={busy || !selected.length || (needsValue && !value.trim())}
-          onClick={() => void run(submit)}
+          onClick={async () => await run(submit)}
         >
           {t("bulk.apply")}
-        </button>
-        <button
+        </BusyButton>
+        <BusyButton
           className="btn"
           disabled={busy || !undo.data}
           title={undo.data ?? ""}
-          onClick={() =>
-            void run(async () => {
+          onClick={async () =>
+            await run(async () => {
               await commands.undoBulk();
               await qc.invalidateQueries();
             })
           }
         >
           {t("bulk.undo")}
-        </button>
+        </BusyButton>
       </div>
       {error && <p role="alert">{error}</p>}
       {result && (
         <div role="status">
           {t("bulk.outcome", { done, failed: result.failed })} ·{" "}
           {Math.round(result.overallPercent ?? 0)}%{" "}
-          <button
+          <BusyButton
             className="btn"
             onClick={() => useLayout.getState().openDiagnostics({ jobId: result.id })}
           >
             {t("bulk.details")}
-          </button>
+          </BusyButton>
         </div>
       )}
     </div>

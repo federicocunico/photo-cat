@@ -59,3 +59,9 @@ Ogni modulo passa a `QueryView`, `RefreshBar` e `BusyButton`. L'elenco dei punti
 ## Migration Plan
 
 Nessun dato coinvolto. Rollback: revert.
+
+## Open Questions resolved
+
+- Tauri 2.12.5: `tests/late_state.rs` uses the real IPC dispatcher with MockRuntime. A command requiring managed State rejects before registration; registering it on a worker after setup makes the same command succeed. The executable test passes on Linux. The primary route (late AppState registration) is therefore used; no OnceLock wrapper is needed.
+- `boot::open_stores` is shared by startup and a migration test against a real schema-v1 database in a temporary directory. It verifies opening, migration and archive phases, schema upgrade and catalog/config backups.
+- The logger is retained through retries using Arc<Diagnostics>. If the selected data directory cannot hold logs, boot errors point to the temporary boot log directory. The catalog and app archive are initialized on the startup worker.

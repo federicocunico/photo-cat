@@ -1,3 +1,6 @@
+import { useBusyAction } from "../../components/feedback/useBusyAction";
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -47,7 +50,7 @@ function Avatar({ name, size = 36 }: { name: string; size?: number }) {
   );
 }
 
-function RefFace({ id, onRemove }: { id: number; onRemove: () => void }) {
+function RefFace({ id, onRemove }: { id: number; onRemove: () => unknown }) {
   const { t } = useTranslation();
   const img = useQuery({
     queryKey: ["identity-face", id],
@@ -70,7 +73,7 @@ function RefFace({ id, onRemove }: { id: number; onRemove: () => void }) {
           }}
         />
       )}
-      <button
+      <BusyButton
         type="button"
         className="btn icon-btn"
         aria-label={t("identities.removeFace")}
@@ -78,7 +81,7 @@ function RefFace({ id, onRemove }: { id: number; onRemove: () => void }) {
         style={{ position: "absolute", top: 2, right: 2, minWidth: 22, minHeight: 22 }}
       >
         ×
-      </button>
+      </BusyButton>
     </span>
   );
 }
@@ -155,7 +158,7 @@ function Editor({
       qc.invalidateQueries({ queryKey: ["identity-faces"] }),
       qc.invalidateQueries({ queryKey: ["people"] }),
     ]);
-  const run = async (fn: () => Promise<unknown>) => {
+  const [run, actionBusy] = useBusyAction(async (fn: () => Promise<unknown>) => {
     setError("");
     try {
       await fn();
@@ -163,7 +166,7 @@ function Editor({
     } catch (e) {
       setError(errorText(e));
     }
-  };
+  });
   const save = () =>
     run(async () => {
       const uid = await commands.saveIdentity(
@@ -211,225 +214,258 @@ function Editor({
   if (!row && !creating) return <p className="muted">{t("identities.none")}</p>;
   const title = creating ? t("identities.new") : row!.name;
   return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <Avatar name={draft.name || "?"} size={48} />
-        <div>
-          <div className="muted" style={{ fontSize: 12 }}>
-            {row ? t("identities.createdAt", { date: fmtDate(new Date(row.createdAt)) }) : ""}
-          </div>
-          <strong style={{ fontSize: 20 }}>{title}</strong>
-        </div>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: 10 }}
-      >
-        {field("name", t("identities.name"), { required: true })}
-        {field("shortName", t("identities.shortName"), {
-          placeholder: draft.name.trim().split(/\s+/)[0] ?? "",
-        })}
-        {field("group", t("identities.group"), { list: "pc-identity-groups" })}
-        <datalist id="pc-identity-groups">
-          {groups.map((g) => (
-            <option key={g} value={g} />
-          ))}
-        </datalist>
-        {field("aliases", t("identities.aliases"), { placeholder: t("identities.aliasesHint") })}
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 600 }}>{t("identities.threshold")}</span>
-            <span className="mono">{draft.threshold.toFixed(2)}</span>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(draft.threshold * 100)}
-            aria-label={t("identities.threshold")}
-            onChange={(e) => setDraft({ ...draft, threshold: Number(e.target.value) / 100 })}
-          />
-        </label>
-        <button className="btn btn-primary" type="submit" disabled={!draft.name.trim()}>
-          {creating ? t("identities.create") : t("identities.save")}
-        </button>
-      </form>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
-      {row && (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h2 style={{ margin: 0, fontSize: 16 }}>
-              {t("identities.references", { count: faces.data?.length ?? row.faces })}
-            </h2>
-            <button className="btn" style={{ marginLeft: "auto" }} onClick={() => void pickFile()}>
-              {t("identities.addFromFile")}
-            </button>
-            {row.person != null && (
-              <button className="btn" onClick={() => setFromLibrary((v) => !v)}>
-                {t("identities.addFromLibrary")}
-              </button>
-            )}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {faces.data?.map((f) => (
-              <RefFace
-                key={f.id}
-                id={f.id}
-                onRemove={() => void run(() => commands.removeIdentityFace(f.id))}
-              />
-            ))}
-          </div>
-          <span className="muted" style={{ fontSize: 12 }}>
-            {t("identities.referencesHint")}
-          </span>
-          {choices && (
-            <div role="group" aria-label={t("identities.chooseFace")} className="feature-card">
-              <span>{t("identities.chooseFace")}</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {choices.faces.map((f) => (
-                  <button
-                    key={f.index}
-                    type="button"
-                    className="btn"
-                    style={{ padding: 2 }}
-                    aria-label={t("identities.faceN", { n: f.index + 1 })}
-                    onClick={() => void addFile(choices.path, f.index)}
-                  >
-                    <img src={f.crop} alt="" width={72} height={72} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {fromLibrary && (
-            <div className="feature-card" style={{ alignItems: "stretch" }}>
-              <span>{t("identities.chooseLibraryFace")}</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {libraryFaces.data?.slice(0, 24).map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className="btn"
-                    style={{ padding: 2 }}
-                    aria-label={t("identities.libraryFaceN", { id: f.id })}
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.addIdentityReferenceFace(row.uid, f.id);
-                        setFromLibrary(false);
-                      })
-                    }
-                  >
-                    <FaceCrop face={f} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{ color: "var(--pc-text-soft)", lineHeight: 1.5 }}>
-            {row.person != null ? (
-              <>
-                {t("identities.linked", { count: row.photos })}{" "}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    useLayout.getState().setModule("people");
-                  }}
-                >
-                  {t("identities.openPeople")}
-                </a>
-              </>
-            ) : (
-              t("identities.notLinked")
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {mergeInto === null ? (
-              <button className="btn" onClick={() => setMergeInto("")}>
-                {t("identities.mergeWith")}
-              </button>
-            ) : (
-              <div className="feature-card" style={{ alignItems: "stretch" }}>
-                <select
-                  className="field"
-                  aria-label={t("identities.mergeTarget")}
-                  value={mergeInto}
-                  onChange={(e) => setMergeInto(e.target.value)}
-                >
-                  <option value="">{t("identities.mergeTarget")}</option>
-                  {all
-                    .filter((x) => x.uid !== row.uid)
-                    .map((x) => (
-                      <option key={x.uid} value={x.uid}>
-                        {x.name}
-                      </option>
-                    ))}
-                </select>
-                {mergeInto && (
-                  <p style={{ margin: 0 }}>
-                    {t("identities.mergeConfirm", {
-                      from: row.name,
-                      into: all.find((x) => x.uid === mergeInto)?.name ?? "",
-                    })}
-                  </p>
-                )}
-                <div className="feature-actions" style={{ margin: 0 }}>
-                  <button
-                    className="btn btn-primary"
-                    disabled={!mergeInto}
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.mergeIdentities(row.uid, mergeInto);
-                        onSaved(mergeInto);
-                      })
-                    }
-                  >
-                    {t("identities.merge")}
-                  </button>
-                  <button className="btn" onClick={() => setMergeInto(null)}>
-                    {t("identities.cancel")}
-                  </button>
+    <QueryView query={faces} enabled={isTauri() && !!row} isEmpty={() => false}>
+      {() => (
+        <QueryView
+          query={libraryFaces}
+          enabled={isTauri() && fromLibrary && row?.person != null}
+          isEmpty={() => false}
+        >
+          {() => (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Avatar name={draft.name || "?"} size={48} />
+                <div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {row
+                      ? t("identities.createdAt", { date: fmtDate(new Date(row.createdAt)) })
+                      : ""}
+                  </div>
+                  <strong style={{ fontSize: 20 }}>{title}</strong>
                 </div>
               </div>
-            )}
-            {confirmDelete ? (
-              <div
-                role="alertdialog"
-                aria-label={t("identities.deleteConfirm", { name: row.name })}
-                className="feature-card"
-                style={{ alignItems: "stretch" }}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void save();
+                }}
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
               >
-                <p style={{ margin: 0 }}>{t("identities.deleteConfirm", { name: row.name })}</p>
-                <div className="feature-actions" style={{ margin: 0 }}>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.deleteIdentity(row.uid);
-                        onDeleted();
-                      })
+                {field("name", t("identities.name"), { required: true })}
+                {field("shortName", t("identities.shortName"), {
+                  placeholder: draft.name.trim().split(/\s+/)[0] ?? "",
+                })}
+                {field("group", t("identities.group"), { list: "pc-identity-groups" })}
+                <datalist id="pc-identity-groups">
+                  {groups.map((g) => (
+                    <option key={g} value={g} />
+                  ))}
+                </datalist>
+                {field("aliases", t("identities.aliases"), {
+                  placeholder: t("identities.aliasesHint"),
+                })}
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontWeight: 600 }}>{t("identities.threshold")}</span>
+                    <span className="mono">{draft.threshold.toFixed(2)}</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(draft.threshold * 100)}
+                    aria-label={t("identities.threshold")}
+                    onChange={(e) =>
+                      setDraft({ ...draft, threshold: Number(e.target.value) / 100 })
                     }
-                  >
-                    {t("identities.confirm")}
-                  </button>
-                  <button className="btn" onClick={() => setConfirmDelete(false)}>
-                    {t("identities.cancel")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-                {t("identities.delete")}
-              </button>
-            )}
-          </div>
-        </>
+                  />
+                </label>
+                <BusyButton
+                  busy={actionBusy}
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={!draft.name.trim()}
+                >
+                  {creating ? t("identities.create") : t("identities.save")}
+                </BusyButton>
+              </form>
+              {error && <p role="alert">{error}</p>}
+              {notice && <p role="status">{notice}</p>}
+              {row && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h2 style={{ margin: 0, fontSize: 16 }}>
+                      {t("identities.references", { count: faces.data?.length ?? row.faces })}
+                    </h2>
+                    <BusyButton
+                      className="btn"
+                      style={{ marginLeft: "auto" }}
+                      onClick={async () => await pickFile()}
+                    >
+                      {t("identities.addFromFile")}
+                    </BusyButton>
+                    {row.person != null && (
+                      <BusyButton className="btn" onClick={() => setFromLibrary((v) => !v)}>
+                        {t("identities.addFromLibrary")}
+                      </BusyButton>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {faces.data?.map((f) => (
+                      <RefFace
+                        key={f.id}
+                        id={f.id}
+                        onRemove={() => run(() => commands.removeIdentityFace(f.id))}
+                      />
+                    ))}
+                  </div>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {t("identities.referencesHint")}
+                  </span>
+                  {choices && (
+                    <div
+                      role="group"
+                      aria-label={t("identities.chooseFace")}
+                      className="feature-card"
+                    >
+                      <span>{t("identities.chooseFace")}</span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {choices.faces.map((f) => (
+                          <BusyButton
+                            key={f.index}
+                            type="button"
+                            className="btn"
+                            style={{ padding: 2 }}
+                            aria-label={t("identities.faceN", { n: f.index + 1 })}
+                            onClick={async () => await addFile(choices.path, f.index)}
+                          >
+                            <img src={f.crop} alt="" width={72} height={72} />
+                          </BusyButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {fromLibrary && (
+                    <div className="feature-card" style={{ alignItems: "stretch" }}>
+                      <span>{t("identities.chooseLibraryFace")}</span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {libraryFaces.data?.slice(0, 24).map((f) => (
+                          <BusyButton
+                            key={f.id}
+                            type="button"
+                            className="btn"
+                            style={{ padding: 2 }}
+                            aria-label={t("identities.libraryFaceN", { id: f.id })}
+                            onClick={async () =>
+                              await run(async () => {
+                                await commands.addIdentityReferenceFace(row.uid, f.id);
+                                setFromLibrary(false);
+                              })
+                            }
+                          >
+                            <FaceCrop face={f} />
+                          </BusyButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ color: "var(--pc-text-soft)", lineHeight: 1.5 }}>
+                    {row.person != null ? (
+                      <>
+                        {t("identities.linked", { count: row.photos })}{" "}
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            return useLayout.getState().setModule("people");
+                          }}
+                        >
+                          {t("identities.openPeople")}
+                        </a>
+                      </>
+                    ) : (
+                      t("identities.notLinked")
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {mergeInto === null ? (
+                      <BusyButton className="btn" onClick={() => setMergeInto("")}>
+                        {t("identities.mergeWith")}
+                      </BusyButton>
+                    ) : (
+                      <div className="feature-card" style={{ alignItems: "stretch" }}>
+                        <select
+                          className="field"
+                          aria-label={t("identities.mergeTarget")}
+                          value={mergeInto}
+                          onChange={(e) => setMergeInto(e.target.value)}
+                        >
+                          <option value="">{t("identities.mergeTarget")}</option>
+                          {all
+                            .filter((x) => x.uid !== row.uid)
+                            .map((x) => (
+                              <option key={x.uid} value={x.uid}>
+                                {x.name}
+                              </option>
+                            ))}
+                        </select>
+                        {mergeInto && (
+                          <p style={{ margin: 0 }}>
+                            {t("identities.mergeConfirm", {
+                              from: row.name,
+                              into: all.find((x) => x.uid === mergeInto)?.name ?? "",
+                            })}
+                          </p>
+                        )}
+                        <div className="feature-actions" style={{ margin: 0 }}>
+                          <BusyButton
+                            className="btn btn-primary"
+                            disabled={!mergeInto}
+                            onClick={async () =>
+                              await run(async () => {
+                                await commands.mergeIdentities(row.uid, mergeInto);
+                                onSaved(mergeInto);
+                              })
+                            }
+                          >
+                            {t("identities.merge")}
+                          </BusyButton>
+                          <BusyButton className="btn" onClick={() => setMergeInto(null)}>
+                            {t("identities.cancel")}
+                          </BusyButton>
+                        </div>
+                      </div>
+                    )}
+                    {confirmDelete ? (
+                      <div
+                        role="alertdialog"
+                        aria-label={t("identities.deleteConfirm", { name: row.name })}
+                        className="feature-card"
+                        style={{ alignItems: "stretch" }}
+                      >
+                        <p style={{ margin: 0 }}>
+                          {t("identities.deleteConfirm", { name: row.name })}
+                        </p>
+                        <div className="feature-actions" style={{ margin: 0 }}>
+                          <BusyButton
+                            className="btn btn-danger"
+                            onClick={async () =>
+                              await run(async () => {
+                                await commands.deleteIdentity(row.uid);
+                                onDeleted();
+                              })
+                            }
+                          >
+                            {t("identities.confirm")}
+                          </BusyButton>
+                          <BusyButton className="btn" onClick={() => setConfirmDelete(false)}>
+                            {t("identities.cancel")}
+                          </BusyButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <BusyButton className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+                        {t("identities.delete")}
+                      </BusyButton>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </QueryView>
       )}
-    </>
+    </QueryView>
   );
 }
 
@@ -441,14 +477,14 @@ function Transfer({ onDone }: { onDone: () => void }) {
   const [merge, setMerge] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const run = async (fn: () => Promise<unknown>) => {
+  const [run, actionBusy] = useBusyAction(async (fn: () => Promise<unknown>) => {
     setError("");
     try {
       await fn();
     } catch (e) {
       setError(errorText(e));
     }
-  };
+  });
   const exportFile = () =>
     run(async () => {
       const { save } = await import("@tauri-apps/plugin-dialog");
@@ -490,12 +526,12 @@ function Transfer({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button className="btn" onClick={() => void importFile()}>
+        <BusyButton busy={actionBusy} className="btn" onClick={async () => await importFile()}>
           {t("identities.import")}
-        </button>
-        <button className="btn" onClick={() => void exportFile()}>
+        </BusyButton>
+        <BusyButton busy={actionBusy} className="btn" onClick={async () => await exportFile()}>
           {t("identities.export")}
-        </button>
+        </BusyButton>
         <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
             type="checkbox"
@@ -529,12 +565,16 @@ function Transfer({ onDone }: { onDone: () => void }) {
             </label>
           ))}
           <div className="feature-actions" style={{ margin: 0 }}>
-            <button className="btn btn-primary" onClick={() => void apply()}>
+            <BusyButton
+              busy={actionBusy}
+              className="btn btn-primary"
+              onClick={async () => await apply()}
+            >
               {t("identities.importApply")}
-            </button>
-            <button className="btn" onClick={() => setPreview(null)}>
+            </BusyButton>
+            <BusyButton busy={actionBusy} className="btn" onClick={() => setPreview(null)}>
               {t("identities.cancel")}
-            </button>
+            </BusyButton>
           </div>
         </div>
       )}
@@ -587,16 +627,16 @@ export function IdentitiesPage() {
           <span className="muted">
             {t("identities.summary", { count: everyone.length, groups: groups.length })}
           </span>
-          <button
+          <BusyButton
             className="btn btn-primary"
             style={{ marginLeft: "auto" }}
             onClick={() => {
               setSelected(null);
-              setCreating(true);
+              return setCreating(true);
             }}
           >
             {t("identities.newButton")}
-          </button>
+          </BusyButton>
         </div>
         <Transfer onDone={() => {}} />
         <div
@@ -619,16 +659,16 @@ export function IdentitiesPage() {
           </span>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <button
+          <BusyButton
             className="pill"
             aria-pressed={group === null}
             onClick={() => setGroup(null)}
             style={{ borderColor: group === null ? "var(--pc-accent)" : undefined }}
           >
             {t("identities.allGroups", { count: everyone.length })}
-          </button>
+          </BusyButton>
           {groups.map((g) => (
-            <button
+            <BusyButton
               key={g}
               className="pill"
               aria-pressed={group === g}
@@ -636,7 +676,7 @@ export function IdentitiesPage() {
               style={{ borderColor: group === g ? "var(--pc-accent)" : undefined }}
             >
               {g} ({everyone.filter((r) => r.group === g).length})
-            </button>
+            </BusyButton>
           ))}
           <input
             type="search"
@@ -648,82 +688,88 @@ export function IdentitiesPage() {
             style={{ marginLeft: "auto", width: 220 }}
           />
         </div>
-        <div
-          role="table"
-          aria-label={t("identities.title")}
-          style={{ border: "1px solid var(--pc-border)", borderRadius: 8, overflow: "hidden" }}
-        >
-          <div
-            role="row"
-            className="muted"
-            style={{
-              display: "grid",
-              gridTemplateColumns: grid,
-              gap: 12,
-              padding: "8px 14px",
-              background: "var(--pc-panel)",
-              fontSize: 12,
-              textTransform: "uppercase",
-              letterSpacing: 0.6,
-            }}
-          >
-            <span role="columnheader" />
-            <span role="columnheader">{t("identities.colName")}</span>
-            <span role="columnheader">{t("identities.colAliases")}</span>
-            <span role="columnheader">{t("identities.colGroup")}</span>
-            <span role="columnheader">{t("identities.colRefs")}</span>
-            <span role="columnheader">{t("identities.colLibrary")}</span>
-          </div>
-          {rows.map((r) => (
-            <button
-              key={r.uid}
-              type="button"
-              role="row"
-              aria-selected={r.uid === selected}
-              onClick={() => {
-                setCreating(false);
-                setSelected(r.uid);
-              }}
-              style={{
-                display: "grid",
-                gridTemplateColumns: grid,
-                gap: 12,
-                alignItems: "center",
-                width: "100%",
-                padding: "6px 14px",
-                minHeight: 48,
-                border: 0,
-                borderTop: "1px solid var(--pc-raised)",
-                textAlign: "left",
-                cursor: "pointer",
-                color: "var(--pc-text)",
-                background: r.uid === selected ? "var(--pc-selection-bg)" : "transparent",
-              }}
+        <QueryView query={view} isEmpty={() => false}>
+          {() => (
+            <div
+              role="table"
+              aria-label={t("identities.title")}
+              style={{ border: "1px solid var(--pc-border)", borderRadius: 8, overflow: "hidden" }}
             >
-              <span role="cell">
-                <Avatar name={r.name} />
-              </span>
-              <span role="cell" style={{ fontWeight: 600 }}>
-                {r.name}
-              </span>
-              <span role="cell" className="muted">
-                {r.aliases.join(", ") || "—"}
-              </span>
-              <span role="cell">{r.group ?? "—"}</span>
-              <span role="cell" style={{ color: r.faces ? undefined : "var(--pc-warn)" }}>
-                {r.faces ? t("identities.refCount", { count: r.faces }) : t("identities.noRefs")}
-              </span>
-              <span role="cell" className="mono" style={{ fontSize: 13 }}>
-                {r.person != null ? fmtInt(r.photos) : t("identities.notLinkedShort")}
-              </span>
-            </button>
-          ))}
-          {!rows.length && (
-            <p className="muted" style={{ padding: 14, margin: 0 }}>
-              {t("identities.empty")}
-            </p>
+              <div
+                role="row"
+                className="muted"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: grid,
+                  gap: 12,
+                  padding: "8px 14px",
+                  background: "var(--pc-panel)",
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
+                <span role="columnheader" />
+                <span role="columnheader">{t("identities.colName")}</span>
+                <span role="columnheader">{t("identities.colAliases")}</span>
+                <span role="columnheader">{t("identities.colGroup")}</span>
+                <span role="columnheader">{t("identities.colRefs")}</span>
+                <span role="columnheader">{t("identities.colLibrary")}</span>
+              </div>
+              {rows.map((r) => (
+                <BusyButton
+                  key={r.uid}
+                  type="button"
+                  role="row"
+                  aria-selected={r.uid === selected}
+                  onClick={() => {
+                    setCreating(false);
+                    return setSelected(r.uid);
+                  }}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: grid,
+                    gap: 12,
+                    alignItems: "center",
+                    width: "100%",
+                    padding: "6px 14px",
+                    minHeight: 48,
+                    border: 0,
+                    borderTop: "1px solid var(--pc-raised)",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    color: "var(--pc-text)",
+                    background: r.uid === selected ? "var(--pc-selection-bg)" : "transparent",
+                  }}
+                >
+                  <span role="cell">
+                    <Avatar name={r.name} />
+                  </span>
+                  <span role="cell" style={{ fontWeight: 600 }}>
+                    {r.name}
+                  </span>
+                  <span role="cell" className="muted">
+                    {r.aliases.join(", ") || "—"}
+                  </span>
+                  <span role="cell">{r.group ?? "—"}</span>
+                  <span role="cell" style={{ color: r.faces ? undefined : "var(--pc-warn)" }}>
+                    {r.faces
+                      ? t("identities.refCount", { count: r.faces })
+                      : t("identities.noRefs")}
+                  </span>
+                  <span role="cell" className="mono" style={{ fontSize: 13 }}>
+                    {r.person != null ? fmtInt(r.photos) : t("identities.notLinkedShort")}
+                  </span>
+                </BusyButton>
+              ))}
+              {!rows.length && (
+                <p className="muted" style={{ padding: 14, margin: 0 }}>
+                  {t("identities.empty")}
+                </p>
+              )}
+            </div>
           )}
-        </div>
+        </QueryView>
       </section>
       <aside
         aria-label={t("identities.edit")}

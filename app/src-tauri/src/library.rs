@@ -348,7 +348,11 @@ pub fn thumb_protocol(
             .expect("risposta 404")
     };
     let Some(state) = ctx.app_handle().try_state::<AppState>() else {
-        return not_found();
+        return tauri::http::Response::builder()
+            .status(503)
+            .header("Retry-After", "1")
+            .body(Vec::new())
+            .expect("risposta avvio");
     };
     let key = request.uri().path().trim_start_matches('/');
     let Some(path) = state.thumbs.path_of(key) else {

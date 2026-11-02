@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -65,88 +67,93 @@ function Toolbar({ gap }: { gap: number }) {
   const value =
     scope.scope === "catalog" ? `c${scope.id}` : scope.scope === "selection" ? "sel" : "lib";
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 14,
-        padding: "10px 16px",
-        borderBottom: "1px solid var(--pc-border)",
-        background: "var(--pc-toolbar)",
-      }}
-    >
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {t("sequence.scope")}
-        <select
-          className="field"
-          value={value}
-          onChange={(e) => {
-            const v = e.target.value;
-            const next: SequenceScope =
-              v === "lib"
-                ? { scope: "library" }
-                : v === "sel"
-                  ? { scope: "selection", ids: libSelection }
-                  : { scope: "catalog", id: Number(v.slice(1)) };
-            setScope(next);
-          }}
-        >
-          <option value="lib">{t("sequence.scopeLibrary")}</option>
-          {catalogs.data?.map(({ catalog: c, items }) => (
-            <option key={c.id} value={`c${c.id}`}>
-              {t("sequence.scopeCatalog", { name: c.name, count: items })}
-            </option>
-          ))}
-          <option value="sel" disabled={!libSelection.length && scope.scope !== "selection"}>
-            {t("sequence.scopeSelection", {
-              count: scope.scope === "selection" ? scope.ids.length : libSelection.length,
-            })}
-          </option>
-        </select>
-      </label>
-      <span className="muted">
-        {t("sequence.order")}{" "}
-        <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
-      </span>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {t("sequence.gap")}
-        <input
-          className="field"
-          type="number"
-          min={1}
-          aria-label={t("sequence.gap")}
-          defaultValue={gap}
-          key={gap}
-          style={{ width: 72 }}
-          onBlur={(e) => {
-            const n = Number(e.target.value);
-            if (n > 0 && n !== gap) void commands.setSessionGap(n).then(() => refreshSequence(qc));
-          }}
-        />
-      </label>
-      {set && (
+    <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
         <div
-          role="group"
-          aria-label={t("sequence.hotkeys")}
           style={{
-            marginLeft: "auto",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
-            gap: 8,
+            gap: 14,
+            padding: "10px 16px",
+            borderBottom: "1px solid var(--pc-border)",
+            background: "var(--pc-toolbar)",
           }}
         >
-          <span className="muted">{t("sequence.activeSet", { name: set.name })}</span>
-          {set.tags.map((x) => (
-            <span key={x.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <kbd className="mono">{x.key}</kbd>
-              <TagChip name={x.name} color={colorOf(tags, x.name)} />
-            </span>
-          ))}
+          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {t("sequence.scope")}
+            <select
+              className="field"
+              value={value}
+              onChange={(e) => {
+                const v = e.target.value;
+                const next: SequenceScope =
+                  v === "lib"
+                    ? { scope: "library" }
+                    : v === "sel"
+                      ? { scope: "selection", ids: libSelection }
+                      : { scope: "catalog", id: Number(v.slice(1)) };
+                setScope(next);
+              }}
+            >
+              <option value="lib">{t("sequence.scopeLibrary")}</option>
+              {catalogs.data?.map(({ catalog: c, items }) => (
+                <option key={c.id} value={`c${c.id}`}>
+                  {t("sequence.scopeCatalog", { name: c.name, count: items })}
+                </option>
+              ))}
+              <option value="sel" disabled={!libSelection.length && scope.scope !== "selection"}>
+                {t("sequence.scopeSelection", {
+                  count: scope.scope === "selection" ? scope.ids.length : libSelection.length,
+                })}
+              </option>
+            </select>
+          </label>
+          <span className="muted">
+            {t("sequence.order")}{" "}
+            <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
+          </span>
+          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {t("sequence.gap")}
+            <input
+              className="field"
+              type="number"
+              min={1}
+              aria-label={t("sequence.gap")}
+              defaultValue={gap}
+              key={gap}
+              style={{ width: 72 }}
+              onBlur={(e) => {
+                const n = Number(e.target.value);
+                if (n > 0 && n !== gap)
+                  void commands.setSessionGap(n).then(() => refreshSequence(qc));
+              }}
+            />
+          </label>
+          {set && (
+            <div
+              role="group"
+              aria-label={t("sequence.hotkeys")}
+              style={{
+                marginLeft: "auto",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span className="muted">{t("sequence.activeSet", { name: set.name })}</span>
+              {set.tags.map((x) => (
+                <span key={x.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <kbd className="mono">{x.key}</kbd>
+                  <TagChip name={x.name} color={colorOf(tags, x.name)} />
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </QueryView>
   );
 }
 
@@ -169,7 +176,7 @@ function Card({
   const url = thumbUrl(item.thumb);
   const [over, setOver] = useState(false);
   return (
-    <button
+    <BusyButton
       type="button"
       data-testid={`seq-${item.id}`}
       aria-pressed={selected}
@@ -247,7 +254,7 @@ function Card({
           {item.device ?? t("sequence.otherSources")}
         </span>
       </div>
-    </button>
+    </BusyButton>
   );
 }
 
@@ -353,13 +360,13 @@ function SessionsGrid({
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
-                  <button
+                  <BusyButton
                     className="btn"
                     style={{ marginLeft: "auto" }}
-                    onClick={() => void selectSession(row.session.index)}
+                    onClick={async () => await selectSession(row.session.index)}
                   >
                     {t("sequence.selectSession")}
-                  </button>
+                  </BusyButton>
                 </div>
               ) : (
                 row.items.map((it) => (
@@ -442,16 +449,16 @@ function Undated({
                   background: url ? `center / cover url("${url}")` : "var(--pc-thumb-bg)",
                 }}
               />
-              <button
+              <BusyButton
                 className="btn"
                 style={{ minHeight: 26, fontSize: 12, padding: "0 6px" }}
                 onClick={() => {
                   setMenu(u.id);
-                  setAfter(String(focused ?? candidates[0]?.id ?? ""));
+                  return setAfter(String(focused ?? candidates[0]?.id ?? ""));
                 }}
               >
                 {t("sequence.placeAfter")}
-              </button>
+              </BusyButton>
             </div>
           );
         })}
@@ -476,19 +483,19 @@ function Undated({
               </option>
             ))}
           </select>
-          <button
+          <BusyButton
             className="btn btn-primary"
             disabled={!after}
             onClick={() => {
               onPlace(menu, Number(after));
-              setMenu(null);
+              return setMenu(null);
             }}
           >
             {t("sequence.place")}
-          </button>
-          <button className="btn" onClick={() => setMenu(null)}>
+          </BusyButton>
+          <BusyButton className="btn" onClick={() => setMenu(null)}>
             {t("sequence.cancel")}
-          </button>
+          </BusyButton>
         </div>
       )}
     </section>
@@ -664,9 +671,13 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           </div>
         );
       })}
-      <button className="btn" disabled={selected.length !== 2} onClick={() => void align()}>
+      <BusyButton
+        className="btn"
+        disabled={selected.length !== 2}
+        onClick={async () => await align()}
+      >
         {t("sequence.align")}
-      </button>
+      </BusyButton>
       {selected.length !== 2 && (
         <span className="muted" style={{ fontSize: 12 }}>
           {t("sequence.alignHelp")}
@@ -679,23 +690,27 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
       )}
       {error && <p role="alert">{error}</p>}
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button
+        <BusyButton
           className="btn"
           disabled={!dirty.length}
           onClick={() => {
             setStaged({});
-            setPreviews({});
+            return setPreviews({});
           }}
         >
           {t("sequence.discard")}
-        </button>
-        <button className="btn btn-primary" disabled={!dirty.length} onClick={() => void apply()}>
+        </BusyButton>
+        <BusyButton
+          className="btn btn-primary"
+          disabled={!dirty.length}
+          onClick={async () => await apply()}
+        >
           {t("sequence.apply", { count: dirty.length })}
-        </button>
+        </BusyButton>
       </div>
-      <button className="btn" onClick={() => setView("export")}>
+      <BusyButton className="btn" onClick={() => setView("export")}>
         {t("sequence.export")}
-      </button>
+      </BusyButton>
     </aside>
   );
 }
@@ -789,84 +804,105 @@ export function SequencePage() {
       setError(errorText(e));
     }
   };
-  if (view === "export") return <SequenceExport />;
+  if (view === "export")
+    return (
+      <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
+        {() => (
+          <QueryView query={pages} enabled={isTauri()} isEmpty={() => false}>
+            {() => <SequenceExport />}
+          </QueryView>
+        )}
+      </QueryView>
+    );
   return (
-    <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
-      <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <Toolbar gap={o?.gapMin ?? 120} />
-        {o?.suggestions.map((s) => {
-          const g = o.groups.find((x) => x.id === s.group);
-          return (
-            <div
-              key={s.group}
-              role="alert"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 16px",
-                background: "var(--pc-warn-bg)",
-                color: "var(--pc-warn)",
-                borderBottom: "1px solid var(--pc-border)",
-              }}
-            >
-              <span style={{ flex: 1, color: "var(--pc-text)" }}>
-                {t("sequence.suggestion", {
-                  device: groupName(g, t),
-                  count: s.count,
-                  current: offsetText(s.currentOffsetMin),
-                  offset: offsetText(s.offsetMin),
+    <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <QueryView query={pages} enabled={isTauri()} isEmpty={() => false}>
+          {() => (
+            <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
+              <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                <Toolbar gap={o?.gapMin ?? 120} />
+                {o?.suggestions.map((s) => {
+                  const g = o.groups.find((x) => x.id === s.group);
+                  return (
+                    <div
+                      key={s.group}
+                      role="alert"
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 16px",
+                        background: "var(--pc-warn-bg)",
+                        color: "var(--pc-warn)",
+                        borderBottom: "1px solid var(--pc-border)",
+                      }}
+                    >
+                      <span style={{ flex: 1, color: "var(--pc-text)" }}>
+                        {t("sequence.suggestion", {
+                          device: groupName(g, t),
+                          count: s.count,
+                          current: offsetText(s.currentOffsetMin),
+                          offset: offsetText(s.offsetMin),
+                        })}
+                      </span>
+                      <BusyButton
+                        className="btn btn-primary"
+                        onClick={async () =>
+                          await commands
+                            .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
+                            .then(() => refreshSequence(qc))
+                            .catch((e) => setError(errorText(e)))
+                        }
+                      >
+                        {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
+                      </BusyButton>
+                      <BusyButton
+                        className="btn"
+                        onClick={async () =>
+                          await commands
+                            .ignoreTzSuggestion(s.group, s.offsetMin)
+                            .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
+                        }
+                      >
+                        {t("sequence.ignore")}
+                      </BusyButton>
+                    </div>
+                  );
                 })}
-              </span>
-              <button
-                className="btn btn-primary"
-                onClick={() =>
-                  void commands
-                    .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
-                    .then(() => refreshSequence(qc))
-                    .catch((e) => setError(errorText(e)))
-                }
-              >
-                {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
-              </button>
-              <button
-                className="btn"
-                onClick={() =>
-                  void commands
-                    .ignoreTzSuggestion(s.group, s.offsetMin)
-                    .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
-                }
-              >
-                {t("sequence.ignore")}
-              </button>
+                {error && (
+                  <p role="alert" style={{ margin: "8px 16px" }}>
+                    {error}
+                  </p>
+                )}
+                {o && !o.total && !o.undated.length ? (
+                  <p className="muted" style={{ padding: 32 }}>
+                    {t("sequence.empty")}
+                  </p>
+                ) : (
+                  <SessionsGrid
+                    sessions={o?.sessions ?? []}
+                    items={items}
+                    groups={o?.groups ?? []}
+                    hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
+                    loadMore={() => void pages.fetchNextPage()}
+                    onPlace={(m, a) => void place(m, a)}
+                  />
+                )}
+                <Undated
+                  items={o?.undated ?? []}
+                  candidates={items}
+                  onPlace={(m, a) => void place(m, a)}
+                />
+              </section>
+              <SourcesPanel groups={o?.groups ?? []} />
+              {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
             </div>
-          );
-        })}
-        {error && (
-          <p role="alert" style={{ margin: "8px 16px" }}>
-            {error}
-          </p>
-        )}
-        {o && !o.total && !o.undated.length ? (
-          <p className="muted" style={{ padding: 32 }}>
-            {t("sequence.empty")}
-          </p>
-        ) : (
-          <SessionsGrid
-            sessions={o?.sessions ?? []}
-            items={items}
-            groups={o?.groups ?? []}
-            hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
-            loadMore={() => void pages.fetchNextPage()}
-            onPlace={(m, a) => void place(m, a)}
-          />
-        )}
-        <Undated items={o?.undated ?? []} candidates={items} onPlace={(m, a) => void place(m, a)} />
-      </section>
-      <SourcesPanel groups={o?.groups ?? []} />
-      {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
-    </div>
+          )}
+        </QueryView>
+      )}
+    </QueryView>
   );
 }
 

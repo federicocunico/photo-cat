@@ -16,7 +16,13 @@ export function LibraryStatus() {
   });
   return (
     <>
-      <span data-testid="status-count">{t("library.count", { n: fmtInt(count.data ?? 0) })}</span>
+      <span data-testid="status-count">
+        {count.isPending
+          ? t("feedback.calculating")
+          : count.isError
+            ? t("feedback.error")
+            : t("library.count", { n: fmtInt(count.data) })}
+      </span>
       <span data-testid="status-selected">{t("library.selected", { n: fmtInt(selected) })}</span>
     </>
   );

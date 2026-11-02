@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useTranslation } from "react-i18next";
 import { Panels } from "../../components/shell/Panels";
 import type { SortKey } from "../../lib/ipc";
@@ -59,7 +60,7 @@ function Toolbar() {
       </label>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: "auto" }}>
         {chips.map((c) => (
-          <button
+          <BusyButton
             key={c.name}
             type="button"
             className="chip"
@@ -68,12 +69,12 @@ function Toolbar() {
             onClick={() => setFilter(c.clear)}
           >
             {c.name} <span aria-hidden="true">×</span>
-          </button>
+          </BusyButton>
         ))}
         {chips.length > 1 && (
-          <button type="button" className="btn btn-ghost" onClick={resetFilter}>
+          <BusyButton type="button" className="btn btn-ghost" onClick={resetFilter}>
             {t("library.clearFilters")}
-          </button>
+          </BusyButton>
         )}
       </div>
     </div>

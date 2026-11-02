@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type React from "react";
@@ -32,7 +34,7 @@ function Row({
   indent?: number;
 }) {
   return (
-    <button
+    <BusyButton
       type="button"
       aria-pressed={active}
       title={title ?? label}
@@ -69,7 +71,7 @@ function Row({
       <span style={{ color: active ? "var(--pc-accent-soft-text)" : "var(--pc-text-secondary)" }}>
         {fmtInt(count)}
       </span>
-    </button>
+    </BusyButton>
   );
 }
 
@@ -97,55 +99,61 @@ function FolderTree({
     enabled: isTauri(),
   });
   return (
-    <>
-      {(folders.data ?? []).map((f) => {
-        const expanded = open.includes(f.path);
-        return (
-          <div key={f.path}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ width: 8 + depth * 12, flexShrink: 0 }} />
-              {f.hasChildren ? (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0 4px", fontSize: 11, width: 20 }}
-                  aria-expanded={expanded}
-                  aria-label={t(expanded ? "folders.collapse" : "folders.expand", { name: f.name })}
-                  onClick={() => setOpen(toggle(open, f.path))}
-                >
-                  {expanded ? "▾" : "▸"}
-                </button>
-              ) : (
-                <span style={{ width: 20, flexShrink: 0 }} />
-              )}
-              <Row
-                mono
-                title={f.path}
-                label={f.name}
-                count={f.items}
-                active={filter.folder?.path === f.path}
-                onClick={() =>
-                  setFilter({
-                    folder: filter.folder?.path === f.path ? null : { path: f.path, recursive },
-                  })
-                }
-              />
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0 4px", fontSize: 12 }}
-                title={t("sources.updateFolder")}
-                aria-label={t("sources.updateFolderOf", { name: f.name })}
-                onClick={() => void updateFolder(source, f.path)}
-              >
-                ↻
-              </button>
-            </div>
-            {expanded && <FolderTree source={source} parent={f.path} depth={depth + 1} />}
-          </div>
-        );
-      })}
-    </>
+    <QueryView query={folders} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <>
+          {(folders.data ?? []).map((f) => {
+            const expanded = open.includes(f.path);
+            return (
+              <div key={f.path}>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <span style={{ width: 8 + depth * 12, flexShrink: 0 }} />
+                  {f.hasChildren ? (
+                    <BusyButton
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                      aria-expanded={expanded}
+                      aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
+                        name: f.name,
+                      })}
+                      onClick={() => setOpen(toggle(open, f.path))}
+                    >
+                      {expanded ? "▾" : "▸"}
+                    </BusyButton>
+                  ) : (
+                    <span style={{ width: 20, flexShrink: 0 }} />
+                  )}
+                  <Row
+                    mono
+                    title={f.path}
+                    label={f.name}
+                    count={f.items}
+                    active={filter.folder?.path === f.path}
+                    onClick={() =>
+                      setFilter({
+                        folder: filter.folder?.path === f.path ? null : { path: f.path, recursive },
+                      })
+                    }
+                  />
+                  <BusyButton
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: "0 4px", fontSize: 12 }}
+                    title={t("sources.updateFolder")}
+                    aria-label={t("sources.updateFolderOf", { name: f.name })}
+                    onClick={async () => await updateFolder(source, f.path)}
+                  >
+                    ↻
+                  </BusyButton>
+                </div>
+                {expanded && <FolderTree source={source} parent={f.path} depth={depth + 1} />}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </QueryView>
   );
 }
 
@@ -175,135 +183,155 @@ export function LibrarySidebar() {
   });
 
   return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
-      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <h2 className="section-title">{t("library.sources")}</h2>
-        {(sources.data ?? []).map((summary) => {
-          const { source, items } = summary;
-          const label = source.path
-            .split(/[\\/]/)
-            .filter(Boolean)
-            .slice(-2)
-            .join(source.path.includes("\\") ? "\\" : "/");
-          const expanded = openSources.includes(source.id);
-          return (
-            <div key={source.id}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0 4px", fontSize: 11, width: 20 }}
-                  aria-expanded={expanded}
-                  aria-label={t(expanded ? "folders.collapse" : "folders.expand", { name: label })}
-                  onClick={() =>
-                    setOpenSources(
-                      expanded
-                        ? openSources.filter((x) => x !== source.id)
-                        : [...openSources, source.id],
-                    )
-                  }
-                >
-                  {expanded ? "▾" : "▸"}
-                </button>
-                <Row
-                  mono
-                  title={source.path}
-                  label={label}
-                  count={items}
-                  active={(filter.sourceIds ?? []).includes(source.id)}
-                  onClick={() =>
-                    setFilter({
-                      sourceIds: (filter.sourceIds ?? []).includes(source.id) ? [] : [source.id],
-                    })
-                  }
-                />
-                <SourceMenu summary={summary} label={label} />
-              </div>
-              {expanded && <FolderTree source={source} parent={null} depth={0} />}
-            </div>
-          );
-        })}
-        {openSources.length > 0 && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={folderRecursive}
-              onChange={(e) => setFolderRecursive(e.target.checked)}
-            />
-            {t("folders.includeSub")}
-          </label>
-        )}
-      </section>
-      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <h2 className="section-title">{t("library.catalogs")}</h2>
-        {(catalogs.data ?? []).map(({ catalog, items }) => (
-          <Row
-            key={catalog.id}
-            label={catalog.name}
-            icon={
-              catalog.kind === "smart" ? (
-                <Icon.Smart size={12} style={{ color: "var(--pc-warn)" }} />
-              ) : undefined
-            }
-            count={items}
-            active={filter.catalogId === catalog.id}
-            onClick={() =>
-              setFilter({ catalogId: filter.catalogId === catalog.id ? null : catalog.id })
-            }
-          />
-        ))}
-      </section>
-      <section
-        style={{ display: "flex", flexDirection: "column", gap: 12 }}
-        aria-label={t("library.filters")}
-      >
-        <h2 className="section-title">{t("library.filters")}</h2>
-        {(facets.data?.labels ?? []).map(([grp, list]) => (
-          <FacetList key={grp} facetKey={{ kind: "label", group: grp }} list={list} />
-        ))}
-        {(facets.data?.places.total ?? 0) > 0 && (
-          <>
-            <FacetList
-              facetKey={{ kind: "place" }}
-              list={facets.data!.places}
-              action={(f) => (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0 4px", fontSize: 12 }}
-                  title={t("place.rename")}
-                  aria-label={t("place.renameOf", { name: f.value })}
-                  onClick={() => setRenaming(f)}
-                >
-                  ✎
-                </button>
+    <QueryView query={sources} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
+          {() => (
+            <QueryView query={facets} enabled={isTauri()} isEmpty={() => false}>
+              {() => (
+                <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+                  <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <h2 className="section-title">{t("library.sources")}</h2>
+                    {(sources.data ?? []).map((summary) => {
+                      const { source, items } = summary;
+                      const label = source.path
+                        .split(/[\\/]/)
+                        .filter(Boolean)
+                        .slice(-2)
+                        .join(source.path.includes("\\") ? "\\" : "/");
+                      const expanded = openSources.includes(source.id);
+                      return (
+                        <div key={source.id}>
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            <BusyButton
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                              aria-expanded={expanded}
+                              aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
+                                name: label,
+                              })}
+                              onClick={() =>
+                                setOpenSources(
+                                  expanded
+                                    ? openSources.filter((x) => x !== source.id)
+                                    : [...openSources, source.id],
+                                )
+                              }
+                            >
+                              {expanded ? "▾" : "▸"}
+                            </BusyButton>
+                            <Row
+                              mono
+                              title={source.path}
+                              label={label}
+                              count={items}
+                              active={(filter.sourceIds ?? []).includes(source.id)}
+                              onClick={() =>
+                                setFilter({
+                                  sourceIds: (filter.sourceIds ?? []).includes(source.id)
+                                    ? []
+                                    : [source.id],
+                                })
+                              }
+                            />
+                            <SourceMenu summary={summary} label={label} />
+                          </div>
+                          {expanded && <FolderTree source={source} parent={null} depth={0} />}
+                        </div>
+                      );
+                    })}
+                    {openSources.length > 0 && (
+                      <label
+                        style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={folderRecursive}
+                          onChange={(e) => setFolderRecursive(e.target.checked)}
+                        />
+                        {t("folders.includeSub")}
+                      </label>
+                    )}
+                  </section>
+                  <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <h2 className="section-title">{t("library.catalogs")}</h2>
+                    {(catalogs.data ?? []).map(({ catalog, items }) => (
+                      <Row
+                        key={catalog.id}
+                        label={catalog.name}
+                        icon={
+                          catalog.kind === "smart" ? (
+                            <Icon.Smart size={12} style={{ color: "var(--pc-warn)" }} />
+                          ) : undefined
+                        }
+                        count={items}
+                        active={filter.catalogId === catalog.id}
+                        onClick={() =>
+                          setFilter({
+                            catalogId: filter.catalogId === catalog.id ? null : catalog.id,
+                          })
+                        }
+                      />
+                    ))}
+                  </section>
+                  <section
+                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                    aria-label={t("library.filters")}
+                  >
+                    <h2 className="section-title">{t("library.filters")}</h2>
+                    {(facets.data?.labels ?? []).map(([grp, list]) => (
+                      <FacetList key={grp} facetKey={{ kind: "label", group: grp }} list={list} />
+                    ))}
+                    {(facets.data?.places.total ?? 0) > 0 && (
+                      <>
+                        <FacetList
+                          facetKey={{ kind: "place" }}
+                          list={facets.data!.places}
+                          action={(f) => (
+                            <BusyButton
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ padding: "0 4px", fontSize: 12 }}
+                              title={t("place.rename")}
+                              aria-label={t("place.renameOf", { name: f.value })}
+                              onClick={() => setRenaming(f)}
+                            >
+                              ✎
+                            </BusyButton>
+                          )}
+                        />
+                        {renaming && (
+                          <RenamePlaceDialog
+                            key={renaming.value}
+                            from={renaming.value}
+                            count={renaming.count}
+                            places={facets.data!.places.values}
+                            onClose={() => setRenaming(null)}
+                          />
+                        )}
+                      </>
+                    )}
+                    {(facets.data?.years.total ?? 0) > 0 && (
+                      <DateFacet
+                        years={facets.data!.years}
+                        months={facets.data!.months ?? null}
+                        days={facets.data!.days ?? null}
+                      />
+                    )}
+                    {(facets.data?.formats.total ?? 0) > 0 && (
+                      <FacetList facetKey={{ kind: "format" }} list={facets.data!.formats} />
+                    )}
+                    {(facets.data?.tags.total ?? 0) > 0 && (
+                      <FacetList facetKey={{ kind: "tag" }} list={facets.data!.tags} />
+                    )}
+                  </section>
+                </div>
               )}
-            />
-            {renaming && (
-              <RenamePlaceDialog
-                key={renaming.value}
-                from={renaming.value}
-                count={renaming.count}
-                places={facets.data!.places.values}
-                onClose={() => setRenaming(null)}
-              />
-            )}
-          </>
-        )}
-        {(facets.data?.years.total ?? 0) > 0 && (
-          <DateFacet
-            years={facets.data!.years}
-            months={facets.data!.months ?? null}
-            days={facets.data!.days ?? null}
-          />
-        )}
-        {(facets.data?.formats.total ?? 0) > 0 && (
-          <FacetList facetKey={{ kind: "format" }} list={facets.data!.formats} />
-        )}
-        {(facets.data?.tags.total ?? 0) > 0 && (
-          <FacetList facetKey={{ kind: "tag" }} list={facets.data!.tags} />
-        )}
-      </section>
-    </div>
+            </QueryView>
+          )}
+        </QueryView>
+      )}
+    </QueryView>
   );
 }

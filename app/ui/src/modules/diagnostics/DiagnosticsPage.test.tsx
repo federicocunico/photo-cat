@@ -81,7 +81,7 @@ describe("schermata Diagnostica", () => {
         expect.objectContaining({ level: "WARN", jobId: 7 }),
       ),
     );
-    fireEvent.change(screen.getByLabelText("Fase"), { target: { value: "metadati" } });
+    fireEvent.change(await screen.findByLabelText("Fase"), { target: { value: "metadati" } });
     fireEvent.change(screen.getByLabelText("Testo"), { target: { value: " IMG_6620 " } });
     await waitFor(() =>
       expect(commandsMock.queryErrors).toHaveBeenLastCalledWith(
@@ -108,7 +108,7 @@ describe("schermata Diagnostica", () => {
     renderPage();
     await screen.findByTestId("error-row-1");
     fireEvent.click(screen.getByRole("button", { name: "Riprova file falliti" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("accodati: 2");
+    expect(await screen.findByText(/accodati: 2/)).toBeInTheDocument();
     expect(commandsMock.retryFailed).toHaveBeenCalledWith(7, null);
     fireEvent.click(screen.getByRole("button", { name: "Apri cartella log" }));
     await waitFor(() => expect(commandsMock.openLogs).toHaveBeenCalled());

@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -236,33 +238,33 @@ export function DiagnosticsPage() {
               void commands.setLogLevel(v as LogLevel);
             },
           )}
-          <button
+          <BusyButton
             type="button"
             className="btn"
             disabled={busy || rows.length === 0}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 const jobs = await commands.retryFailed(filter.jobId ?? null, filter.phase ?? null);
                 return t("diag.retried", { n: jobs.length });
               })
             }
           >
             {t("diag.retryFailed")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             type="button"
             className="btn"
             disabled={busy}
-            onClick={() => void run(async () => void (await commands.openLogs()))}
+            onClick={async () => await run(async () => void (await commands.openLogs()))}
           >
             {t("diag.openLogs")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             type="button"
             className="btn btn-primary"
             disabled={busy}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 const { save } = await import("@tauri-apps/plugin-dialog");
                 const path = await save({
                   defaultPath: `photo-cat-diagnostica-${new Date().toISOString().slice(0, 10)}.zip`,
@@ -275,7 +277,7 @@ export function DiagnosticsPage() {
             }
           >
             {t("diag.exportBundle")}
-          </button>
+          </BusyButton>
         </div>
       </div>
       {notice && (
@@ -332,9 +334,9 @@ export function DiagnosticsPage() {
             style={{ flex: 1, background: "transparent", border: 0, outline: "none" }}
           />
         </label>
-        <button type="button" className="btn btn-ghost" onClick={() => setFilter({})}>
+        <BusyButton type="button" className="btn btn-ghost" onClick={() => setFilter({})}>
           {t("diag.clearFilters")}
-        </button>
+        </BusyButton>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
         <section
@@ -348,51 +350,57 @@ export function DiagnosticsPage() {
             maxHeight: 520,
           }}
         >
-          <table className="table" style={{ minWidth: 760 }}>
-            <thead>
-              <tr>
-                <th>{t("diag.time")}</th>
-                <th>{t("diag.level")}</th>
-                <th>{t("diag.phase")}</th>
-                <th>{t("diag.file")}</th>
-                <th>{t("diag.message")}</th>
-                <th>{t("diag.code")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="muted" style={{ padding: 16 }}>
-                    {t("diag.empty")}
-                  </td>
-                </tr>
-              )}
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  aria-selected={current?.id === r.id}
-                  onClick={() => setSelected(r.id)}
-                  style={{ cursor: "pointer" }}
-                  data-testid={`error-row-${r.id}`}
-                >
-                  <td className="mono" style={{ fontSize: 12 }}>
-                    {fmtTime(r.ts)}
-                  </td>
-                  <td>
-                    <span style={levelBadge(r.level)}>{r.level}</span>
-                  </td>
-                  <td>{r.phase ? t(`jobs.phases.${r.phase}`, { defaultValue: r.phase }) : "—"}</td>
-                  <td className="mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                    {r.path ? r.path.split(/[\\/]/).pop() : "—"}
-                  </td>
-                  <td>{text(r)}</td>
-                  <td className="mono muted" style={{ fontSize: 12 }}>
-                    {r.code ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <QueryView query={errors} isEmpty={() => false}>
+            {() => (
+              <table className="table" style={{ minWidth: 760 }}>
+                <thead>
+                  <tr>
+                    <th>{t("diag.time")}</th>
+                    <th>{t("diag.level")}</th>
+                    <th>{t("diag.phase")}</th>
+                    <th>{t("diag.file")}</th>
+                    <th>{t("diag.message")}</th>
+                    <th>{t("diag.code")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="muted" style={{ padding: 16 }}>
+                        {t("diag.empty")}
+                      </td>
+                    </tr>
+                  )}
+                  {rows.map((r) => (
+                    <tr
+                      key={r.id}
+                      aria-selected={current?.id === r.id}
+                      onClick={() => setSelected(r.id)}
+                      style={{ cursor: "pointer" }}
+                      data-testid={`error-row-${r.id}`}
+                    >
+                      <td className="mono" style={{ fontSize: 12 }}>
+                        {fmtTime(r.ts)}
+                      </td>
+                      <td>
+                        <span style={levelBadge(r.level)}>{r.level}</span>
+                      </td>
+                      <td>
+                        {r.phase ? t(`jobs.phases.${r.phase}`, { defaultValue: r.phase }) : "—"}
+                      </td>
+                      <td className="mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
+                        {r.path ? r.path.split(/[\\/]/).pop() : "—"}
+                      </td>
+                      <td>{text(r)}</td>
+                      <td className="mono muted" style={{ fontSize: 12 }}>
+                        {r.code ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </QueryView>
         </section>
         {current && <Detail entry={current} />}
       </div>

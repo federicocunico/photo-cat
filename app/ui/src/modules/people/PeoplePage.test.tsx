@@ -19,6 +19,24 @@ beforeEach(() => {
   ] as never);
 });
 afterEach(cleanup);
+it("Elenco vuoto: only shows the empty message after loading has finished", async () => {
+  let finish!: (value: never[]) => void;
+  commandsMock.listPeople.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        finish = r;
+      }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PeoplePage />
+    </QueryClientProvider>,
+  );
+  expect(screen.queryByText(/nessun volto/i)).not.toBeInTheDocument();
+  expect(screen.getByRole("status", { name: "Caricamento…" })).toBeInTheDocument();
+  finish([]);
+  expect(await screen.findByText(/nessun volto/i)).toBeInTheDocument();
+});
 it("opens a cluster, offers the identity field and sends a persistent refusal", async () => {
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -26,7 +44,7 @@ it("opens a cluster, offers the identity field and sends a persistent refusal", 
     </QueryClientProvider>,
   );
   fireEvent.click(await screen.findByText("Alice"));
-  expect(screen.getByRole("combobox", { name: "Chi è?" })).toBeInTheDocument();
+  expect(await screen.findByRole("combobox", { name: "Chi è?" })).toBeInTheDocument();
   fireEvent.click(await screen.findByText("Non è questa persona"));
   await waitFor(() =>
     expect(commandsMock.correctPerson).toHaveBeenCalledWith({

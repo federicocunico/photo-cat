@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Lista di un filtro nella barra laterale: voci principali più quelle
 // selezionate, "Mostra tutti (N)" con ricerca sul posto e "Apri in finestra".
 import { useState, type ReactNode } from "react";
@@ -48,7 +50,7 @@ export function FacetList({
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <div style={{ fontWeight: 600, flex: 1 }}>{title}</div>
-        <button
+        <BusyButton
           type="button"
           className="btn btn-ghost"
           style={{ padding: "0 4px", fontSize: 12 }}
@@ -57,7 +59,7 @@ export function FacetList({
           onClick={(e) => openFacetPanel(facetKey, e.currentTarget)}
         >
           ⧉
-        </button>
+        </BusyButton>
       </div>
       {expanded ? (
         <>
@@ -70,28 +72,35 @@ export function FacetList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <FacetValuesList
-            values={full.values}
-            hasMore={full.hasMore}
-            loadMore={full.loadMore}
-            loading={full.loading}
-            selected={selected}
-            onToggle={onToggle}
-            render={render}
-            action={action}
-            height={360}
-          />
-          <button
+          <QueryView
+            query={{ ...full.query, data: full.query.data === undefined ? undefined : full.values }}
+            isEmpty={() => false}
+          >
+            {() => (
+              <FacetValuesList
+                values={full.values}
+                hasMore={full.hasMore}
+                loadMore={full.loadMore}
+                loading={full.loading}
+                selected={selected}
+                onToggle={onToggle}
+                render={render}
+                action={action}
+                height={360}
+              />
+            )}
+          </QueryView>
+          <BusyButton
             type="button"
             className="btn btn-ghost"
             style={{ alignSelf: "flex-start", padding: "0 4px" }}
             onClick={() => {
               setExpanded(false);
-              setSearch("");
+              return setSearch("");
             }}
           >
             {t("library.facets.showLess")}
-          </button>
+          </BusyButton>
         </>
       ) : (
         <>
@@ -108,14 +117,14 @@ export function FacetList({
             </div>
           ))}
           {hidden && (
-            <button
+            <BusyButton
               type="button"
               className="btn btn-ghost"
               style={{ alignSelf: "flex-start", padding: "0 4px" }}
               onClick={() => setExpanded(true)}
             >
               {t("library.facets.showAll", { n: list.total })}
-            </button>
+            </BusyButton>
           )}
         </>
       )}

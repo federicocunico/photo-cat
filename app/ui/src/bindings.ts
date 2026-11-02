@@ -6,6 +6,9 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	bootStatus: () => __TAURI_INVOKE<BootStatus>("boot_status"),
+	bootRetry: () => __TAURI_INVOKE<void>("boot_retry"),
+	bootChooseFolder: () => __TAURI_INVOKE<null>("boot_choose_folder"),
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**  Segna come letto l'avviso di chiusura anomala. */
 	dismissCrashNotice: () => __TAURI_INVOKE<void>("dismiss_crash_notice"),
@@ -256,6 +259,13 @@ export type AppInfo = {
 	dataDir: string,
 	logsDir: string,
 	previousCrash: CrashInfo | null,
+};
+
+export type BootStatus = {
+	phase: string,
+	ready: boolean,
+	error: string | null,
+	logsPath: string,
 };
 
 export type Budget = {

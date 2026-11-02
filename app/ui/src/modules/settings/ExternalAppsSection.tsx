@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Sezione "Applicazioni esterne": app per "Apri con", azione del doppio clic e
 // cartelle da ignorare nella deduzione del luogo. Si salva con il pulsante
 // generale delle impostazioni (il backend verifica che gli eseguibili esistano).
@@ -88,9 +89,9 @@ export function ExternalAppsSection({
                 onChange={(e) => edit(i, { path: e.target.value })}
               />
             </label>
-            <button className="btn" type="button" onClick={() => void browse(i)}>
+            <BusyButton className="btn" type="button" onClick={async () => await browse(i)}>
               {t("externalApps.browse")}
-            </button>
+            </BusyButton>
             <label style={{ flexBasis: "100%" }}>
               {t("externalApps.args")}
               <textarea
@@ -102,17 +103,17 @@ export function ExternalAppsSection({
                 onChange={(e) => edit(i, { args: e.target.value.split("\n") })}
               />
             </label>
-            <button
+            <BusyButton
               className="btn btn-ghost"
               type="button"
               aria-label={`${t("externalApps.remove")} ${a.name ?? ""}`}
               onClick={() => setApps(apps.filter((_, j) => j !== i))}
             >
               {t("externalApps.remove")}
-            </button>
+            </BusyButton>
           </fieldset>
         ))}
-        <button
+        <BusyButton
           className="btn"
           type="button"
           onClick={() =>
@@ -131,7 +132,7 @@ export function ExternalAppsSection({
           }
         >
           {t("externalApps.add")}
-        </button>
+        </BusyButton>
         <label>
           {t("externalApps.doubleClick")}{" "}
           <select
