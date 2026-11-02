@@ -15,6 +15,7 @@ pub mod persons;
 pub mod retune;
 pub mod schedule;
 pub mod selftest;
+pub mod similar;
 pub mod stages;
 pub mod taxonomy;
 pub mod tensor;

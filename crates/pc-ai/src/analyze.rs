@@ -22,6 +22,8 @@ pub const PHASE_CLIP: &str = "clip";
 pub const PHASE_PERSONS: &str = "persons";
 pub const PHASE_FACES: &str = "faces";
 pub const PHASE_CLUSTER: &str = "cluster";
+/// Gruppi di foto simili (dopo CLIP, a livello di libreria).
+pub const PHASE_SIMILAR: &str = "similar";
 /// Pavimenti di salvataggio: il rilevatore conserva i risultati da qui in su e
 /// le soglie configurate si applicano in conteggio e raggruppamento, così si
 /// possono abbassare senza rianalisi fino al pavimento.
@@ -50,6 +52,8 @@ pub struct AiDeps {
     pub analysis_lock: Arc<Mutex<()>>,
     /// Archivio dell'app con le identità (volti di riferimento); `None` nei test.
     pub app_store: Option<pc_store::AppStore>,
+    /// Miniature per i gruppi di foto simili; `None` = fase `similar` saltata (test).
+    pub thumbs: Option<pc_ingest::thumb::ThumbCache>,
 }
 
 impl AiDeps {
@@ -358,6 +362,32 @@ pub fn load_oriented(
     Ok(d)
 }
 
+/// Fase `similar`: gruppi di foto simili dagli embedding CLIP e dalle miniature.
+/// Saltata senza modello CLIP o senza cache delle miniature.
+pub fn run_similar(
+    deps: &AiDeps,
+    control: &pc_jobs::JobControl,
+    phase: &pc_jobs::PhaseCounters,
+) -> AppResult<()> {
+    let (Some(thumbs), Ok(entry)) = (&deps.thumbs, deps.resources.entry(Role::ClassificationImage))
+    else {
+        phase.set_total(0);
+        phase.finish();
+        return Ok(());
+    };
+    let threshold = deps.config.read().ai.thresholds.similar_photos;
+    crate::similar::run(
+        &deps.store,
+        thumbs,
+        &deps.resources.governor,
+        control,
+        &model_key(entry),
+        threshold,
+        Some(phase),
+    )?;
+    Ok(())
+}
+
 /// Job "analisi" (parametri `{ "ids": [..] }`, `{ "sourceId": n }` o nessuno = tutta la libreria):
 /// salta gli elementi già analizzati con le versioni correnti di modello e tassonomia.
 pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
@@ -368,6 +398,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
             PhaseSpec::new(PHASE_PERSONS, 2.0),
             PhaseSpec::new(PHASE_FACES, 4.0),
             PhaseSpec::new(PHASE_CLUSTER, 1.0),
+            PhaseSpec::new(PHASE_SIMILAR, 1.0),
         ],
         min_memory_mb: 256,
         run: Box::new(move |ctx| {
@@ -387,7 +418,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
             let runnable = deps.runnable_models();
             if runnable.is_empty() && runnable.over_budget {
                 // Requisiti minimi: nessuna fase AI entra nel budget, il job termina senza analisi.
-                for p in [PHASE_CLIP, PHASE_PERSONS, PHASE_FACES, PHASE_CLUSTER] {
+                for p in [PHASE_CLIP, PHASE_PERSONS, PHASE_FACES, PHASE_CLUSTER, PHASE_SIMILAR] {
                     ctx.progress.phase(p).set_total(0);
                     ctx.progress.phase(p).finish();
                 }
@@ -606,6 +637,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 )?;
                 p.inc_done(1);
                 p.finish();
+                run_similar(&deps, &ctx.control, &ctx.progress.phase(PHASE_SIMILAR))?;
             }
             match res {
                 Ok(()) => Ok(RunSummary {

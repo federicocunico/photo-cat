@@ -19,6 +19,8 @@ const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_des
 function Toolbar() {
   const { t } = useTranslation();
   const { filter, sort, setSort, thumbSize, setThumbSize, setFilter, resetFilter } = useLibrary();
+  const groupSimilar = useLibrary((s) => s.groupSimilar);
+  const setGroupSimilar = useLibrary((s) => s.setGroupSimilar);
   const names = useLabelName();
   const chips = activeChips(filter, t as never, names.label);
   return (
@@ -56,6 +58,22 @@ function Toolbar() {
           aria-label={t("library.thumbSize")}
           onChange={(e) => setThumbSize(Number(e.target.value))}
         />
+      </label>
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={groupSimilar}
+          onChange={(e) => setGroupSimilar(e.target.checked)}
+        />
+        {t("similar.group")}
+      </label>
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={filter.similarOnly ?? false}
+          onChange={(e) => setFilter({ similarOnly: e.target.checked })}
+        />
+        {t("similar.only")}
       </label>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: "auto" }}>
         {chips.map((c) => (

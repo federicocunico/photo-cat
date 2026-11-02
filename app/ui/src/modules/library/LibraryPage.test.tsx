@@ -43,6 +43,9 @@ const item = (id: number): GridItem => ({
   faces: id === 2 ? 3 : 0,
   analyzed: id % 3 === 0,
   tags: id === 1 ? ["Tramonti"] : [],
+  similarGroup: null,
+  similarCover: false,
+  similarCount: null,
 });
 
 beforeEach(() => {

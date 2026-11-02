@@ -275,6 +275,18 @@ path = "/usr/bin/darktable"
 args = ["--library", ":memory:", "{file}"]
 ```
 
+## Foto simili
+
+L'analisi raggruppa le foto quasi identiche (raffiche, scatti ripetuti, piccole variazioni della stessa inquadratura). Per ogni foto cerca le candidate più vicine nell'embedding CLIP, quelle dello stesso dispositivo scattate entro 10 secondi e le copie esatte, poi conferma la somiglianza confrontando le miniature (SSIM). Tutto avviene in locale e nessuna funzione dei gruppi cancella o modifica file sul disco.
+
+- **Raggruppa foto simili** (barra della griglia, anche nei cataloghi): ogni gruppo diventa una sola miniatura, la foto principale, con il numero di foto; il numero apre il gruppo sul posto. Conteggi, filtri e "Seleziona tutto" restano sulle singole foto; un clic su un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
+- **Foto principale**: proposta in base a nitidezza ed esposizione; dall'Inspector (sezione **Foto simili**) si sceglie un'altra foto, e la scelta resta anche dopo nuove analisi.
+- **Correzioni** dall'Inspector: *Togli dal gruppo*, *Sciogli gruppo*; le correzioni valgono anche per le analisi successive.
+- **Aiuto alla scelta**: *Solo foto con simili* (barra della griglia) e *Seleziona tutte tranne la principale* (barra delle azioni), da combinare con "Escludi dal catalogo", i tag o "Rimuovi dalla libreria".
+- **Soglia** in Impostazioni › Soglie AI (*Somiglianza dei gruppi di foto simili*, predefinita 0,80): l'anteprima indica quanti gruppi si formerebbero, e al salvataggio i gruppi vengono ricalcolati senza rianalizzare le foto.
+
+L'analisi dei gruppi fa parte dell'analisi AI ed è incrementale: dopo un import vengono confrontate solo le foto nuove. Per una libreria analizzata prima di questa funzione, Impostazioni › Soglie AI propone **Analizza i gruppi**.
+
 ## Librerie grandi
 
 L'app è pensata per librerie da 100.000 foto e oltre:

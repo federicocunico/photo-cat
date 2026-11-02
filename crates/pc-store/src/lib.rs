@@ -14,6 +14,7 @@ pub mod query;
 pub mod repo;
 pub mod rules;
 pub mod sequence;
+pub mod similar;
 pub mod sources;
 pub mod timeline;
 

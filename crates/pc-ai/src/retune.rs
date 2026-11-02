@@ -17,6 +17,7 @@ pub const JOB_KIND: &str = "retune";
 pub const PHASE_CLIP: &str = "clip";
 pub const PHASE_PERSONS: &str = "persons";
 pub const PHASE_FACES: &str = "faces";
+pub const PHASE_SIMILAR: &str = "similar";
 /// Media rivalutati per blocco (embedding letti e scritti insieme).
 const BLOCK: i64 = 500;
 
@@ -31,6 +32,8 @@ pub struct RetuneSpec {
     pub persons: bool,
     /// Soglie di rilevamento o somiglianza dei volti cambiate.
     pub faces: bool,
+    /// Soglia dei gruppi di foto simili cambiata.
+    pub similar: bool,
 }
 
 impl RetuneSpec {
@@ -42,16 +45,18 @@ impl RetuneSpec {
             persons: prev.person_detection != next.person_detection,
             faces: prev.face_detection != next.face_detection
                 || prev.face_similarity != next.face_similarity,
+            similar: prev.similar_photos != next.similar_photos,
         }
     }
     pub fn is_empty(&self) -> bool {
-        !self.clip && !self.persons && !self.faces
+        !self.clip && !self.persons && !self.faces && !self.similar
     }
     pub fn merge(self, other: Self) -> Self {
         Self {
             clip: self.clip || other.clip,
             persons: self.persons || other.persons,
             faces: self.faces || other.faces,
+            similar: self.similar || other.similar,
         }
     }
     pub fn params(&self) -> serde_json::Value {
@@ -76,6 +81,11 @@ pub struct ThresholdImpact {
     pub reanalysis_persons: i64,
     /// File salvati con un minimo di volti più alto della nuova soglia.
     pub reanalysis_faces: i64,
+    /// Gruppi di foto simili con la soglia attuale e con quella nuova.
+    #[serde(default)]
+    pub similar_groups_current: i64,
+    #[serde(default)]
+    pub similar_groups: i64,
 }
 
 /// Concetti testuali e modello immagine per rivalutare le catalogazioni.
@@ -202,6 +212,8 @@ pub fn preview(
         persons_affected_estimate: rest.2,
         reanalysis_persons: rest.3,
         reanalysis_faces: rest.4,
+        similar_groups_current: store.read(pc_store::similar::group_count)?,
+        similar_groups: crate::similar::preview_count(store, next.similar_photos)? as i64,
     })
 }
 
@@ -282,6 +294,21 @@ pub fn apply(
     } else {
         finish_empty(phase(PHASE_FACES));
     }
+    if spec.similar {
+        // Gruppi ricalcolati dagli archi salvati: nessuna miniatura, nessun modello.
+        let p = phase(PHASE_SIMILAR);
+        if let Some(p) = &p {
+            p.set_total(1);
+            p.start();
+        }
+        crate::similar::regroup(store, thresholds.similar_photos, "retune")?;
+        if let Some(p) = p {
+            p.inc_done(1);
+            p.finish();
+        }
+    } else {
+        finish_empty(phase(PHASE_SIMILAR));
+    }
     Ok(out)
 }
 
@@ -317,6 +344,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
             PhaseSpec::new(PHASE_CLIP, 3.0),
             PhaseSpec::new(PHASE_PERSONS, 0.5),
             PhaseSpec::new(PHASE_FACES, 1.5),
+            PhaseSpec::new(PHASE_SIMILAR, 0.5),
         ],
         min_memory_mb: 64,
         run: Box::new(move |ctx| {

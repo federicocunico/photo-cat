@@ -25,6 +25,8 @@ export const emptyFilter = (): LibraryFilter => ({
   rule: null,
   folder: null,
   ids: null,
+  similarOnly: false,
+  groupSimilar: false,
 });
 
 /**
@@ -93,6 +95,9 @@ interface LibraryState {
   scrollTop: number;
   /** Il filtro per cartella include le sottocartelle. */
   folderRecursive: boolean;
+  /** "Raggruppa foto simili": un elemento per gruppo nella griglia (preferenza persistita). */
+  groupSimilar: boolean;
+  setGroupSimilar: (v: boolean) => void;
   setFolderRecursive: (v: boolean) => void;
   setFilter: (f: Partial<LibraryFilter>) => void;
   resetFilter: () => void;
@@ -124,6 +129,8 @@ export const useLibrary = create<LibraryState>()(
       focused: null,
       scrollTop: 0,
       folderRecursive: true,
+      groupSimilar: false,
+      setGroupSimilar: (groupSimilar) => set({ groupSimilar, scrollTop: 0 }),
       setFolderRecursive: (folderRecursive) =>
         set((s) => ({
           folderRecursive,
@@ -194,6 +201,7 @@ export const useLibrary = create<LibraryState>()(
         sort: s.sort === "excluded_at" ? "captured_desc" : s.sort,
         thumbSize: s.thumbSize,
         folderRecursive: s.folderRecursive,
+        groupSimilar: s.groupSimilar,
       }),
     },
   ),

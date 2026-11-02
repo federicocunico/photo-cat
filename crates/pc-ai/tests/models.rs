@@ -369,6 +369,7 @@ fn disabled_face_recognition_saves_no_faces_but_still_counts_people() {
             face_policy: Arc::new(pc_ai::face_policy::FacePolicy::new(false)),
             analysis_lock: Arc::default(),
             app_store: None,
+            thumbs: None,
         };
         let jobs = JobManager::new(db.clone(), gov, 1, Arc::new(Sink));
         jobs.register(

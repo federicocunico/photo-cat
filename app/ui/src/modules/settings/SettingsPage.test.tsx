@@ -110,7 +110,7 @@ const fullConfig = {
   ai: {
     ...config.ai,
     ignored_folder_names: [],
-    thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363 },
+    thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363, similar_photos: 0.8 },
   },
   ui: { ...config.ui, double_click: "system" },
   external_apps: [],
@@ -133,6 +133,8 @@ const impact = {
   personsAffectedEstimate: 0,
   reanalysisPersons: 0,
   reanalysisFaces: 0,
+  similarGroupsCurrent: 0,
+  similarGroups: 0,
 };
 
 it("anteprima di una soglia di categoria e applicazione senza rianalisi", async () => {
@@ -146,7 +148,7 @@ it("anteprima di una soglia di categoria e applicazione senza rianalisi", async 
   (expected.groups[0].categories[0] as { threshold?: number }).threshold = 0.6;
   await waitFor(() =>
     expect(commandsMock.previewThresholds).toHaveBeenCalledWith(
-      { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363 },
+      { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363, similar_photos: 0.8 },
       expected,
     ),
   );
@@ -170,7 +172,12 @@ it("rifiuta un valore non valido e ripristina i predefiniti", async () => {
     expect(commandsMock.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         ai: expect.objectContaining({
-          thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.5 },
+          thresholds: {
+            person_detection: 0.4,
+            face_detection: 0.8,
+            face_similarity: 0.5,
+            similar_photos: 0.8,
+          },
         }),
       }),
     ),
@@ -335,4 +342,50 @@ it("eliminazione di una voce usata con il numero di foto", async () => {
     expect(commandsMock.deleteCategory).toHaveBeenCalledWith("environment", "teatro"),
   );
   expect(await screen.findByText("Voce eliminata da 25 foto")).toBeInTheDocument();
+});
+
+it("Soglia dei gruppi di foto simili: anteprima dei gruppi e ricalcolo senza modelli", async () => {
+  commandsMock.previewThresholds.mockResolvedValue({
+    ...impact,
+    mediaLabelsChanged: 0,
+    similarGroupsCurrent: 120,
+    similarGroups: 85,
+  });
+  renderSettings();
+  await screen.findByLabelText("Categoria Stanza");
+  const field = await screen.findByLabelText("Somiglianza dei gruppi di foto simili");
+  expect(field).toHaveValue("0.8");
+  fireEvent.change(field, { target: { value: "1.3" } });
+  expect(screen.getByRole("alert")).toHaveTextContent("Resta in vigore 0,8");
+  fireEvent.change(field, { target: { value: "0.9" } });
+  fireEvent.click(screen.getByRole("button", { name: "Anteprima dell'effetto" }));
+  await waitFor(() =>
+    expect(commandsMock.previewThresholds).toHaveBeenCalledWith(
+      expect.objectContaining({ similar_photos: 0.9 }),
+      null,
+    ),
+  );
+  expect(await screen.findByTestId("similar-preview")).toHaveTextContent(
+    "Gruppi con questa soglia: 85 (ora 120)",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Applica soglie" }));
+  await waitFor(() =>
+    expect(commandsMock.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ai: expect.objectContaining({
+          thresholds: expect.objectContaining({ similar_photos: 0.9 }),
+        }),
+      }),
+    ),
+  );
+  // Nessuna rianalisi con i modelli: solo il ricalcolo dei gruppi (retune lato backend).
+  expect(commandsMock.reanalyze).not.toHaveBeenCalled();
+});
+
+it("propone l'analisi dei gruppi alle librerie analizzate prima", async () => {
+  commandsMock.similarPending.mockResolvedValue(1200 as never);
+  renderSettings();
+  const propose = await screen.findByTestId("similar-propose");
+  fireEvent.click(within(propose).getByRole("button", { name: "Analizza i gruppi" }));
+  await waitFor(() => expect(commandsMock.startSimilarAnalysis).toHaveBeenCalled());
 });
