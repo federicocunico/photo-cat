@@ -58,6 +58,15 @@ Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
 
 ## Aggiornare e tornare a una versione precedente
 
+**Dove stanno i dati.** Libreria e preferenze sono nella cartella utente dell'app, separata dalla cartella del programma:
+
+| Contenuto | Windows | Linux |
+|---|---|---|
+| Cartella dati: `catalog.db`, `config.toml` (impostazioni, tema, lingua), miniature, modelli, log, `backups/` | `%APPDATA%\photocat\photo-cat\data` (o il percorso scelto nelle impostazioni) | `~/.local/share/photo-cat` |
+| Cartella dell'app: `app.db` (identità, set di tag), `ui-prefs.json` (layout, ordinamento, miniature, pannelli) | `%APPDATA%\photocat\photo-cat\config` | `~/.config/photo-cat` |
+
+**Installare sopra una versione esistente** (anche senza disinstallare) conserva tutto: l'installer sostituisce solo il programma. **Disinstallare e reinstallare** conserva comunque libreria, impostazioni e preferenze, anche spuntando "Elimina i dati dell'applicazione": quella casella cancella solo il profilo dell'interfaccia (`%LOCALAPPDATA%\com.photocat.app`), e al primo avvio le preferenze dell'interfaccia vengono ripristinate da `ui-prefs.json`. Per rimuovere davvero tutto, dopo la disinstallazione cancellare a mano la cartella `%APPDATA%\photocat` (Windows) oppure `~/.local/share/photo-cat` e `~/.config/photo-cat` (Linux).
+
 All'avvio la nuova versione aggiorna il catalogo (`catalog.db`) se è di una versione precedente. Prima di farlo ne salva una copia in `backups/` dentro la cartella dati (`catalog-v<schema>-<data>.db`), insieme a una copia della configurazione (`config-v<schema>-<data>.toml`). L'archivio dell'app (`app.db`, identità e set di tag) è nuovo dalla 0.2.0 e viene creato al primo avvio; le persone con nome del catalogo diventano identità.
 
 Una versione precedente non apre un catalogo aggiornato: lo segnala e non lo modifica. Non legge nemmeno la configurazione nuova, quindi usa i valori predefiniti, compresa la cartella dati. Per tornare a una versione precedente:

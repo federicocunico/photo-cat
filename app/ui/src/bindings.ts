@@ -193,6 +193,10 @@ export const commands = {
 	 */
 	openWith: (ids: number[], target: OpenTarget, confirmed: boolean) => __TAURI_INVOKE<OpenOutcome>("open_with", { ids, target, confirmed }),
 	onboardingDone: () => __TAURI_INVOKE<boolean>("onboarding_done"),
+	/**  Preferenze dell'interfaccia salvate nella cartella dell'app. */
+	uiPrefsLoad: () => __TAURI_INVOKE<{ [key in string]: string }>("ui_prefs_load"),
+	/**  Salva le preferenze dell'interfaccia nella cartella dell'app. */
+	uiPrefsSave: (prefs: { [key in string]: string }) => __TAURI_INVOKE<null>("ui_prefs_save", { prefs }),
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
 	openLogs: () => __TAURI_INVOKE<null>("open_logs"),

@@ -3,6 +3,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { mirroredStorage } from "../lib/uiPrefs";
 import type { LibraryFilter, SortKey } from "../lib/ipc";
 
 export const emptyFilter = (): LibraryFilter => ({
@@ -73,7 +74,7 @@ export const useLibrary = create<LibraryState>()(
     }),
     {
       name: "photo-cat.library",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => mirroredStorage),
       partialize: (s) => ({
         sort: s.sort,
         thumbSize: s.thumbSize,
