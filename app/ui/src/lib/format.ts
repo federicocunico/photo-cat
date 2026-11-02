@@ -56,3 +56,23 @@ export const fmtTime = (d: string | number | Date) =>
 
 export const fmtDate = (d: string | number | Date) =>
   new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(new Date(d));
+
+/**
+ * Anno, mese o giorno del filtro per data (`AAAA`, `AAAA-MM`, `AAAA-MM-GG`)
+ * nella lingua corrente. `short`: solo il nome del mese ("maggio") o il giorno
+ * con la settimana ("dom 14"); altrimenti per intero ("14 maggio 2023").
+ */
+export function fmtPeriod(p: string, short = false): string {
+  const [y, m, d] = p.split("-").map(Number);
+  if (!m) return p;
+  // In UTC, così la data non si sposta con il fuso del computer.
+  const date = new Date(Date.UTC(y, m - 1, d || 1));
+  const opts: Intl.DateTimeFormatOptions = short
+    ? d
+      ? { weekday: "short", day: "numeric" }
+      : { month: "long" }
+    : d
+      ? { day: "numeric", month: "long", year: "numeric" }
+      : { month: "long", year: "numeric" };
+  return new Intl.DateTimeFormat(locale(), { ...opts, timeZone: "UTC" }).format(date);
+}
