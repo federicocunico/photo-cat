@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum PressureState {
@@ -29,7 +29,13 @@ pub struct Thresholds {
     pub critical_min_mb: u64,
     /// Capacità in pressione, come frazione del budget.
     pub pressure_capacity: f64,
+    /// Quota di memoria dei processi dell'interfaccia (WebView): oltre, il sistema è in
+    /// pressione e l'interfaccia deve liberare le cache.
+    pub ui_quota_mb: u64,
 }
+
+/// Quota predefinita della WebView (design: da tarare con la prova a 100.000 foto).
+pub const DEFAULT_UI_QUOTA_MB: u64 = 1536;
 
 impl Default for Thresholds {
     fn default() -> Self {
@@ -39,6 +45,7 @@ impl Default for Thresholds {
             critical_pct: 0.05,
             critical_min_mb: 512,
             pressure_capacity: 0.5,
+            ui_quota_mb: DEFAULT_UI_QUOTA_MB,
         }
     }
 }
@@ -67,6 +74,10 @@ pub struct ResourceSnapshot {
     pub system: SystemSnapshot,
     pub governor: GovernorSnapshot,
     pub state: PressureState,
+    /// Solo al cambio: `Some(true)` quando la memoria della WebView supera la quota
+    /// (l'interfaccia deve liberare le cache), `Some(false)` quando rientra.
+    #[serde(default)]
+    pub ui_trim: Option<bool>,
 }
 
 pub struct PressureMonitor {
@@ -74,6 +85,7 @@ pub struct PressureMonitor {
     gov: MemoryGovernor,
     thresholds: Thresholds,
     state: Mutex<PressureState>,
+    ui_over: Mutex<bool>,
 }
 
 impl PressureMonitor {
@@ -83,13 +95,43 @@ impl PressureMonitor {
             gov,
             thresholds,
             state: Mutex::new(PressureState::Normal),
+            ui_over: Mutex::new(false),
         }
     }
 
-    /// Una misura: aggiorna capacità/pausa AI alle transizioni e restituisce lo snapshot.
+    /// Una misura: aggiorna capacità/pausa (AI e decodifica) alle transizioni e restituisce
+    /// lo snapshot. La memoria della WebView oltre la quota conta come pressione.
     pub fn tick(&self) -> ResourceSnapshot {
         let sys = self.probe.snapshot();
-        let next = self.thresholds.classify(&sys);
+        let over = sys.webview_mb > self.thresholds.ui_quota_mb;
+        let ui_trim = {
+            let mut prev = self.ui_over.lock();
+            (over != *prev).then(|| {
+                *prev = over;
+                if over {
+                    tracing::warn!(
+                        code = "INSUFFICIENT_MEMORY",
+                        webview_mb = sys.webview_mb,
+                        quota_mb = self.thresholds.ui_quota_mb,
+                        app_mb = sys.process_mb,
+                        available_mb = sys.available_mb,
+                        "memoria dell'interfaccia oltre la quota: concorrenza ridotta, cache da liberare"
+                    );
+                } else {
+                    tracing::info!(
+                        webview_mb = sys.webview_mb,
+                        "memoria dell'interfaccia rientrata nella quota"
+                    );
+                }
+                over
+            })
+        };
+        let ui_state = if over {
+            PressureState::Pressure
+        } else {
+            PressureState::Normal
+        };
+        let next = self.thresholds.classify(&sys).max(ui_state);
         let mut state = self.state.lock();
         if next != *state {
             let budget = self.gov.snapshot().budget_mb;
@@ -120,7 +162,9 @@ impl PressureMonitor {
                     tracing::warn!(
                         code = "INSUFFICIENT_MEMORY",
                         available_mb = sys.available_mb,
-                        "memoria di sistema critica: fasi AI in pausa"
+                        app_mb = sys.process_mb,
+                        webview_mb = sys.webview_mb,
+                        "memoria di sistema critica: fasi AI e decodifica in pausa"
                     );
                 }
             }
@@ -130,6 +174,7 @@ impl PressureMonitor {
             system: sys,
             governor: self.gov.snapshot(),
             state: next,
+            ui_trim,
         }
     }
 
@@ -213,6 +258,77 @@ mod tests {
         assert!(!gov.ai_paused());
         assert_eq!(gov.capacity_mb(), 4000);
         assert_eq!(snap.governor.in_use_mb, 700);
+    }
+
+    #[test]
+    fn critical_pressure_suspends_decoding_until_memory_returns() {
+        let (probe, gov, mon) = setup(10_000);
+        mon.tick();
+        probe.set_available(600);
+        assert_eq!(mon.tick().state, PressureState::Critical);
+        let states = Arc::new(Mutex::new(Vec::new()));
+        let (g2, s2) = (gov.clone(), states.clone());
+        let worker = std::thread::spawn(move || {
+            let started = Instant::now();
+            let ok = g2.wait_memory(|| true, |p| s2.lock().push(p));
+            (ok, started.elapsed())
+        });
+        std::thread::sleep(Duration::from_millis(250));
+        assert_eq!(*states.lock(), vec![true], "job in pausa per memoria");
+        probe.set_available(9_000);
+        assert_eq!(mon.tick().state, PressureState::Normal);
+        let (ok, waited) = worker.join().unwrap();
+        assert!(ok && waited >= Duration::from_millis(200));
+        assert_eq!(*states.lock(), vec![true, false], "ripresa al rientro");
+        // Annullamento durante l'attesa.
+        probe.set_available(600);
+        mon.tick();
+        let mut n = 0;
+        assert!(!gov.wait_memory(
+            || {
+                n += 1;
+                n < 3
+            },
+            |_| {}
+        ));
+    }
+
+    #[test]
+    fn growing_ui_reduces_capacity_and_asks_to_trim_caches() {
+        let (probe, gov, mon) = setup(10_000);
+        assert_eq!(mon.tick().ui_trim, None);
+        probe.set_webview(DEFAULT_UI_QUOTA_MB + 400);
+        let tmp = tempfile::tempdir().unwrap();
+        let (sub, diag) = pc_diag::build(tmp.path(), &pc_core::config::LoggingConfig::default());
+        let sink = Arc::new(pc_diag::MemorySink::default());
+        diag.hub().add_sink(sink.clone());
+        let snap = tracing::subscriber::with_default(sub, || mon.tick());
+        assert_eq!(snap.ui_trim, Some(true), "richiesta di liberare le cache");
+        assert_eq!(snap.state, PressureState::Pressure);
+        assert_eq!(gov.capacity_mb(), 2000, "concorrenza dell'import ridotta");
+        assert_eq!(
+            sink.errors.lock().last().and_then(|e| e.code.clone()),
+            Some("INSUFFICIENT_MEMORY".into())
+        );
+        let lines = sink.lines.lock();
+        let line = lines
+            .iter()
+            .find(|l| l.message.contains("interfaccia oltre la quota"))
+            .expect("evento registrato");
+        assert!(
+            line.fields
+                .iter()
+                .any(|(k, v)| k == "webview_mb" && v == &(DEFAULT_UI_QUOTA_MB + 400).to_string()),
+            "{:?}",
+            line.fields
+        );
+        drop(lines);
+        assert_eq!(mon.tick().ui_trim, None, "solo al cambio");
+        probe.set_webview(300);
+        let snap = mon.tick();
+        assert_eq!(snap.ui_trim, Some(false));
+        assert_eq!(snap.state, PressureState::Normal);
+        assert_eq!(gov.capacity_mb(), 4000);
     }
 
     #[test]

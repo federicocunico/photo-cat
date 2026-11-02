@@ -1,7 +1,7 @@
 // Tasti 1–9 e 0 del set attivo sulla selezione corrente (Libreria e Sequenza).
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { commands, type BulkAction } from "../../lib/ipc";
+import { commands, type BulkAction, type Target } from "../../lib/ipc";
 import { useLive } from "../../store/live";
 import { activeSet, refreshTags, useTagOverview } from "./data";
 
@@ -46,7 +46,7 @@ export function hotkeyAction(
  * della pressione, così vale anche "tutti i risultati" non visibili).
  * Al termine del job aggiorna le viste senza ricaricare.
  */
-export function useTagHotkeys(selection: () => number[], enabled = true) {
+export function useTagHotkeys(selection: () => { target: Target; count: number }, enabled = true) {
   const qc = useQueryClient();
   const set = activeSet(useTagOverview().data);
   const [job, setJob] = useState<number | null>(null);
@@ -67,11 +67,11 @@ export function useTagHotkeys(selection: () => number[], enabled = true) {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || isTyping(e.target)) return;
       const action = hotkeyAction(e.key, ref.current.set);
       if (!action) return;
-      const ids = ref.current.selection();
-      if (!ids.length) return;
+      const { target, count } = ref.current.selection();
+      if (!count) return;
       e.preventDefault();
       void commands
-        .startBulk(ids, action, false)
+        .startBulk(target, action, false)
         .then(setJob)
         .catch(() => {});
     };

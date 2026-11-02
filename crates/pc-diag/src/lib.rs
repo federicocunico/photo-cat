@@ -1,13 +1,19 @@
 //! Diagnostica di photo-cat: `tracing` è l'unica fonte per log su file,
 //! registro errori e coda log della UI.
 
+pub mod batch;
 pub mod bundle;
 pub mod crash;
+pub mod dumps;
 pub mod layer;
+pub mod native;
 pub mod rolling;
+pub mod session;
 
-pub use crash::{install_panic_hook, take_previous_crash, CrashInfo};
+pub use batch::{ErrorAggregator, ErrorBatch, ErrorCount};
+pub use crash::{install_panic_hook, take_previous_crash, CrashInfo, CrashKind};
 pub use layer::{DiagHub, DiagLayer, DiagSink, ErrorRecord, LogLine, MemorySink};
+pub use session::{MemorySummary, SessionInfo, SessionMarker};
 
 use pc_core::config::{LogLevel, LoggingConfig};
 use pc_core::{AppError, AppResult};

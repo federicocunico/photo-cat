@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { TagOverview } from "../../bindings";
 import { commandsMock, emit, ipcMockModule, job } from "../../test/ipcMock";
-import { useLibrary } from "../../store/library";
+import { emptyFilter, idsSelection, selCount, selTarget, useLibrary } from "../../store/library";
 import { useLiveEvents } from "../../store/live";
 import { useTagHotkeys } from "./useTagHotkeys";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -43,7 +43,10 @@ const overview: TagOverview = {
 
 function Harness() {
   useLiveEvents();
-  useTagHotkeys(() => useLibrary.getState().selected);
+  useTagHotkeys(() => {
+    const s = useLibrary.getState().selection;
+    return { target: selTarget(s), count: selCount(s) };
+  });
   return <input type="search" aria-label="Ricerca" />;
 }
 
@@ -63,7 +66,7 @@ beforeEach(() => {
   commandsMock.startBulk.mockResolvedValue(41);
   commandsMock.listJobs.mockResolvedValue([]);
   commandsMock.getResources.mockResolvedValue(undefined);
-  useLibrary.setState({ selected: [10, 11, 12, 13, 14, 15] });
+  useLibrary.setState({ selection: idsSelection([10, 11, 12, 13, 14, 15]) });
 });
 afterEach(cleanup);
 
@@ -76,7 +79,7 @@ it("key 3 tags the whole selection with the third tag of the active set", async 
   });
   expect(commandsMock.startBulk).toHaveBeenCalledTimes(1);
   expect(commandsMock.startBulk).toHaveBeenCalledWith(
-    [10, 11, 12, 13, 14, 15],
+    { kind: "ids", ids: [10, 11, 12, 13, 14, 15] },
     { action: "add_tag", name: "Tramonti" },
     false,
   );
@@ -87,15 +90,22 @@ it("key 3 tags the whole selection with the third tag of the active set", async 
 });
 
 it("selection of 2,340 unseen results is sent whole", async () => {
-  const all = Array.from({ length: 2340 }, (_, i) => i + 1);
-  useLibrary.setState({ selected: all });
+  useLibrary.setState({
+    selection: {
+      mode: "filter",
+      filter: emptyFilter(),
+      maxId: 2400,
+      total: 2340,
+      except: new Set(),
+    },
+  });
   renderHarness();
   await waitFor(() => {
     fireEvent.keyDown(window, { key: "2" });
     expect(commandsMock.startBulk).toHaveBeenCalled();
   });
-  const call = commandsMock.startBulk.mock.calls[0] as unknown as [number[], unknown];
-  expect(call[0]).toHaveLength(2340);
+  const call = commandsMock.startBulk.mock.calls[0] as unknown as [unknown, unknown];
+  expect(call[0]).toEqual({ kind: "filter", filter: emptyFilter(), maxId: 2400, except: [] });
   expect(call[1]).toEqual({ action: "add_tag", name: "Città" });
 });
 
@@ -106,7 +116,7 @@ it("key 0 removes the active set's tags", async () => {
     expect(commandsMock.startBulk).toHaveBeenCalled();
   });
   expect(commandsMock.startBulk).toHaveBeenCalledWith(
-    [10, 11, 12, 13, 14, 15],
+    { kind: "ids", ids: [10, 11, 12, 13, 14, 15] },
     { action: "remove_tags", names: ["Paesaggi", "Città", "Tramonti", "Persone", "Cibo"] },
     false,
   );
@@ -125,7 +135,7 @@ it("does nothing while typing in the search box, for free keys or without select
   fireEvent.keyDown(search, { key: "3" });
   fireEvent.keyDown(window, { key: "9" }); // tasto senza tag nel set
   fireEvent.keyDown(window, { key: "3", ctrlKey: true });
-  useLibrary.setState({ selected: [] });
+  useLibrary.setState({ selection: idsSelection() });
   fireEvent.keyDown(window, { key: "3" });
   expect(commandsMock.startBulk).toHaveBeenCalledTimes(1);
 });

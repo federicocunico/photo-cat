@@ -4,10 +4,14 @@ use pc_store::{
     errorlog::{self, ErrorQuery},
     repo,
 };
-use tauri::State;
+use tauri::{Manager, State};
 #[tauri::command]
 #[specta::specta]
-pub async fn export_diagnostics(state: State<'_, AppState>, destination: String) -> AppResult<()> {
+pub async fn export_diagnostics(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    destination: String,
+) -> AppResult<()> {
     let dest =
         pc_organize::paths::writable_destination(&state.store, std::path::Path::new(&destination))?;
     let config = state.config.read().clone();
@@ -16,13 +20,46 @@ pub async fn export_diagnostics(state: State<'_, AppState>, destination: String)
     let system = commands::get_resources(state.clone());
     let db = state.store.clone();
     let app_store = state.app_store.clone();
-    tauri::async_runtime::spawn_blocking(move||{
-        let errors=db.read(|c|errorlog::query(c,&ErrorQuery{limit:Some(5000),..Default::default()}))?;
-        let jobs=pc_jobs::persist::recent(&db,500)?;
+    let logs_dir = state.paths.logs();
+    // Dump di crash di WebView2 (cartella dati della WebView di Tauri).
+    let crashpad = app
+        .path()
+        .app_local_data_dir()
+        .ok()
+        .map(|d| pc_diag::dumps::crashpad_reports(&d.join("EBWebView")));
+    tauri::async_runtime::spawn_blocking(move || {
+        let errors = db.read(|c| {
+            errorlog::query(
+                c,
+                &ErrorQuery {
+                    limit: Some(5000),
+                    ..Default::default()
+                },
+            )
+        })?;
+        let jobs = pc_jobs::persist::recent(&db, 500)?;
         // I parametri dei job non entrano: possono contenere selezioni o correzioni private.
-        let jobs:Vec<_>=jobs.into_iter().map(|j|serde_json::json!({"id":j.id,"kind":j.kind,"state":j.state,"created_at":j.created_at})).collect();
-        pc_diag::bundle::write(&dest,pc_diag::bundle::Bundle{config,logs,models:serde_json::to_value(models)?,system:serde_json::to_value(system)?,jobs:serde_json::json!(jobs),errors:serde_json::to_value(errors)?,app_store:app_store.diagnostic_summary()?})
-    }).await.map_err(|e|AppError::internal(e.to_string()))?
+        let jobs: Vec<_> = jobs
+            .into_iter()
+            .map(|j| serde_json::json!({"id":j.id,"kind":j.kind,"state":j.state,"created_at":j.created_at}))
+            .collect();
+        let attachments = pc_diag::dumps::collect(&logs_dir, crashpad.as_deref());
+        pc_diag::bundle::write(
+            &dest,
+            pc_diag::bundle::Bundle {
+                config,
+                logs,
+                models: serde_json::to_value(models)?,
+                system: serde_json::to_value(system)?,
+                jobs: serde_json::json!(jobs),
+                errors: serde_json::to_value(errors)?,
+                app_store: app_store.diagnostic_summary()?,
+                attachments,
+            },
+        )
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
 }
 #[tauri::command]
 #[specta::specta]

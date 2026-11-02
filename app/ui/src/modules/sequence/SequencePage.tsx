@@ -13,7 +13,9 @@ import {
   type UndatedItem,
 } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
-import { clickSelect, useLibrary } from "../../store/library";
+import { clickSelect, selIds, useLibrary } from "../../store/library";
+
+const EMPTY: number[] = [];
 import { offsetText, parseShift, shiftText, timeOf, useSequence } from "../../store/sequence";
 import { deviceColorVar } from "../../theme/tokens";
 import { thumbUrl } from "../library/thumbUrl";
@@ -54,7 +56,8 @@ function Toolbar({ gap }: { gap: number }) {
   const qc = useQueryClient();
   const scope = useSequence((s) => s.scope);
   const setScope = useSequence((s) => s.setScope);
-  const libSelection = useLibrary((s) => s.selected);
+  // Una selezione "tutti i risultati" della Libreria non diventa un elenco di id qui.
+  const libSelection = useLibrary((s) => selIds(s.selection)) ?? EMPTY;
   const tags = useTagOverview().data;
   const set = activeSet(tags);
   const catalogs = useQuery({
@@ -758,7 +761,10 @@ export function SequencePage() {
         sessions: o.sessions.length,
       });
   }, [o, setStats]);
-  useTagHotkeys(() => useSequence.getState().selected, view === "sequence");
+  useTagHotkeys(() => {
+    const ids = useSequence.getState().selected;
+    return { target: { kind: "ids", ids }, count: ids.length };
+  }, view === "sequence");
   useEffect(() => {
     if (view !== "sequence") return;
     const onKey = (e: KeyboardEvent) => {

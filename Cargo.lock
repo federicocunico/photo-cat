@@ -3460,6 +3460,7 @@ name = "pc-diag"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "libc",
  "parking_lot",
  "pc-core",
  "serde",
@@ -3469,6 +3470,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "windows-sys 0.61.2",
  "zip",
 ]
 
@@ -3496,6 +3498,7 @@ dependencies = [
  "globset",
  "image",
  "jpeg-decoder",
+ "jpeg-encoder",
  "kamadak-exif",
  "libloading 0.8.9",
  "notify",
@@ -3683,6 +3686,7 @@ name = "photo-cat"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "chrono-tz",
  "parking_lot",
  "pc-ai",
@@ -3706,6 +3710,7 @@ dependencies = [
  "tauri-specta",
  "tempfile",
  "tracing",
+ "webkit2gtk",
  "webview2-com",
  "windows-core 0.62.2",
 ]

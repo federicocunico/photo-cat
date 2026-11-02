@@ -28,6 +28,7 @@ const phase = (name: string, over: object) => ({
   percent: 0,
   rate: null,
   etaSecs: null,
+  memoryPaused: false,
   ...over,
 });
 
@@ -155,5 +156,22 @@ describe("schermata Job", () => {
     expect(panel).toHaveTextContent("clip");
     expect(panel).toHaveTextContent("600 MB");
     expect(panel).toHaveTextContent("8 / 4");
+  });
+
+  it('Pressione critica: il job mostra lo stato "in pausa per memoria"', () => {
+    render(<Harness />);
+    act(() =>
+      emit(
+        "job",
+        job({
+          id: 9,
+          memoryPaused: true,
+          phases: [phase("miniature", { done: 10, total: 100, memoryPaused: true })],
+        }),
+      ),
+    );
+    expect(screen.getByTestId("memory-paused-9")).toHaveTextContent("In pausa per memoria");
+    act(() => emit("job", job({ id: 9, memoryPaused: false })));
+    expect(screen.queryByTestId("memory-paused-9")).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Panels } from "../../components/shell/Panels";
 import type { SortKey } from "../../lib/ipc";
-import { useLibrary } from "../../store/library";
+import { selCount, selTarget, useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
 import { LibraryGrid } from "./Grid";
@@ -81,7 +81,10 @@ function Toolbar() {
 }
 
 export function LibraryPage() {
-  useTagHotkeys(() => useLibrary.getState().selected);
+  useTagHotkeys(() => {
+    const s = useLibrary.getState().selection;
+    return { target: selTarget(s), count: selCount(s) };
+  });
   return (
     <Panels
       left={<LibrarySidebar />}

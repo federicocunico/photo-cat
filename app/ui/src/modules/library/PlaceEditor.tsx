@@ -121,12 +121,12 @@ export function PlaceEditor({
         <button
           className="btn"
           disabled={!trimmed || (trimmed === (name ?? "") && source === "manual")}
-          onClick={() => void apply([id], input())}
+          onClick={() => void apply({ kind: "ids", ids: [id] }, input())}
         >
           {t("place.set")}
         </button>
         {source === "manual" && (
-          <button className="btn" onClick={() => void apply([id], null)}>
+          <button className="btn" onClick={() => void apply({ kind: "ids", ids: [id] }, null)}>
             {t("place.reset")}
           </button>
         )}

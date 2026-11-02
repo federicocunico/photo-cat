@@ -5,7 +5,7 @@ import "../../i18n";
 import type { TagOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
-import { useLibrary } from "../../store/library";
+import { selIds, useLibrary } from "../../store/library";
 import { TagsPage } from "./TagsPage";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 
@@ -154,6 +154,6 @@ it("reports conflicts when a set becomes exclusive and opens them in Library", a
   fireEvent.click(await screen.findByLabelText(/^Esclusivo/));
   expect(await screen.findByText(/6 file hanno già due o più tag/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("Apri in Libreria"));
-  expect(useLibrary.getState().selected).toEqual([4, 5, 6, 7, 8, 9]);
+  expect(selIds(useLibrary.getState().selection)).toEqual([4, 5, 6, 7, 8, 9]);
   expect(useLayout.getState().module).toBe("library");
 });
