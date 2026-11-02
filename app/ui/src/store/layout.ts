@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { mirroredStorage } from "../lib/uiPrefs";
 import type { ThemeName } from "../theme/tokens";
 import type { Language } from "../i18n";
 
@@ -72,7 +73,7 @@ export const useLayout = create<LayoutState>()(
     }),
     {
       name: "photo-cat.layout",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => mirroredStorage),
       partialize: (s) => ({
         module: s.module,
         leftOpen: s.leftOpen,

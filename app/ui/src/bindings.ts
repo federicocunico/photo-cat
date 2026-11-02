@@ -193,6 +193,10 @@ export const commands = {
 	 */
 	openWith: (ids: number[], target: OpenTarget, confirmed: boolean) => __TAURI_INVOKE<OpenOutcome>("open_with", { ids, target, confirmed }),
 	onboardingDone: () => __TAURI_INVOKE<boolean>("onboarding_done"),
+	/**  Preferenze dell'interfaccia salvate nella cartella dell'app. */
+	uiPrefsLoad: () => __TAURI_INVOKE<{ [key in string]: string }>("ui_prefs_load"),
+	/**  Salva le preferenze dell'interfaccia nella cartella dell'app. */
+	uiPrefsSave: (prefs: { [key in string]: string }) => __TAURI_INVOKE<null>("ui_prefs_save", { prefs }),
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
 	openLogs: () => __TAURI_INVOKE<null>("open_logs"),
@@ -266,7 +270,7 @@ export type BulkAction = { action: "add_tag"; name: string;
 /**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
 exclusive?: string[] } | { action: "remove_tag"; name: string } | 
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
-{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "exclude_from_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "restore_to_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
 { action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
@@ -295,6 +299,7 @@ export type CatalogLoss = {
 export type CatalogSummary = {
 	catalog: Catalog,
 	items: number,
+	excluded: number,
 };
 
 export type Category = {
@@ -536,6 +541,10 @@ export type Facets = {
 	labels: ([string, FacetList])[],
 	places: FacetList,
 	years: FacetList,
+	/**  Mesi dell'anno scelto (`AAAA-MM`), solo con un anno scelto. */
+	months: FacetList | null,
+	/**  Giorni del mese scelto (`AAAA-MM-GG`), solo con un mese scelto. */
+	days: FacetList | null,
 	formats: FacetList,
 	people: FacetList,
 	tags: FacetList,
@@ -581,6 +590,7 @@ export type GridItem = {
 	analyzed: boolean,
 	/**  Tag utente del file (per i chip colorati della griglia). */
 	tags: string[],
+	excludedAt: number | null,
 };
 
 export type Group = {
@@ -713,6 +723,9 @@ export type Language = "it" | "en";
 export type LibraryFilter = {
 	sourceIds?: number[],
 	catalogId?: number | null,
+	excludedFrom?: number | null,
+	/**  None equivale a true. */
+	matchingOnly?: boolean | null,
 	/**  AND tra gruppi, OR tra i valori dello stesso gruppo. */
 	labels?: LabelFilter[],
 	/**  Tutte le persone indicate devono essere presenti. */
@@ -1106,7 +1119,7 @@ export type SetTag = {
 	name: string,
 };
 
-export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc";
+export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc" | "excluded_at";
 
 export type Source = {
 	id: number,

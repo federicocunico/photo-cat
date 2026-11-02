@@ -113,6 +113,7 @@ pub fn source_summaries(c: &Connection) -> StoreResult<Vec<SourceSummary>> {
 pub struct CatalogSummary {
     pub catalog: Catalog,
     pub items: i64,
+    pub excluded: i64,
 }
 
 pub fn catalog_summaries(c: &Connection) -> StoreResult<Vec<CatalogSummary>> {
@@ -124,9 +125,17 @@ pub fn catalog_summaries(c: &Connection) -> StoreResult<Vec<CatalogSummary>> {
                 ..Default::default()
             };
             let items = crate::query::count(c, &f).unwrap_or(0);
+            let excluded = crate::query::count(
+                c,
+                &crate::query::LibraryFilter {
+                    excluded_from: Some(cat.id),
+                    ..Default::default()
+                },
+            )?;
             Ok(CatalogSummary {
                 catalog: cat,
                 items,
+                excluded,
             })
         })
         .collect()
