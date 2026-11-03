@@ -376,7 +376,10 @@ describe("cartelle, luogo e Apri con", () => {
 
     // Scenario "Seleziona tutto in una cartella".
     commandsMock.librarySelection.mockResolvedValue({ count: 3, maxId: 6 });
-    fireEvent.click(screen.getByText("Seleziona tutto (filtro)"));
+    const user = userEvent.setup();
+    screen.getByRole("button", { name: "Seleziona" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: /Seleziona tutte le foto/ }));
     await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(3));
     expect(useLibrary.getState().selection).toMatchObject({
       mode: "filter",
@@ -385,7 +388,12 @@ describe("cartelle, luogo e Apri con", () => {
     expect(commandsMock.librarySelection).toHaveBeenLastCalledWith(
       expect.objectContaining({ folder: { path: `${trip}\\D7000`, recursive: false } }),
     );
-    fireEvent.click(chip);
+    // Con la selezione la barra delle azioni prende il posto dei chip: Esc li riporta.
+    expect(chip).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rimuovi filtro Cartella (solo questa): D7000" }),
+    );
     expect(useLibrary.getState().filter.folder).toBeNull();
   });
 

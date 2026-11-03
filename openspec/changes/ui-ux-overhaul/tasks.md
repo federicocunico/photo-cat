@@ -38,7 +38,7 @@
   **Inventario (3 novembre 2026).** Il backend ha un solo registro LIFO (`undo_log`): `undo_bulk` annulla l'ultima voce qualunque sia, `undo_people` solo se è una correzione delle persone (ed emette `faces_changed`). Lo store ricorda quindi una sola operazione, e ogni comando che scrive in `undo_log` la fa decadere (`UNDO_LOG_COMMANDS` in `store/undo.ts`), così Ctrl+Z non annulla mai un'operazione diversa da quella mostrata.
 
   Con annullamento lato backend:
-  - `startBulk`: tag, cataloghi, esclusioni e reinserimenti, categorie, luogo, tag del set → `undoBulk`;
+  - `startBulk`: tag, cataloghi, esclusioni e reinserimenti, categorie, luogo, tag del set → `undoBulk` (non `assign_person` e `remove_library`, vedi sotto);
   - `renameTag`, `mergeTag`, `deleteTag` → `undoBulk`;
   - `renamePlace`, `deleteCategory` → `undoBulk`;
   - `setGroupShift`, `placeUndated` (Sequenza) → `undoBulk`;
@@ -52,6 +52,7 @@
   - foto simili: `similarRemove`, `similarGroupTogether`, `similarDissolve`, `similarSetCover` → nessuna conferma, si correggono a mano;
   - identità: `saveIdentity`, `deleteIdentity`, `mergeIdentities`, `removeIdentityFace`, `linkPersonIdentity` → `ConfirmDialog` per eliminazione e unione (7.4);
   - `recomputePlaces` → nessuna conferma (ricalcolo).
+  - `startBulk` con `assign_person` (`people::assign` non registra) e `remove_library` (cancella righe e miniature) → `ConfirmDialog` nella barra delle azioni (3.2).
 
   Da cablare nelle fasi successive: Libreria (3.3), Tag (7.3), Persone (7.4; finché il registro globale è vuoto, Ctrl+Z in Persone chiama ancora `undoPeople`), Sequenza e Luoghi (3.3, 7.5).
 - [x] 1.6 Glossario in `i18n/GLOSSARY.md`; chiavi `common.*` (Annulla, Salva, Chiudi, Interrompi, Annulla operazione, Riprova, Dettagli); formattazione delle date con `Intl`. Test sui termini vietati per lingua.
@@ -88,7 +89,7 @@
   - "Solo foto con simili" va al pannello Filtri, con il suo chip.
 
   Verifica: `LibraryPage.test.tsx` (catalogo, escluse, chip).
-- [ ] 3.2 `SelectionBar` al posto di `BulkBar`:
+- [x] 3.2 `SelectionBar` al posto di `BulkBar`:
   - visibile solo con una selezione;
   - comandi diretti con popover di ricerca, "Altro", Esc per deselezionare;
   - "Esporta" apre il modulo Esporta con l'ambito già impostato;

@@ -446,3 +446,37 @@
     transition: none;
   }
 }
+
+/* Selettore con ricerca (SearchPicker) */
+.ui-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  min-width: 240px;
+}
+.ui-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.ui-picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-3);
+  min-height: 28px;
+  padding: 0 var(--pc-space-2);
+  border-radius: var(--pc-radius-sm);
+  cursor: pointer;
+}
+.ui-picker-option[aria-selected="true"] {
+  background: var(--pc-selection-bg);
+}
+.ui-picker-option[data-created] {
+  font-weight: 600;
+}
+.ui-picker-empty {
+  margin: 0;
+}

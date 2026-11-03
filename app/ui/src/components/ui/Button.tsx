@@ -74,14 +74,18 @@ export const Button = forwardRef<HTMLButtonElement, BaseProps>(function Button(
     >
       {icon}
       {children}
-      {blocked && (
-        <span id={reasonId} className="visually-hidden">
-          {t("common.disabledBecause", { reason: disabledReason })}
-        </span>
-      )}
     </BusyButton>
   );
-  return blocked ? <Tooltip content={disabledReason!}>{button}</Tooltip> : button;
+  if (!blocked) return button;
+  // La ragione è la descrizione del pulsante, non parte del suo nome.
+  return (
+    <>
+      <Tooltip content={disabledReason!}>{button}</Tooltip>
+      <span id={reasonId} className="visually-hidden">
+        {t("common.disabledBecause", { reason: disabledReason })}
+      </span>
+    </>
+  );
 });
 
 type IconButtonProps = Omit<BaseProps, "children" | "icon"> & {

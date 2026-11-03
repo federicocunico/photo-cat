@@ -12,15 +12,9 @@ import { useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
-import { useCatalogFeedback } from "./catalogActions";
+import { SelectMenu } from "./SelectionBar";
 
-const SORTS: SortKey[] = [
-  "captured_desc",
-  "captured_asc",
-  "name_asc",
-  "size_desc",
-  "added_desc",
-];
+const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
 
 const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "") ? "⌘" : "Ctrl";
 
@@ -255,8 +249,6 @@ function InspectorToggle() {
 }
 
 export function LibraryHeader() {
-  // Gli esiti delle esclusioni arrivano come avvisi nell'unico ToastHost.
-  useCatalogFeedback();
   return (
     <div className="lib-header">
       <Breadcrumb />
@@ -264,6 +256,7 @@ export function LibraryHeader() {
       <ExclusionsControl />
       <Chips />
       <div className="lib-header-actions">
+        <SelectMenu />
         <SortMenu />
         <ViewMenu />
         <InspectorToggle />

@@ -8,7 +8,8 @@ import type { GridItem } from "../../lib/ipc";
 import { emptyFilter, idsSelection, selIds, useLibrary } from "../../store/library";
 import { LibraryGrid } from "./Grid";
 import { SimilarSection } from "./SimilarSection";
-import { BulkBar } from "./BulkBar";
+import { SelectionBar, SelectMenu } from "./SelectionBar";
+import userEvent from "@testing-library/user-event";
 import { displayTotal, locate, toBase } from "./similarView";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
@@ -148,13 +149,23 @@ describe("Inspector e scelta", () => {
     commandsMock.similarNonCovers.mockResolvedValue([3, 4, 5] as never);
     const filter = { ...emptyFilter(), catalogId: 4, similarOnly: true };
     useLibrary.setState({ filter });
-    wrap(<BulkBar />);
-    fireEvent.click(screen.getByTestId("select-non-covers"));
+    const user = userEvent.setup();
+    const pick = async (menu: string) => {
+      screen.getByRole("button", { name: menu }).focus();
+      await user.keyboard("{Enter}");
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Seleziona tutte tranne la principale/ }),
+      );
+    };
+    wrap(<SelectMenu />);
+    await pick("Seleziona");
     await waitFor(() => expect(selIds(useLibrary.getState().selection)).toEqual([3, 4, 5]));
     expect(commandsMock.similarNonCovers).toHaveBeenLastCalledWith(filter);
     // Con una selezione esplicita si lavora su quella.
+    cleanup();
     act(() => useLibrary.setState({ selection: idsSelection([2, 3, 9]) }));
-    fireEvent.click(screen.getByTestId("select-non-covers"));
+    wrap(<SelectionBar />);
+    await pick("Altro");
     await waitFor(() =>
       expect(commandsMock.similarNonCovers).toHaveBeenLastCalledWith({ ...filter, ids: [2, 3, 9] }),
     );
@@ -164,8 +175,11 @@ describe("Inspector e scelta", () => {
 describe("unione manuale", () => {
   it("Raggruppa come simili sulle foto selezionate", async () => {
     useLibrary.setState({ selection: idsSelection([4, 8, 15]) });
-    wrap(<BulkBar />);
-    fireEvent.click(screen.getByTestId("group-together"));
+    const user = userEvent.setup();
+    wrap(<SelectionBar />);
+    screen.getByRole("button", { name: "Altro" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: /Raggruppa come simili/ }));
     await waitFor(() => expect(commandsMock.similarGroupTogether).toHaveBeenCalledWith([4, 8, 15]));
   });
 });
