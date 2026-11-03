@@ -245,4 +245,13 @@ pub struct Catalog {
     pub kind: CatalogKind,
     pub rules: Option<serde_json::Value>,
     pub created_at: i64,
+    /// Ruolo dei cataloghi di sistema (`trash`, `duplicates`, `low_quality`): non
+    /// eliminabili né rinominabili; le loro foto sono nascoste dalle altre viste.
+    #[serde(default)]
+    pub system: Option<String>,
 }
+
+/// Ruoli dei cataloghi di sistema (schema v10).
+pub const SYSTEM_TRASH: &str = "trash";
+pub const SYSTEM_DUPLICATES: &str = "duplicates";
+pub const SYSTEM_LOW_QUALITY: &str = "low_quality";

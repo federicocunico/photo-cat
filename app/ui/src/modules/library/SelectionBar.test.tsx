@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import {
@@ -377,4 +377,120 @@ it("issue #26: aggiungere più foto a un catalogo le aggiunge tutte", async () =
       false,
     ),
   );
+});
+
+describe("cataloghi di sistema", () => {
+  it("issue #24: «Sposta nel cestino» dalla barra delle azioni, con Annulla operazione", async () => {
+    commandsMock.listCatalogs.mockResolvedValue([
+      {
+        catalog: {
+          id: 3,
+          name: "Vacanze",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: null,
+        },
+        items: 10,
+        excluded: 0,
+      },
+      {
+        catalog: {
+          id: 90,
+          name: "Cestino",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: "trash",
+        },
+        items: 2,
+        excluded: 0,
+      },
+      {
+        catalog: {
+          id: 91,
+          name: "Duplicati",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: "duplicates",
+        },
+        items: 0,
+        excluded: 0,
+      },
+    ] as never);
+    commandsMock.startBulk.mockResolvedValue(120 as never);
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection([1, 2, 3]) });
+    renderBars();
+    const user = await openMenu("Altro");
+    await user.click(await screen.findByRole("menuitem", { name: /Sposta nel cestino/ }));
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [1, 2, 3] },
+        { action: "add_catalog", catalog: 90 },
+        false,
+      ),
+    );
+    finish(120);
+    const notice = (await screen.findByText("3 foto nel cestino")).closest(
+      '[role="status"]',
+    ) as HTMLElement;
+    expect(within(notice).getByRole("button", { name: "Annulla operazione" })).toBeInTheDocument();
+  });
+
+  it("nel Cestino aperto «Ripristina» riporta le foto nella libreria", async () => {
+    commandsMock.listCatalogs.mockResolvedValue([
+      {
+        catalog: {
+          id: 3,
+          name: "Vacanze",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: null,
+        },
+        items: 10,
+        excluded: 0,
+      },
+      {
+        catalog: {
+          id: 90,
+          name: "Cestino",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: "trash",
+        },
+        items: 2,
+        excluded: 0,
+      },
+      {
+        catalog: {
+          id: 91,
+          name: "Duplicati",
+          kind: "manual",
+          rules: null,
+          createdAt: 0,
+          system: "duplicates",
+        },
+        items: 0,
+        excluded: 0,
+      },
+    ] as never);
+    useLibrary.setState({
+      filter: { ...emptyFilter(), catalogId: 90 },
+      selection: idsSelection([7, 8]),
+    });
+    renderBars();
+    fireEvent.click(await screen.findByRole("button", { name: "Ripristina" }));
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [7, 8] },
+        { action: "restore_from_system", catalog: 90 },
+        false,
+      ),
+    );
+    // Niente "Escludi dal catalogo" né "Sposta nel cestino" dentro il Cestino.
+    expect(screen.queryByRole("button", { name: "Escludi dal catalogo" })).not.toBeInTheDocument();
+  });
 });

@@ -513,6 +513,7 @@ pub mod catalog {
             },
             rules: rules.and_then(|s| serde_json::from_str(&s).ok()),
             created_at: r.get(4)?,
+            system: r.get(5)?,
         })
     }
 
@@ -534,6 +535,7 @@ pub mod catalog {
     }
 
     pub fn rename(c: &Connection, id: i64, name: &str) -> StoreResult<()> {
+        protect_system(c, id)?;
         let name = name.trim();
         if name.is_empty() {
             return Err(StoreError::Invalid("nome catalogo vuoto".into()));
@@ -552,15 +554,35 @@ pub mod catalog {
         Ok(())
     }
 
-    /// Elimina il catalogo; i file restano in libreria.
+    /// Elimina il catalogo; i file restano in libreria. I cataloghi di sistema restano.
     pub fn delete(c: &Connection, id: i64) -> StoreResult<()> {
+        protect_system(c, id)?;
         c.execute("DELETE FROM catalog WHERE id=?1", [id])?;
         Ok(())
     }
 
+    /// I cataloghi di sistema non si eliminano né si rinominano.
+    fn protect_system(c: &Connection, id: i64) -> StoreResult<()> {
+        if get(c, id)?.system.is_some() {
+            return Err(StoreError::Invalid(
+                "i cataloghi di sistema non si eliminano né si rinominano".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Id del catalogo di sistema con quel ruolo.
+    pub fn system_id(c: &Connection, role: &str) -> StoreResult<i64> {
+        Ok(
+            c.query_row("SELECT id FROM catalog WHERE system=?1", [role], |r| {
+                r.get(0)
+            })?,
+        )
+    }
+
     pub fn get(c: &Connection, id: i64) -> StoreResult<Catalog> {
         Ok(c.query_row(
-            "SELECT id, name, kind, rules, created_at FROM catalog WHERE id=?1",
+            "SELECT id, name, kind, rules, created_at, system FROM catalog WHERE id=?1",
             [id],
             from_row,
         )?)
@@ -568,7 +590,7 @@ pub mod catalog {
 
     pub fn list(c: &Connection) -> StoreResult<Vec<Catalog>> {
         let mut st = c.prepare(
-            "SELECT id, name, kind, rules, created_at FROM catalog ORDER BY name COLLATE NOCASE",
+            "SELECT id, name, kind, rules, created_at, system FROM catalog ORDER BY system IS NOT NULL, name COLLATE NOCASE",
         )?;
         let rows = st.query_map([], from_row)?.collect::<Result<_, _>>()?;
         Ok(rows)

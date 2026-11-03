@@ -53,6 +53,32 @@ pub async fn delete_catalog(state: State<'_, AppState>, id: i64, confirmed: bool
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
 }
+/// Mette da parte i duplicati nel catalogo di sistema "Duplicati" (issue #29);
+/// restituisce quante copie ha spostato. Annullabile con `undo_bulk`.
+#[tauri::command]
+#[specta::specta]
+pub async fn collect_duplicates(state: State<'_, AppState>) -> AppResult<u32> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(|c| Ok(pc_store::bulk::collect_duplicates(c)?.changed as u32))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Avvia il controllo della qualità delle foto (issue #20): attività con avanzamento.
+#[tauri::command]
+#[specta::specta]
+pub async fn start_photo_quality(app: tauri::AppHandle) -> AppResult<i64> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .jobs
+            .submit(pc_ai::photo_quality::JOB_KIND, serde_json::json!({}))
+    })
+    .await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn start_bulk(

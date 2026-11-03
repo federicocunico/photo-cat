@@ -89,6 +89,7 @@ export const it = {
       face_quality: "Valutazione dei volti",
       retune: "Ricalcolo delle categorie",
       time_backfill: "Lettura delle date delle foto",
+      photo_quality: "Controllo della qualità delle foto",
       other: "Attività",
     },
     overall: "Complessivo",
@@ -116,6 +117,7 @@ export const it = {
     aiPaused: "Analisi AI in pausa per memoria insufficiente",
     memoryPaused: "In pausa per memoria",
     phases: {
+      qualita_foto: "Qualità delle foto",
       scansione: "Scansione",
       ricollegamento: "Ricollegamento",
       metadati: "Metadati",

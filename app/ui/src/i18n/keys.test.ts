@@ -19,6 +19,8 @@ for (const text of Object.values(files)) {
 // Chiavi composte a runtime (t(`prefisso.${valore}`)): valori elencati qui.
 const dynamic: Record<string, string[]> = {
   "nav.groups": ["browse", "organize", "transfer"],
+  "catalogs.system": ["trash", "duplicates", "low_quality"],
+  "catalogs.system.help": ["trash", "duplicates", "low_quality"],
   "shortcuts.items": [
     "palette",
     "undo",
@@ -68,7 +70,7 @@ const dynamic: Record<string, string[]> = {
     ...["import", "relink", "export", "organize", "sequence_export", "bulk", "analysis"].flatMap(
       (k) => [k, `${k}_of`],
     ),
-    ...["models", "similar", "face_quality", "retune", "time_backfill"],
+    ...["models", "similar", "face_quality", "retune", "time_backfill", "photo_quality"],
   ],
   "tags.colors": ["blue", "teal", "yellow", "coral", "purple", "gray"],
   // Cataloghi (modules/catalogs/rules.ts e RuleEditor.tsx).

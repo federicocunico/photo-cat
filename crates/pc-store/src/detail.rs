@@ -198,6 +198,8 @@ mod tests {
         assert_eq!((s[0].items, s[0].missing), (1, 0));
         let k = catalog::create(&c, "Viaggio", CatalogKind::Manual, None).unwrap();
         catalog::add_items(&c, k, &[id]).unwrap();
-        assert_eq!(catalog_summaries(&c).unwrap()[0].items, 1);
+        let summaries = catalog_summaries(&c).unwrap();
+        let viaggio = summaries.iter().find(|s| s.catalog.id == k).unwrap();
+        assert_eq!(viaggio.items, 1);
     }
 }

@@ -16,6 +16,7 @@ import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
 import { FacetList } from "./FacetList";
 import { DateFacet } from "./DateFacet";
+import { catalogLabel } from "../catalogs/systemCatalogs";
 import { OpenInPeople } from "../people/OpenInPeople";
 
 function Row({
@@ -302,7 +303,7 @@ export function LibrarySidebar() {
               {list.map(({ catalog, items }) => (
                 <Row
                   key={catalog.id}
-                  label={catalog.name}
+                  label={catalogLabel(catalog, t)}
                   icon={
                     catalog.kind === "smart" ? (
                       <Icon.Smart size={12} className="sidebar-smart" />

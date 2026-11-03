@@ -35,6 +35,8 @@ export const selection = {
       reanalyze: "Rianalizza con l'AI",
       organize: "Organizza in cartelle",
       removeLibrary: "Rimuovi dalla libreria…",
+      trash: "Sposta nel cestino",
+      restore: "Ripristina",
       removeTitle_one: "Rimuovere {{count}} foto dalla libreria?",
       removeTitle_other: "Rimuovere {{count}} foto dalla libreria?",
       removeBody:
@@ -46,6 +48,8 @@ export const selection = {
         "Tutti i volti di {{count}} foto vengono assegnati a {{name}}. Non si può annullare da qui: eventuali errori si correggono nel modulo Persone.",
       assignConfirm: "Assegna a {{name}}",
       done: {
+        trash: "{{count}} foto nel cestino",
+        restore_from_system: "{{count}} foto ripristinate da «{{name}}»",
         add_tag: "Tag «{{name}}» aggiunto a {{count}} foto",
         remove_tag: "Tag «{{name}}» tolto da {{count}} foto",
         remove_tags: "Tag del set tolti da {{count}} foto",
@@ -96,6 +100,8 @@ export const selection = {
       reanalyze: "Re-analyze with AI",
       organize: "Organize into folders",
       removeLibrary: "Remove from library…",
+      trash: "Move to Trash",
+      restore: "Restore",
       removeTitle_one: "Remove {{count}} photo from the library?",
       removeTitle_other: "Remove {{count}} photos from the library?",
       removeBody:
@@ -107,6 +113,8 @@ export const selection = {
         "All faces in {{count}} photos are assigned to {{name}}. This cannot be undone here: fix mistakes in People.",
       assignConfirm: "Assign to {{name}}",
       done: {
+        trash: "{{count}} photos moved to Trash",
+        restore_from_system: "{{count}} photos restored from “{{name}}”",
         add_tag: "Tag “{{name}}” added to {{count}} photos",
         remove_tag: "Tag “{{name}}” removed from {{count}} photos",
         remove_tags: "Set tags removed from {{count}} photos",

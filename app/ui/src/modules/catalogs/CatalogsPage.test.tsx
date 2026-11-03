@@ -175,3 +175,48 @@ it("i gruppi solo manuali compaiono nell'editor dei cataloghi smart", async () =
     ),
   );
 });
+
+it("cataloghi di sistema: senza Modifica ed Elimina, con «Metti da parte i duplicati»", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 3, name: "Vacanze", kind: "manual", rules: null, createdAt: 0, system: null },
+      items: 10,
+      excluded: 0,
+    },
+    {
+      catalog: {
+        id: 90,
+        name: "Cestino",
+        kind: "manual",
+        rules: null,
+        createdAt: 0,
+        system: "trash",
+      },
+      items: 2,
+      excluded: 0,
+    },
+    {
+      catalog: {
+        id: 91,
+        name: "Duplicati",
+        kind: "manual",
+        rules: null,
+        createdAt: 0,
+        system: "duplicates",
+      },
+      items: 0,
+      excluded: 0,
+    },
+  ] as never);
+  commandsMock.collectDuplicates.mockResolvedValue(2 as never);
+  renderPage();
+  const trash = await screen.findByRole("region", { name: "Cestino" });
+  expect(within(trash).queryByRole("button", { name: /Elimina/ })).not.toBeInTheDocument();
+  expect(within(trash).queryByRole("button", { name: /Modifica/ })).not.toBeInTheDocument();
+  const dup = screen.getByRole("region", { name: "Duplicati" });
+  fireEvent.click(within(dup).getByRole("button", { name: "Metti da parte i duplicati" }));
+  await waitFor(() => expect(commandsMock.collectDuplicates).toHaveBeenCalledTimes(1));
+  // I cataloghi dell'utente restano modificabili.
+  const user = screen.getByRole("region", { name: "Vacanze" });
+  expect(within(user).getByRole("button", { name: /Elimina/ })).toBeInTheDocument();
+});

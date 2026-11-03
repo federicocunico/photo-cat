@@ -144,6 +144,8 @@ pub fn bindings() -> Builder<tauri::Wry> {
             people::purge_faces,
             catalogs::save_catalog,
             catalogs::delete_catalog,
+            catalogs::collect_duplicates,
+            catalogs::start_photo_quality,
             catalogs::start_bulk,
             catalogs::undo_bulk,
             catalogs::last_bulk_undo,
@@ -477,6 +479,12 @@ fn initialize(
         Arc::new(move |p| {
             pc_ai::face_quality::plan(fq_store.clone(), fq_gov.clone(), Some(fq_crops.clone()), p)
         }),
+    );
+    let pq_store = store.clone();
+    let pq_thumbs = pc_ingest::thumb::ThumbCache::new(paths.thumbnails());
+    jobs.register(
+        pc_ai::photo_quality::JOB_KIND,
+        Arc::new(move |p| pc_ai::photo_quality::plan(pq_store.clone(), pq_thumbs.clone(), p)),
     );
     let seq_store = store.clone();
     let seq_governor = governor.clone();

@@ -24,6 +24,7 @@ export const JOB_KINDS = [
   "face_quality",
   "retune",
   "time_backfill",
+  "photo_quality",
 ] as const;
 
 /** Attività che scrivono file sul disco: interromperle chiede conferma (ui-foundations). */

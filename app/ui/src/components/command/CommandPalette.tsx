@@ -16,6 +16,7 @@ import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { usePalette } from "../../store/palette";
 import { Icon } from "../icons";
+import { catalogLabel } from "../../modules/catalogs/systemCatalogs";
 import "./palette.css";
 
 /** Risultati per gruppo di entità. */
@@ -192,16 +193,16 @@ export function CommandPalette() {
             </Command.Group>
             <Command.Group heading={t("palette.catalogs")}>
               {(catalogs.data ?? [])
-                .filter((c) => match(c.catalog.name))
+                .filter((c) => match(catalogLabel(c.catalog, t)))
                 .slice(0, ENTITY_LIMIT)
                 .map(({ catalog: c }) => (
                   <Command.Item
                     key={`c${c.id}`}
-                    value={`catalog:${c.id} ${c.name}`}
+                    value={`catalog:${c.id} ${catalogLabel(c, t)}`}
                     onSelect={() => run(() => openLibrary({ catalogId: c.id }))}
                   >
                     <Icon.Catalogs size={14} aria-hidden="true" />
-                    <span className="palette-label">{c.name}</span>
+                    <span className="palette-label">{catalogLabel(c, t)}</span>
                   </Command.Item>
                 ))}
             </Command.Group>

@@ -184,6 +184,8 @@ export const commandsMock = {
   undoBulk: vi.fn(async () => null),
   undoPeople: vi.fn(async () => null),
   lastBulkUndo: vi.fn(async () => null),
+  collectDuplicates: vi.fn(async () => 0),
+  startPhotoQuality: vi.fn(async () => 1),
   tagOverview: vi.fn(async (): Promise<TagOverview> => ({
     tags: [],
     sets: [],

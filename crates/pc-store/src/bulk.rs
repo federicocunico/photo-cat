@@ -762,6 +762,67 @@ pub fn add_to_catalog(
     })
 }
 
+/**
+ * "Ripristina" da un catalogo di sistema (Cestino, Duplicati, Qualità insufficiente):
+ * le foto tornano visibili nella libreria. Annullabile.
+ */
+pub fn restore_from_system(
+    c: &Connection,
+    catalog_id: i64,
+    ids: &[MediaId],
+) -> StoreResult<BulkOutcome> {
+    let cat = catalog::get(c, catalog_id)?;
+    if cat.system.is_none() {
+        return Err(StoreError::Invalid(
+            "\"Ripristina\" vale solo per i cataloghi di sistema".into(),
+        ));
+    }
+    let removed = catalog::remove_items(c, catalog_id, ids)?;
+    if !removed.is_empty() {
+        record_undo(
+            c,
+            &format!("Ripristina da {}", cat.name),
+            &UndoAction::CatalogRemoved {
+                catalog_id,
+                ids: removed.clone(),
+            },
+        )?;
+    }
+    Ok(BulkOutcome {
+        changed: removed.len(),
+        requested: ids.len(),
+    })
+}
+
+/**
+ * Mette da parte i duplicati (issue #29): per ogni contenuto presente più volte tra le
+ * foto visibili resta la copia importata per prima (id minore); le altre vanno nel
+ * catalogo di sistema "Duplicati". Annullabile come un'aggiunta a un catalogo.
+ */
+pub fn collect_duplicates(c: &Connection) -> StoreResult<BulkOutcome> {
+    let hidden = crate::query::HIDDEN_BY_SYSTEM;
+    let visible2 = hidden.replace("m.id", "m2.id");
+    let sql = format!(
+        "SELECT m.id FROM media_item m
+         WHERE m.content_hash IS NOT NULL AND {hidden}
+           AND m.id > (SELECT MIN(m2.id) FROM media_item m2
+                       WHERE m2.content_hash = m.content_hash AND {visible2})
+         ORDER BY m.id"
+    );
+    let ids: Vec<MediaId> = c
+        .prepare(&sql)?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    if ids.is_empty() {
+        return Ok(BulkOutcome {
+            changed: 0,
+            requested: 0,
+        });
+    }
+    let target = catalog::system_id(c, crate::model::SYSTEM_DUPLICATES)?;
+    add_to_catalog(c, target, &ids)
+}
+
 pub fn remove_from_catalog(
     c: &Connection,
     catalog_id: i64,

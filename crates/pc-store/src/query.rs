@@ -269,6 +269,9 @@ pub enum PageAt {
     Offset { offset: u32 },
 }
 
+/// Esclude le foto che appartengono a un catalogo di sistema.
+pub const HIDDEN_BY_SYSTEM: &str = "m.id NOT IN (SELECT ci.media_id FROM catalog_item ci      JOIN catalog cs ON cs.id = ci.catalog_id WHERE cs.system IS NOT NULL)";
+
 const FROM: &str = "FROM media_item m
     LEFT JOIN media_dates d ON d.media_id = m.id
     LEFT JOIN media_tech t ON t.media_id = m.id";
@@ -302,6 +305,15 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         let frag = rules::catalog_content(c, cid, &[])?;
         parts.push(format!("({})", frag.sql));
         args.extend(frag.args);
+    }
+    // Le foto dei cataloghi di sistema (Cestino, Duplicati, Qualità insufficiente) sono
+    // nascoste da ogni vista, salvo aprendo proprio quel catalogo.
+    let viewing_system = match f.catalog_id {
+        Some(cid) => repo::catalog::get(c, cid)?.system.is_some(),
+        None => false,
+    };
+    if !viewing_system {
+        parts.push(HIDDEN_BY_SYSTEM.into());
     }
     if let Some(cid) = f.excluded_from {
         let cat = repo::catalog::get(c, cid)?;

@@ -89,6 +89,7 @@ export const en: Messages = {
       face_quality: "Rating faces",
       retune: "Recomputing categories",
       time_backfill: "Reading photo dates",
+      photo_quality: "Checking photo quality",
       other: "Activity",
     },
     overall: "Overall",
@@ -116,6 +117,7 @@ export const en: Messages = {
     aiPaused: "AI analysis paused: not enough memory",
     memoryPaused: "Paused for memory",
     phases: {
+      qualita_foto: "Photo quality",
       scansione: "Scan",
       ricollegamento: "Relinking",
       metadati: "Metadata",

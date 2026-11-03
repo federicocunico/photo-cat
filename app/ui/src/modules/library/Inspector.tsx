@@ -165,6 +165,7 @@ function AddToCatalog({ edit }: { edit: Editing }) {
   });
   const options = (catalogs.data ?? [])
     .filter((c) => c.catalog.kind === "manual")
+    .filter((c) => !c.catalog.system)
     .map((c) => ({ value: String(c.catalog.id), label: c.catalog.name }));
   return (
     <InlineEdit
@@ -327,7 +328,7 @@ function SingleInspector({ d }: { d: MediaDetail }) {
           return (
             <div key={name} className="inspector-row">
               <span>{name}</span>
-              {cat && (
+              {cat && !cat.catalog.system && (
                 <Button
                   size="sm"
                   variant="ghost"

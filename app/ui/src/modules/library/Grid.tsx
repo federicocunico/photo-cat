@@ -46,6 +46,7 @@ import { hotkeyAction } from "../tags/useTagHotkeys";
 import { colorOf, useTagOverview } from "../tags/data";
 import { Button, EmptyState } from "../../components/ui";
 import { useLayout } from "../../store/layout";
+import { systemCatalogId } from "../catalogs/systemCatalogs";
 import { TagChip } from "../tags/TagChip";
 
 /** Chip dei tag in basso sulla miniatura (al massimo 3, poi "+N"). */
@@ -506,6 +507,24 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           return;
         if (onGridKey(e)) return;
         const restore = filter.excludedFrom != null;
+        const trashId = systemCatalogId(catalogs.data, "trash");
+        if (
+          e.key === "Delete" &&
+          filter.catalogId == null &&
+          !restore &&
+          trashId != null &&
+          selCount(selection) > 0
+        ) {
+          // Canc fuori da un catalogo: nel cestino, con "Annulla operazione" (issue #24).
+          e.preventDefault();
+          const count = selCount(selection);
+          void bulk.start(
+            selTarget(selection),
+            { action: "add_catalog", catalog: trashId },
+            t("selection.done.trash", { count }),
+          );
+          return;
+        }
         if (
           (e.key === "Delete" && filter.catalogId != null && !restore) ||
           (e.key === "Enter" && restore)
