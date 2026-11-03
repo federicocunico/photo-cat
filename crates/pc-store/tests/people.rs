@@ -925,7 +925,10 @@ fn people_corrections_are_undoable() {
 
     // Unione + annulla ripristina il gruppo sorgente.
     let snap = people::person_snapshot(&c, a).unwrap();
+    let target = people::person_snapshot(&c, b).unwrap();
     let faces = people::faces_of_persons(&c, &[a]).unwrap();
+    let states = people::face_states(&c, &people::faces_touching(&c, &[a, b]).unwrap()).unwrap();
+    let not_same = people::not_same_rows(&c, &[a, b]).unwrap();
     people::merge(&c, a, b).unwrap();
     bulk::record_undo(
         &c,
@@ -934,6 +937,9 @@ fn people_corrections_are_undoable() {
             from: vec![snap],
             faces,
             to: b,
+            states: states.clone(),
+            target: Some(target),
+            not_same,
         },
     )
     .unwrap();
@@ -955,6 +961,9 @@ fn people_corrections_are_undoable() {
         })
         .unwrap();
     assert_eq!(person, Some(a));
+    // Origine dell assegnazione e rifiuti tornano com erano, non solo la persona.
+    let after = people::face_states(&c, &states.iter().map(|s| s.id).collect::<Vec<_>>()).unwrap();
+    assert_eq!(after, states);
 }
 
 #[test]
@@ -1126,4 +1135,103 @@ fn locate_face_review_ignored_and_discarded() {
     )
     .unwrap();
     assert_eq!(page.items[located.index as usize].id, discarded_face);
+}
+
+#[test]
+fn merging_a_named_person_into_an_unnamed_group_keeps_name_and_identity() {
+    let c = lib_with(2);
+    for media in 1..=2 {
+        let mut f = face(0.1, media as usize);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let fids: Vec<_> = (1..=2)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let unnamed = people::create_person(&c, None).unwrap();
+    let giulia = people::create_person(&c, Some("Giulia")).unwrap();
+    people::link_identity(&c, giulia, Some(("uid-g", "Giulia"))).unwrap();
+    people::assign(&c, &[fids[0]], unnamed).unwrap();
+    people::assign(&c, &[fids[1]], giulia).unwrap();
+
+    // Dal banner dei suggerimenti: il gruppo senza nome è la destinazione.
+    people::merge(&c, giulia, unnamed).unwrap();
+    let (name, uid): (Option<String>, Option<String>) = c
+        .query_row(
+            "SELECT name, identity_uid FROM person WHERE id=?1",
+            [unnamed],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(name.as_deref(), Some("Giulia"));
+    assert_eq!(uid.as_deref(), Some("uid-g"));
+}
+
+#[test]
+fn people_undo_restores_full_face_state_and_ignores_other_actions() {
+    use pc_store::bulk::{self, UndoAction};
+    let c = lib_with(3);
+    for media in 1..=3 {
+        let mut f = face(0.1, media as usize);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let fids: Vec<_> = (1..=3)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let a = people::create_person(&c, None).unwrap();
+    people::assign(&c, &fids, a).unwrap();
+    c.execute("UPDATE face SET assigned_by='auto'", []).unwrap();
+    let before = people::face_states(&c, &fids).unwrap();
+
+    // "Non è questa persona": l'annullamento rimette persona, origine e rifiuti.
+    let states = people::face_states(&c, &[fids[0]]).unwrap();
+    people::reject(&c, fids[0], a).unwrap();
+    bulk::record_undo(
+        &c,
+        "Non è questa persona",
+        &UndoAction::FacesRestored {
+            states,
+            created: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        bulk::undo_last_people(&c).unwrap().as_deref(),
+        Some("Non è questa persona")
+    );
+    assert_eq!(people::face_states(&c, &fids).unwrap(), before);
+
+    // "Separa": l'annullamento ricompone il gruppo ed elimina quello creato.
+    let states = people::face_states(&c, &people::faces_touching(&c, &[a]).unwrap()).unwrap();
+    let created = people::separate(&c, &[fids[2]], a).unwrap();
+    bulk::record_undo(
+        &c,
+        "Separa volti",
+        &UndoAction::FacesRestored {
+            states,
+            created: Some(created),
+        },
+    )
+    .unwrap();
+    bulk::undo_last_people(&c).unwrap();
+    assert_eq!(people::face_states(&c, &fids).unwrap(), before);
+    let exists: bool = c
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+            [created],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!exists);
+
+    // L'ultima operazione è un tag della Libreria: Ctrl+Z in Persone non la tocca.
+    bulk::add_tag(&c, "Mare", &[1], &[]).unwrap();
+    assert_eq!(bulk::undo_last_people(&c).unwrap(), None);
+    let tagged: i64 = c
+        .query_row("SELECT count(*) FROM media_tag", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(tagged, 1);
 }

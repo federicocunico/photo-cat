@@ -139,6 +139,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             people::face_count,
             people::person_faces,
             people::correct_person,
+            people::undo_people,
             people::purge_faces,
             catalogs::save_catalog,
             catalogs::delete_catalog,

@@ -161,38 +161,35 @@ pub async fn correct_person(
         db.write(move |c| {
             match correction {
                 Correction::Rename { person, name } => people::rename(c, person, &name)?,
-                Correction::Merge { from, to } => {
-                    let snap = people::person_snapshot(c, from)?;
-                    let faces = people::faces_of_persons(c, &[from])?;
-                    people::merge(c, from, to)?;
+                Correction::Merge { from, to } => merge_with_undo(c, vec![from], to)?,
+                Correction::Separate { person, faces } => {
+                    let touched = people::faces_touching(c, &[person])?;
+                    let states = people::face_states(c, &touched)?;
+                    let created = people::separate(c, &faces, person)?;
                     bulk::record_undo(
                         c,
-                        "Unisci persone",
-                        &UndoAction::PersonsMerged {
-                            from: vec![snap],
-                            faces,
-                            to,
+                        "Separa volti",
+                        &UndoAction::FacesRestored {
+                            states,
+                            created: Some(created),
                         },
                     )?;
                 }
-                Correction::Separate { person, faces } => {
-                    people::separate(c, &faces, person)?;
-                }
                 Correction::Assign { person, faces } => {
-                    let prev = people::face_person_ids(c, &faces)?;
-                    people::assign(c, &faces, person)?;
-                    if !prev.is_empty() {
-                        bulk::record_undo(
-                            c,
-                            "Sposta volti",
-                            &UndoAction::FacesMoved {
-                                faces: prev,
-                                to: person,
-                            },
-                        )?;
-                    }
+                    move_with_undo(c, &faces, person, |c| people::assign(c, &faces, person))?
                 }
-                Correction::Reject { person, face } => people::reject(c, face, person)?,
+                Correction::Reject { person, face } => {
+                    let states = people::face_states(c, &[face])?;
+                    people::reject(c, face, person)?;
+                    bulk::record_undo(
+                        c,
+                        "Non è questa persona",
+                        &UndoAction::FacesRestored {
+                            states,
+                            created: None,
+                        },
+                    )?;
+                }
                 Correction::Remove { face } => people::remove_face(c, face)?,
                 Correction::MergeMany { from, to } => {
                     let from: Vec<i64> = from.into_iter().filter(|id| *id != to).collect();
@@ -201,32 +198,10 @@ pub async fn correct_person(
                             "nessun gruppo da unire".into(),
                         ));
                     }
-                    let mut snaps = Vec::with_capacity(from.len());
-                    for id in &from {
-                        snaps.push(people::person_snapshot(c, *id)?);
-                    }
-                    let faces = people::faces_of_persons(c, &from)?;
-                    people::merge_many(c, &from, to)?;
-                    bulk::record_undo(
-                        c,
-                        "Unisci persone",
-                        &UndoAction::PersonsMerged {
-                            from: snaps,
-                            faces,
-                            to,
-                        },
-                    )?;
+                    merge_with_undo(c, from, to)?;
                 }
                 Correction::Move { faces, to } => {
-                    let prev = people::face_person_ids(c, &faces)?;
-                    people::move_faces(c, &faces, to)?;
-                    if !prev.is_empty() {
-                        bulk::record_undo(
-                            c,
-                            "Sposta volti",
-                            &UndoAction::FacesMoved { faces: prev, to },
-                        )?;
-                    }
+                    move_with_undo(c, &faces, to, |c| people::move_faces(c, &faces, to))?
                 }
                 Correction::NotSame { a, b } => {
                     people::mark_not_same(c, a, b)?;
@@ -285,6 +260,76 @@ pub async fn correct_person(
     events::faces_changed(&app);
     Ok(())
 }
+/// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento: gruppi
+/// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse".
+fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {
+    let mut snaps = Vec::with_capacity(from.len());
+    for id in &from {
+        snaps.push(people::person_snapshot(c, *id)?);
+    }
+    let target = people::person_snapshot(c, to)?;
+    let faces = people::faces_of_persons(c, &from)?;
+    let mut groups = from.clone();
+    groups.push(to);
+    let states = people::face_states(c, &people::faces_touching(c, &groups)?)?;
+    let not_same = people::not_same_rows(c, &groups)?;
+    people::merge_many(c, &from, to)?;
+    bulk::record_undo(
+        c,
+        "Unisci persone",
+        &UndoAction::PersonsMerged {
+            from: snaps,
+            faces,
+            to,
+            states,
+            target: Some(target),
+            not_same,
+        },
+    )
+}
+
+/// Sposta volti su un gruppo registrando lo stato completo dei volti per l'annullamento.
+fn move_with_undo(
+    c: &rusqlite::Connection,
+    faces: &[i64],
+    to: i64,
+    apply: impl FnOnce(&rusqlite::Connection) -> pc_store::StoreResult<()>,
+) -> pc_store::StoreResult<()> {
+    let prev = people::face_person_ids(c, faces)?;
+    let states = people::face_states(c, faces)?;
+    apply(c)?;
+    if !prev.is_empty() {
+        bulk::record_undo(
+            c,
+            "Sposta volti",
+            &UndoAction::FacesMoved {
+                faces: prev,
+                to,
+                states,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
+/// operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
+#[tauri::command]
+#[specta::specta]
+pub async fn undo_people(app: AppHandle, state: State<'_, AppState>) -> AppResult<Option<String>> {
+    let db = state.store.clone();
+    let done = tauri::async_runtime::spawn_blocking(move || {
+        db.write(pc_store::bulk::undo_last_people)
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    if done.is_some() {
+        events::faces_changed(&app);
+    }
+    Ok(done)
+}
+
 /// Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati.
 #[tauri::command]
 #[specta::specta]

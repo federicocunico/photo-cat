@@ -264,7 +264,7 @@ export function PeopleModule() {
     },
     undo() {
       void commands
-        .undoBulk()
+        .undoPeople()
         .then(() =>
           Promise.all([
             qc.invalidateQueries({ queryKey: ["people-groups"] }),
@@ -313,6 +313,11 @@ export function PeopleModule() {
       setSelectedFaceIds([]);
       if (located.singles) {
         setTarget({ kind: "singles" });
+        setSelectedIds([]);
+        setGroup(null);
+      } else if (located.groupId == null && located.discarded) {
+        // Volto scartato per qualità e senza gruppo: si apre l'elenco dei volti scartati.
+        setTarget({ kind: "discarded" });
         setSelectedIds([]);
         setGroup(null);
       } else if (located.groupId != null) {

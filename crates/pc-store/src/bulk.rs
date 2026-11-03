@@ -136,9 +136,12 @@ pub enum UndoAction {
     },
     /// Volti spostati su un altro gruppo.
     FacesMoved {
-        /// `(face_id, person_id precedente)`.
+        /// `(face_id, person_id precedente)` (voci registrate prima di `states`).
         faces: Vec<(i64, Option<i64>)>,
         to: i64,
+        /// Stato completo dei volti prima dello spostamento (persona, origine, rifiuti).
+        #[serde(default)]
+        states: Vec<crate::people::FaceState>,
     },
     /// Persone unite in `to`: snapshot dei gruppi eliminati e assegnazioni previe.
     PersonsMerged {
@@ -146,7 +149,40 @@ pub enum UndoAction {
         /// `(face_id, person_id)` dei volti che erano nei gruppi `from`.
         faces: Vec<(i64, i64)>,
         to: i64,
+        /// Stato completo dei volti toccati dall'unione (anche i rifiuti riscritti).
+        #[serde(default)]
+        states: Vec<crate::people::FaceState>,
+        /// Gruppo di destinazione prima dell'unione (nome e identità possono cambiare).
+        #[serde(default)]
+        target: Option<crate::people::PersonSnapshot>,
+        /// Vincoli "persone diverse" di `from` e `to` prima dell'unione.
+        #[serde(default)]
+        not_same: Vec<(i64, i64, i64)>,
     },
+    /// Correzione sui volti (rifiuto, separazione): ripristina lo stato salvato.
+    FacesRestored {
+        states: Vec<crate::people::FaceState>,
+        /// Gruppo creato dalla correzione (es. separazione): eliminato se resta vuoto.
+        #[serde(default)]
+        created: Option<i64>,
+    },
+}
+
+impl UndoAction {
+    /// `true` per le correzioni del modulo Persone: Ctrl+Z lì annulla solo queste.
+    pub fn is_people(&self) -> bool {
+        matches!(
+            self,
+            UndoAction::PersonNotSame { .. }
+                | UndoAction::PersonIgnored { .. }
+                | UndoAction::PersonRestored { .. }
+                | UndoAction::FacesRecovered { .. }
+                | UndoAction::PersonCover { .. }
+                | UndoAction::FacesMoved { .. }
+                | UndoAction::PersonsMerged { .. }
+                | UndoAction::FacesRestored { .. }
+        )
+    }
 }
 
 /// Luogo scelto dall'utente (nome libero o località del dataset geografico).
@@ -956,6 +992,22 @@ pub fn last_undoable(c: &Connection) -> StoreResult<Option<String>> {
     .optional()?)
 }
 
+/// Annulla l'ultima operazione solo se è una correzione delle persone: dal modulo Persone
+/// Ctrl+Z non deve annullare un tag o un catalogo assegnati prima in Libreria.
+pub fn undo_last_people(c: &Connection) -> StoreResult<Option<String>> {
+    let payload: Option<String> = c
+        .query_row(
+            "SELECT payload FROM undo_log ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match payload {
+        Some(p) if serde_json::from_str::<UndoAction>(&p)?.is_people() => undo_last(c),
+        _ => Ok(None),
+    }
+}
+
 /// Annulla l'ultima operazione registrata; restituisce la sua descrizione.
 pub fn undo_last(c: &Connection) -> StoreResult<Option<String>> {
     Ok(undo_last_collect(c)?.map(|(d, _)| d))
@@ -1141,18 +1193,48 @@ fn undo_action(
             Some(face) => crate::people::set_cover(c, group, face)?,
             None => crate::people::clear_cover(c, group)?,
         },
-        UndoAction::FacesMoved { faces, to: _ } => {
-            crate::people::restore_face_persons(c, &faces)?;
+        UndoAction::FacesMoved { faces, states, .. } => {
+            if states.is_empty() {
+                crate::people::restore_face_persons(c, &faces)?;
+            } else {
+                crate::people::restore_face_states(c, &states)?;
+            }
         }
-        UndoAction::PersonsMerged { from, faces, to: _ } => {
+        UndoAction::PersonsMerged {
+            from,
+            faces,
+            to,
+            states,
+            target,
+            not_same,
+        } => {
             for snap in &from {
                 crate::people::restore_person_row(c, snap)?;
             }
-            let pairs: Vec<(i64, Option<i64>)> = faces
-                .into_iter()
-                .map(|(face, person)| (face, Some(person)))
-                .collect();
-            crate::people::restore_face_persons(c, &pairs)?;
+            if let Some(t) = &target {
+                crate::people::restore_person_fields(c, t)?;
+            }
+            if states.is_empty() {
+                let pairs: Vec<(i64, Option<i64>)> = faces
+                    .into_iter()
+                    .map(|(face, person)| (face, Some(person)))
+                    .collect();
+                crate::people::restore_face_persons(c, &pairs)?;
+            } else {
+                let mut persons: Vec<i64> = from.iter().map(|s| s.id).collect();
+                persons.push(to);
+                crate::people::restore_not_same(c, &persons, &not_same)?;
+                crate::people::restore_face_states(c, &states)?;
+            }
+        }
+        UndoAction::FacesRestored { states, created } => {
+            crate::people::restore_face_states(c, &states)?;
+            if let Some(id) = created {
+                c.execute(
+                    "DELETE FROM person WHERE id=?1 AND NOT EXISTS (SELECT 1 FROM face WHERE person_id=?1)",
+                    [id],
+                )?;
+            }
         }
     }
     Ok(())

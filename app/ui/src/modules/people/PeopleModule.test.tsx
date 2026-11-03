@@ -517,3 +517,37 @@ describe("Aggiornamento dopo l'analisi", () => {
     );
   });
 });
+
+describe("Volti scartati senza gruppo", () => {
+  it("compaiono in Da rivedere e si aprono con l'elenco dei volti scartati", async () => {
+    renderModule();
+    const entry = await screen.findByRole("button", { name: /18 volti scartati/i });
+    fireEvent.click(entry);
+    await waitFor(() =>
+      expect(commandsMock.groupFaces).toHaveBeenCalledWith(
+        { kind: "discarded", group: null },
+        expect.anything(),
+        null,
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("Apri in Persone su un volto scartato senza gruppo apre l'elenco dei scartati", async () => {
+    commandsMock.locateFace.mockResolvedValue(
+      located({ faceId: 55, section: "review", groupId: null, discarded: true }),
+    );
+    renderModule();
+    act(() => {
+      useLayout.getState().openPeople({ face: 55 });
+    });
+    await waitFor(() =>
+      expect(commandsMock.groupFaces).toHaveBeenCalledWith(
+        { kind: "discarded", group: null },
+        expect.anything(),
+        null,
+        expect.anything(),
+      ),
+    );
+  });
+});

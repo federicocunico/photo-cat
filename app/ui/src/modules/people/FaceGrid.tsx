@@ -96,6 +96,7 @@ export const FaceGrid = forwardRef<
   const scope: FaceScope | null = useMemo(() => {
     if (!target || target.kind === "identity") return null;
     if (target.kind === "singles") return { kind: "singles" };
+    if (target.kind === "discarded") return { kind: "discarded", group: null };
     if (discardedOnly) return { kind: "discarded", group: target.id };
     return { kind: "group", group: target.id };
   }, [target, discardedOnly]);
@@ -272,11 +273,13 @@ export const FaceGrid = forwardRef<
   const title =
     target?.kind === "singles"
       ? t("people.singlesLabel", { count: singlesCount })
-      : group?.name
-        ? group.name
-        : group
-          ? t("people.groupOfFaces", { count: group.faces })
-          : t("people.facesLabel");
+      : target?.kind === "discarded"
+        ? t("people.discardedAllTitle")
+        : group?.name
+          ? group.name
+          : group
+            ? t("people.groupOfFaces", { count: group.faces })
+            : t("people.facesLabel");
 
   const moveOptions = useMemo(() => {
     const seen = new Set<number>();
@@ -547,7 +550,7 @@ export const FaceGrid = forwardRef<
             className="btn"
             onClick={() => {
               void commands
-                .undoBulk()
+                .undoPeople()
                 .then(() => {
                   setUndoToast(null);
                   return refresh();

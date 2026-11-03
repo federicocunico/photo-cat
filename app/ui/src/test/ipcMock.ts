@@ -173,6 +173,7 @@ export const commandsMock = {
   deleteCatalog: vi.fn(async () => null),
   startBulk: vi.fn(async () => 1),
   undoBulk: vi.fn(async () => null),
+  undoPeople: vi.fn(async () => null),
   lastBulkUndo: vi.fn(async () => null),
   tagOverview: vi.fn(async (): Promise<TagOverview> => ({
     tags: [],

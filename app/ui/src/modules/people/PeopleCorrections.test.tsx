@@ -86,7 +86,7 @@ beforeEach(() => {
     defaultThreshold: 0.363,
   } as never);
   commandsMock.correctPerson.mockResolvedValue(null);
-  commandsMock.undoBulk.mockResolvedValue(null);
+  commandsMock.undoPeople.mockResolvedValue(null);
 });
 afterEach(cleanup);
 
@@ -223,7 +223,7 @@ describe("Persone diverse", () => {
     const toast = await screen.findByRole("status");
     expect(toast).toHaveTextContent(/persone diverse/i);
     fireEvent.click(within(toast).getByRole("button", { name: /^Annulla$/i }));
-    await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
   });
 });
 

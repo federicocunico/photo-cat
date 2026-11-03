@@ -30,7 +30,11 @@ const ROW_H = 58;
 const LABEL_H = 28;
 
 export type GroupListTarget =
-  { kind: "group"; id: number } | { kind: "identity"; uid: string } | { kind: "singles" } | null;
+  | { kind: "group"; id: number }
+  | { kind: "identity"; uid: string }
+  | { kind: "singles" }
+  | { kind: "discarded" }
+  | null;
 
 export type GroupListSelection = {
   target: GroupListTarget;
@@ -48,7 +52,8 @@ export type GroupListHandle = {
 type VirtItem =
   | { kind: "label"; key: string; label: string }
   | { kind: "group"; group: GroupRow }
-  | { kind: "singles"; count: number };
+  | { kind: "singles"; count: number }
+  | { kind: "discarded"; count: number };
 
 const SORTS: GroupSort[] = ["photos_desc", "name_asc", "faces_desc"];
 
@@ -207,8 +212,13 @@ export const GroupList = forwardRef<
       out.push({ kind: "label", key: "singles", label: t("people.singles") });
       out.push({ kind: "singles", count: counts.singles });
     }
+    // Volti scartati per qualità senza gruppo: altrimenti non sarebbero raggiungibili.
+    if (section === "review" && counts.discarded > 0) {
+      out.push({ kind: "label", key: "discarded", label: t("people.discardedAllTitle") });
+      out.push({ kind: "discarded", count: counts.discarded });
+    }
     return out;
-  }, [rows, section, counts.singles, t]);
+  }, [rows, section, counts.singles, counts.discarded, t]);
 
   const order = useMemo(
     () =>
@@ -552,7 +562,7 @@ export const GroupList = forwardRef<
         ) : (
           <QueryView
             query={groups}
-            isEmpty={() => rows.length === 0 && counts.singles === 0}
+            isEmpty={() => rows.length === 0 && counts.singles === 0 && counts.discarded === 0}
             skeleton={<p className="muted">{t("people.loading")}</p>}
             error={t("people.failed")}
             empty={<p className="muted">{emptyMsg}</p>}
@@ -712,6 +722,60 @@ export const GroupList = forwardRef<
                               </span>
                               <span className="muted" style={{ fontSize: 12 }}>
                                 {t("people.singlesSub")}
+                              </span>
+                            </span>
+                          </button>
+                        )}
+                        {item.kind === "discarded" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelect({
+                                target: { kind: "discarded" },
+                                selectedIds: [],
+                                anchor: null,
+                                group: null,
+                                identity: null,
+                              })
+                            }
+                            aria-selected={target?.kind === "discarded"}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "44px 1fr",
+                              gap: 10,
+                              alignItems: "center",
+                              width: "100%",
+                              padding: 6,
+                              borderRadius: 6,
+                              border:
+                                target?.kind === "discarded"
+                                  ? "1px solid var(--pc-selection-border)"
+                                  : "1px solid transparent",
+                              background:
+                                target?.kind === "discarded"
+                                  ? "var(--pc-selection-bg)"
+                                  : "transparent",
+                              textAlign: "left",
+                              cursor: "pointer",
+                              color: "inherit",
+                              font: "inherit",
+                            }}
+                          >
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: "50%",
+                                background: "var(--pc-thumb-bg)",
+                              }}
+                            />
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ display: "block", fontWeight: 600 }}>
+                                {t("people.discardedAllLabel", { count: item.count })}
+                              </span>
+                              <span className="muted" style={{ fontSize: 12 }}>
+                                {t("people.discardedAllSub")}
                               </span>
                             </span>
                           </button>

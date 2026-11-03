@@ -99,6 +99,11 @@ export const commands = {
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
 	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
 	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
+	/**
+	 *  Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
+	 *  operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
+	 */
+	undoPeople: () => __TAURI_INVOKE<string | null>("undo_people"),
 	/**  Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati. */
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),

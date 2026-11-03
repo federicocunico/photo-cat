@@ -2248,6 +2248,129 @@ pub fn restore_person_row(c: &Connection, snap: &PersonSnapshot) -> StoreResult<
     Ok(())
 }
 
+/// Stato di un volto per l'annullamento: persona, origine dell'assegnazione e rifiuti.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FaceState {
+    pub id: i64,
+    pub person_id: Option<i64>,
+    pub assigned_by: Option<String>,
+    /// JSON dei gruppi rifiutati, come salvato.
+    pub rejected: String,
+}
+
+/// Volti assegnati a uno dei gruppi indicati o che li rifiutano.
+pub fn faces_touching(c: &Connection, persons: &[i64]) -> StoreResult<Vec<i64>> {
+    if persons.is_empty() {
+        return Ok(Vec::new());
+    }
+    let list = persons.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id FROM face WHERE person_id IN ({list}) \
+         OR EXISTS (SELECT 1 FROM json_each(face.rejected) j WHERE j.value IN ({list})) \
+         ORDER BY id"
+    );
+    let args: Vec<i64> = persons.iter().chain(persons.iter()).copied().collect();
+    let mut q = c.prepare(&sql)?;
+    let rows = q
+        .query_map(rusqlite::params_from_iter(args), |r| r.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Stato attuale dei volti indicati (quelli inesistenti sono ignorati).
+pub fn face_states(c: &Connection, faces: &[i64]) -> StoreResult<Vec<FaceState>> {
+    let mut q =
+        c.prepare_cached("SELECT person_id, assigned_by, rejected FROM face WHERE id=?1")?;
+    let mut out = Vec::with_capacity(faces.len());
+    for id in faces {
+        if let Some((person_id, assigned_by, rejected)) = q
+            .query_row([*id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?
+        {
+            out.push(FaceState {
+                id: *id,
+                person_id,
+                assigned_by,
+                rejected,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Ripristina lo stato salvato dei volti, poi centroidi e persone delle foto.
+pub fn restore_face_states(c: &Connection, states: &[FaceState]) -> StoreResult<()> {
+    let mut media = HashSet::new();
+    for s in states {
+        let Some(media_id) = c
+            .query_row("SELECT media_id FROM face WHERE id=?1", [s.id], |r| {
+                r.get::<_, i64>(0)
+            })
+            .optional()?
+        else {
+            continue;
+        };
+        c.execute(
+            "UPDATE face SET person_id=?2, assigned_by=?3, rejected=?4 WHERE id=?1",
+            params![s.id, s.person_id, s.assigned_by, s.rejected],
+        )?;
+        media.insert(media_id);
+    }
+    refresh_centroids(c)?;
+    refresh_media(c, &media)
+}
+
+/// Vincoli "persone diverse" che coinvolgono i gruppi indicati: `(a, b, created_at)`.
+pub fn not_same_rows(c: &Connection, persons: &[i64]) -> StoreResult<Vec<(i64, i64, i64)>> {
+    let mut out = Vec::new();
+    let mut q = c.prepare_cached(
+        "SELECT a, b, created_at FROM person_not_same WHERE a=?1 OR b=?1 ORDER BY a, b",
+    )?;
+    for p in persons {
+        for row in q.query_map([*p], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))? {
+            out.push(row?);
+        }
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// Rimette i vincoli "persone diverse" dei gruppi indicati com'erano.
+pub fn restore_not_same(
+    c: &Connection,
+    persons: &[i64],
+    rows: &[(i64, i64, i64)],
+) -> StoreResult<()> {
+    for p in persons {
+        c.execute("DELETE FROM person_not_same WHERE a=?1 OR b=?1", [*p])?;
+    }
+    for (a, b, ts) in rows {
+        c.execute(
+            "INSERT OR IGNORE INTO person_not_same(a, b, created_at) VALUES (?1, ?2, ?3)",
+            params![a, b, ts],
+        )?;
+    }
+    Ok(())
+}
+
+/// Riporta nome, identità, stato "ignorato" e copertina di una persona esistente.
+pub fn restore_person_fields(c: &Connection, snap: &PersonSnapshot) -> StoreResult<()> {
+    c.execute(
+        "UPDATE person SET name=?2, identity_uid=?3, ignored_at=?4, ignored_faces=?5, \
+         cover_face_id=?6 WHERE id=?1",
+        params![
+            snap.id,
+            snap.name,
+            snap.identity_uid,
+            snap.ignored_at,
+            snap.ignored_faces,
+            snap.cover_face_id
+        ],
+    )?;
+    Ok(())
+}
+
 /// Ripristina ignored_at / ignored_faces (annullamento di ignora/ripristina).
 pub fn set_ignored_state(
     c: &Connection,
@@ -2380,24 +2503,43 @@ pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
     }
     let mut media = person_media(c, from)?;
     media.extend(person_media(c, to)?);
+    // Il nome e il collegamento all'identità sopravvivono all'unione: se solo il gruppo
+    // eliminato li aveva, passano a quello di destinazione.
+    let (from_name, from_uid): (Option<String>, Option<String>) = c.query_row(
+        "SELECT name, identity_uid FROM person WHERE id=?1",
+        [from],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    if from_name.is_some() || from_uid.is_some() {
+        c.execute(
+            "UPDATE person SET name = COALESCE(name, ?2), \
+             identity_uid = COALESCE(identity_uid, ?3) WHERE id=?1",
+            params![to, from_name, from_uid],
+        )?;
+    }
     c.execute(
         "UPDATE face SET person_id=?2,assigned_by='manual' WHERE person_id=?1",
         params![from, to],
     )?;
-    for f in records(c, None)? {
-        let mut rejected: Vec<_> = f
-            .rejected
+    // Solo i volti che rifiutano `from` o appartengono a `to` cambiano i rifiuti.
+    for id in faces_touching(c, &[from, to])? {
+        let (person_id, rejected): (Option<i64>, String) = c.query_row(
+            "SELECT person_id, rejected FROM face WHERE id=?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let mut rejected: Vec<i64> = serde_json::from_str::<Vec<i64>>(&rejected)?
             .into_iter()
             .map(|p| if p == from { to } else { p })
             .collect();
         rejected.sort();
         rejected.dedup();
-        if f.person_id == Some(to) {
+        if person_id == Some(to) {
             rejected.retain(|p| *p != to);
         }
         c.execute(
             "UPDATE face SET rejected=?2 WHERE id=?1",
-            params![f.id, serde_json::to_string(&rejected)?],
+            params![id, serde_json::to_string(&rejected)?],
         )?;
     }
     // Propaga i vincoli "persone diverse" al gruppo di destinazione.
