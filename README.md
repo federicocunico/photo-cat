@@ -5,6 +5,25 @@ Gestore desktop locale per catalogare fotografie: libreria unica, cataloghi tema
 Stack: backend Rust (workspace `crates/pc-*`) + shell Tauri 2 (`app/src-tauri`) + UI React/TypeScript (`app/ui`).
 Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 
+## Uso dell'app
+
+**Primo avvio.** Tre passi, ognuno saltabile con "Lo faccio dopo": lingua e tema, la prima cartella di foto (scelta o trascinata; i file non vengono spostati né modificati), le funzioni AI con un riepilogo del computer in parole e il download dei modelli in background. Alla fine si apre la Libreria, dove le foto compaiono man mano che l'importazione procede, insieme alla lista **Primi passi** (importare una cartella, scaricare i modelli, dare un nome a una persona, creare un catalogo, usare un set di tag), che si spunta da sola anche se l'azione si fa da un'altra parte. Aiuto › "Rivedi l'introduzione" la ripropone senza cambiare nulla finché non si conferma un passo.
+
+**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag) e **Importa ed esporta** (Importa, Esporta), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
+
+**Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera):
+
+| Tasto | Azione |
+|---|---|
+| Ctrl+K | palette dei comandi: moduli, azioni, persone, tag, cataloghi, luoghi |
+| Ctrl+1…7 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
+| Ctrl+B | riduce o espande la navigazione |
+| Ctrl+Z | annulla l'ultima operazione annullabile |
+| ? | foglio delle scorciatoie |
+| 1–9, 0 | in Libreria e Sequenza, aggiunge il tag del set attivo alle foto selezionate (0 toglie i tag del set) |
+
+**Impostazioni.** Sezioni Generale, Libreria e importazione, Riconoscimento AI, Modelli AI e sistema, Applicazioni esterne, Diagnostica e Avanzate, con una ricerca che porta al campo. Le preferenze si salvano appena modificate ("Salvato" accanto al campo). Soglie, tassonomia e percorso dei dati cambiano i risultati della libreria: restano in sospeso nella barra **Ripristina / Applica**, con l'anteprima dell'effetto. La sensibilità si regola su una scala "Più risultati ↔ Più precisi"; i valori numerici sono in Avanzate.
+
 ## Prerequisiti
 
 - Rust stable ≥ 1.90 (`rustup`), con `rustfmt` e `clippy`
@@ -94,7 +113,7 @@ npm --prefix app/ui test
 I modelli e il runtime ONNX per Windows e Linux sono inclusi in `assets/`, nell'installer e nei pacchetti;
 fonti e licenze sono documentate in [assets/README.md](assets/README.md).
 All'avvio la verifica e l'eventuale ripristino/download avvengono in background.
-La schermata **Modelli AI** permette di verificare, installare un file locale,
+Impostazioni › **Modelli AI e sistema** permette di verificare, installare un file locale,
 eseguire i self-test e scegliere provider e profilo di memoria. Il provider
 predefinito è CPU; gli acceleratori disponibili sono selezionabili e, in caso
 di errore di inizializzazione, si torna alla CPU registrando il motivo.
@@ -143,7 +162,7 @@ cargo run -p pc-ai --example benchmark_detector -- rtdetr target/model-bench/rtd
 - **Tag**: elenco dei tag della libreria con conteggi, rinomina, unione, eliminazione (annullabili) e colore; **set di tag** con tasti rapidi 1–9, eventualmente esclusivi. Il set attivo assegna i tag da tastiera in Libreria e Sequenza (0 rimuove i tag del set).
 - **Persone**: un solo modulo (Identità non è più una voce separata nella navigazione), a tre colonne (elenco, volti, scheda), con le sezioni **Da rivedere** (gruppi automatici, con suggerimenti di unione), **Persone** (identità decise dall'utente: nome, nome breve per i file, alias, gruppo, soglia di somiglianza, volti di riferimento) e **Ignorati**. Un gruppo diventa persona solo quando gli si dà un nome con "Chi è?"; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova. Esportazione e importazione delle identità in un file JSON, con o senza volti.
   - **Ignorare**: non toglie foto dalla libreria né file dal disco. La persona sparisce da Da rivedere, dai filtri, dall'Inspector e dai suggerimenti; i nuovi volti simili vi confluiscono. Si ripristina dalla sezione Ignorati.
-  - **Qualità dei volti**: ogni volto ha nitidezza del ritaglio, frontalità e dimensione (oltre alla confidenza del rilevatore). I volti sotto soglia sono scartati dal raggruppamento e dai suggerimenti, ma restano consultabili e recuperabili ("Volti scartati per qualità"). La nitidezza minima si regola con `ai.thresholds.face_min_sharpness` in Impostazioni › Soglie AI.
+  - **Qualità dei volti**: ogni volto ha nitidezza del ritaglio, frontalità e dimensione (oltre alla confidenza del rilevatore). I volti sotto soglia sono scartati dal raggruppamento e dai suggerimenti, ma restano consultabili e recuperabili ("Volti scartati per qualità"). La nitidezza minima si regola con `ai.thresholds.face_min_sharpness` in Impostazioni › Riconoscimento AI (scala) o › Avanzate (valore).
   - **Apri in Persone**: dall'Inspector (persona, volto non riconosciuto o scartato), dai filtri e dalla Sequenza apre direttamente il gruppo o la persona di quel volto, con il volto evidenziato e un avviso per tornare alla foto.
 - **Sequenza**: le foto di un ambito (libreria, catalogo, selezione) in ordine di istante reale, divise in sessioni. Per ogni gruppo di sorgente (dispositivo + fuso dichiarato) si possono impostare l'ora locale mostrata e uno scostamento dell'orologio, allineare due foto dello stesso momento e accettare i suggerimenti di fuso ricavati dal GPS; le foto senza data si collocano trascinandole. Le correzioni stanno nel catalogo: gli originali non vengono mai modificati.
 - **Export della sequenza**: copie rinominate con un modello di nome (`{seq:04d}_{date}_{time}_{tag}` e altri token), cartelle `sequenza/` e `per-tag/<Tag>/` (hard link quando possibile), `manifest.csv` e due zip non compressi. Il JPEG è ricodificato a qualità 97 con crominanza 4:4:4, verificato con SSIM/PSNR e ricodificato fino a 100 se serve; profilo ICC, risoluzione e orientamento vengono preservati e i metadati corretti scritti nelle copie.
@@ -170,9 +189,9 @@ Le catalogazioni (tipo soggetto, interno/esterno, ambiente e i gruppi aggiunti d
 Creare una voce:
 
 - **durante la correzione**: nell'Inspector o nell'azione bulk "Imposta catalogazione", ultima opzione "Nuova voce…". Si scrive il nome e Invio conferma (Esc annulla). La voce nasce manuale e viene assegnata subito alla foto o alla selezione; l'azione bulk si annulla con "Annulla", e la voce resta. Un nome già presente nel gruppo, anche con maiuscole o accenti diversi, riusa la voce esistente;
-- **in Impostazioni › Tassonomia**: "Aggiungi voce" in un gruppo e "Aggiungi gruppo" (es. "Evento", "Progetto"). La descrizione per il riconoscimento è facoltativa: scriverla rende la voce automatica. "Elimina" chiede conferma con il numero di foto che perdono la voce; l'eliminazione si annulla con "Annulla" nella barra bulk.
+- **in Impostazioni › Riconoscimento AI › Tassonomia**: "Aggiungi voce" in un gruppo e "Aggiungi gruppo" (es. "Evento", "Progetto"). La descrizione per il riconoscimento è facoltativa: scriverla rende la voce automatica. "Elimina" chiede conferma con il numero di foto che perdono la voce; l'eliminazione si annulla con "Annulla" nella barra bulk.
 
-**Quando serve la rianalisi.** Aggiungere, rinominare, disattivare o eliminare voci e gruppi manuali non rende nessun file "da rianalizzare". Lo fanno solo le modifiche che cambiano l'analisi automatica: descrizioni, voci automatiche attivate, disattivate o eliminate, soglie. Impostazioni lo segnala prima del salvataggio. Al salvataggio le catalogazioni automatiche vengono ricalcolate dagli embedding già salvati, senza rielaborare le immagini.
+**Quando serve la rianalisi.** Aggiungere, rinominare, disattivare o eliminare voci e gruppi manuali non rende nessun file "da rianalizzare". Lo fanno solo le modifiche che cambiano l'analisi automatica: descrizioni, voci automatiche attivate, disattivate o eliminate, soglie. Impostazioni lo segnala prima di applicare. Con "Applica" le catalogazioni automatiche vengono ricalcolate dagli embedding già salvati, senza rielaborare le immagini.
 
 **Tornare a una versione precedente.** Le versioni precedenti rifiutano le tassonomie con voci senza descrizione. Prima di installarne una vanno eliminati le voci e i gruppi manuali, oppure va aggiunta una descrizione a ogni voce manuale.
 
@@ -190,7 +209,7 @@ Anche "Rimuovi dalla libreria" sulla selezione cancella le miniature non più us
 
 ## Luogo, cartelle, "Apri con" e soglie AI
 
-Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni → Percorso dati): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.
+Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni › Generale › Percorso dati alternativo): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.
 
 ### Correzione del luogo
 
@@ -201,7 +220,7 @@ Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazi
 - **Filtro per data**: la lista Anno è una gerarchia. Scelto un anno compaiono sotto di esso i suoi mesi, scelto un mese i suoi giorni, ognuno con il numero di foto; mese e giorno valgono solo dentro l'anno scelto. Togliere la spunta risale di un livello (giorno → mese → anno → nessun filtro); il chip mostra la data scelta (es. "14 maggio 2023") e rimuoverlo toglie il filtro per data. Le date usano l'ora locale corretta di ogni foto; le foto senza data non compaiono.
 - **Una cartella**: le sorgenti nella barra laterale si espandono nell'albero delle cartelle (con il numero di foto, sottocartelle incluse). Scegliendo una cartella la libreria si filtra, con o senza sottocartelle; "Seleziona tutto (filtro)" seleziona tutte le sue foto per un'azione bulk.
 
-Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca o modello della fotocamera della foto (EXIF, es. `D7000` per una Nikon D7000) e nomi comuni come `Telefono`, `iPhone`, `WhatsApp`. Per `Viaggio Giappone\D7000\DSC_0001.NEF` il luogo è quindi "Viaggio Giappone". Altri nomi da saltare si aggiungono in Impostazioni → "Cartelle da ignorare per il luogo"; dopo il salvataggio l'app propone di ricalcolare i luoghi dedotti dalle cartelle (quelli manuali e da GPS non cambiano).
+Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca o modello della fotocamera della foto (EXIF, es. `D7000` per una Nikon D7000) e nomi comuni come `Telefono`, `iPhone`, `WhatsApp`. Per `Viaggio Giappone\D7000\DSC_0001.NEF` il luogo è quindi "Viaggio Giappone". Altri nomi da saltare si aggiungono in Impostazioni › Libreria e importazione › "Cartelle da ignorare per il luogo"; appena salvate l'app propone, con un avviso, di ricalcolare i luoghi dedotti dalle cartelle (quelli manuali e da GPS non cambiano).
 
 ### Soglie AI
 
@@ -214,7 +233,7 @@ Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca 
 | soglia di gruppo (tassonomia) | 0,25 | punteggio minimo delle catalogazioni CLIP del gruppo |
 | soglia di categoria (tassonomia) | quella del gruppo | punteggio minimo di una singola categoria |
 
-Valori più alti danno meno catalogazioni automatiche, più sicure. La sezione "Soglie AI" mostra prima l'effetto ("N foto cambiano catalogazioni", conteggi delle persone, volti esclusi, stima delle persone che cambiano raggruppamento; per la nitidezza minima, quanti volti verrebbero scartati). Al salvataggio parte il job **retune**, che ricalcola i risultati già salvati senza rieseguire i modelli: le catalogazioni dagli embedding CLIP, i conteggi dai riquadri delle persone, i raggruppamenti dai volti e la qualità dei volti. Le correzioni manuali restano. Le analisi conservano i risultati da 0,25 (persone) e 0,6 (volti) in su: si può scendere fino a questi valori senza rianalizzare. Le foto analizzate con versioni precedenti hanno come minimo 0,4 e 0,8; scendendo sotto, l'app lo segnala e propone la rianalisi dei soli file interessati. La soglia globale `ai.confidence_threshold` è solo il valore proposto ai gruppi nuovi e non modifica le soglie dei gruppi esistenti.
+Valori più alti danno meno catalogazioni automatiche, più sicure. La barra "Applica" delle Impostazioni mostra prima, con "Anteprima dell'effetto", l'effetto ("N foto cambiano catalogazioni", conteggi delle persone, volti esclusi, stima delle persone che cambiano raggruppamento; per la nitidezza minima, quanti volti verrebbero scartati). Con "Applica" parte l'attività **retune**, che ricalcola i risultati già salvati senza rieseguire i modelli: le catalogazioni dagli embedding CLIP, i conteggi dai riquadri delle persone, i raggruppamenti dai volti e la qualità dei volti. Le correzioni manuali restano. Le analisi conservano i risultati da 0,25 (persone) e 0,6 (volti) in su: si può scendere fino a questi valori senza rianalizzare. Le foto analizzate con versioni precedenti hanno come minimo 0,4 e 0,8; scendendo sotto, l'app lo segnala e propone la rianalisi dei soli file interessati. La soglia globale `ai.confidence_threshold` è solo il valore proposto ai gruppi nuovi e non modifica le soglie dei gruppi esistenti.
 
 ```toml
 [ai]
@@ -288,9 +307,9 @@ L'analisi raggruppa le foto quasi identiche (raffiche, scatti ripetuti, piccole 
 - **Foto principale**: proposta in base a nitidezza ed esposizione; dall'Inspector (sezione **Foto simili**) si sceglie un'altra foto, e la scelta resta anche dopo nuove analisi.
 - **Correzioni** dall'Inspector: *Togli dal gruppo*, *Sciogli gruppo*; le correzioni valgono anche per le analisi successive.
 - **Aiuto alla scelta**: *Solo foto con simili* (barra della griglia) e *Seleziona tutte tranne la principale* (barra delle azioni), da combinare con "Escludi dal catalogo", i tag o "Rimuovi dalla libreria".
-- **Soglia** in Impostazioni › Soglie AI (*Somiglianza dei gruppi di foto simili*, predefinita 0,80): l'anteprima indica quanti gruppi si formerebbero, e al salvataggio i gruppi vengono ricalcolati senza rianalizzare le foto.
+- **Soglia** in Impostazioni › Riconoscimento AI o › Avanzate (*Somiglianza dei gruppi di foto simili*, predefinita 0,80): l'anteprima indica quanti gruppi si formerebbero, e con "Applica" i gruppi vengono ricalcolati senza rianalizzare le foto.
 
-L'analisi dei gruppi fa parte dell'analisi AI ed è incrementale: dopo un import vengono confrontate solo le foto nuove. Per una libreria analizzata prima di questa funzione, Impostazioni › Soglie AI propone **Analizza i gruppi**.
+L'analisi dei gruppi fa parte dell'analisi AI ed è incrementale: dopo un import vengono confrontate solo le foto nuove. Per una libreria analizzata prima di questa funzione, Impostazioni › Riconoscimento AI propone **Analizza i gruppi**.
 
 ## Librerie grandi
 
@@ -299,7 +318,7 @@ L'app è pensata per librerie da 100.000 foto e oltre:
 - la griglia tiene in memoria solo le pagine vicine alla vista (al massimo 5 da 300 foto); scorrendo lontano le altre vengono scaricate e ricaricate quando si torna indietro;
 - "Seleziona tutto" e "Inverti" non caricano l'elenco delle foto: la selezione è "tutti i risultati del filtro" più le eccezioni (Ctrl+clic), e le azioni in blocco si applicano solo alle foto presenti al momento della selezione;
 - conteggi, filtri e miniature non bloccano mai la finestra: una richiesta superata da un filtro più recente viene interrotta;
-- gli errori per file arrivano a gruppi: Diagnostica › **Riepilogo per codice** mostra, per esempio, "DECODE_FAILED — 1.240 file"; aprendo la riga si vede l'elenco dei file con il motivo (file danneggiato o incompleto, variante non supportata, RAW senza anteprima, immagine oltre i limiti);
+- gli errori per file arrivano a gruppi: Impostazioni › Diagnostica › **Riepilogo per codice** mostra, per esempio, "DECODE_FAILED — 1.240 file"; aprendo la riga si vede l'elenco dei file con il motivo (file danneggiato o incompleto, variante non supportata, RAW senza anteprima, immagine oltre i limiti);
 - immagini non JPEG oltre 100 megapixel non vengono decodificate (miniatura assente, errore "immagine oltre i limiti"); per i JPEG che il decodificatore principale non legge si usa un decodificatore di riserva;
 - se la memoria del sistema diventa critica, decodifica e analisi si fermano ("in pausa per memoria" nella schermata Job) e riprendono da sole; se l'interfaccia supera 1,5 GB, l'import rallenta e l'interfaccia libera le cache.
 
@@ -307,7 +326,7 @@ L'app è pensata per librerie da 100.000 foto e oltre:
 
 Al riavvio un avviso indica che la sessione precedente non si è chiusa regolarmente, con l'ora dell'ultima attività e la memoria in quel momento. Se si chiude solo l'interfaccia (processo WebView), l'app la ricarica e i job continuano; dopo tre chiusure in pochi minuti i job vanno in pausa e compare una finestra con il percorso dei log.
 
-Dove guardare (cartella dati, vedi Impostazioni → Percorso dati):
+Dove guardare (cartella dati, vedi Impostazioni › Generale):
 
 | File | Contenuto |
 |---|---|
@@ -316,7 +335,7 @@ Dove guardare (cartella dati, vedi Impostazioni → Percorso dati):
 | `logs/crash/native.log`, `logs/crash/native-*.dmp` | abort nativi (eccezioni, segnali) e minidump (Windows) |
 | `%LOCALAPPDATA%\com.photocat.app\EBWebView\Crashpad\reports\*.dmp` | dump di crash di WebView2 (Windows) |
 
-Diagnostica › **Esporta pacchetto** include questi file (al massimo 3 dump per tipo e 20 MB in tutto, solo quelli successivi all'ultima chiusura regolare).
+Impostazioni › Diagnostica › **Esporta pacchetto** (anche da Aiuto › Segnala un problema) include questi file (al massimo 3 dump per tipo e 20 MB in tutto, solo quelli successivi all'ultima chiusura regolare).
 
 ### Test di carico
 

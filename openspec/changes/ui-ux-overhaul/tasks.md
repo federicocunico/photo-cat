@@ -187,7 +187,7 @@
 ## 8. Pulizia e verifica
 
 - [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
-- [ ] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
+- [x] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
 - [ ] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
 - [ ] 8.4 Prova sull'app reale, con un backup dei dati:
   - aggiornamento da una versione con preferenze salvate (moduli Identità, Modelli e Diagnostica come ultimi aperti);
