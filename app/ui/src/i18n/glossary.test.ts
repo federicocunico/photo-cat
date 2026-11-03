@@ -59,16 +59,12 @@ const PENDING: Record<string, string[]> = {
   // 3.2/3.3 (SelectionBar e store undo).
   "it:annullaUltimaAzione": ["bulk.undo"],
   "en:undoLastAction": ["bulk.undo"],
-  // 6.3 (Sensibilità, "Elimina tutti i dati dei volti"), 6.1 (Modelli AI), 7.5 (export di Sequenza).
+  // 7.5 (export di Sequenza).
   "it:gergo": [
-    "models.selfTests",
-    "settings.purgeConfirm",
     "seqExport.verify",
     "seqExport.outManifest",
   ],
   "en:gergo": [
-    "errors.self_test_failed",
-    "settings.purgeConfirm",
     "seqExport.verify",
     "seqExport.outManifest",
   ],

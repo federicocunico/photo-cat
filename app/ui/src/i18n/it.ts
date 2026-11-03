@@ -334,7 +334,7 @@ export const it = {
     installFile: "Installa da file…",
     passed: "Superato",
     failed: "Fallito",
-    selfTests: "Self-test di funzionamento",
+    selfTests: "Prove di funzionamento",
     privacy: "I modelli girano solo su questo computer: nessuna immagine viene inviata in rete.",
     col: {
       model: "Modello",

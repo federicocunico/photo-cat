@@ -167,7 +167,7 @@ export const screens = {
       faceSize: "Dimensione minima volto (px)",
       purge: "Elimina tutti i dati dei volti",
       purgeConfirm:
-        "Eliminare definitivamente {{count}} volti, embedding e ritagli? Il conteggio persone resta.",
+        "Eliminare definitivamente {{count}} volti, con le impronte e i ritagli? Il conteggio persone resta.",
       purged: "Dati dei volti eliminati.",
       log: "Livello di log",
       theme: "Tema",
@@ -304,7 +304,7 @@ export const screens = {
       faceSize: "Minimum face size (px)",
       purge: "Delete all face data",
       purgeConfirm:
-        "Permanently delete {{count}} faces, embeddings and crops? People counts are kept.",
+        "Permanently delete {{count}} faces, with their fingerprints and crops? People counts are kept.",
       purged: "Face data deleted.",
       log: "Log level",
       theme: "Theme",

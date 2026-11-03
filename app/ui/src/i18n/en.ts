@@ -334,7 +334,7 @@ export const en: Messages = {
     installFile: "Install from file…",
     passed: "Passed",
     failed: "Failed",
-    selfTests: "Self-tests",
+    selfTests: "Function checks",
     privacy: "Models run only on this computer: no image is ever sent over the network.",
     col: {
       model: "Model",
@@ -414,7 +414,7 @@ export const en: Messages = {
     network: "Network error.",
     checksum_mismatch: "The downloaded file is corrupt.",
     model_unavailable: "AI model not available.",
-    self_test_failed: "The AI model self-test failed.",
+    self_test_failed: "The AI model check failed.",
     insufficient_memory: "Not enough memory.",
     cancelled: "Operation cancelled.",
     invalid_input: "Invalid data.",
