@@ -1,0 +1,79 @@
+/* Palette dei comandi (4.2) */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pc-z-dialog);
+  background: rgba(0, 0, 0, 0.35);
+}
+.palette {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  z-index: var(--pc-z-dialog);
+  width: min(640px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-lg);
+  background: var(--pc-raised);
+  box-shadow: var(--pc-elevation-dialog);
+  color: var(--pc-text);
+  overflow: hidden;
+}
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-3) var(--pc-space-4);
+  border-bottom: 1px solid var(--pc-border);
+  color: var(--pc-text-secondary);
+}
+.palette-input input {
+  flex: 1;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--pc-text);
+  font: var(--pc-font-lg) var(--pc-font-ui);
+  outline: none;
+}
+.palette-list {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  padding: var(--pc-space-2);
+}
+.palette [cmdk-group-heading] {
+  padding: var(--pc-space-2) var(--pc-space-2) var(--pc-space-1);
+  font: 600 var(--pc-font-xs) var(--pc-font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pc-text-secondary);
+}
+.palette [cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  min-height: 32px;
+  padding: 0 var(--pc-space-2);
+  border-radius: var(--pc-radius-md);
+  cursor: pointer;
+}
+.palette [cmdk-item][data-selected="true"] {
+  background: var(--pc-selection-bg);
+}
+.palette-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-keys {
+  font: var(--pc-font-xs) var(--pc-font-mono);
+  color: var(--pc-text-secondary);
+}
+.palette-empty {
+  padding: var(--pc-space-3);
+  color: var(--pc-text-secondary);
+}

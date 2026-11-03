@@ -137,8 +137,14 @@ function Chips() {
   const { t } = useTranslation();
   const { filter, setFilter, resetFilter } = useLibrary();
   const names = useLabelName();
+  const people = useQuery({
+    queryKey: ["people"],
+    queryFn: () => commands.listPeople(),
+    enabled: isTauri() && (filter.personIds ?? []).length > 0,
+  });
+  const person = (id: number) => people.data?.find((p) => p.id === id)?.name ?? undefined;
   // Il catalogo aperto è già nel percorso: niente chip doppio.
-  const chips = activeChips({ ...filter, catalogId: null }, t as never, names.label);
+  const chips = activeChips({ ...filter, catalogId: null }, t as never, names.label, person);
   if (chips.length === 0) return null;
   return (
     <div className="lib-chips">

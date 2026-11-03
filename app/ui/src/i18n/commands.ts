@@ -1,6 +1,19 @@
 // Comandi del registro (palette, foglio delle scorciatoie, menu).
 export const commandStrings = {
   it: {
+    palette: {
+      label: "Palette dei comandi",
+      placeholder: "Cerca comandi, persone, tag, cataloghi, luoghi, file…",
+      empty: "Nessun risultato",
+      recent: "Recenti",
+      people: "Persone",
+      tags: "Tag",
+      catalogs: "Cataloghi",
+      places: "Luoghi",
+      files: "File",
+      searchText: "Cerca «{{text}}» nei nomi dei file",
+      field: "Cerca",
+    },
     commands: {
       goTo: "Vai a {{name}}",
       toggleNav: "Riduci o espandi la navigazione",
@@ -13,6 +26,8 @@ export const commandStrings = {
       sessionSelect: "Seleziona la sessione della foto",
       openViewer: "Apri il visualizzatore",
       palette: "Cerca comandi, persone, tag…",
+      addTag: "Aggiungi tag…",
+      exportSelection: "Esporta la selezione",
       shortcuts: "Scorciatoie da tastiera",
       groups: {
         general: "Generale",
@@ -26,6 +41,19 @@ export const commandStrings = {
     },
   },
   en: {
+    palette: {
+      label: "Command palette",
+      placeholder: "Search commands, people, tags, catalogs, places, files…",
+      empty: "No results",
+      recent: "Recent",
+      people: "People",
+      tags: "Tags",
+      catalogs: "Catalogs",
+      places: "Places",
+      files: "Files",
+      searchText: "Search “{{text}}” in file names",
+      field: "Search",
+    },
     commands: {
       goTo: "Go to {{name}}",
       toggleNav: "Collapse or expand navigation",
@@ -38,6 +66,8 @@ export const commandStrings = {
       sessionSelect: "Select the photo's session",
       openViewer: "Open the viewer",
       palette: "Search commands, people, tags…",
+      addTag: "Add tag…",
+      exportSelection: "Export the selection",
       shortcuts: "Keyboard shortcuts",
       groups: {
         general: "General",

@@ -7,6 +7,8 @@ export function activeChips(
   f: LibraryFilter,
   t: (k: string, o?: object) => string,
   label?: (group: string, value: string) => string,
+  /** Nome di una persona per il chip del filtro persone. */
+  person?: (id: number) => string | undefined,
 ) {
   const chips: Array<{ name: string; clear: Partial<LibraryFilter> }> = [];
   for (const l of f.labels ?? []) {
@@ -23,6 +25,11 @@ export function activeChips(
       });
     }
   }
+  for (const id of f.personIds ?? [])
+    chips.push({
+      name: person?.(id) ?? t("selection.unnamed"),
+      clear: { personIds: (f.personIds ?? []).filter((x) => x !== id) },
+    });
   for (const p of f.places ?? [])
     chips.push({ name: p, clear: { places: (f.places ?? []).filter((x) => x !== p) } });
   for (const x of f.formats ?? [])

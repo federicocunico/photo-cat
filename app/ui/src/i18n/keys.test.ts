@@ -19,6 +19,15 @@ for (const text of Object.values(files)) {
 // Chiavi composte a runtime (t(`prefisso.${valore}`)): valori elencati qui.
 const dynamic: Record<string, string[]> = {
   "nav.groups": ["browse", "organize", "transfer"],
+  "commands.groups": [
+    "general",
+    "navigation",
+    "library",
+    "selection",
+    "viewer",
+    "sequence",
+    "people",
+  ],
   "shell.ramState": ["pressure", "critical"],
   "sequence.keys": ["assign", "remove", "session", "fullscreen"],
   "shell.models": ["ready", "missing", "update", "error"],

@@ -4,13 +4,15 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { activeJobs, useLive } from "../../store/live";
 import { useLayout } from "../../store/layout";
-import { useLibrary } from "../../store/library";
 import { fmtInt } from "../../lib/format";
 import { currentPhase, jobTitle } from "../../lib/jobs";
 import { commands, isTauri } from "../../lib/ipc";
-import { Dialog, Menu } from "../ui";
+import { Dialog, Kbd, Menu } from "../ui";
+import { usePalette } from "../../store/palette";
 import { usePending } from "../../store/pending";
 import { Spinner } from "../feedback/Spinner";
+
+const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "") ? "⌘" : "Ctrl";
 
 export function PendingIndicator() {
   const count = usePending((s) => s.count);
@@ -32,37 +34,31 @@ export function PendingIndicator() {
   ) : null;
 }
 
-/** Ricerca globale: filtra la Libreria per testo (nome, percorso, luogo, persone, tag). */
+/**
+ * Campo di ricerca della barra superiore: apre la palette dei comandi (Ctrl+K). Un
+ * carattere digitato con il campo attivo diventa il testo iniziale della palette.
+ */
 function GlobalSearch() {
   const { t } = useTranslation();
-  const text = useLibrary((s) => s.filter.text ?? "");
-  const setFilter = useLibrary((s) => s.setFilter);
-  const openModule = useLayout((s) => s.openModule);
-  const [value, setValue] = useState(text);
-  useEffect(() => setValue(text), [text]);
-  useEffect(() => {
-    if (value === text) return;
-    const h = setTimeout(() => {
-      setFilter({ text: value.trim() ? value : null });
-      if (value.trim()) openModule({ module: "library" });
-    }, 250);
-    return () => clearTimeout(h);
-  }, [value, text, setFilter, openModule]);
+  const openPalette = usePalette((s) => s.openPalette);
   return (
-    <input
-      type="search"
-      aria-label={t("app.searchLabel")}
-      placeholder={t("app.search")}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      style={{
-        flex: 1,
-        background: "transparent",
-        border: 0,
-        color: "var(--pc-text)",
-        outline: "none",
+    <button
+      type="button"
+      className="topbar-search"
+      aria-label={t("palette.field")}
+      aria-keyshortcuts="Control+K"
+      onClick={() => openPalette()}
+      onKeyDown={(e) => {
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && e.key !== " ") {
+          e.preventDefault();
+          openPalette(e.key);
+        }
       }}
-    />
+    >
+      <Icon.Search size={16} aria-hidden="true" />
+      <span className="topbar-search-text">{t("app.search")}</span>
+      <Kbd keys={[MOD, "K"]} />
+    </button>
   );
 }
 
@@ -167,24 +163,7 @@ export function TopBar() {
         <Icon.Logo size={22} style={{ color: "var(--pc-accent-text)" }} />
         <span>{t("app.name")}</span>
       </div>
-      <label
-        style={{
-          flex: "1 1 280px",
-          maxWidth: 520,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "var(--pc-bg)",
-          border: "1px solid var(--pc-border)",
-          borderRadius: 6,
-          padding: "0 10px",
-          minHeight: 34,
-          color: "var(--pc-text-secondary)",
-        }}
-      >
-        <Icon.Search size={16} />
-        <GlobalSearch />
-      </label>
+      <GlobalSearch />
       <div
         style={{
           marginLeft: "auto",

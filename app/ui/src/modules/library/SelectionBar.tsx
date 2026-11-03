@@ -27,6 +27,7 @@ import { useLabelName, useTaxonomy } from "./labelName";
 import { useCatalogAction } from "./useCatalogAction";
 import { useOpenWith } from "./useOpenWith";
 import { useSelectItems } from "./useSelectItems";
+import { useSelectionPicker } from "../../store/palette";
 import { useBulkJob } from "./bulkJob";
 
 type DoneKind =
@@ -77,12 +78,19 @@ function PickerButton({
   label,
   icon,
   children,
+  open: controlled,
+  onOpenChange,
 }: {
   label: string;
   icon: React.ReactNode;
   children: (close: () => void) => React.ReactNode;
+  /** Aperto da fuori (es. "Aggiungi tag…" nella palette). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  const open = controlled ?? inner;
+  const setOpen = (o: boolean) => (onOpenChange ? onOpenChange(o) : setInner(o));
   return (
     <Popover
       label={label}
@@ -133,6 +141,23 @@ export function SelectionBar() {
   const [removeTagOpen, setRemoveTagOpen] = useState(false);
   const clear = () => setSelection([]);
   useEscapeToClear(clear);
+  const picker = useSelectionPicker();
+  useCommands([
+    {
+      id: "selection.addTag",
+      label: t("commands.addTag"),
+      group: "selection",
+      when: () => selCount(useLibrary.getState().selection) > 0,
+      run: () => picker.set("tag"),
+    },
+    {
+      id: "selection.export",
+      label: t("commands.exportSelection"),
+      group: "selection",
+      when: () => selCount(useLibrary.getState().selection) > 0,
+      run: () => useLayout.getState().openModule({ module: "organize" }),
+    },
+  ]);
 
   const start = (operation: BulkAction, kind: DoneKind, name = "") =>
     bulk.start(target, operation, t(`selection.done.${kind}`, { name, count }));
@@ -235,7 +260,12 @@ export function SelectionBar() {
       />
       <strong data-testid="bulk-count">{t("selection.count", { count })}</strong>
 
-      <PickerButton label={t("selection.tag")} icon={<Icon.Tags size={14} />}>
+      <PickerButton
+        label={t("selection.tag")}
+        icon={<Icon.Tags size={14} />}
+        open={picker.open === "tag"}
+        onOpenChange={(o) => picker.set(o ? "tag" : null)}
+      >
         {(close) => (
           <SearchPicker
             label={t("selection.tagSearch")}

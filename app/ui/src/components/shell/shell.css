@@ -158,3 +158,24 @@
   display: flex;
   flex-direction: column;
 }
+
+/* Campo della barra superiore che apre la palette (4.2) */
+.topbar-search {
+  flex: 1 1 280px;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  background: var(--pc-bg);
+  color: var(--pc-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+.topbar-search-text {
+  flex: 1;
+}
