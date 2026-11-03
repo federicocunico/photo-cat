@@ -37,6 +37,6 @@ class FakeResizeObserver {
   unobserve() {}
   disconnect() {}
 }
-globalThis.ResizeObserver ??= FakeResizeObserver as unknown as typeof ResizeObserver;
+globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
 Object.defineProperty(Element.prototype, "clientHeight", { configurable: true, get: () => SIZE });
 Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => SIZE });

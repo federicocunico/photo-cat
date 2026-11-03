@@ -18,7 +18,7 @@ export const BusyButton = forwardRef<HTMLButtonElement, Props>(function BusyButt
       ref={ref}
       {...props}
       disabled={disabled || busy}
-      aria-disabled={pending || undefined}
+      aria-disabled={pending || props["aria-disabled"] || undefined}
       aria-busy={busy || pending || undefined}
       onClick={(event) => {
         if (locked.current || disabled || busy || pending) {

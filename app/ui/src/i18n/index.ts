@@ -11,6 +11,7 @@ import { modules } from "./modules";
 import { tuning } from "./tuning";
 import { sources } from "./sources";
 import { entries } from "./entries";
+import { common } from "./common";
 
 export type Language = "it" | "en";
 
@@ -28,6 +29,7 @@ void i18n.use(initReactI18next).init({
         ...tuning.it,
         ...sources.it,
         ...entries.it,
+        ...common.it,
       },
     },
     en: {
@@ -42,6 +44,7 @@ void i18n.use(initReactI18next).init({
         ...tuning.en,
         ...sources.en,
         ...entries.en,
+        ...common.en,
       },
     },
   },

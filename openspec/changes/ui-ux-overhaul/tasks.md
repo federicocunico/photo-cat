@@ -16,10 +16,10 @@
   - Tema `system`, che segue `prefers-color-scheme`.
   - Nuove coppie di contrasto 3:1 (bordo, icona, focus).
   - Verifica: `tokens.test.ts` per entrambi i temi.
-- [ ] 1.2 Aggiungere le dipendenze scelte in 0.4 e le relative licenze in `assets/licenses`.
+- [x] 1.2 Aggiungere le dipendenze scelte in 0.4 e le relative licenze in `assets/licenses`.
   - Sostituire le icone con l'adattatore `components/icons.tsx` e rimuovere i glifi di testo (▸ ▾ ↻ ✎ × ↑ − ‹).
   - Verifica: `npm run build` e `make test-linux`.
-- [ ] 1.3 Componenti in `components/ui/`:
+- [x] 1.3 Componenti in `components/ui/`:
   - `Button` (primary, secondary, ghost, danger, con spiegazione del disabilitato);
   - `IconButton` (etichetta obbligatoria);
   - `PageHeader`, `Card`, `FormField`, `InlineAlert`, `EmptyState`, `Badge`, `Kbd`;
