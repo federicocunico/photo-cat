@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, emit, ipcMockModule } from "../../test/ipcMock";
 import { ModelsPage } from "./ModelsPage";
 import type { ModelStatus } from "../../bindings";
 import { open } from "@tauri-apps/plugin-dialog";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
@@ -57,7 +59,7 @@ beforeEach(() => {
     },
   ] as never);
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 const renderPage = () =>
   render(

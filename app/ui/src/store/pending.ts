@@ -35,7 +35,7 @@ export async function trackCommand<T>(name: string, run: () => Promise<T>): Prom
     return value;
   } catch (error) {
     if (mutation.test(name) && Date.now() - started >= 1000)
-      notify({ message: i18n.t("feedback.failed") });
+      notify({ message: i18n.t("feedback.failed"), tone: "error" });
     throw error;
   } finally {
     if (tracked) usePending.setState((s) => ({ count: s.count - 1 }));

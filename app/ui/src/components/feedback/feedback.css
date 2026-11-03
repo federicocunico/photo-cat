@@ -49,11 +49,44 @@
   position: fixed;
   right: 24px;
   bottom: 48px;
-  z-index: 50;
+  z-index: var(--pc-z-toast, 200);
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-width: min(480px, 90vw);
+}
+.feedback-toasts[data-position="top"] {
+  bottom: auto;
+  top: 56px;
+}
+.feedback-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  background: var(--pc-raised);
+  color: var(--pc-text);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md, 6px);
+  box-shadow: var(--pc-elevation-floating, none);
+}
+.feedback-toast-text {
+  flex: 1;
+}
+.feedback-toast-icon {
+  display: inline-flex;
+  color: var(--pc-accent-text);
+}
+.feedback-toast-ok .feedback-toast-icon {
+  color: var(--pc-ok);
+}
+.feedback-toast-error {
+  border-color: var(--pc-danger-border);
+  background: var(--pc-danger-bg);
+}
+.feedback-toast-error .feedback-toast-icon,
+.feedback-toast-error .feedback-toast-text {
+  color: var(--pc-danger);
 }
 @keyframes feedback-pulse {
   to {

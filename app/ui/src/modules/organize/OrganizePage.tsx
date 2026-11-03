@@ -13,6 +13,7 @@ import {
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { fmtBytes } from "../../lib/format";
+import { Icon } from "../../components/icons";
 const LEVELS = [
   "place",
   "year",
@@ -268,6 +269,8 @@ export function OrganizePage() {
               </select>
               <BusyButton
                 className="btn"
+                aria-label={t("organize.levelUp", { n: i + 1 })}
+                title={t("organize.levelUp", { n: i + 1 })}
                 disabled={i === 0}
                 onClick={() =>
                   setLevels((s) => {
@@ -277,14 +280,16 @@ export function OrganizePage() {
                   })
                 }
               >
-                ↑
+                <Icon.ArrowUp size={14} />
               </BusyButton>
               <BusyButton
                 className="btn"
+                aria-label={t("organize.levelRemove", { n: i + 1 })}
+                title={t("organize.levelRemove", { n: i + 1 })}
                 disabled={levels.length === 1}
                 onClick={() => setLevels((s) => s.filter((_, j) => j !== i))}
               >
-                ×
+                <Icon.Close size={14} />
               </BusyButton>
             </li>
           ))}

@@ -84,7 +84,15 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
     const start = import.meta.env.VITE_START_MODULE as ModuleId | undefined;
     if (import.meta.env.DEV && start) useLayout.getState().setModule(start);
   }, []);
-  useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "system" || !window.matchMedia) return;
+    // Tema del sistema: segue i cambi del sistema operativo senza riavvio.
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, [theme]);
   useEffect(() => setLanguage(language), [language]);
   const dismiss = () => {
     setCrash(null);

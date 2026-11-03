@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { emit, ipcMockModule, job, resources } from "../../test/ipcMock";
@@ -9,6 +9,8 @@ import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
 import { trackCommand, usePending } from "../../store/pending";
 import { commandsMock } from "../../test/ipcMock";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes", async () => {
   vi.useFakeTimers();
@@ -58,7 +60,7 @@ beforeEach(() => {
   useLayout.setState({ leftOpen: true, rightOpen: true, module: "library", leftWidth: 240 });
   useLive.setState({ jobs: {}, resources: null, errorCount: 0, tail: [] });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("layout a pannelli", () => {
   it("lo stato dei pannelli è persistito e ripristinato", async () => {

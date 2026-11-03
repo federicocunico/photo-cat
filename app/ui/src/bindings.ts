@@ -1541,7 +1541,9 @@ export type TemplateError = {
 
 export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | "empty";
 
-export type Theme = "dark" | "light";
+export type Theme = 
+/**  Segue il tema del sistema operativo: predefinito per le nuove installazioni. */
+"system" | "dark" | "light";
 
 /**  Effetto di nuove soglie sulla libreria, calcolato dai risultati salvati. */
 export type ThresholdImpact = {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
@@ -7,6 +7,8 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import type { FaceView, GroupRow } from "../../lib/ipc";
 import { FaceGrid } from "./FaceGrid";
 import { rectangleSelect } from "../../store/library";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -83,7 +85,7 @@ beforeEach(() => {
   } as never);
   commandsMock.correctPerson.mockResolvedValue(null);
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 describe("FaceGrid selezione e azioni", () => {
   it("seleziona con clic, Ctrl e Maiusc e invoca le azioni", async () => {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -9,6 +9,8 @@ import { useLive } from "../../store/live";
 import { ImportPage } from "./ImportPage";
 import { splitPatterns } from "./formats";
 import { deferred } from "../../test/deferred";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 it("Elenco delle sorgenti in caricamento: no false empty state and retry after failure", async () => {
   const pending = deferred<never[]>();
@@ -37,7 +39,7 @@ beforeEach(() => {
     removeSource: vi.fn(async () => null),
   });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 const renderPage = () =>
   render(

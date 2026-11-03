@@ -8,6 +8,7 @@ import { fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { useSequence } from "../../store/sequence";
 import { useTagOverview } from "../tags/data";
+import { Icon } from "../../components/icons";
 
 const TOKENS: Array<[string, string]> = [
   ["{seq}", "seq"],
@@ -176,7 +177,7 @@ export function SequenceExport() {
         >
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
             <BusyButton className="btn btn-ghost" onClick={() => setView("sequence")}>
-              ‹ {t("modules.sequence")}
+              <Icon.ChevronLeft size={14} /> {t("modules.sequence")}
             </BusyButton>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("seqExport.title")}</h1>
             {pre && (

@@ -1,11 +1,10 @@
-import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands } from "../../lib/ipc";
 import { useLive } from "../../store/live";
 import { useLibrary } from "../../store/library";
-import { Toast } from "../../components/feedback/Toast";
+import { notify, notifyError } from "../../store/toasts";
 import { useCatalogOperation as useAction } from "./useCatalogAction";
 
 const closeToast = () => useAction.setState({ message: "" });
@@ -49,31 +48,34 @@ export function CatalogFeedback() {
     // La query viene invalidata solo al termine del job seguito.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
-  if (!state.message) return null;
-  return (
-    <Toast key={state.message} onClose={closeToast}>
-      {state.message}{" "}
-      {state.undoable && (
-        <BusyButton
-          className="btn"
-          disabled={state.busy}
-          onClick={async () => {
-            if (useAction.getState().busy) return;
-            useAction.setState({ busy: true });
-            return await commands
-              .undoBulk()
-              .then(() => {
+  // L'esito va nell'unico ToastHost; un nuovo esito sostituisce il precedente.
+  useEffect(() => {
+    if (!state.message) return;
+    notify({
+      key: "catalog-operation",
+      message: state.message,
+      tone: state.undoable ? "ok" : "info",
+      onDismiss: closeToast,
+      action: state.undoable
+        ? {
+            label: t("exclusions.undo"),
+            run: async () => {
+              if (useAction.getState().busy) return;
+              useAction.setState({ busy: true });
+              try {
+                await commands.undoBulk();
                 refresh();
-                useAction.setState({ busy: false, message: "", undoable: false });
-              })
-              .catch((error) =>
-                useAction.setState({ busy: false, message: String(error), undoable: false }),
-              );
-          }}
-        >
-          {t("exclusions.undo")}
-        </BusyButton>
-      )}
-    </Toast>
-  );
+                useAction.setState({ busy: false, undoable: false });
+              } catch (error) {
+                useAction.setState({ busy: false, undoable: false });
+                notifyError(error);
+              }
+            },
+          }
+        : undefined,
+    });
+    // Solo al cambio del messaggio: le funzioni usate leggono lo stato al momento del clic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.message, state.undoable]);
+  return null;
 }

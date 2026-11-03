@@ -2,6 +2,17 @@
 // Unica fonte di verità: `applyTheme` li scrive come CSS custom properties su :root.
 
 export type ThemeName = "dark" | "light";
+/** Preferenza salvata: un tema fisso o quello del sistema operativo. */
+export type ThemePref = ThemeName | "system";
+
+/** Tema effettivo: `system` segue `prefers-color-scheme`. */
+export function resolveTheme(pref: ThemePref | string | null | undefined): ThemeName {
+  if (pref === "dark" || pref === "light") return pref;
+  return typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
+}
 
 export interface ThemeTokens {
   bg: string;
@@ -10,6 +21,12 @@ export interface ThemeTokens {
   toolbar: string;
   raised: string;
   border: string;
+  /** Bordo dei controlli (campi, caselle): contrasto 3:1 con lo sfondo. */
+  borderStrong: string;
+  /** Icone senza testo: contrasto 3:1 con lo sfondo. */
+  icon: string;
+  /** Anello di focus: contrasto 3:1 con lo sfondo. */
+  focus: string;
   text: string;
   textSecondary: string;
   textSoft: string;
@@ -41,6 +58,9 @@ export const themes: Record<ThemeName, ThemeTokens> = {
     toolbar: "#202022",
     raised: "#2C2C2F",
     border: "#3A3A3E",
+    borderStrong: "#77777F",
+    icon: "#A9A9AE",
+    focus: "#6AAEF5",
     text: "#E8E8EA",
     textSecondary: "#A9A9AE",
     textSoft: "#C9C9CE",
@@ -70,6 +90,9 @@ export const themes: Record<ThemeName, ThemeTokens> = {
     toolbar: "#F7F7F8",
     raised: "#ECECEE",
     border: "#D4D4D8",
+    borderStrong: "#7D7D85",
+    icon: "#5A5A60",
+    focus: "#1F6FD1",
     text: "#1B1B1C",
     textSecondary: "#5A5A60",
     textSoft: "#3F3F45",
@@ -119,6 +142,53 @@ export const contrastPairs: Array<[keyof ThemeTokens, keyof ThemeTokens]> = [
   ["textSoft", "logBg"],
 ];
 
+/** Elementi non testuali (WCAG 1.4.11): contrasto minimo 3:1. */
+export const nonTextPairs: Array<[keyof ThemeTokens, keyof ThemeTokens]> = [
+  ["borderStrong", "bg"],
+  ["borderStrong", "panel"],
+  ["borderStrong", "raised"],
+  ["icon", "bg"],
+  ["icon", "panel"],
+  ["icon", "toolbar"],
+  ["focus", "bg"],
+  ["focus", "panel"],
+  ["focus", "selectionBg"],
+  ["accent", "panel"],
+];
+
+/** Scale indipendenti dal tema, scritte come `--pc-<scala>-<nome>`. */
+export const scales = {
+  space: { 1: "4px", 2: "8px", 3: "12px", 4: "16px", 5: "24px", 6: "32px", 7: "48px" },
+  radius: { sm: "4px", md: "6px", lg: "10px", pill: "999px" },
+  /** Dimensione / interlinea. */
+  font: {
+    xs: "11px/16px",
+    sm: "12px/16px",
+    md: "13px/18px",
+    base: "14px/20px",
+    lg: "16px/22px",
+    xl: "20px/26px",
+    xxl: "26px/32px",
+  },
+  weight: { regular: "400", medium: "600", bold: "700" },
+  motion: { fast: "120ms", normal: "200ms" },
+  z: { content: "0", floating: "100", toast: "200", popover: "300", dialog: "400" },
+} as const;
+
+/** Ombre per livello: diverse per tema perché sul fondo scuro serve più opacità. */
+const elevation: Record<ThemeName, Record<"flat" | "floating" | "dialog", string>> = {
+  dark: {
+    flat: "none",
+    floating: "0 4px 16px rgba(0, 0, 0, 0.45)",
+    dialog: "0 12px 40px rgba(0, 0, 0, 0.6)",
+  },
+  light: {
+    flat: "none",
+    floating: "0 4px 16px rgba(20, 20, 30, 0.14)",
+    dialog: "0 12px 40px rgba(20, 20, 30, 0.22)",
+  },
+};
+
 /** Palette fissa dei tag: chiavi come `pc_store::app_store::tags::PALETTE`. */
 export const TAG_COLORS = ["blue", "teal", "yellow", "coral", "purple", "gray"] as const;
 export type TagColor = (typeof TAG_COLORS)[number];
@@ -163,13 +233,27 @@ export const fonts = {
 
 const cssName = (key: string) => `--pc-${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
 
-export function applyTheme(name: ThemeName, root: HTMLElement = document.documentElement) {
+export function applyTheme(pref: ThemePref, root: HTMLElement = document.documentElement) {
+  const name = resolveTheme(pref);
   const t = themes[name];
   for (const [k, v] of Object.entries(t)) root.style.setProperty(cssName(k), v);
   for (const [k, v] of Object.entries(tagPalette[name])) root.style.setProperty(`--pc-tag-${k}`, v);
   devicePalette[name].forEach((v, i) => root.style.setProperty(`--pc-device-${i}`, v));
   root.style.setProperty("--pc-font-ui", fonts.ui);
   root.style.setProperty("--pc-font-mono", fonts.mono);
+  for (const [scale, values] of Object.entries(scales)) {
+    for (const [k, v] of Object.entries(values)) root.style.setProperty(`--pc-${scale}-${k}`, v);
+  }
+  for (const [k, v] of Object.entries(elevation[name]))
+    root.style.setProperty(`--pc-elevation-${k}`, v);
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reduced) {
+    root.style.setProperty("--pc-motion-fast", "0ms");
+    root.style.setProperty("--pc-motion-normal", "0ms");
+  }
+  root.dataset.themePref = pref;
   root.dataset.theme = name;
   root.style.colorScheme = name;
 }

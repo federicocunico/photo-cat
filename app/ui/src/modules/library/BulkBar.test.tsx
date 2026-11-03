@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, it, expect, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -13,9 +13,12 @@ import {
 } from "../../store/library";
 import { CatalogFeedback } from "./catalogActions";
 import { useLive } from "../../store/live";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { BulkBar } from "./BulkBar";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.library));
 it("selects unseen filtered results, inverts and confirms destructive edits", async () => {
   useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
   commandsMock.librarySelection.mockResolvedValue({ count: 2340, maxId: 2400 });
@@ -193,6 +196,7 @@ it("reinserisce dalla vista escluse senza conferma", async () => {
     <QueryClientProvider client={new QueryClient()}>
       <BulkBar />
       <CatalogFeedback />
+      <ToastHost />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Reinserisci nel catalogo" }));

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Catalogo smart — regole leggibili</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.pc{--bg:#1B1B1C;--panel:#232325;--panel-alt:#1F1F21;--raised:#2C2C2F;--border:#3A3A3E;--text:#E8E8EA;--text-2:#A9A9AE;--text-soft:#C9C9CE;--accent:#3B8EEA;--accent-text:#6AAEF5;--on-accent:#0B1726;--accent-soft-bg:#233449;--accent-soft-text:#C9DCF2;--warn:#E0B252;--thumb:#34393A;--thumb-2:#3B4144;--shadow:0 16px 48px rgba(0,0,0,.5);
+font-family:'Source Sans 3',system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:1.4;color:var(--text);background:var(--bg)}
+.pc.light{--bg:#F4F4F5;--panel:#FFFFFF;--panel-alt:#FAFAFA;--raised:#ECECEE;--border:#D4D4D8;--text:#1B1B1C;--text-2:#5A5A60;--text-soft:#3F3F45;--accent:#1F6FD1;--accent-text:#1A5FB4;--on-accent:#FFFFFF;--accent-soft-bg:#DCE9F9;--accent-soft-text:#163E6E;--warn:#8A5A00;--thumb:#DADDE0;--thumb-2:#CDD1D5;--shadow:0 16px 48px rgba(0,0,0,.14)}
+.pc *{box-sizing:border-box}
+.pc button{font:inherit;color:inherit;cursor:pointer}
+.muted{color:var(--text-2)}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--raised)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.ghost{background:transparent;border-color:transparent}
+.icon-btn{min-width:32px;justify-content:center;padding:0}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);min-width:150px}
+.cond{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px;border-radius:8px;background:var(--panel-alt);border:1px solid var(--border)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.thumb{aspect-ratio:3/2;border-radius:6px;background:var(--thumb)}
+</style>
+</helmet>
+<div class="pc {{themeClass}}" style="min-height: 900px; display: flex; flex-direction: column; border: 1px solid var(--border)">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 20px 32px 12px">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600">Cataloghi</h1>
+    <span class="muted">8 cataloghi</span>
+    <button type="button" class="btn primary" style="margin-left: auto">Nuovo catalogo</button>
+  </header>
+  <div style="flex: 1; display: flex; flex-wrap: wrap; gap: 24px; padding: 8px 32px 32px; align-items: flex-start">
+    <div style="flex: 1 1 300px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
+      <sc-for list="{{cats}}" as="c" hint-placeholder-count="4">
+        <article class="card">
+          <div class="thumb"></div>
+          <strong>{{c.name}}</strong>
+          <span class="muted" style="font-size: 13px">{{c.meta}}</span>
+          <sc-if value="{{c.excluded}}" hint-placeholder-val="{{false}}">
+            <a href="#" style="font-size: 13px; color: var(--accent-text)">{{c.excluded}}</a>
+          </sc-if>
+        </article>
+      </sc-for>
+    </div>
+
+    <section role="dialog" aria-labelledby="ed-title" style="flex: 0 1 640px; min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <h2 id="ed-title" style="margin: 0; font-size: 20px; font-weight: 600">Modifica catalogo smart</h2>
+      <label style="display: flex; flex-direction: column; gap: 4px">
+        <span class="muted" style="font-size: 13px">Nome</span>
+        <input value="Ritratti recenti" style="min-height: 34px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit">
+      </label>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span>Includi le foto che soddisfano</span>
+        <span class="sel">tutte le condizioni <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+      </div>
+      <sc-for list="{{conds}}" as="r" hint-placeholder-count="3">
+        <div class="cond">
+          <span class="sel">{{r.field}} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span class="sel" style="min-width: 110px">{{r.op}} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span class="sel" style="flex: 1">{{r.value}}</span>
+          <button type="button" class="btn ghost icon-btn" aria-label="Rimuovi condizione"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </div>
+      </sc-for>
+      <div style="display: flex; gap: 8px">
+        <button type="button" class="btn">+ Condizione</button>
+        <button type="button" class="btn ghost">+ Gruppo di condizioni</button>
+      </div>
+      <div style="padding: 12px 14px; border-radius: 8px; background: var(--accent-soft-bg); color: var(--accent-soft-text)">
+        <strong>1.208 foto</strong> · Ritratti con almeno 1 persona, dal 2022 in poi, senza il tag «Scarti».
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end">
+        <button type="button" class="btn ghost">Annulla</button>
+        <button type="button" class="btn primary">Salva catalogo</button>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["scuro","chiaro"],"default":"scuro"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themeClass: this.props.theme === 'chiaro' ? 'light' : '',
+      cats: [
+        { name: 'Viaggio Toscana', meta: 'Manuale · 312 foto', excluded: '' },
+        { name: 'Ritratti recenti', meta: 'Smart · 1.208 foto', excluded: '6 escluse' },
+        { name: 'Matrimonio Elena', meta: 'Manuale · 2.430 foto', excluded: '' },
+        { name: 'Panorami', meta: 'Smart · 3.904 foto', excluded: '12 escluse' }
+      ],
+      conds: [
+        { field: 'Tipo soggetto', op: 'è', value: 'Ritratto' },
+        { field: 'Persone nella foto', op: 'almeno', value: '1 persona' },
+        { field: 'Anno', op: 'dal', value: '2022' },
+        { field: 'Tag', op: 'non contiene', value: 'Scarti' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

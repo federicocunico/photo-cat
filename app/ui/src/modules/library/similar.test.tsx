@@ -10,6 +10,8 @@ import { LibraryGrid } from "./Grid";
 import { SimilarSection } from "./SimilarSection";
 import { BulkBar } from "./BulkBar";
 import { displayTotal, locate, toBase } from "./similarView";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({ convertFileSrc: (k: string) => `thumb://${k}` }));
@@ -48,7 +50,7 @@ beforeEach(() => {
     groupSimilar: true,
   });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.library));
 
 describe("posizioni nella griglia raggruppata", () => {
   it("le foto di un gruppo aperto seguono la rappresentante", () => {

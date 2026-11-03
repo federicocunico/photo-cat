@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Impostazioni a sezioni</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.pc{--bg:#1B1B1C;--panel:#232325;--panel-alt:#1F1F21;--raised:#2C2C2F;--border:#3A3A3E;--text:#E8E8EA;--text-2:#A9A9AE;--text-soft:#C9C9CE;--accent:#3B8EEA;--accent-text:#6AAEF5;--on-accent:#0B1726;--accent-soft-bg:#233449;--accent-soft-text:#C9DCF2;--ok:#4FC3B0;--warn:#E0B252;--warn-bg:#3A3320;--danger:#F2A38F;--danger-border:#6B3A30;
+font-family:'Source Sans 3',system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:1.4;color:var(--text);background:var(--bg)}
+.pc.light{--bg:#F4F4F5;--panel:#FFFFFF;--panel-alt:#FAFAFA;--raised:#ECECEE;--border:#D4D4D8;--text:#1B1B1C;--text-2:#5A5A60;--text-soft:#3F3F45;--accent:#1F6FD1;--accent-text:#1A5FB4;--on-accent:#FFFFFF;--accent-soft-bg:#DCE9F9;--accent-soft-text:#163E6E;--ok:#176A5D;--warn:#8A5A00;--warn-bg:#F7ECD3;--danger:#B3361C;--danger-border:#E3A79A}
+.pc *{box-sizing:border-box}
+.pc button{font:inherit;color:inherit;cursor:pointer}
+.muted{color:var(--text-2)}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--raised)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.ghost{background:transparent;border-color:transparent}
+.sub{display:flex;align-items:center;min-height:34px;padding:0 12px;border-radius:6px;border:0;background:transparent;color:var(--text-soft);width:100%;text-align:left}
+.sub.on{background:var(--raised);color:var(--text);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.frow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-items:center;padding:6px 0}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{min-height:32px;padding:0 12px;border:0;background:transparent}
+.seg button.on{background:var(--accent-soft-bg);color:var(--accent-soft-text);font-weight:600}
+.saved{font-size:12px;color:var(--ok);display:inline-flex;align-items:center;gap:4px}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2)}
+</style>
+</helmet>
+<div class="pc {{themeClass}}" style="min-height: 900px; display: flex; flex-wrap: wrap; border: 1px solid var(--border)">
+  <nav aria-label="Sezioni delle impostazioni" style="flex: 0 1 260px; min-width: 220px; padding: 20px 12px; background: var(--panel-alt); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0 12px 12px; font-size: 24px; font-weight: 600">Impostazioni</h1>
+    <label style="display: flex; align-items: center; gap: 6px; min-height: 34px; margin: 0 4px 10px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-2)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <input aria-label="Cerca nelle impostazioni" placeholder="Cerca nelle impostazioni" style="flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; outline: none">
+    </label>
+    <sc-for list="{{sections}}" as="s" hint-placeholder-count="7">
+      <button type="button" class="sub {{s.cls}}">{{s.name}}</button>
+    </sc-for>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 920px">
+    <div>
+      <h2 style="margin: 0; font-size: 20px; font-weight: 600">Riconoscimento AI</h2>
+      <p class="muted" style="margin: 4px 0 0">Quanto l'app è sicura prima di catalogare da sola. Le modifiche ricalcolano la libreria: vengono applicate solo con «Applica».</p>
+    </div>
+
+    <section class="card" aria-labelledby="s-people">
+      <h3 id="s-people" style="margin: 0; font-size: 16px; font-weight: 600">Persone e volti</h3>
+      <div class="frow">
+        <label for="faces"><strong>Riconoscimento dei volti</strong><div class="muted" style="font-size: 13px">Raggruppa i volti simili e propone i nomi.</div></label>
+        <span style="display: flex; align-items: center; gap: 10px"><input id="faces" type="checkbox" checked> Attivo <span class="saved"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>Salvato</span></span>
+      </div>
+      <div class="frow">
+        <label for="sens"><strong>Sensibilità del rilevamento persone</strong><div class="muted" style="font-size: 13px">Più a destra: meno foto, ma più sicure.</div></label>
+        <div>
+          <input id="sens" type="range" min="0" max="100" value="68" style="width: 100%">
+          <div class="scale"><span>Più risultati</span><span>68%</span><span>Più precisi</span></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2" aria-hidden="true"><path d="M12 3l9 16H3z"></path><path d="M12 10v4"></path></svg>
+        <span style="flex: 1">Con questo valore <strong>412 foto</strong> perderebbero la categoria «Persone» e <strong>38</strong> la guadagnerebbero.</span>
+        <button type="button" class="btn ghost">Ripristina</button>
+        <button type="button" class="btn primary">Applica</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="s-look">
+      <h3 id="s-look" style="margin: 0; font-size: 16px; font-weight: 600">Somiglianza</h3>
+      <div class="frow">
+        <span><strong>Somiglianza tra volti</strong><div class="muted" style="font-size: 13px">Quando due volti sono considerati la stessa persona.</div></span>
+        <div class="seg" role="group" aria-label="Somiglianza tra volti"><button type="button">Larga</button><button type="button" class="on">Normale</button><button type="button">Stretta</button></div>
+      </div>
+      <div class="frow">
+        <span><strong>Foto simili</strong><div class="muted" style="font-size: 13px">Quanto devono assomigliarsi due scatti per essere raggruppati.</div></span>
+        <div class="seg" role="group" aria-label="Foto simili"><button type="button">Larga</button><button type="button" class="on">Normale</button><button type="button">Stretta</button></div>
+      </div>
+      <button type="button" class="btn ghost" style="align-self: flex-start; color: var(--accent-text)">Valori numerici in Avanzate ›</button>
+    </section>
+
+    <section class="card" aria-labelledby="s-tax">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+        <h3 id="s-tax" style="margin: 0; font-size: 16px; font-weight: 600">Categorie (tassonomia)</h3>
+        <button type="button" class="btn">Modifica categorie…</button>
+      </div>
+      <p class="muted" style="margin: 0">Tipo soggetto (9 categorie) · Ambiente (6) · Momento della giornata (4)</p>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["scuro","chiaro"],"default":"scuro"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const names = ['Generale', 'Libreria e importazione', 'Riconoscimento AI', 'Modelli AI e sistema', 'Applicazioni esterne', 'Diagnostica', 'Avanzate'];
+    return {
+      themeClass: this.props.theme === 'chiaro' ? 'light' : '',
+      sections: names.map(function (n) { return { name: n, cls: n === 'Riconoscimento AI' ? 'on' : '' }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -71,6 +71,12 @@ export function useLiveEvents() {
         const since = started.get(job.id);
         if (since !== undefined && Date.now() - since >= 1000)
           notify({
+            tone:
+              job.state === "completed"
+                ? "ok"
+                : job.state === "completed_with_errors" || job.state === "failed"
+                  ? "error"
+                  : "info",
             message:
               job.state === "completed"
                 ? i18n.t("feedback.done")

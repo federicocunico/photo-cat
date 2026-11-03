@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { contrastRatio } from "./contrast";
-import { applyTheme, contrastPairs, themes, type ThemeName } from "./tokens";
+import {
+  applyTheme,
+  contrastPairs,
+  nonTextPairs,
+  resolveTheme,
+  scales,
+  themes,
+  type ThemeName,
+} from "./tokens";
 
 describe("design token", () => {
   for (const name of Object.keys(themes) as ThemeName[]) {
@@ -9,6 +17,17 @@ describe("design token", () => {
       const failures = contrastPairs
         .map(([fg, bg]) => ({ fg, bg, ratio: contrastRatio(t[fg], t[bg]) }))
         .filter((p) => p.ratio < 4.5)
+        .map((p) => `${p.fg} su ${p.bg}: ${p.ratio.toFixed(2)}`);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  for (const name of Object.keys(themes) as ThemeName[]) {
+    it(`tema ${name}: bordi dei controlli, icone e focus hanno contrasto >= 3:1`, () => {
+      const t = themes[name];
+      const failures = nonTextPairs
+        .map(([fg, bg]) => ({ fg, bg, ratio: contrastRatio(t[fg], t[bg]) }))
+        .filter((p) => p.ratio < 3)
         .map((p) => `${p.fg} su ${p.bg}: ${p.ratio.toFixed(2)}`);
       expect(failures).toEqual([]);
     });
@@ -29,5 +48,45 @@ describe("design token", () => {
   it("calcolo del contrasto WCAG", () => {
     expect(contrastRatio("#000000", "#FFFFFF")).toBeCloseTo(21, 0);
     expect(contrastRatio("#777777", "#777777")).toBeCloseTo(1, 5);
+  });
+
+  it("applyTheme scrive le scale come custom properties", () => {
+    applyTheme("dark");
+    const s = document.documentElement.style;
+    expect(s.getPropertyValue("--pc-space-4")).toBe(scales.space[4]);
+    expect(s.getPropertyValue("--pc-radius-pill")).toBe(scales.radius.pill);
+    expect(s.getPropertyValue("--pc-z-dialog")).toBe(scales.z.dialog);
+    expect(s.getPropertyValue("--pc-elevation-dialog")).not.toBe("");
+    expect(s.getPropertyValue("--pc-focus")).toBe(themes.dark.focus);
+  });
+
+  describe("tema del sistema", () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const prefers = (light: boolean) =>
+      vi.stubGlobal(
+        "matchMedia",
+        (q: string) =>
+          ({
+            matches: q.includes("light") ? light : false,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+          }) as unknown as MediaQueryList,
+      );
+
+    it("segue prefers-color-scheme", () => {
+      prefers(true);
+      expect(resolveTheme("system")).toBe("light");
+      prefers(false);
+      expect(resolveTheme("system")).toBe("dark");
+      expect(resolveTheme("light")).toBe("light");
+    });
+
+    it("applyTheme('system') applica il tema effettivo e ricorda la preferenza", () => {
+      prefers(true);
+      applyTheme("system");
+      expect(document.documentElement.dataset.theme).toBe("light");
+      expect(document.documentElement.dataset.themePref).toBe("system");
+      expect(document.documentElement.style.getPropertyValue("--pc-bg")).toBe(themes.light.bg);
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -7,7 +7,10 @@ import { idsSelection, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { CatalogFeedback } from "./catalogActions";
 import { useLive } from "../../store/live";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { Inspector } from "./Inspector";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -76,7 +79,7 @@ beforeEach(() => {
     },
   ] as never);
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.library));
 
 it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async () => {
   render(
@@ -295,6 +298,7 @@ it("esclude dal catalogo smart nell'Inspector", async () => {
     <QueryClientProvider client={new QueryClient()}>
       <Inspector />
       <CatalogFeedback />
+      <ToastHost />
     </QueryClientProvider>,
   );
   fireEvent.click(await screen.findByRole("button", { name: "Escludi dal catalogo" }));

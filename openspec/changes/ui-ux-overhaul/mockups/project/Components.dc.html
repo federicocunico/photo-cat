@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Fondamenta e componenti</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.pc{--bg:#1B1B1C;--panel:#232325;--panel-alt:#1F1F21;--raised:#2C2C2F;--border:#3A3A3E;--text:#E8E8EA;--text-2:#A9A9AE;--text-soft:#C9C9CE;--accent:#3B8EEA;--accent-text:#6AAEF5;--on-accent:#0B1726;--accent-soft-bg:#233449;--accent-soft-text:#C9DCF2;--ok:#4FC3B0;--warn:#E0B252;--danger:#F2A38F;--danger-bg:#3D2420;--danger-border:#6B3A30;--shadow:0 16px 48px rgba(0,0,0,.5);
+font-family:'Source Sans 3',system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:1.4;color:var(--text);background:var(--bg)}
+.pc.light{--bg:#F4F4F5;--panel:#FFFFFF;--panel-alt:#FAFAFA;--raised:#ECECEE;--border:#D4D4D8;--text:#1B1B1C;--text-2:#5A5A60;--text-soft:#3F3F45;--accent:#1F6FD1;--accent-text:#1A5FB4;--on-accent:#FFFFFF;--accent-soft-bg:#DCE9F9;--accent-soft-text:#163E6E;--ok:#176A5D;--warn:#8A5A00;--danger:#B3361C;--danger-bg:#F9E1DB;--danger-border:#E3A79A;--shadow:0 16px 48px rgba(0,0,0,.14)}
+.pc *{box-sizing:border-box}
+.pc button{font:inherit;color:inherit;cursor:pointer}
+.muted{color:var(--text-2)}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2)}
+.kbd{font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--text-soft);background:var(--panel-alt)}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--raised)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger);font-weight:600}
+.btn[disabled]{opacity:.5;cursor:default}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.sw{display:flex;align-items:flex-end;gap:10px}
+.box{background:var(--accent-soft-bg);border-radius:2px}
+.rail{display:flex;flex-direction:column;gap:4px;padding:8px;background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;width:56px}
+.rail button{width:40px;height:40px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;color:var(--text-soft)}
+.rail button.on{background:var(--raised);color:var(--accent-text)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--text-2);padding:6px 8px;border-bottom:1px solid var(--border)}
+td{padding:6px 8px;border-bottom:1px solid var(--raised);vertical-align:top}
+</style>
+</helmet>
+<div class="pc {{themeClass}}" style="min-height: 1500px; padding: 32px; display: flex; flex-direction: column; gap: 24px; border: 1px solid var(--border)">
+  <header>
+    <h1 style="margin: 0; font-size: 26px; font-weight: 600">Fondamenta dell'interfaccia</h1>
+    <p class="muted" style="margin: 4px 0 0">Token e componenti condivisi: ogni pagina li usa, nessuna li ridisegna.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+    <section class="card">
+      <div class="label">Scala tipografica</div>
+      <div style="font-size: 26px; font-weight: 600">Titolo pagina 26</div>
+      <div style="font-size: 20px; font-weight: 600">Sezione 20</div>
+      <div style="font-size: 16px; font-weight: 600">Sottosezione 16</div>
+      <div>Testo 14 — corpo di base</div>
+      <div style="font-size: 13px" class="muted">Secondario 13</div>
+      <div class="label">Etichetta 11</div>
+    </section>
+    <section class="card">
+      <div class="label">Spaziature (base 4)</div>
+      <div class="sw">
+        <sc-for list="{{spaces}}" as="s" hint-placeholder-count="7">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div class="box" style="width: {{s.px}}; height: {{s.px}}"></div><span class="muted" style="font-size: 11px">{{s.n}}</span></div>
+        </sc-for>
+      </div>
+      <div class="label" style="margin-top: 8px">Raggi</div>
+      <div style="display: flex; gap: 12px">
+        <div style="width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 4px; display: grid; place-items: center; font-size: 11px">4</div>
+        <div style="width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 6px; display: grid; place-items: center; font-size: 11px">6</div>
+        <div style="width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 10px; display: grid; place-items: center; font-size: 11px">10</div>
+        <div style="width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 999px; display: grid; place-items: center; font-size: 11px">pill</div>
+      </div>
+      <div class="muted" style="font-size: 13px">Movimento: 120 ms (micro), 200 ms (pannelli); ridotto se il sistema lo chiede.</div>
+    </section>
+    <section class="card">
+      <div class="label">Pulsanti</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button type="button" class="btn primary">Principale</button>
+        <button type="button" class="btn">Secondario</button>
+        <button type="button" class="btn ghost">Discreto</button>
+        <button type="button" class="btn danger">Elimina</button>
+      </div>
+      <div class="label" style="margin-top: 8px">Comando disabilitato spiegato</div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <button type="button" class="btn primary" disabled style="align-self: flex-start">Avvia export</button>
+        <span class="muted" style="font-size: 13px">Nessuna foto selezionata: seleziona foto in Libreria o scegli un altro ambito.</span>
+      </div>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+    <section role="dialog" aria-labelledby="cf" class="card" style="box-shadow: var(--shadow)">
+      <div class="label">Conferma — solo per i file sul disco</div>
+      <h2 id="cf" style="margin: 0; font-size: 18px; font-weight: 600">Spostare 1.200 file in D:\Ordinate?</h2>
+      <p style="margin: 0" class="muted">I file lasceranno le cartelle attuali. Potrai riportarli indietro dallo storico di Attività finché non li modifichi.</p>
+      <div style="display: flex; justify-content: flex-end; gap: 8px"><button type="button" class="btn ghost">Annulla</button><button type="button" class="btn danger">Sposta 1.200 file</button></div>
+    </section>
+    <section class="card" style="align-items: center; text-align: center; justify-content: center">
+      <div class="label" style="align-self: flex-start">Stato vuoto con azione</div>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <strong style="font-size: 16px">Nessuna foto corrisponde ai filtri</strong>
+      <span class="muted">Filtri attivi: 2023, Tag «Mare», Giulia Rossi.</span>
+      <button type="button" class="btn">Azzera i filtri</button>
+    </section>
+    <section class="card">
+      <div class="label">Errore vicino al campo</div>
+      <label style="display: flex; flex-direction: column; gap: 4px">
+        <span class="muted" style="font-size: 13px">Cartella</span>
+        <input value="E:\Foto vacanze" aria-invalid="true" aria-describedby="err1" style="min-height: 34px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--danger); background: var(--bg); color: var(--text); font: inherit">
+      </label>
+      <div id="err1" style="display: flex; gap: 6px; color: var(--danger); font-size: 13px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg>
+        <span>La cartella non esiste o non è raggiungibile. Scegline un'altra. <a href="#" style="color: inherit">Dettagli</a></span>
+      </div>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 20px">
+    <section class="card">
+      <div class="label">Navigazione compatta e suggerimento al primo uso</div>
+      <div style="display: flex; gap: 16px; align-items: flex-start">
+        <div class="rail" aria-label="Moduli (compatta)">
+          <button type="button" class="on" aria-label="Libreria (Ctrl+1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+          <button type="button" aria-label="Sequenza (Ctrl+2)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h18M7 8v8M12 6v12M17 9v6"></path></svg></button>
+          <button type="button" aria-label="Cataloghi (Ctrl+3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path></svg></button>
+          <button type="button" aria-label="Persone (Ctrl+4)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></button>
+          <button type="button" aria-label="Tag (Ctrl+5)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"></path></svg></button>
+        </div>
+        <div role="note" style="position: relative; flex: 1; padding: 14px 16px; border-radius: 10px; background: var(--panel-alt); border: 1px solid var(--accent); display: flex; flex-direction: column; gap: 8px">
+          <strong>Set di tag</strong>
+          <span>Un set assegna i tasti 1–9: in Libreria premi un numero per taggare le foto selezionate.</span>
+          <div style="display: flex; gap: 8px"><button type="button" class="btn primary">Ho capito</button><button type="button" class="btn ghost">Scopri di più</button></div>
+        </div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="label">Glossario</div>
+      <table>
+        <thead><tr><th scope="col">Si dice</th><th scope="col">Per</th><th scope="col">Non più</th></tr></thead>
+        <tbody>
+          <sc-for list="{{terms}}" as="g" hint-placeholder-count="8">
+            <tr><td><strong>{{g.say}}</strong></td><td>{{g.for}}</td><td class="muted">{{g.not}}</td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["scuro","chiaro"],"default":"scuro"},"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themeClass: this.props.theme === 'chiaro' ? 'light' : '',
+      spaces: [4, 8, 12, 16, 24, 32, 48].map(function (n) { return { n: n, px: n + 'px' }; }),
+      terms: [
+        { say: 'Attività', for: 'lavori in background', not: 'Job, #12 · import' },
+        { say: 'Annulla', for: 'chiudere un dialogo senza effetti', not: 'fermare un job, tornare indietro' },
+        { say: 'Interrompi', for: 'fermare un\u2019attività in corso', not: 'Annulla' },
+        { say: 'Annulla operazione', for: 'tornare indietro (avviso, Ctrl+Z, storico)', not: 'Annulla ultima azione' },
+        { say: 'Rimuovi da… / Escludi da…', for: 'togliere da un contenitore', not: 'Elimina' },
+        { say: 'Elimina', for: 'cancellare dati dell\u2019app', not: 'Rimuovi' },
+        { say: 'Sensibilità', for: 'soglie dell\u2019automatismo AI', not: 'soglia di confidenza, somiglianza minima' },
+        { say: 'Categoria', for: 'voce della tassonomia', not: 'voce, etichetta' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

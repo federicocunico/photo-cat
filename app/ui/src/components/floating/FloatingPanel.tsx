@@ -6,6 +6,7 @@ import type React from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { fit, MIN_H, MIN_W, openers, useFloating } from "../../store/floating";
+import { Icon } from "../icons";
 
 type Drag = {
   mode: "move" | "resize";
@@ -146,7 +147,7 @@ export function FloatingPanel({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={doClose}
         >
-          ✕
+          <Icon.Close size={16} />
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

@@ -7,6 +7,8 @@ import { migrateLayoutState, useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import type { FaceView, GroupRow, LocatedFace } from "../../lib/ipc";
 import { PeopleModule } from "./PeopleModule";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -133,7 +135,7 @@ beforeEach(() => {
     discardedCount: 0,
   } as never);
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 describe("PeopleModule", () => {
   it("mostra le sezioni con i conteggi da peopleSections", async () => {

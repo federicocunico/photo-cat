@@ -1,5 +1,6 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
+import { Icon } from "../../components/icons";
 // Pannelli flottanti delle liste di filtro: ricerca, ordinamento, numero di
 // voci, elenco completo con caselle e "Deseleziona tutto". Leggono e
 // scrivono il filtro della libreria, quindi restano allineati a barra
@@ -44,7 +45,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
             aria-label={t("place.renameOf", { name: f.value })}
             onClick={() => setRenaming(f)}
           >
-            ✎
+            <Icon.Edit size={14} />
           </BusyButton>
         )
       : undefined;

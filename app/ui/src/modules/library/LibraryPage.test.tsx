@@ -19,7 +19,10 @@ import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
 import { deferred } from "../../test/deferred";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { LibraryStatus } from "./LibraryStatus";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 it("Primo caricamento della griglia: placeholders and calculating count, never an empty library", () => {
   commandsMock.libraryPage.mockImplementationOnce(() => new Promise(() => {}));
@@ -213,7 +216,7 @@ beforeEach(() => {
     })),
   });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.library));
 
 function renderPage() {
   return render(
@@ -221,6 +224,7 @@ function renderPage() {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <LibraryPage />
+      <ToastHost />
     </QueryClientProvider>,
   );
 }
@@ -408,7 +412,7 @@ describe("cartelle, luogo e Apri con", () => {
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("3 foto");
     expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
-    fireEvent.click(screen.getByRole("menuitem", { name: /Apri con ▸/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Apri con$/ }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Lightroom" }));
     await waitFor(() =>
       expect(commandsMock.openWith).toHaveBeenCalledWith(
@@ -804,7 +808,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
       jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect(await screen.findByText(/foto reinserite/)).toHaveAttribute("role", "status");
+  expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
   expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
 });
@@ -832,7 +836,9 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
       jobs: { 800: { id: 800, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect(await screen.findByText(/file non sono stati toccati/)).toHaveAttribute("role", "status");
+  expect(
+    (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
+  ).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
   confirm.mockRestore();

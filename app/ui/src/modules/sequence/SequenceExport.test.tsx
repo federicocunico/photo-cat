@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { ExportPreflight, SequenceExportOptions } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useSequence } from "../../store/sequence";
 import { SequenceExport } from "./SequenceExport";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "E:\\Export\\USA") }));
 
@@ -65,7 +67,7 @@ beforeEach(() => {
   commandsMock.sequenceExportPreview.mockImplementation(async (o) => names(o.template));
   commandsMock.sequenceExportPreflight.mockImplementation(async (o) => ok(o));
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 it("updates the preview while the template is edited", async () => {
   renderView();

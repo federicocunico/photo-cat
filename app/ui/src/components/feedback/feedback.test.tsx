@@ -1,13 +1,14 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { QueryView } from "./QueryView";
 import { BusyButton } from "./BusyButton";
 import { ToastHost } from "./ToastHost";
-import { notify, useToast } from "../../store/toasts";
+import { notify, notifyError, useToast } from "../../store/toasts";
+import { checkedCleanup } from "../../test/a11y";
 
 afterEach(() => {
-  cleanup();
+  checkedCleanup()();
   vi.useRealTimers();
   useToast.setState({ notices: [] });
 });
@@ -73,4 +74,61 @@ it("offers a toast action and dismisses notices automatically", async () => {
     vi.advanceTimersByTime(2000);
   });
   expect(screen.queryByText("Done")).not.toBeInTheDocument();
+});
+
+describe("ToastHost", () => {
+  it("impila due avvisi, ciascuno con la propria chiusura", async () => {
+    render(<ToastHost />);
+    act(() => {
+      notify({ message: "Primo" });
+      notify({ message: "Secondo", tone: "ok" });
+    });
+    const statuses = screen.getAllByRole("status");
+    expect(statuses.map((s) => s.textContent)).toEqual(["Primo", "Secondo"]);
+    fireEvent.click(within(statuses[0]).getByRole("button", { name: "Chiudi l'avviso" }));
+    expect(screen.queryByText("Primo")).not.toBeInTheDocument();
+    expect(screen.getByText("Secondo")).toBeInTheDocument();
+  });
+
+  it("gli errori sono annunciati come alert e non si chiudono da soli", () => {
+    vi.useFakeTimers();
+    render(<ToastHost />);
+    act(() => {
+      notifyError({ detail: "Cartella non raggiungibile" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Cartella non raggiungibile");
+  });
+
+  it("il tempo si ferma con il puntatore sopra", () => {
+    vi.useFakeTimers();
+    render(<ToastHost />);
+    act(() => {
+      notify({ message: "Tag assegnato", duration: 1000 });
+    });
+    fireEvent.pointerEnter(screen.getByRole("status"));
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(screen.getByText("Tag assegnato")).toBeInTheDocument();
+    fireEvent.pointerLeave(screen.getByRole("status"));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.queryByText("Tag assegnato")).not.toBeInTheDocument();
+  });
+
+  it("un avviso con la stessa chiave sostituisce il precedente e lo segnala", () => {
+    const first = vi.fn();
+    render(<ToastHost />);
+    act(() => {
+      notify({ key: "esito", message: "Escluse 3 foto", onDismiss: first });
+      notify({ key: "esito", message: "Escluse 5 foto" });
+    });
+    expect(screen.queryByText("Escluse 3 foto")).not.toBeInTheDocument();
+    expect(screen.getByText("Escluse 5 foto")).toBeInTheDocument();
+    expect(first).toHaveBeenCalledOnce();
+  });
 });

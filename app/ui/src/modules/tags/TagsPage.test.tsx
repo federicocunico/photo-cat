@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { TagOverview } from "../../bindings";
@@ -8,6 +8,8 @@ import { useLayout } from "../../store/layout";
 import { selIds, useLibrary } from "../../store/library";
 import { TagsPage } from "./TagsPage";
 import { deferred } from "../../test/deferred";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 it("Doppio clic: a pending tag rename submits only once", async () => {
   renderPage();
@@ -74,7 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   commandsMock.tagOverview.mockResolvedValue(overview());
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 it("shows the active set with keys and counts", async () => {
   renderPage();
