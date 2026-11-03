@@ -223,3 +223,15 @@ it("il titolo della pagina è quello della voce di navigazione", async () => {
   renderPage();
   expect(await screen.findByRole("heading", { level: 1, name: "Sequenza" })).toBeInTheDocument();
 });
+
+it("Spazio apre il visualizzatore condiviso; le frecce scorrono, Esc torna sulla stessa foto", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByTestId("seq-2"));
+  fireEvent.keyDown(window, { key: " " });
+  const viewer = await screen.findByTestId("viewer");
+  fireEvent.keyDown(viewer, { key: "ArrowRight" });
+  expect(within(viewer).getByText("3 di 4")).toBeInTheDocument();
+  fireEvent.keyDown(viewer, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByTestId("viewer")).not.toBeInTheDocument());
+  expect(useSequence.getState().focused).toBe(3);
+});

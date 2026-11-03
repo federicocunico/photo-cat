@@ -934,3 +934,52 @@ describe("navigazione da tastiera nella griglia", () => {
     await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(12));
   });
 });
+
+describe("visualizzatore", () => {
+  it("Revisione rapida: Spazio, tre volte →, tasto 2, Esc sulla stessa foto", async () => {
+    commandsMock.tagOverview.mockResolvedValue({
+      tags: [],
+      sets: [
+        {
+          id: 1,
+          name: "Revisione",
+          tags: [{ key: 2, name: "da tenere" }],
+          tagged: 0,
+        },
+      ],
+      activeSet: 1,
+      palette: [],
+    } as never);
+    commandsMock.startBulk.mockResolvedValue(70 as never);
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: " " });
+    const viewer = await screen.findByTestId("viewer");
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0001.JPG");
+    for (let i = 0; i < 3; i++) fireEvent.keyDown(viewer, { key: "ArrowRight" });
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0004.JPG");
+    await waitFor(() => expect(commandsMock.tagOverview).toHaveBeenCalled());
+    fireEvent.keyDown(viewer, { key: "2" });
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [4] },
+        { action: "add_tag", name: "da tenere" },
+        false,
+      ),
+    );
+    fireEvent.keyDown(viewer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("viewer")).not.toBeInTheDocument());
+    expect(grid).toHaveAttribute("aria-activedescendant", "thumb-opt-4");
+  });
+
+  it("Doppio clic sul visualizzatore interno quando è l'azione configurata", async () => {
+    commandsMock.getConfig.mockResolvedValue({ ui: { double_click: "viewer" } } as never);
+    renderPage();
+    fireEvent.doubleClick(await screen.findByTestId("thumb-3"));
+    const viewer = await screen.findByTestId("viewer");
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0003.JPG");
+    expect(commandsMock.openWith).not.toHaveBeenCalledWith([3], { kind: "double_click" }, false);
+  });
+});

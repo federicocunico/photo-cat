@@ -25,10 +25,12 @@ import { deviceColorVar } from "../../theme/tokens";
 import { thumbUrl } from "../library/thumbUrl";
 import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
-import { isTyping, useTagHotkeys } from "../tags/useTagHotkeys";
+import { hotkeyAction, isTyping, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
 import { Kbd } from "../../components/ui";
 import { ModulePage } from "../../components/shell/ModulePage";
+import { Viewer } from "../../components/viewer/Viewer";
+import { useBulkJob } from "../library/bulkJob";
 import { SequenceExport } from "./SequenceExport";
 
 /** Chip dei volti della foto focalizzata → Apri in Persone. */
@@ -833,34 +835,6 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   );
 }
 
-function Viewer({ item, onClose }: { item: SequenceItem; onClose: () => void }) {
-  const url = thumbUrl(item.thumb);
-  return (
-    <div
-      role="dialog"
-      aria-label={item.name}
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        background: "rgba(0,0,0,0.88)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        color: "#E8E8EA",
-      }}
-    >
-      {url && <img src={url} alt="" style={{ maxWidth: "92vw", maxHeight: "84vh" }} />}
-      <span className="mono">
-        {item.local} · {item.device ?? ""} · {item.name}
-      </span>
-    </div>
-  );
-}
-
 export function SequencePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -868,7 +842,8 @@ export function SequencePage() {
   const view = useSequence((s) => s.view);
   const setStats = useSequence((s) => s.setStats);
   const [error, setError] = useState("");
-  const [viewer, setViewer] = useState<SequenceItem | null>(null);
+  // Visualizzatore condiviso: posizione nella sequenza, null se chiuso.
+  const [viewerAt, setViewerAt] = useState<number | null>(null);
   const overview = useQuery({
     queryKey: ["sequence", scope],
     queryFn: () => commands.sequenceOverview(scope),
@@ -882,6 +857,8 @@ export function SequencePage() {
     enabled: isTauri(),
   });
   const items = useMemo(() => pages.data?.pages.flatMap((p) => p.items) ?? [], [pages.data]);
+  const tagInfo = useTagOverview().data;
+  const bulk = useBulkJob();
   const o = overview.data;
   useEffect(() => {
     if (o)
@@ -901,16 +878,15 @@ export function SequencePage() {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
       const { focused } = useSequence.getState();
       const item = items.find((i) => i.id === focused);
-      if (e.key === "Escape") setViewer(null);
       if (!item) return;
       if (e.key === "a" || e.key === "A") {
         e.preventDefault();
         void commands
           .sequenceSessionIds(scope, item.session)
           .then((ids) => useSequence.getState().setSelection(ids, item.id));
-      } else if (e.key === " ") {
+      } else if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
-        setViewer((v) => (v ? null : item));
+        setViewerAt(items.indexOf(item));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1007,7 +983,47 @@ export function SequencePage() {
           />
         </section>
         <SourcesPanel groups={o?.groups ?? []} />
-        {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
+        {viewerAt != null && (
+          <Viewer
+            index={viewerAt}
+            total={items.length}
+            photo={(() => {
+              const it = items[viewerAt];
+              return it
+                ? {
+                    id: it.id,
+                    name: it.name,
+                    src: thumbUrl(it.thumb),
+                    details: (
+                      <span className="mono">
+                        {[it.local, it.device].filter(Boolean).join(" · ")}
+                      </span>
+                    ),
+                  }
+                : null;
+            })()}
+            onIndex={(n) => {
+              setViewerAt(n);
+              // Alla chiusura la sequenza resta sulla stessa foto.
+              const it = items[n];
+              if (it) useSequence.setState({ focused: it.id });
+            }}
+            onClose={() => setViewerAt(null)}
+            onKey={(key) => {
+              const it = items[viewerAt];
+              const action = it ? hotkeyAction(key, activeSet(tagInfo)) : null;
+              if (!it || !action) return false;
+              void bulk.start(
+                { kind: "ids", ids: [it.id] },
+                action,
+                action.action === "add_tag"
+                  ? t("selection.done.add_tag", { name: action.name, count: 1 })
+                  : t("selection.done.remove_tags", { count: 1 }),
+              );
+              return true;
+            }}
+          />
+        )}
       </div>
     </ModulePage>
   );

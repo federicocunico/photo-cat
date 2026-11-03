@@ -1,0 +1,91 @@
+/* Visualizzatore delle foto (3.6): sempre su fondo scuro, in entrambi i temi. */
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pc-z-dialog);
+  background: rgba(0, 0, 0, 0.92);
+}
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pc-z-dialog);
+  display: flex;
+  flex-direction: column;
+  color: #e8e8ea;
+  outline: none;
+}
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-2) var(--pc-space-4);
+}
+.viewer-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--pc-font-base) var(--pc-font-ui);
+}
+.viewer-count {
+  color: #b5b5bb;
+}
+.viewer-button,
+.viewer-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--pc-radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.viewer-button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+.viewer-button:focus-visible,
+.viewer-nav:focus-visible {
+  outline: 2px solid #8ab4ff;
+  outline-offset: 2px;
+}
+.viewer-nav {
+  min-height: 64px;
+  border: 0;
+  background: transparent;
+}
+.viewer-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.viewer-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-2);
+  padding: 0 var(--pc-space-2) var(--pc-space-4);
+}
+.viewer-image {
+  flex: 1;
+  min-width: 0;
+  max-height: 100%;
+  object-fit: contain;
+}
+.viewer-missing {
+  flex: 1;
+  text-align: center;
+  color: #b5b5bb;
+}
+.viewer-info {
+  padding: var(--pc-space-3) var(--pc-space-4);
+  background: rgba(255, 255, 255, 0.06);
+}

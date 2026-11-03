@@ -39,6 +39,10 @@ import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
 import { useOpenWith } from "./useOpenWith";
 import { usePlaceAction } from "./usePlaceAction";
+import { Viewer } from "../../components/viewer/Viewer";
+import { useBulkJob } from "./bulkJob";
+import { activeSet } from "../tags/data";
+import { hotkeyAction } from "../tags/useTagHotkeys";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 
@@ -333,6 +337,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   );
   const openWith = useOpenWith();
   const place = usePlaceAction();
+  const config = useQuery({
+    queryKey: ["config"],
+    queryFn: () => commands.getConfig(),
+    enabled: isTauri(),
+  });
+  // Visualizzatore interno: posizione nella vista, null se chiuso.
+  const [viewerAt, setViewerAt] = useState<number | null>(null);
+  const bulk = useBulkJob();
   const closeMenu = useCallback(() => setMenu(null), []);
   const actionError = openWith.error || place.error;
 
@@ -499,6 +511,19 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     if (mod && (e.key === "a" || e.key === "A") && !e.shiftKey) {
       e.preventDefault();
       void commands.librarySelection(filter).then((base) => useLibrary.getState().selectAll(base));
+      return true;
+    }
+    const restoreView = filter.excludedFrom != null;
+    if (
+      !mod &&
+      !e.altKey &&
+      !e.shiftKey &&
+      cursorItem &&
+      (e.key === " " || (e.key === "Enter" && !restoreView))
+    ) {
+      // Nelle escluse Invio resta "Reinserisci": il visualizzatore si apre con Spazio.
+      e.preventDefault();
+      setViewerAt(cursor);
       return true;
     }
     if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && cursorItem) {
@@ -691,7 +716,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                       selectGroup(it);
                     else onClick(it.id)(e);
                   }}
-                  onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
+                  onDoubleClick={() => {
+                    if (config.data?.ui?.double_click === "viewer") {
+                      setCursor(i);
+                      setViewerAt(i);
+                    } else void openWith.open([it.id], { kind: "double_click" });
+                  }}
                   onMenu={onMenu(it.id)}
                   tagColor={tagColor}
                 />
@@ -738,6 +768,47 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         >
           {actionError}
         </div>
+      )}
+      {viewerAt != null && (
+        <Viewer
+          index={viewerAt}
+          total={total}
+          photo={(() => {
+            const it = at_(viewerAt).item;
+            if (!it) return null;
+            return {
+              id: it.id,
+              name: it.name,
+              src: thumbUrl(it.thumb),
+              details: (
+                <span>
+                  {[it.capturedAt ? fmtDateTime(it.capturedAt.replace(" ", "T")) : null, ...it.tags]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              ),
+            };
+          })()}
+          onIndex={(n) => {
+            setViewerAt(n);
+            // La griglia segue: alla chiusura il focus è sulla stessa foto.
+            moveCursor(n, false);
+          }}
+          onClose={() => setViewerAt(null)}
+          onKey={(key) => {
+            const it = at_(viewerAt).item;
+            const action = it ? hotkeyAction(key, activeSet(tagInfo)) : null;
+            if (!it || !action) return false;
+            void bulk.start(
+              { kind: "ids", ids: [it.id] },
+              action,
+              action.action === "add_tag"
+                ? t("selection.done.add_tag", { name: action.name, count: 1 })
+                : t("selection.done.remove_tags", { count: 1 }),
+            );
+            return true;
+          }}
+        />
       )}
       {menu && (
         <GridContextMenu

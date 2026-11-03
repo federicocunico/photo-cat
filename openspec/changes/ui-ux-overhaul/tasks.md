@@ -110,7 +110,7 @@
   - il gruppo di simili diventa un pulsante separato (niente controlli annidati).
 
   Verifica: test della griglia virtualizzata.
-- [ ] 3.6 Visualizzatore condiviso `components/viewer/Viewer.tsx`, estratto da Sequenza:
+- [x] 3.6 Visualizzatore condiviso `components/viewer/Viewer.tsx`, estratto da Sequenza:
   - Spazio/Invio, frecce, 1–9/0, I, Esc;
   - stessa foto con il focus alla chiusura;
   - opzione "Visualizzatore di photo-cat" per il doppio clic (`external-apps`).

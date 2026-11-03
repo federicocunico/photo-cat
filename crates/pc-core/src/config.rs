@@ -197,9 +197,15 @@ pub enum Language {
 }
 
 /// Azione del doppio clic su una miniatura: `system` (app predefinita),
-/// `none` oppure l'`id` di un'applicazione esterna.
+/// `viewer` (visualizzatore interno, gestito dall'interfaccia), `none` oppure
+/// l'`id` di un'applicazione esterna.
 pub const DOUBLE_CLICK_SYSTEM: &str = "system";
 pub const DOUBLE_CLICK_NONE: &str = "none";
+pub const DOUBLE_CLICK_VIEWER: &str = "viewer";
+
+/// Valori di `ui.double_click` che non sono applicazioni esterne.
+const DOUBLE_CLICK_RESERVED: [&str; 3] =
+    [DOUBLE_CLICK_SYSTEM, DOUBLE_CLICK_NONE, DOUBLE_CLICK_VIEWER];
 
 fn default_double_click() -> String {
     DOUBLE_CLICK_SYSTEM.into()
@@ -211,7 +217,7 @@ fn default_double_click() -> String {
 pub struct UiConfig {
     pub theme: Theme,
     pub language: Language,
-    /// `system`, `none` o l'id di un'applicazione esterna.
+    /// `system`, `viewer`, `none` o l'id di un'applicazione esterna.
     pub double_click: String,
 }
 
@@ -290,7 +296,7 @@ impl Config {
             if id.is_empty() || app.name.trim().is_empty() {
                 return bad("external_apps: id e nome sono obbligatori".into());
             }
-            if id == DOUBLE_CLICK_SYSTEM || id == DOUBLE_CLICK_NONE {
+            if DOUBLE_CLICK_RESERVED.contains(&id) {
                 return bad(format!("external_apps: id riservato \"{id}\""));
             }
             if !ids.insert(id) {
@@ -298,7 +304,7 @@ impl Config {
             }
         }
         let dc = self.ui.double_click.as_str();
-        if dc != DOUBLE_CLICK_SYSTEM && dc != DOUBLE_CLICK_NONE && !ids.contains(dc) {
+        if !DOUBLE_CLICK_RESERVED.contains(&dc) && !ids.contains(dc) {
             return bad(format!(
                 "ui.double_click punta a un'applicazione inesistente \"{dc}\""
             ));
@@ -390,6 +396,20 @@ mod tests {
         assert!(cfg.ai.ignored_folder_names.is_empty());
         assert!(cfg.external_apps.is_empty());
         assert_eq!(cfg.ui.double_click, "system");
+    }
+
+    #[test]
+    fn double_click_viewer_is_valid_and_reserved() {
+        let mut cfg = Config::default();
+        cfg.ui.double_click = DOUBLE_CLICK_VIEWER.into();
+        assert!(cfg.validate().is_ok());
+        cfg.external_apps.push(ExternalApp {
+            id: "viewer".into(),
+            name: "Visualizzatore".into(),
+            path: "C:/v.exe".into(),
+            args: vec![],
+        });
+        assert!(cfg.validate().is_err(), "\"viewer\" è riservato");
     }
 
     #[test]

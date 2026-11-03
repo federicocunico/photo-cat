@@ -36,7 +36,7 @@ export function ExternalAppsSection({
       external_apps: next,
       ui: {
         ...cfg.ui,
-        double_click: dc === "system" || dc === "none" || ids.includes(dc) ? dc : "system",
+        double_click: ["system", "viewer", "none"].includes(dc) || ids.includes(dc) ? dc : "system",
       },
     });
   };
@@ -141,6 +141,7 @@ export function ExternalAppsSection({
             onChange={(e) => setCfg({ ...cfg, ui: { ...cfg.ui, double_click: e.target.value } })}
           >
             <option value="system">{t("externalApps.system")}</option>
+            <option value="viewer">{t("externalApps.viewer")}</option>
             {apps.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name || a.id}

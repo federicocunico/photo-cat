@@ -29,6 +29,14 @@ export const common = {
       editField: "{{field}}: {{value}}. Modifica",
       mixed: "Valori diversi",
     },
+    viewer: {
+      position: "{{n}} di {{total}}",
+      info: "Informazioni",
+      close: "Chiudi",
+      previous: "Foto precedente",
+      next: "Foto successiva",
+      loading: "Caricamento…",
+    },
     help: {
       menu: "Aiuto",
       diagnostics: "Diagnostica e registri",
@@ -75,6 +83,14 @@ export const common = {
       notSet: "Not set",
       editField: "{{field}}: {{value}}. Edit",
       mixed: "Mixed values",
+    },
+    viewer: {
+      position: "{{n}} of {{total}}",
+      info: "Info",
+      close: "Close",
+      previous: "Previous photo",
+      next: "Next photo",
+      loading: "Loading…",
     },
     help: {
       menu: "Help",
