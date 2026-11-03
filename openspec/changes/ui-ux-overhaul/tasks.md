@@ -143,9 +143,9 @@
 
 ## 6. Impostazioni
 
-- [ ] 6.1 Layout a sezioni con sotto-navigazione e ricerca (con evidenziazione del campo); contenuto di `ModelsPage` e `DiagnosticsPage` spostato nelle sezioni; rimozione dei duplicati.
-- [ ] 6.2 Salvataggio immediato con "Salvato" accanto al campo per le preferenze; barra "Ripristina / Applica" con anteprima per soglie, tassonomia e percorso dei dati; nessun "Salva" a metà pagina. Verifica: `SettingsPage.test.tsx` (le soglie dei gruppi restano preservate).
-- [ ] 6.3 Sensibilità:
+- [x] 6.1 Layout a sezioni con sotto-navigazione e ricerca (con evidenziazione del campo); contenuto di `ModelsPage` e `DiagnosticsPage` spostato nelle sezioni; rimozione dei duplicati.
+- [x] 6.2 Salvataggio immediato con "Salvato" accanto al campo per le preferenze; barra "Ripristina / Applica" con anteprima per soglie, tassonomia e percorso dei dati; nessun "Salva" a metà pagina. Verifica: `SettingsPage.test.tsx` (le soglie dei gruppi restano preservate).
+- [x] 6.3 Sensibilità:
   - tabella del verso di ogni soglia in `tuning.ts`;
   - scala "Più risultati ↔ Più precisi" e controlli segmentati dove bastano tre livelli;
   - valori numerici in "Avanzate";

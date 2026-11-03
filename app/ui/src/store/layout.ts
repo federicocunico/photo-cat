@@ -22,7 +22,8 @@ export type ModuleId =
  * Sezioni di Impostazioni raggiungibili direttamente (design D2, D9). Modelli AI e
  * Diagnostica non sono più voci della navigazione ma sezioni di Impostazioni.
  */
-export type SettingsSection = "general" | "models" | "diagnostics";
+export type SettingsSection =
+  "general" | "library" | "ai" | "models" | "apps" | "diagnostics" | "advanced";
 
 export const PANEL_LIMITS = { left: [200, 420], right: [260, 480] } as const;
 

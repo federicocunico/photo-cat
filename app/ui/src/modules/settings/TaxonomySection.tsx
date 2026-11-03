@@ -1,5 +1,6 @@
 import { BusyButton } from "../../components/feedback/BusyButton";
-// Impostazioni › Tassonomia: voci e gruppi (anche manuali, senza descrizione),
+// Impostazioni › Riconoscimento AI › Tassonomia: voci e gruppi (anche manuali, senza
+// descrizione), modificati in bozza e applicati con la barra "Applica";
 // eliminazione con il numero di foto coinvolte e avviso quando la modifica
 // cambia l'analisi automatica.
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, type Category, type Taxonomy } from "../../lib/ipc";
 import { groupNameOf } from "../library/labelName";
-import { categoryId, changesAnalysis, cleanTaxonomy, groupId, isManual } from "./taxonomyEdit";
+import { categoryId, changesAnalysis, groupId, isManual } from "./taxonomyEdit";
 
 /** Campo per il nome di una voce o di un gruppo nuovo, sul posto. */
 function NameField({
@@ -128,22 +129,9 @@ export function TaxonomySection({
       await qc.invalidateQueries({ queryKey: ["facets"] });
       setNotice(t("entries.deleted", { count: n }));
     });
-  const save = () =>
-    run(async () => {
-      const clean = cleanTaxonomy(tax);
-      if (clean.groups.some((g) => g.categories.length === 0)) {
-        setError(t("entries.emptyGroup"));
-        return;
-      }
-      await commands.saveTaxonomy(clean, saved!.version);
-      await qc.invalidateQueries({ queryKey: ["taxonomy"] });
-      setNotice(t("settings.saved"));
-    });
   const reanalysis = saved !== undefined && changesAnalysis(saved, tax);
   return (
     <>
-      <h2>{t("settings.taxonomy")}</h2>
-      <p className="muted">{t("settings.taxonomyHint")}</p>
       {tax.groups.map((g, gi) => (
         <fieldset
           key={g.id}
@@ -288,9 +276,6 @@ export function TaxonomySection({
       )}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <BusyButton className="btn" disabled={busy || !saved} onClick={async () => await save()}>
-        {t("settings.saveTaxonomy")}
-      </BusyButton>
     </>
   );
 }
