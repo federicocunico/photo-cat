@@ -304,7 +304,7 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
     }
     for pid in &f.person_ids {
         parts.push(
-            "EXISTS (SELECT 1 FROM face fc WHERE fc.media_id = m.id AND fc.person_id = ?)".into(),
+            "EXISTS (SELECT 1 FROM face fc JOIN person p ON p.id = fc.person_id WHERE fc.media_id = m.id AND fc.person_id = ? AND p.ignored_at IS NULL)".into(),
         );
         args.push(Value::Integer(*pid));
     }
@@ -419,7 +419,7 @@ pub fn page(
     let limit = limit.clamp(1, 2000);
     let sql = format!(
         "SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
-                (SELECT count(*) FROM face fc WHERE fc.media_id = m.id),
+                (SELECT count(*) FROM face fc LEFT JOIN person p ON p.id = fc.person_id WHERE fc.media_id = m.id AND p.ignored_at IS NULL),
                 EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
@@ -846,7 +846,7 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
     // Persone: non mostrate nella barra laterale, con il filtro completo.
     let people = column(
         "SELECT p.name, count(DISTINCT fc.media_id) FROM face fc JOIN f ON f.id = fc.media_id \
-         JOIN person p ON p.id = fc.person_id WHERE p.name IS NOT NULL GROUP BY p.id ORDER BY 2 DESC, 1",
+         JOIN person p ON p.id = fc.person_id WHERE p.name IS NOT NULL AND p.ignored_at IS NULL GROUP BY p.id ORDER BY 2 DESC, 1",
     )?;
     out.people = summarize(
         people

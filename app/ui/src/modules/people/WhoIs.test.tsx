@@ -2,8 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
+import type { GroupRow } from "../../lib/ipc";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
-import { PeoplePage } from "./PeoplePage";
+import { useLayout } from "../../store/layout";
+import { PeopleModule } from "./PeopleModule";
+
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,
@@ -15,13 +18,46 @@ const all = [
   { uid: "r", name: "Rita Rossi", shortName: "Rita", score: 0.2, person: null },
 ];
 
+function row(partial: Partial<GroupRow> & { id: number }): GroupRow {
+  return {
+    name: null,
+    identityUid: null,
+    section: "review",
+    faces: 3,
+    goodFaces: 3,
+    discardedFaces: 0,
+    photos: 3,
+    cover: null,
+    ignoredAt: null,
+    newFaces: 0,
+    nameHint: null,
+    mergeHint: null,
+    ...partial,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  commandsMock.listPeople.mockResolvedValue([
-    { id: 12, name: null, identityUid: null, photos: 3, faces: 3, cover: null },
-  ] as never);
-  commandsMock.personFaces.mockResolvedValue([] as never);
-  // Il backend cerca su nome e alias ("Nonna" è un alias di Rita Rossi).
+  localStorage.clear();
+  useLayout.setState({
+    module: "people",
+    peopleSection: "review",
+    theme: "dark",
+    language: "it",
+  });
+  commandsMock.peopleSections.mockResolvedValue({
+    review: 1,
+    people: 0,
+    ignored: 0,
+    singles: 0,
+    discarded: 0,
+  } as never);
+  commandsMock.listGroups.mockResolvedValue({
+    items: [row({ id: 12, faces: 3, photos: 3 })],
+    next: null,
+    total: 1,
+  } as never);
+  commandsMock.groupFaces.mockResolvedValue({ items: [], next: null, total: 0 } as never);
   commandsMock.suggestIdentities.mockImplementation(async (_p: number, q: string) =>
     all.filter((s) =>
       q.toLowerCase() === "nonna" ? s.uid === "r" : s.name.toLowerCase().includes(q.toLowerCase()),
@@ -33,10 +69,10 @@ afterEach(cleanup);
 async function openUnnamed() {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <PeoplePage />
+      <PeopleModule />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByText(/senza nome/i));
+  fireEvent.click(await screen.findByText(/Gruppo di 3 volti/i));
   return screen.findByRole("combobox", { name: "Chi è?" });
 }
 

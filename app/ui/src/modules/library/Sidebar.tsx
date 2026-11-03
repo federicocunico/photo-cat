@@ -11,6 +11,7 @@ import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
 import { FacetList } from "./FacetList";
 import { DateFacet } from "./DateFacet";
+import { OpenInPeople } from "../people/OpenInPeople";
 
 function Row({
   label,
@@ -173,6 +174,16 @@ export function LibrarySidebar() {
     enabled: isTauri(),
     placeholderData: (prev) => prev,
   });
+  const people = useQuery({
+    queryKey: ["people"],
+    queryFn: commands.listPeople,
+    enabled: isTauri() && (facets.data?.people.total ?? 0) > 0,
+  });
+  const personIdByName = new Map(
+    (people.data ?? [])
+      .filter((p) => p.name)
+      .map((p) => [p.name as string, p.id] as const),
+  );
 
   return (
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -302,6 +313,47 @@ export function LibrarySidebar() {
         )}
         {(facets.data?.tags.total ?? 0) > 0 && (
           <FacetList facetKey={{ kind: "tag" }} list={facets.data!.tags} />
+        )}
+        {(facets.data?.people.total ?? 0) > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>{t("library.facets.people")}</div>
+            {facets.data!.people.values.slice(0, 8).map((v) => {
+              const id = personIdByName.get(v.value);
+              return (
+                <div
+                  key={v.value}
+                  style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 24 }}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{
+                      flex: 1,
+                      justifyContent: "space-between",
+                      padding: "0 4px",
+                      fontWeight: (filter.personIds ?? []).includes(id ?? -1) ? 600 : undefined,
+                    }}
+                    onClick={() => {
+                      if (id == null) return;
+                      const cur = filter.personIds ?? [];
+                      setFilter({
+                        personIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+                      });
+                    }}
+                  >
+                    <span>{v.value}</span>
+                    <span className="muted">{fmtInt(v.count)}</span>
+                  </button>
+                  {id != null && (
+                    <OpenInPeople
+                      target={{ person: id }}
+                      style={{ padding: "0 4px", fontSize: 12 }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </section>
     </div>

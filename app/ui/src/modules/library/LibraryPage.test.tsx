@@ -132,6 +132,17 @@ beforeEach(() => {
       labels: [{ group: "subject", value: "paesaggio", score: 0.82, origin: "auto" }],
       peopleCount: 2,
       people: ["Giulia"],
+      faces: [
+        {
+          id: 11,
+          bbox: [0.1, 0.1, 0.2, 0.2],
+          personId: 4,
+          personName: "Giulia",
+          identityUid: "g",
+          ignored: false,
+          discarded: false,
+        },
+      ],
       tags: ["tramonto"],
       catalogs: [],
       duplicates: [],

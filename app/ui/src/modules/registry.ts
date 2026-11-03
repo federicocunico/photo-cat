@@ -11,7 +11,6 @@ export const MODULES: Array<{ id: ModuleId; icon: IconC; bottom?: boolean }> = [
   { id: "catalogs", icon: Icon.Catalogs },
   { id: "tags", icon: Icon.Tags },
   { id: "people", icon: Icon.People },
-  { id: "identities", icon: Icon.Identities },
   { id: "import", icon: Icon.Import },
   { id: "jobs", icon: Icon.Jobs },
   { id: "models", icon: Icon.Models },

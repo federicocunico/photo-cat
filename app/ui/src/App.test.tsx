@@ -17,10 +17,7 @@ vi.mock("./modules/sequence/SequencePage", () => ({
   SequencePage: () => <p>page:sequence</p>,
   SequenceStatus: () => null,
 }));
-vi.mock("./modules/people/PeoplePage", () => ({ PeoplePage: () => <p>page:people</p> }));
-vi.mock("./modules/identities/IdentitiesPage", () => ({
-  IdentitiesPage: () => <p>page:identities</p>,
-}));
+vi.mock("./modules/people/PeopleModule", () => ({ PeopleModule: () => <p>page:people</p> }));
 vi.mock("./modules/import/ImportPage", () => ({ ImportPage: () => <p>page:import</p> }));
 vi.mock("./modules/jobs/JobsPage", () => ({ JobsPage: () => <p>page:jobs</p> }));
 vi.mock("./modules/models/ModelsPage", () => ({ ModelsPage: () => <p>page:models</p> }));
@@ -66,7 +63,6 @@ describe("moduli di navigazione", () => {
       "catalogs",
       "tags",
       "people",
-      "identities",
       "import",
       "jobs",
       "models",
@@ -85,7 +81,6 @@ describe("moduli di navigazione", () => {
       catalogs: "Cataloghi",
       tags: "Tag",
       people: "Persone",
-      identities: "Identità",
       import: "Importa",
       jobs: "Job",
       organize: "Esporta e organizza",

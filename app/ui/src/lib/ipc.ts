@@ -31,6 +31,7 @@ export const EVENTS = {
   logLines: "log://lines",
   error: "log://error",
   models: "models://status",
+  facesChanged: "faces://changed",
 } as const;
 
 export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -46,4 +47,5 @@ export const events = {
   onLogLines: (cb: (l: LogLine[]) => void) => on(EVENTS.logLines, cb),
   onError: (cb: (e: ErrorRecord) => void) => on(EVENTS.error, cb),
   onModels: (cb: (m: ModelStatus[]) => void) => on(EVENTS.models, cb),
+  onFacesChanged: (cb: () => void) => on(EVENTS.facesChanged, () => cb()),
 };

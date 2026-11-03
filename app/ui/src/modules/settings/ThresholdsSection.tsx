@@ -18,6 +18,7 @@ import { cleanSettings } from "./cleanSettings";
 const DEFAULTS = {
   person_detection: 0.4,
   face_detection: 0.8,
+  face_min_sharpness: 0.35,
   face_similarity: 0.363,
   face_min_size_px: 40,
   group: 0.25,
@@ -30,6 +31,7 @@ function thresholdsOf(cfg: Settings): Full {
   return {
     person_detection: t.person_detection ?? DEFAULTS.person_detection,
     face_detection: t.face_detection ?? DEFAULTS.face_detection,
+    face_min_sharpness: t.face_min_sharpness ?? DEFAULTS.face_min_sharpness,
     face_similarity: t.face_similarity ?? DEFAULTS.face_similarity,
   };
 }
@@ -167,6 +169,7 @@ export function ThresholdsSection({
         thresholds: {
           person_detection: DEFAULTS.person_detection,
           face_detection: DEFAULTS.face_detection,
+          face_min_sharpness: DEFAULTS.face_min_sharpness,
           face_similarity: DEFAULTS.face_similarity,
         },
       },
@@ -215,6 +218,14 @@ export function ThresholdsSection({
             onChange={(e) =>
               setCfg({ ...cfg, ai: { ...cfg.ai, face_min_size_px: Number(e.target.value) } })
             }
+          />
+        </label>
+        <label>
+          {t("thresholds.faceSharpness")}{" "}
+          <ThresholdInput
+            label={t("thresholds.faceSharpness")}
+            value={th.face_min_sharpness}
+            onValid={(v) => setTh({ face_min_sharpness: v ?? DEFAULTS.face_min_sharpness })}
           />
         </label>
         <label>
@@ -307,6 +318,11 @@ export function ThresholdsSection({
             <li>{t("thresholds.labelsChanged", { count: impact.mediaLabelsChanged })}</li>
             <li>{t("thresholds.peopleChanged", { count: impact.mediaPeopleChanged })}</li>
             <li>{t("thresholds.facesExcluded", { count: impact.facesExcluded })}</li>
+            <li>
+              {t("thresholds.facesDiscardedSharpness", {
+                count: impact.facesDiscardedSharpness,
+              })}
+            </li>
             {impact.personsAffectedEstimate > 0 && (
               <li>{t("thresholds.personsEstimate", { count: impact.personsAffectedEstimate })}</li>
             )}

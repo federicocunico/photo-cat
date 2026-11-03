@@ -487,6 +487,7 @@ fn reference_from_file_offers_three_faces_and_recognises_in_new_library() {
             bbox: c.bbox,
             quality: 0.99,
             embedding: c.embedding.clone(),
+            ..Default::default()
         })
         .collect();
     let model = chosen.model_ver.clone();

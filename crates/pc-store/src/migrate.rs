@@ -13,6 +13,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v4.sql"),
     include_str!("schema_v5.sql"),
     include_str!("schema_v6.sql"),
+    include_str!("schema_v7.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -228,7 +229,49 @@ mod tests {
         "media_fts",
         "source_group",
         "media_time_placement",
+        "catalog_exclusion",
+        "person_not_same",
+        "person_suggestion",
     ];
+
+    #[test]
+    fn migrate_v6_preserves_people_identities_rejections_and_manual_faces() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 6);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at)
+             VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1),(2,'b.jpg','b.jpg','jpg',1,1,1,1);
+             INSERT INTO person(id,name,created_at,identity_uid)
+             VALUES (10,'Giulia',0,'uid-giulia'),(20,NULL,0,NULL);
+             INSERT INTO face(id,media_id,bbox,quality,person_id,assigned_by,rejected,model_ver)
+             VALUES (100,1,'[0.1,0.1,0.2,0.2]',0.92,10,'manual','[20]','sface'),
+                    (101,2,'[0.2,0.2,0.3,0.3]',0.85,20,'auto','[]','sface');",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        let p: (Option<String>, Option<String>, Option<i64>) = c
+            .query_row(
+                "SELECT name, identity_uid, ignored_at FROM person WHERE id=10",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(p, (Some("Giulia".into()), Some("uid-giulia".into()), None));
+        let f: (Option<i64>, String, String, Option<f32>, f32, i64) = c
+            .query_row(
+                "SELECT person_id, assigned_by, rejected, sharpness, quality_score, quality_override FROM face WHERE id=100",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert_eq!(f.0, Some(10));
+        assert_eq!(f.1, "manual");
+        assert_eq!(f.2, "[20]");
+        assert_eq!(f.3, None);
+        assert!((f.4 - 0.92).abs() < 1e-5);
+        assert_eq!(f.5, 0);
+    }
 
     #[test]
     fn v4_library_migrates_to_v5_with_backup_and_keeps_dates() {

@@ -724,7 +724,7 @@ pub mod fts {
             .flatten();
         let people: String = c.query_row(
             "SELECT coalesce(group_concat(DISTINCT p.name), '') FROM face f JOIN person p ON p.id=f.person_id
-             WHERE f.media_id=?1 AND p.name IS NOT NULL",
+             WHERE f.media_id=?1 AND p.name IS NOT NULL AND p.ignored_at IS NULL",
             [id],
             |r| r.get(0),
         )?;

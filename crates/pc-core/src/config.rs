@@ -103,6 +103,8 @@ pub struct AiThresholds {
     pub person_detection: f32,
     /// Confidenza minima di un volto usato per il riconoscimento.
     pub face_detection: f32,
+    /// Nitidezza minima (0..1) di un volto usato per il riconoscimento.
+    pub face_min_sharpness: f32,
     /// Somiglianza coseno minima tra due volti della stessa persona.
     pub face_similarity: f32,
 }
@@ -110,6 +112,7 @@ pub struct AiThresholds {
 impl AiThresholds {
     pub const DEFAULT_PERSON_DETECTION: f32 = 0.4;
     pub const DEFAULT_FACE_DETECTION: f32 = 0.8;
+    pub const DEFAULT_FACE_MIN_SHARPNESS: f32 = 0.35;
     pub const DEFAULT_FACE_SIMILARITY: f32 = 0.363;
 }
 
@@ -118,6 +121,7 @@ impl Default for AiThresholds {
         Self {
             person_detection: Self::DEFAULT_PERSON_DETECTION,
             face_detection: Self::DEFAULT_FACE_DETECTION,
+            face_min_sharpness: Self::DEFAULT_FACE_MIN_SHARPNESS,
             face_similarity: Self::DEFAULT_FACE_SIMILARITY,
         }
     }
@@ -264,6 +268,7 @@ impl Config {
         for (name, v) in [
             ("person_detection", t.person_detection),
             ("face_detection", t.face_detection),
+            ("face_min_sharpness", t.face_min_sharpness),
             ("face_similarity", t.face_similarity),
         ] {
             if !(0.0..=1.0).contains(&v) {
@@ -340,6 +345,8 @@ mod tests {
             "not toml at all = = =",
             "[unknown]\nx = 1\n",
             "[ai.thresholds]\nperson_detection = 1.5\n",
+            "[ai.thresholds]\nface_min_sharpness = 1.2\n",
+            "[ai.thresholds]\nface_min_sharpness = -0.1\n",
             "[ai.thresholds]\nface_similarity = -0.1\n",
             "[ui]\ndouble_click = \"lightroom\"\n",
             "[[external_apps]]\nid = \"a\"\nname = \"A\"\npath = \"/a\"\n[[external_apps]]\nid = \"a\"\nname = \"B\"\npath = \"/b\"\n",
@@ -366,6 +373,7 @@ mod tests {
         assert_eq!(cfg.ai.thresholds, AiThresholds::default());
         assert_eq!(cfg.ai.thresholds.person_detection, 0.4);
         assert_eq!(cfg.ai.thresholds.face_detection, 0.8);
+        assert_eq!(cfg.ai.thresholds.face_min_sharpness, 0.35);
         assert_eq!(cfg.ai.thresholds.face_similarity, 0.363);
         assert!(cfg.ai.ignored_folder_names.is_empty());
         assert!(cfg.external_apps.is_empty());

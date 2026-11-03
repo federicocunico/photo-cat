@@ -110,7 +110,12 @@ const fullConfig = {
   ai: {
     ...config.ai,
     ignored_folder_names: [],
-    thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363 },
+    thresholds: {
+      person_detection: 0.4,
+      face_detection: 0.8,
+      face_min_sharpness: 0.35,
+      face_similarity: 0.363,
+    },
   },
   ui: { ...config.ui, double_click: "system" },
   external_apps: [],
@@ -130,9 +135,17 @@ const impact = {
   mediaLabelsChanged: 12,
   mediaPeopleChanged: 0,
   facesExcluded: 0,
+  facesDiscardedSharpness: 0,
   personsAffectedEstimate: 0,
   reanalysisPersons: 0,
   reanalysisFaces: 0,
+};
+
+const defaultThresholds = {
+  person_detection: 0.4,
+  face_detection: 0.8,
+  face_min_sharpness: 0.35,
+  face_similarity: 0.363,
 };
 
 it("anteprima di una soglia di categoria e applicazione senza rianalisi", async () => {
@@ -145,15 +158,42 @@ it("anteprima di una soglia di categoria e applicazione senza rianalisi", async 
   const expected = structuredClone(taxonomy);
   (expected.groups[0].categories[0] as { threshold?: number }).threshold = 0.6;
   await waitFor(() =>
-    expect(commandsMock.previewThresholds).toHaveBeenCalledWith(
-      { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.363 },
-      expected,
-    ),
+    expect(commandsMock.previewThresholds).toHaveBeenCalledWith(defaultThresholds, expected),
   );
   expect(await screen.findByText("12 foto cambiano catalogazioni")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Applica soglie" }));
   await waitFor(() => expect(commandsMock.saveTaxonomy).toHaveBeenCalledWith(expected, 3));
   expect(commandsMock.saveSettings).not.toHaveBeenCalled();
+});
+
+it("Nitidezza minima dei volti: anteprima degli scarti e applicazione senza rianalisi", async () => {
+  commandsMock.previewThresholds.mockResolvedValue({
+    ...impact,
+    facesDiscardedSharpness: 7,
+  });
+  renderSettings();
+  const sharpness = await screen.findByLabelText("Nitidezza minima dei volti");
+  expect(sharpness).toHaveValue("0.35");
+  fireEvent.change(sharpness, { target: { value: "0.6" } });
+  fireEvent.click(screen.getByRole("button", { name: "Anteprima dell'effetto" }));
+  await waitFor(() =>
+    expect(commandsMock.previewThresholds).toHaveBeenCalledWith(
+      { ...defaultThresholds, face_min_sharpness: 0.6 },
+      null,
+    ),
+  );
+  expect(await screen.findByText("7 volti scartati per nitidezza")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Applica soglie" }));
+  await waitFor(() =>
+    expect(commandsMock.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ai: expect.objectContaining({
+          thresholds: expect.objectContaining({ face_min_sharpness: 0.6 }),
+        }),
+      }),
+    ),
+  );
+  expect(commandsMock.reanalyzeBelowFloor).not.toHaveBeenCalled();
 });
 
 it("rifiuta un valore non valido e ripristina i predefiniti", async () => {
@@ -170,7 +210,7 @@ it("rifiuta un valore non valido e ripristina i predefiniti", async () => {
     expect(commandsMock.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         ai: expect.objectContaining({
-          thresholds: { person_detection: 0.4, face_detection: 0.8, face_similarity: 0.5 },
+          thresholds: { ...defaultThresholds, face_similarity: 0.5 },
         }),
       }),
     ),
@@ -178,10 +218,14 @@ it("rifiuta un valore non valido e ripristina i predefiniti", async () => {
 
   // Scenario "Ripristino dei predefiniti".
   fireEvent.change(persons, { target: { value: "0.7" } });
+  fireEvent.change(screen.getByLabelText("Nitidezza minima dei volti"), {
+    target: { value: "0.8" },
+  });
   fireEvent.change(screen.getByLabelText("Gruppo Ambiente"), { target: { value: "0.5" } });
   fireEvent.change(screen.getByLabelText("Categoria Teatro"), { target: { value: "0.9" } });
   fireEvent.click(screen.getByRole("button", { name: "Ripristina predefiniti" }));
   await waitFor(() => expect(persons).toHaveValue("0.4"));
+  expect(screen.getByLabelText("Nitidezza minima dei volti")).toHaveValue("0.35");
   expect(screen.getByLabelText("Somiglianza tra volti")).toHaveValue("0.363");
   expect(screen.getByLabelText("Gruppo Ambiente")).toHaveValue("0.25");
   expect(screen.getByLabelText("Categoria Teatro")).toHaveValue("");

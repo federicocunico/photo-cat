@@ -34,6 +34,16 @@ import type {
   FacetValue,
   UpdateSummary,
   RelinkSummary,
+  PeopleSections,
+  GroupPage,
+  PeopleSection,
+  GroupSort,
+  FacePage,
+  FaceScope,
+  FaceSort,
+  FaceCursor,
+  LocateFaceRequest,
+  LocatedFace,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -44,6 +54,7 @@ export const emitters = {
   log: [] as Cb<LogLine[]>[],
   error: [] as Cb<ErrorRecord>[],
   models: [] as Cb<ModelStatus[]>[],
+  faces: [] as Cb<null>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -97,6 +108,37 @@ export const commandsMock = {
   setResourceProfile: vi.fn(),
   reanalyze: vi.fn(async () => 1),
   listPeople: vi.fn(async () => []),
+  peopleSections: vi.fn(async (): Promise<PeopleSections> => ({
+    review: 0,
+    people: 0,
+    ignored: 0,
+    singles: 0,
+    discarded: 0,
+  })),
+  listGroups: vi.fn<
+    (
+      section: PeopleSection,
+      query: string | null,
+      sort: GroupSort,
+      after: number | null,
+      limit: number | null,
+    ) => Promise<GroupPage>
+  >(async () => ({ items: [], next: null, total: 0 })),
+  groupFaces: vi.fn<
+    (
+      scope: FaceScope,
+      sort: FaceSort,
+      after: FaceCursor | null,
+      limit: number | null,
+    ) => Promise<FacePage>
+  >(async () => ({
+    items: [],
+    next: null,
+    total: 0,
+    goodCount: 0,
+    discardedCount: 0,
+  })),
+  locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
   personFaces: vi.fn(async () => []),
   correctPerson: vi.fn(async () => null),
   purgeFaces: vi.fn(async () => null),
@@ -234,13 +276,14 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: {},
+    EVENTS: { facesChanged: "faces://changed" },
     events: {
       onJobProgress: reg(emitters.job),
       onResources: reg(emitters.resources),
       onLogLines: reg(emitters.log),
       onError: reg(emitters.error),
       onModels: reg(emitters.models),
+      onFacesChanged: (cb: () => void) => reg(emitters.faces)(() => cb()),
     },
   };
 }

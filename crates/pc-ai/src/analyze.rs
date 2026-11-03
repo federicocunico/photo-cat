@@ -36,7 +36,20 @@ pub fn face_match(t: &pc_core::AiThresholds) -> pc_store::people::FaceMatch {
     pc_store::people::FaceMatch {
         similarity: t.face_similarity,
         min_quality: t.face_detection,
+        min_sharpness: t.face_min_sharpness,
+        min_size_px: 0,
         floor: Some(FACE_FLOOR),
+    }
+}
+
+/// Soglie di salvataggio dei volti comprensive della dimensione minima.
+pub fn face_match_with_size(
+    t: &pc_core::AiThresholds,
+    min_size_px: u32,
+) -> pc_store::people::FaceMatch {
+    pc_store::people::FaceMatch {
+        min_size_px,
+        ..face_match(t)
     }
 }
 

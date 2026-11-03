@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type Ref } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type IdentitySuggestion } from "../../lib/ipc";
@@ -14,11 +14,13 @@ export function WhoIs({
   person,
   linked,
   onLinked,
+  inputRef,
 }: {
   person: number;
   /** Nome dell'identità collegata, se presente. */
   linked: string | null;
   onLinked: (person: number) => void;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -45,6 +47,8 @@ export function WhoIs({
     setOpen(false);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["people"] }),
+      qc.invalidateQueries({ queryKey: ["people-groups"] }),
+      qc.invalidateQueries({ queryKey: ["people-sections"] }),
       qc.invalidateQueries({ queryKey: ["faces"] }),
       qc.invalidateQueries({ queryKey: ["identities"] }),
     ]);
@@ -81,6 +85,7 @@ export function WhoIs({
     <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
       <div className="feature-actions" style={{ margin: 0 }}>
         <input
+          ref={inputRef}
           className="field"
           role="combobox"
           aria-label={t("identities.whoIs")}
@@ -107,7 +112,7 @@ export function WhoIs({
               choose(active);
             } else if (e.key === "Escape") setOpen(false);
           }}
-          style={{ minWidth: 260 }}
+          style={{ minWidth: 0, flex: 1 }}
         />
         {linked && (
           <button

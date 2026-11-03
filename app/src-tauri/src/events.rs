@@ -12,6 +12,10 @@ pub const RESOURCES_TICK: &str = "resources://tick";
 /// Righe di log raggruppate (al massimo ogni `LOG_FLUSH`).
 pub const LOG_LINES: &str = "log://lines";
 pub const ERROR_RECORDED: &str = "log://error";
+/// Volti/persone cambiati (correzione o analisi). La UI ascolta senza polling.
+/// Task 2.2: emesso da `correct_person`. L'emissione a fine faces/cluster
+/// richiede un hook sul job (task 4.6) senza refactor ampio qui.
+pub const FACES_CHANGED: &str = "faces://changed";
 
 const LOG_FLUSH: Duration = Duration::from_millis(300);
 /// Righe inviate per raffica: oltre, si tengono le più recenti (il file di log ha tutto).

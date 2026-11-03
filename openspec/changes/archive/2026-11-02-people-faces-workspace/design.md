@@ -105,4 +105,4 @@ Dopo la migrazione parte una volta, in background, il job `face_quality` (annull
 
 ## Open Questions
 
-- Curva di normalizzazione della nitidezza e soglia predefinita (0,35): da tarare sui volti di `D:\Foto` senza cambiare l'approccio.
+- Curva di normalizzazione della nitidezza e soglia predefinita (0,35): tarata su campione da `D:\Foto` (48 JPEG, 18 volti con nitidezza misurata; cartelle Montagna / Rome / SHG). Con `SHARPNESS_REF_VAR = 250` e `sqrt(var/(var+250))`: p10≈0,71, p50≈0,94, p90≈0,97; ~0% sotto 0,35 sul campione (foto già ben a fuoco). La soglia 0,35 resta come pavimento per volti mossi/sfocati; nessuna modifica all'approccio. Note in `.tmp-people-data/sharpness-notes.txt` (cartella dati di prova, non in git).

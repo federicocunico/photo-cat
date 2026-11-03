@@ -521,6 +521,7 @@ mod tests {
             bbox: [0.1, 0.1, 0.2, 0.2],
             quality: 0.99,
             embedding,
+            ..Default::default()
         }
     }
 

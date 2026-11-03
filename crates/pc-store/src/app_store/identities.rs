@@ -270,7 +270,11 @@ pub fn find_by_name(c: &Connection, name: &str) -> StoreResult<Option<String>> {
     .optional()?)
 }
 
-/// Identità con questo nome, creata se non esiste (migrazione delle persone con nome).
+/// Identità con questo nome, creata se non esiste.
+///
+/// **Solo per** `people::migrate_to_identities` (migrazione v5 una tantum).
+/// Ogni altra creazione di identità passa da `create` / `save_identity` /
+/// import esplicito dell'utente — non usare qui per collegamenti o riconoscimento.
 pub fn ensure_by_name(c: &Connection, name: &str) -> StoreResult<String> {
     match find_by_name(c, name)? {
         Some(uid) => Ok(uid),
