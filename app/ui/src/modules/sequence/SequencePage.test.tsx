@@ -218,3 +218,8 @@ it("aligns two selected photos and stages the proposed shift", async () => {
   const xt5 = screen.getByRole("group", { name: /Fujifilm X-T5/ });
   expect(within(xt5).getByLabelText("Scostamento")).toHaveValue("+2 min 25 s");
 });
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: "Sequenza" })).toBeInTheDocument();
+});

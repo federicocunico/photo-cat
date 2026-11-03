@@ -98,3 +98,8 @@ it("mostra anteprima con conteggi e spazio, propone l'alternativa e solo dopo av
     ),
   );
 });
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: "Esporta" })).toBeInTheDocument();
+});

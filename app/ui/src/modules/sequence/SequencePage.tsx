@@ -28,6 +28,7 @@ import { TagChip } from "../tags/TagChip";
 import { isTyping, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
 import { Kbd } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { SequenceExport } from "./SequenceExport";
 
 /** Chip dei volti della foto focalizzata → Apri in Persone. */
@@ -926,83 +927,89 @@ export function SequencePage() {
   };
   if (view === "export") return <SequenceExport />;
   return (
-    <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
-      <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <Toolbar gap={o?.gapMin ?? 120} />
-        <FocusedFaces />
-        {o?.suggestions.map((s) => {
-          const g = o.groups.find((x) => x.id === s.group);
-          return (
-            <div
-              key={s.group}
-              role="alert"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 16px",
-                background: "var(--pc-warn-bg)",
-                color: "var(--pc-warn)",
-                borderBottom: "1px solid var(--pc-border)",
-              }}
-            >
-              <span style={{ flex: 1, color: "var(--pc-text)" }}>
-                {t("sequence.suggestion", {
-                  device: groupName(g, t),
-                  count: s.count,
-                  current: offsetText(s.currentOffsetMin),
-                  offset: offsetText(s.offsetMin),
-                })}
-              </span>
-              <BusyButton
-                className="btn btn-primary"
-                onClick={() =>
-                  void commands
-                    .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
-                    .then(() => refreshSequence(qc))
-                    .catch((e) => setError(errorText(e)))
-                }
+    <ModulePage title={t("modules.sequence")}>
+      <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
+        <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <Toolbar gap={o?.gapMin ?? 120} />
+          <FocusedFaces />
+          {o?.suggestions.map((s) => {
+            const g = o.groups.find((x) => x.id === s.group);
+            return (
+              <div
+                key={s.group}
+                role="alert"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 16px",
+                  background: "var(--pc-warn-bg)",
+                  color: "var(--pc-warn)",
+                  borderBottom: "1px solid var(--pc-border)",
+                }}
               >
-                {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
-              </BusyButton>
-              <BusyButton
-                className="btn"
-                onClick={() =>
-                  void commands
-                    .ignoreTzSuggestion(s.group, s.offsetMin)
-                    .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
-                }
-              >
-                {t("sequence.ignore")}
-              </BusyButton>
-            </div>
-          );
-        })}
-        {error && (
-          <p role="alert" style={{ margin: "8px 16px" }}>
-            {error}
-          </p>
-        )}
-        {o && !o.total && !o.undated.length ? (
-          <p className="muted" style={{ padding: 32 }}>
-            {t("sequence.empty")}
-          </p>
-        ) : (
-          <SessionsGrid
-            sessions={o?.sessions ?? []}
-            items={items}
-            groups={o?.groups ?? []}
-            hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
-            loadMore={() => void pages.fetchNextPage()}
+                <span style={{ flex: 1, color: "var(--pc-text)" }}>
+                  {t("sequence.suggestion", {
+                    device: groupName(g, t),
+                    count: s.count,
+                    current: offsetText(s.currentOffsetMin),
+                    offset: offsetText(s.offsetMin),
+                  })}
+                </span>
+                <BusyButton
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void commands
+                      .setGroupDisplay(s.group, s.tz, s.tz ? null : s.offsetMin)
+                      .then(() => refreshSequence(qc))
+                      .catch((e) => setError(errorText(e)))
+                  }
+                >
+                  {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
+                </BusyButton>
+                <BusyButton
+                  className="btn"
+                  onClick={() =>
+                    void commands
+                      .ignoreTzSuggestion(s.group, s.offsetMin)
+                      .then(() => qc.invalidateQueries({ queryKey: ["sequence"] }))
+                  }
+                >
+                  {t("sequence.ignore")}
+                </BusyButton>
+              </div>
+            );
+          })}
+          {error && (
+            <p role="alert" style={{ margin: "8px 16px" }}>
+              {error}
+            </p>
+          )}
+          {o && !o.total && !o.undated.length ? (
+            <p className="muted" style={{ padding: 32 }}>
+              {t("sequence.empty")}
+            </p>
+          ) : (
+            <SessionsGrid
+              sessions={o?.sessions ?? []}
+              items={items}
+              groups={o?.groups ?? []}
+              hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
+              loadMore={() => void pages.fetchNextPage()}
+              onPlace={(m, a) => void place(m, a)}
+            />
+          )}
+          <Undated
+            items={o?.undated ?? []}
+            candidates={items}
             onPlace={(m, a) => void place(m, a)}
           />
-        )}
-        <Undated items={o?.undated ?? []} candidates={items} onPlace={(m, a) => void place(m, a)} />
-      </section>
-      <SourcesPanel groups={o?.groups ?? []} />
-      {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
-    </div>
+        </section>
+        <SourcesPanel groups={o?.groups ?? []} />
+        {viewer && <Viewer item={viewer} onClose={() => setViewer(null)} />}
+      </div>
+    </ModulePage>
   );
 }
 

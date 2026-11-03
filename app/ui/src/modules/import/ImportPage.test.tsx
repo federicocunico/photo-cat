@@ -259,3 +259,8 @@ describe("gestione delle importazioni", () => {
     expect(await within(dialog).findByText("3 file rimossi")).toBeTruthy();
   });
 });
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: "Importa" })).toBeInTheDocument();
+});

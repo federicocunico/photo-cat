@@ -78,7 +78,8 @@
 - [ ] 2.5 Pannelli: Tab nasconde e mostra i laterali, Ctrl+I l'ispettore; sezioni del pannello sinistro richiudibili e persistite. Verifica: test di `Panels`.
   - Fatti: Ctrl+I, sezioni richiudibili e persistite (`collapsedSections`), azione `toggleSidePanels` che nasconde e ripristina i laterali.
   - **Da decidere**: il tasto. Tab sposta anche il focus: se nasconde i pannelli, chi usa solo la tastiera non entra più nella pagina (WCAG 2.1.1). Serve un tasto diverso o una regola su quando Tab agisce.
-- [ ] 2.6 `PageHeader` su tutte le pagine dei moduli, con titolo uguale alla voce di navigazione (Importa, Esporta, Attività, Sequenza…).
+- [x] 2.6 `PageHeader` su tutte le pagine dei moduli, con titolo uguale alla voce di navigazione (Importa, Esporta, Attività, Sequenza…).
+  - `ModulePage` per Sequenza, Persone e Tag; `PageHeader` in Importa, Esporta, Cataloghi, Attività e Impostazioni. La Libreria ha la sua intestazione con il percorso in 3.1 (`LibraryHeader`).
 
 ## 3. Libreria
 

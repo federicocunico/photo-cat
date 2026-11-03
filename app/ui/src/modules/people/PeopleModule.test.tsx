@@ -553,3 +553,8 @@ describe("Volti scartati senza gruppo", () => {
     );
   });
 });
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderModule();
+  expect(await screen.findByRole("heading", { level: 1, name: "Persone" })).toBeInTheDocument();
+});

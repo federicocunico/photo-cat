@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Catalog } from "../../lib/ipc";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
+import { PageHeader } from "../../components/ui";
 import { RuleEditor, newRule, type RuleNode } from "./RuleEditor";
 export function CatalogsPage() {
   const { t } = useTranslation();
@@ -46,7 +47,7 @@ export function CatalogsPage() {
   };
   return (
     <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-      <h1>{t("catalogs.title")}</h1>
+      <PageHeader title={t("modules.catalogs")} />
       {error && <p role="alert">{error}</p>}
       <BusyButton className="btn" onClick={() => edit()}>
         {t("catalogs.create")}
