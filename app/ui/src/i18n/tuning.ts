@@ -25,6 +25,7 @@ export const tuning = {
     folders: {
       expand: "Mostra le cartelle di {{name}}",
       collapse: "Nascondi le cartelle di {{name}}",
+      menu: "Azioni della cartella {{name}}",
       includeSub: "Includi sottocartelle",
       chip: "Cartella: {{name}}",
       chipExact: "Cartella (solo questa): {{name}}",
@@ -122,6 +123,7 @@ export const tuning = {
     folders: {
       expand: "Show the folders of {{name}}",
       collapse: "Hide the folders of {{name}}",
+      menu: "Actions for the folder {{name}}",
       includeSub: "Include subfolders",
       chip: "Folder: {{name}}",
       chipExact: "Folder (only this one): {{name}}",

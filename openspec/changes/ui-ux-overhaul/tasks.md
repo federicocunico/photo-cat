@@ -116,7 +116,7 @@
   - opzione "Visualizzatore di photo-cat" per il doppio clic (`external-apps`).
 
   Verifica: test in Libreria e Sequenza.
-- [ ] 3.7 Barra laterale: Cartelle (ex Sorgenti) con nomi leggibili e percorso nel suggerimento, Cataloghi, Filtri con ricerca; il comando "aggiorna cartella" passa nel menu della cartella; bersagli di almeno 24 px.
+- [x] 3.7 Barra laterale: Cartelle (ex Sorgenti) con nomi leggibili e percorso nel suggerimento, Cataloghi, Filtri con ricerca; il comando "aggiorna cartella" passa nel menu della cartella; bersagli di almeno 24 px.
 
 ## 4. Palette e scorciatoie
 

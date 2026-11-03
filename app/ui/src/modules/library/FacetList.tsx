@@ -23,9 +23,12 @@ export function FacetList({
   list,
   action,
   below,
+  query: shared = "",
 }: {
   facetKey: FacetKey;
   list: FacetListData;
+  /** Ricerca comune a tutti i filtri della barra: mostra solo i valori corrispondenti. */
+  query?: string;
   action?: RowAction;
   /** Contenuto sotto una voce della lista compatta (mesi sotto l'anno scelto). */
   below?: (v: FacetValue) => ReactNode;
@@ -36,8 +39,9 @@ export function FacetList({
   const { title, render } = useFacetNames(facetKey);
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
-  const query = useDebounced(search);
-  const full = useFacetValues(facetKey, filter, query, "count", render, expanded);
+  const searching = shared.trim().length > 0;
+  const query = useDebounced(searching ? shared.trim() : search);
+  const full = useFacetValues(facetKey, filter, query, "count", render, expanded || searching);
   const selected = selectedOf(facetKey, filter);
   const onToggle = (v: string) => setFilter(toggleIn(facetKey, filter, v));
   const top = list.values.slice(0, COMPACT);
@@ -47,6 +51,26 @@ export function FacetList({
   );
   const shown = [...pinned, ...top];
   const hidden = list.total > top.length;
+  if (searching) {
+    // Con la ricerca comune: solo i gruppi con risultati, senza elenco compatto.
+    if (full.query.data !== undefined && full.values.length === 0) return null;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ fontWeight: 600 }}>{title}</div>
+        <FacetValuesList
+          values={full.values}
+          hasMore={full.hasMore}
+          loadMore={full.loadMore}
+          loading={full.loading}
+          selected={selected}
+          onToggle={onToggle}
+          render={render}
+          action={action}
+          height={Math.min(240, 28 * Math.max(1, full.values.length))}
+        />
+      </div>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

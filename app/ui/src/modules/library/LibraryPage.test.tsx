@@ -294,7 +294,7 @@ describe("Libreria", () => {
     expect(useLibrary.getState().filter.places).toEqual(["Siena"]);
 
     // Sorgenti e cataloghi nel pannello sinistro.
-    expect(screen.getByRole("button", { name: /^D:\\Foto/ })).toHaveTextContent("12");
+    expect(screen.getByRole("button", { name: /^Foto/ })).toHaveTextContent("12");
     fireEvent.click(screen.getByRole("button", { name: /Ritratti di Giulia/ }));
     expect(useLibrary.getState().filter.catalogId).toBe(5);
   });
@@ -344,10 +344,30 @@ describe("cartelle, luogo e Apri con", () => {
     } as never);
   });
 
+  it("cartelle con nomi leggibili; Aggiorna cartella nel menu della cartella", async () => {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    // Il nome è l'ultima cartella, il percorso completo è nel suggerimento.
+    const source = await screen.findByRole("button", { name: /^Foto/ });
+    expect(source).toHaveAttribute("title", "D:" + String.fromCharCode(92) + "Foto");
+    expect(screen.getByRole("heading", { name: "Cartelle" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mostra le cartelle di Foto" }));
+    const user = userEvent.setup();
+    const menu = await screen.findByRole("button", {
+      name: "Azioni della cartella Viaggio Giappone",
+    });
+    menu.focus();
+    await user.keyboard("{Enter}");
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Aggiorna la cartella Viaggio Giappone" }),
+    );
+    await waitFor(() => expect(commandsMock.startImport).toHaveBeenCalledWith(1, trip));
+  });
+
   it("albero delle cartelle, filtro e Seleziona tutto in una cartella", async () => {
     renderPage();
     await screen.findByTestId("thumb-1");
-    fireEvent.click(await screen.findByRole("button", { name: "Mostra le cartelle di D:\\Foto" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Mostra le cartelle di Foto" }));
     const tripRow = await screen.findByRole("button", { name: /^Viaggio Giappone/ });
     expect(tripRow).toHaveTextContent("5");
     fireEvent.click(screen.getByRole("button", { name: "Mostra le cartelle di Viaggio Giappone" }));
@@ -598,6 +618,25 @@ describe("elenco completo dei filtri e pannelli flottanti", () => {
     }) as never);
   });
   afterEach(() => i18n.changeLanguage("it"));
+
+  it("Cerca nei filtri: ogni gruppo mostra solo i valori che corrispondono", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    fireEvent.change(within(filters).getByRole("searchbox", { name: "Cerca nei filtri" }), {
+      target: { value: "mar" },
+    });
+    await waitFor(() =>
+      expect(commandsMock.libraryFacetValues).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ kind: "place" }),
+        "mar",
+        "count",
+        0,
+        expect.any(Number),
+      ),
+    );
+    expect(await within(filters).findByText("mare")).toBeInTheDocument();
+  });
 
   it("molte località: Mostra tutti (340), ricerca e scelta del luogo con meno foto", async () => {
     renderPage();
