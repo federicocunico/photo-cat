@@ -1,8 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import "../../i18n";
 import { openers, useFloating } from "../../store/floating";
 import { FloatingPanel } from "./FloatingPanel";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 const rect = (id: string) => {
   const p = useFloating.getState().panels[id];
@@ -39,7 +41,7 @@ beforeEach(() => {
   useFloating.setState({ panels: {}, order: [] });
   Object.assign(window, { innerWidth: 1200, innerHeight: 800 });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("pannello flottante", () => {
   it("si trascina dalla barra del titolo e si ridimensiona dall'angolo", () => {

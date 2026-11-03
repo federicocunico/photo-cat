@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -7,6 +7,8 @@ import { useLayout } from "../../store/layout";
 import type { FaceView, GroupRow } from "../../lib/ipc";
 import { ToastHost } from "../../components/feedback/ToastHost";
 import { PeopleModule } from "./PeopleModule";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -90,7 +92,7 @@ beforeEach(() => {
   commandsMock.correctPerson.mockResolvedValue(null);
   commandsMock.undoPeople.mockResolvedValue(null);
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 describe("Unione persone", () => {
   it("apre il dialogo e unisce «Senza nome» con Giulia", async () => {

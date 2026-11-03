@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, it, expect, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { CatalogsPage } from "./CatalogsPage";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 it("Errore di caricamento: offers retry instead of an empty catalog list", async () => {
   commandsMock.listCatalogs.mockRejectedValueOnce(new Error("Catalog unavailable"));
   render(

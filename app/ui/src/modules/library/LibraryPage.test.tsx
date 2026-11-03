@@ -21,6 +21,8 @@ import type { GridItem, SourceSummary } from "../../bindings";
 import { deferred } from "../../test/deferred";
 import { ToastHost } from "../../components/feedback/ToastHost";
 import { LibraryStatus } from "./LibraryStatus";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 it("Primo caricamento della griglia: placeholders and calculating count, never an empty library", () => {
   commandsMock.libraryPage.mockImplementationOnce(() => new Promise(() => {}));
@@ -214,7 +216,7 @@ beforeEach(() => {
     })),
   });
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.library));
 
 function renderPage() {
   return render(

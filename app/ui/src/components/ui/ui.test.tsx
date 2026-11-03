@@ -1,6 +1,6 @@
 // Componenti condivisi: ruoli, focus, Esc, ritorno del focus e Invio (ui-ux-overhaul §1.3).
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import "../../i18n";
@@ -27,8 +27,10 @@ import {
   Tabs,
   Tooltip,
 } from ".";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("Button e IconButton", () => {
   it("esegue con Invio e blocca i clic ripetuti durante un'azione asincrona", async () => {

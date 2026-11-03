@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, emit, ipcMockModule, job, resources } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { useLive, useLiveEvents } from "../../store/live";
 import { JobsPage } from "./JobsPage";
+import { checkedCleanup } from "../../test/a11y";
+import { A11Y_KNOWN } from "../../test/a11yKnown";
 
 vi.mock("../../lib/ipc", () => ipcMockModule());
 
@@ -36,7 +38,7 @@ beforeEach(() => {
   useLive.setState({ jobs: {}, resources: null, errorCount: 0, tail: [] });
   vi.clearAllMocks();
 });
-afterEach(cleanup);
+afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("schermata Job", () => {
   it("indica con uno spinner il totale provvisorio durante la scansione", () => {

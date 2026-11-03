@@ -1,13 +1,14 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { QueryView } from "./QueryView";
 import { BusyButton } from "./BusyButton";
 import { ToastHost } from "./ToastHost";
 import { notify, notifyError, useToast } from "../../store/toasts";
+import { checkedCleanup } from "../../test/a11y";
 
 afterEach(() => {
-  cleanup();
+  checkedCleanup()();
   vi.useRealTimers();
   useToast.setState({ notices: [] });
 });

@@ -55,7 +55,9 @@
 
   Da cablare nelle fasi successive: Libreria (3.3), Tag (7.3), Persone (7.4; finché il registro globale è vuoto, Ctrl+Z in Persone chiama ancora `undoPeople`), Sequenza e Luoghi (3.3, 7.5).
 - [x] 1.6 Glossario in `i18n/GLOSSARY.md`; chiavi `common.*` (Annulla, Salva, Chiudi, Interrompi, Annulla operazione, Riprova, Dettagli); formattazione delle date con `Intl`. Test sui termini vietati per lingua.
-- [ ] 1.7 Test di accessibilità sul DOM: bersagli sotto 24 px, controlli annidati, pulsanti con sola icona senza nome. Va eseguito sulle pagine di ogni modulo nei test esistenti.
+- [x] 1.7 Test di accessibilità sul DOM: bersagli sotto 24 px, controlli annidati, pulsanti con sola icona senza nome. Va eseguito sulle pagine di ogni modulo nei test esistenti.
+  - Fatto con `test/a11y.ts` (`checkedCleanup` al posto di `afterEach(cleanup)` nei test di pagine e componenti). La dimensione si legge dallo stile (classi e stile in linea: `width`/`height` e minimi), perché jsdom non calcola il layout: i bersagli senza dimensione nello stile non sono misurati e restano alla prova manuale (8.4).
+  - Problemi aperti in `test/a11yKnown.ts`, ognuno con il task che lo risolve (3.5, 3.7, 7.4); 8.1 lo svuota.
 
 ## 2. Shell e navigazione
 
@@ -181,7 +183,7 @@
 
 ## 8. Pulizia e verifica
 
-- [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
+- [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
 - [ ] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
 - [ ] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
 - [ ] 8.4 Prova sull'app reale, con un backup dei dati:
