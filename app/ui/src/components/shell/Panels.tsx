@@ -1,10 +1,27 @@
 // Layout a tre colonne del modulo: pannello sinistro e ispettore ridimensionabili
 // (trascinamento o frecce da tastiera) e richiudibili; lo stato è persistito.
 
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { useLayout } from "../../store/layout";
+import { isTyping, modalOpen } from "../../lib/keys";
+
+/** Ctrl+I mostra o nasconde l'ispettore del modulo, se c'è. */
+function useInspectorHotkey(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== "i" && e.key !== "I") return;
+      if (isTyping(e.target) || modalOpen()) return;
+      e.preventDefault();
+      useLayout.getState().toggleRight();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled]);
+}
 
 function Resizer({ label, onDelta }: { label: string; onDelta: (dx: number) => void }) {
   const last = useRef<number | null>(null);
@@ -76,6 +93,7 @@ export function Panels({
 }) {
   const { t } = useTranslation();
   const s = useLayout();
+  useInspectorHotkey(Boolean(right));
   return (
     <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
       {left &&
@@ -144,6 +162,7 @@ export function Panels({
                 type="button"
                 className="btn btn-ghost icon-btn"
                 aria-label={t("shell.collapseRight")}
+                aria-keyshortcuts="Control+I"
                 onClick={s.toggleRight}
                 style={{ position: "absolute", top: 8, right: 8, border: 0 }}
               >

@@ -71,6 +71,18 @@ beforeEach(() => {
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("layout a pannelli", () => {
+  it("Ctrl+I mostra e nasconde l'ispettore, ma non mentre si scrive", () => {
+    render(
+      <Panels left={<div>sx</div>} center={<input aria-label="campo" />} right={<div>dx</div>} />,
+    );
+    fireEvent.keyDown(window, { key: "i", ctrlKey: true });
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText("campo"), { key: "i", ctrlKey: true });
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "i", ctrlKey: true });
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument();
+  });
+
   it("lo stato dei pannelli è persistito e ripristinato", async () => {
     const { unmount } = render(
       <Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />,

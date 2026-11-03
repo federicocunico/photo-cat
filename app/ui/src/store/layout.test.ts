@@ -65,3 +65,25 @@ describe("openModule", () => {
     expect(destinationFor("boh")).toBeNull();
   });
 });
+
+describe("pannelli laterali", () => {
+  it("nascondere entrambi i pannelli e poi ripristinarli com'erano", () => {
+    useLayout.setState({ leftOpen: true, rightOpen: false });
+    useLayout.getState().toggleSidePanels();
+    expect(useLayout.getState()).toMatchObject({ leftOpen: false, rightOpen: false });
+    useLayout.getState().toggleSidePanels();
+    expect(useLayout.getState()).toMatchObject({ leftOpen: true, rightOpen: false });
+  });
+
+  it("le sezioni richiuse sono ricordate dopo il riavvio", async () => {
+    useLayout.setState({ collapsedSections: [] });
+    useLayout.getState().toggleSection("library.catalogs");
+    const raw = localStorage.getItem("photo-cat.layout")!;
+    useLayout.setState({ collapsedSections: [] });
+    localStorage.setItem("photo-cat.layout", raw);
+    await useLayout.persist.rehydrate();
+    expect(useLayout.getState().collapsedSections).toEqual(["library.catalogs"]);
+    useLayout.getState().toggleSection("library.catalogs");
+    expect(useLayout.getState().collapsedSections).toEqual([]);
+  });
+});

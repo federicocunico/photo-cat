@@ -55,6 +55,8 @@ interface LayoutState {
   navCompact: boolean;
   leftOpen: boolean;
   rightOpen: boolean;
+  /** Sezioni richiuse dei pannelli laterali (es. "library.catalogs"). */
+  collapsedSections: string[];
   leftWidth: number;
   rightWidth: number;
   theme: ThemePref;
@@ -72,12 +74,18 @@ interface LayoutState {
   toggleNav: () => void;
   toggleLeft: () => void;
   toggleRight: () => void;
+  /** Tab: nasconde entrambi i pannelli laterali, poi li ripristina com'erano. */
+  toggleSidePanels: () => void;
+  toggleSection: (id: string) => void;
   setLeftWidth: (w: number) => void;
   setRightWidth: (w: number) => void;
   setTheme: (t: ThemePref) => void;
   setLanguage: (l: Language) => void;
   clearPeopleTarget: () => void;
 }
+
+/** Pannelli com'erano prima di Tab, per ripristinarli al Tab successivo. */
+let hiddenPanels: { leftOpen: boolean; rightOpen: boolean } | null = null;
 
 const clamp = (v: number, [min, max]: readonly [number, number]) => Math.min(max, Math.max(min, v));
 
@@ -88,6 +96,7 @@ type PersistedLayout = {
   navCompact?: boolean;
   leftOpen?: boolean;
   rightOpen?: boolean;
+  collapsedSections?: string[];
   leftWidth?: number;
   rightWidth?: number;
   theme?: ThemePref;
@@ -138,6 +147,7 @@ export const useLayout = create<LayoutState>()(
       navCompact: false,
       leftOpen: true,
       rightOpen: true,
+      collapsedSections: [],
       leftWidth: 240,
       rightWidth: 300,
       // Nuove installazioni: tema del sistema. Le preferenze salvate restano come sono.
@@ -161,6 +171,22 @@ export const useLayout = create<LayoutState>()(
       toggleNav: () => set((s) => ({ navCompact: !s.navCompact })),
       toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
       toggleRight: () => set((s) => ({ rightOpen: !s.rightOpen })),
+      toggleSidePanels: () =>
+        set((s) => {
+          if (s.leftOpen || s.rightOpen) {
+            hiddenPanels = { leftOpen: s.leftOpen, rightOpen: s.rightOpen };
+            return { leftOpen: false, rightOpen: false };
+          }
+          const restore = hiddenPanels ?? { leftOpen: true, rightOpen: true };
+          hiddenPanels = null;
+          return restore;
+        }),
+      toggleSection: (id) =>
+        set((s) => ({
+          collapsedSections: s.collapsedSections.includes(id)
+            ? s.collapsedSections.filter((x) => x !== id)
+            : [...s.collapsedSections, id],
+        })),
       setLeftWidth: (w) => set({ leftWidth: clamp(w, PANEL_LIMITS.left) }),
       setRightWidth: (w) => set({ rightWidth: clamp(w, PANEL_LIMITS.right) }),
       setTheme: (theme) => set({ theme }),
@@ -179,6 +205,7 @@ export const useLayout = create<LayoutState>()(
         navCompact: s.navCompact,
         leftOpen: s.leftOpen,
         rightOpen: s.rightOpen,
+        collapsedSections: s.collapsedSections,
         leftWidth: s.leftWidth,
         rightWidth: s.rightWidth,
         theme: s.theme,

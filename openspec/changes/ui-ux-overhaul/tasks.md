@@ -76,6 +76,8 @@
   - stato vuoto con "Importa una cartella".
 - [x] 2.4 Barra superiore: indicatore delle attività in parole, menu Aiuto (Diagnostica, Informazioni; le voci della guida si aggiungono con 5.4). Il campo che apre la palette si fa con 4.2, dove nasce la palette: fino ad allora il campo filtra la Libreria come prima. Barra di stato: aggiungere RAM (spostata dalla barra superiore, con icona di pressione) e modelli; scorciatoie contestuali al posto del testo lungo di Sequenza.
 - [ ] 2.5 Pannelli: Tab nasconde e mostra i laterali, Ctrl+I l'ispettore; sezioni del pannello sinistro richiudibili e persistite. Verifica: test di `Panels`.
+  - Fatti: Ctrl+I, sezioni richiudibili e persistite (`collapsedSections`), azione `toggleSidePanels` che nasconde e ripristina i laterali.
+  - **Da decidere**: il tasto. Tab sposta anche il focus: se nasconde i pannelli, chi usa solo la tastiera non entra più nella pagina (WCAG 2.1.1). Serve un tasto diverso o una regola su quando Tab agisce.
 - [ ] 2.6 `PageHeader` su tutte le pagine dei moduli, con titolo uguale alla voce di navigazione (Importa, Esporta, Attività, Sequenza…).
 
 ## 3. Libreria
