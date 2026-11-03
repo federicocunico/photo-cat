@@ -30,10 +30,30 @@
 
   Verifica: un test vitest per componente su ruoli, focus, Esc, ritorno del focus e Invio.
 - [x] 1.4 `ToastHost` unico, a partire dal Toast di `loading-feedback`: pila, chiusura, azione, durata, `role="status"` e `alert` per gli errori, nessuna copertura del focus. Verifica con un test sulla pila di due avvisi.
-- [ ] 1.5 Store `undo`, il registro globale dell'ultima operazione annullabile, e scorciatoia Ctrl+Z.
+- [x] 1.5 Store `undo`, il registro globale dell'ultima operazione annullabile, e scorciatoia Ctrl+Z.
   - Elencare le operazioni annullabili esistenti e i loro comandi di annullamento.
   - Annotare qui quelle che non hanno un annullamento lato backend prima di continuare.
   - Verifica: test sul registro (registrazione, esecuzione, sostituzione).
+
+  **Inventario (3 novembre 2026).** Il backend ha un solo registro LIFO (`undo_log`): `undo_bulk` annulla l'ultima voce qualunque sia, `undo_people` solo se è una correzione delle persone (ed emette `faces_changed`). Lo store ricorda quindi una sola operazione, e ogni comando che scrive in `undo_log` la fa decadere (`UNDO_LOG_COMMANDS` in `store/undo.ts`), così Ctrl+Z non annulla mai un'operazione diversa da quella mostrata.
+
+  Con annullamento lato backend:
+  - `startBulk`: tag, cataloghi, esclusioni e reinserimenti, categorie, luogo, tag del set → `undoBulk`;
+  - `renameTag`, `mergeTag`, `deleteTag` → `undoBulk`;
+  - `renamePlace`, `deleteCategory` → `undoBulk`;
+  - `setGroupShift`, `placeUndated` (Sequenza) → `undoBulk`;
+  - `correctPerson` (unione, separazione, sposta volti, ignora, ripristina, non è la stessa persona, copertina) → `undoPeople`.
+
+  **Senza annullamento lato backend** (nessun nuovo comando in questa change):
+  - definizione dei cataloghi: `saveCatalog`, `deleteCatalog` → eliminazione con `ConfirmDialog` (7.2);
+  - rimozione dalla libreria: `removeSource`, `removeMissing` → `ConfirmDialog` (3.3, 7.1);
+  - tassonomia: `addCategory`, `saveTaxonomy` → modifica esplicita con "Applica" (6.2);
+  - set di tag e colori: `saveTagSet`, `duplicateTagSet`, `deleteTagSet`, `reorderTagSets`, `addTagToSet`, `removeTagFromSet`, `setTagColor` → `ConfirmDialog` solo per `deleteTagSet` (7.3);
+  - foto simili: `similarRemove`, `similarGroupTogether`, `similarDissolve`, `similarSetCover` → nessuna conferma, si correggono a mano;
+  - identità: `saveIdentity`, `deleteIdentity`, `mergeIdentities`, `removeIdentityFace`, `linkPersonIdentity` → `ConfirmDialog` per eliminazione e unione (7.4);
+  - `recomputePlaces` → nessuna conferma (ricalcolo).
+
+  Da cablare nelle fasi successive: Libreria (3.3), Tag (7.3), Persone (7.4; finché il registro globale è vuoto, Ctrl+Z in Persone chiama ancora `undoPeople`), Sequenza e Luoghi (3.3, 7.5).
 - [ ] 1.6 Glossario in `i18n/GLOSSARY.md`; chiavi `common.*` (Annulla, Salva, Chiudi, Interrompi, Annulla operazione, Riprova, Dettagli); formattazione delle date con `Intl`. Test sui termini vietati per lingua.
 - [ ] 1.7 Test di accessibilità sul DOM: bersagli sotto 24 px, controlli annidati, pulsanti con sola icona senza nome. Va eseguito sulle pagine di ogni modulo nei test esistenti.
 

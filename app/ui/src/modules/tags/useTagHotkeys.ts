@@ -4,28 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { commands, type BulkAction, type Target } from "../../lib/ipc";
 import { useLive } from "../../store/live";
 import { activeSet, refreshTags, useTagOverview } from "./data";
+import { isTyping } from "../../lib/keys";
+
+export { isTyping };
 
 const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
-const NON_TEXT_INPUTS = [
-  "checkbox",
-  "radio",
-  "range",
-  "button",
-  "submit",
-  "reset",
-  "color",
-  "file",
-];
-
-/** Vero se il fuoco è in un campo dove i tasti scrivono testo. */
-export function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable || target.closest("[contenteditable='true']")) return true;
-  const tag = target.tagName;
-  if (tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (tag === "INPUT") return !NON_TEXT_INPUTS.includes((target as HTMLInputElement).type);
-  return false;
-}
 
 /** Azione bulk per un tasto del set attivo, o `null` se il tasto non ha effetto. */
 export function hotkeyAction(

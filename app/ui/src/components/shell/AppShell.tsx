@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ModuleNav } from "./ModuleNav";
 import { TopBar } from "./TopBar";
 import { useLayout } from "../../store/layout";
+import { useUndoHotkey } from "../../store/undo";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 
 const bannerStyle = {
@@ -92,6 +93,7 @@ export function UiRecoveredBanner({
 
 /** Struttura comune: barra superiore, navigazione moduli, contenuto del modulo. */
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
+  useUndoHotkey();
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <TopBar />
