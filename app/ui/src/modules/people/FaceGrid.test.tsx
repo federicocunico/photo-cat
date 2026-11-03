@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
@@ -9,6 +9,7 @@ import { FaceGrid } from "./FaceGrid";
 import { rectangleSelect } from "../../store/library";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
+import { runUndo, useUndo } from "../../store/undo";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -138,6 +139,8 @@ describe("FaceGrid selezione e azioni", () => {
       expect([...move.options].some((o) => o.textContent?.includes("Marco"))).toBe(true),
     );
     fireEvent.change(move, { target: { value: "2" } });
+    expect(commandsMock.correctPerson).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^Sposta$/ }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "move",
@@ -172,14 +175,59 @@ describe("FaceGrid selezione e azioni", () => {
       }),
     );
 
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    // Rimuovi volto non si annulla: chiede conferma con il verbo esplicito.
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByRole("button", { name: /Rimuovi volto/i }));
+    const dialog = await screen.findByRole("alertdialog", { name: /Rimuovere il volto/i });
+    expect(commandsMock.correctPerson).not.toHaveBeenCalledWith({ action: "remove", face: 1 });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Rimuovi volto$/i }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "remove", face: 1 }),
     );
-    expect(confirm).toHaveBeenCalled();
-    confirm.mockRestore();
+  });
+
+  it("«Sposta in…»: cambiare la scelta da tastiera non sposta nulla finché non si conferma", async () => {
+    commandsMock.listGroups.mockResolvedValue({
+      items: [
+        group({ id: 2, name: "Marco", faces: 5, section: "people" }),
+        group({ id: 3, name: "Anna", faces: 7, section: "people" }),
+      ],
+      next: null,
+      total: 2,
+    } as never);
+    commandsMock.undoPeople.mockResolvedValue(null);
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1 }) });
+
+    fireEvent.click(await screen.findByTestId("face-1"));
+    const move = screen.getByLabelText(/Sposta in/i) as HTMLSelectElement;
+    await waitFor(() => expect(move.options.length).toBe(3));
+    const apply = screen.getByRole("button", { name: /^Sposta$/ });
+    // Senza destinazione il comando spiega perché non è disponibile.
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+
+    // Le frecce su una select chiusa (Windows) cambiano il valore: nessuno spostamento.
+    move.focus();
+    fireEvent.keyDown(move, { key: "ArrowDown" });
+    fireEvent.change(move, { target: { value: "2" } });
+    fireEvent.keyDown(move, { key: "ArrowDown" });
+    fireEvent.change(move, { target: { value: "3" } });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(commandsMock.correctPerson).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Sposta$/ }));
+    await waitFor(() =>
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+        action: "move",
+        faces: [1],
+        to: 3,
+      }),
+    );
+    expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
+
+    // Lo spostamento è annullabile dallo store `undo`.
+    await waitFor(() => expect(useUndo.getState().last?.label).toMatch(/Volto spostato in «Anna»/));
+    await runUndo();
+    expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1);
   });
 
   it("filtra i scartati e mostra il motivo in tooltip; banner unione", async () => {

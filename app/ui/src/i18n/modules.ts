@@ -125,7 +125,7 @@ export const modules = {
       chooseFace: "L'immagine contiene più volti: scegli quale usare.",
       faceN: "Volto {{n}}",
       chooseLibraryFace: "Scegli un volto del gruppo collegato",
-      libraryFaceN: "Volto {{id}} della libreria",
+      libraryFaceN: "Volto {{n}} del gruppo",
       noFace: "Nessun volto trovato nell'immagine.",
       linked_one: "In questa libreria: collegata a un gruppo di volti · {{count}} foto.",
       linked_other: "In questa libreria: collegata a un gruppo di volti · {{count}} foto.",
@@ -135,6 +135,10 @@ export const modules = {
       mergeConfirm:
         'Volti di riferimento, alias e collegamenti di "{{from}}" passeranno a "{{into}}" e "{{from}}" sarà eliminata.',
       merge: "Unisci",
+      mergeTitle: "Unire «{{from}}» a «{{into}}»?",
+      mergeButton: "Unisci a {{into}}",
+      deleteTitle: "Eliminare «{{name}}»?",
+      deleteButton: "Elimina identità",
       delete: "Elimina identità…",
       deleteConfirm:
         'Eliminare l\'identità "{{name}}" con i suoi volti di riferimento? I gruppi di volti collegati restano nella libreria.',
@@ -401,7 +405,7 @@ export const modules = {
       chooseFace: "The image contains several faces: choose which one to use.",
       faceN: "Face {{n}}",
       chooseLibraryFace: "Choose a face of the linked group",
-      libraryFaceN: "Library face {{id}}",
+      libraryFaceN: "Group face {{n}}",
       noFace: "No face found in the image.",
       linked_one: "In this library: linked to a face group · {{count}} photo.",
       linked_other: "In this library: linked to a face group · {{count}} photos.",
@@ -411,6 +415,10 @@ export const modules = {
       mergeConfirm:
         'Reference faces, aliases and links of "{{from}}" will move to "{{into}}" and "{{from}}" will be deleted.',
       merge: "Merge",
+      mergeTitle: "Merge «{{from}}» into «{{into}}»?",
+      mergeButton: "Merge into {{into}}",
+      deleteTitle: "Delete «{{name}}»?",
+      deleteButton: "Delete identity",
       delete: "Delete identity…",
       deleteConfirm:
         'Delete the identity "{{name}}" and its reference faces? Linked face groups stay in the library.',

@@ -10,6 +10,8 @@ import {
   type PeopleSection,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
+import { Button, InlineAlert } from "../../components/ui";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { IdentityEditor } from "./IdentityEditor";
 import { MergeDialog } from "./MergeDialog";
@@ -129,22 +131,16 @@ export const PersonCard = forwardRef<
     identity ??
     (group?.identityUid ? (everyone.find((r) => r.uid === group.identityUid) ?? null) : null);
 
-  const refresh = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: ["people"] }),
-      qc.invalidateQueries({ queryKey: ["people-groups"] }),
-      qc.invalidateQueries({ queryKey: ["people-sections"] }),
-      qc.invalidateQueries({ queryKey: ["group-faces"] }),
-      qc.invalidateQueries({ queryKey: ["faces"] }),
-      qc.invalidateQueries({ queryKey: ["identities"] }),
-    ]);
+  const refresh = () => refreshPeople(qc);
 
-  const correct = async (c: Correction) => {
+  /** Correzione del gruppo; `done` è l'avviso con "Annulla operazione". */
+  const correct = async (c: Correction, done: string) => {
     setBusy(true);
     setError("");
     try {
       await commands.correctPerson(c);
       await refresh();
+      notifyPeopleUndo(qc, done);
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     } finally {
@@ -169,7 +165,7 @@ export const PersonCard = forwardRef<
     },
     ignoreGroup() {
       if (!group || section === "ignored" || busy) return false;
-      void correct({ action: "ignore", group: group.id });
+      void correct({ action: "ignore", group: group.id }, t("people.ignoredDone"));
       return true;
     },
   }));
@@ -181,7 +177,6 @@ export const PersonCard = forwardRef<
         <QueryView
           query={identities}
           isEmpty={() => !creating && !row}
-          skeleton={<p className="muted">{t("people.loading")}</p>}
           error={t("people.failed")}
           empty={
             <p className="muted" style={{ margin: 0 }}>
@@ -225,8 +220,7 @@ export const PersonCard = forwardRef<
         </div>
         {identities.data?.storePath && (
           <p role="note" className="muted" style={{ margin: 0, fontSize: 12 }}>
-            {t("identities.appNote")} {t("identities.storeAt")}{" "}
-            <code className="mono">{identities.data.storePath}</code>
+            {t("identities.appNote")} {t("identities.storeAt")} {identities.data.storePath}
           </p>
         )}
       </div>
@@ -278,15 +272,17 @@ export const PersonCard = forwardRef<
 
       <CoverPreview group={group} />
       {selectedFaceIds.length === 1 && (
-        <button
-          className="btn"
+        <Button
           disabled={busy}
           onClick={() =>
-            void correct({ action: "set_cover", group: group.id, face: selectedFaceIds[0]! })
+            correct(
+              { action: "set_cover", group: group.id, face: selectedFaceIds[0]! },
+              t("people.coverDone"),
+            )
           }
         >
           {t("people.useAsCover")}
-        </button>
+        </Button>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -317,34 +313,40 @@ export const PersonCard = forwardRef<
               </option>
             ))}
         </select>
-        <button className="btn" disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
+        <Button disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
           {t("people.merge")}
-        </button>
+        </Button>
         {section !== "ignored" && (
           <>
-            <button
-              className="btn"
+            <Button
               disabled={busy}
-              onClick={() => void correct({ action: "ignore", group: group.id })}
+              onClick={() =>
+                correct({ action: "ignore", group: group.id }, t("people.ignoredDone"))
+              }
             >
               {t("people.ignore")}
-            </button>
+            </Button>
             <span className="muted" style={{ fontSize: 12 }}>
               {t("people.ignoreHint")}
             </span>
           </>
         )}
         {section === "ignored" && (
-          <button
-            className="btn"
+          <Button
             disabled={busy}
-            onClick={() => void correct({ action: "restore", group: group.id })}
+            onClick={() =>
+              correct({ action: "restore", group: group.id }, t("people.restoredDone"))
+            }
           >
             {t("people.restore")}
-          </button>
+          </Button>
         )}
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <InlineAlert tone="danger" title={t("people.failed")}>
+          {error}
+        </InlineAlert>
+      )}
       {mergeOpen && mergeTo && (
         <MergeDialog
           sources={[group]}

@@ -1,0 +1,30 @@
+/* Modulo Persone (7.4) */
+.people-title {
+  margin: 0;
+  font: var(--pc-weight-bold) var(--pc-font-lg) var(--pc-font-ui);
+}
+.people-alert {
+  margin: var(--pc-space-2) var(--pc-space-4) 0;
+}
+.people-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--pc-space-2);
+  align-items: center;
+}
+.people-arrival {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--pc-raised);
+  border: 1px solid var(--pc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  max-width: 90%;
+}

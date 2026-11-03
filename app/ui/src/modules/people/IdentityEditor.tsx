@@ -12,6 +12,7 @@ import { fmtDate } from "../../lib/format";
 import { FaceCrop } from "./FaceCrop";
 import { OpenInPeople } from "./OpenInPeople";
 import { Icon } from "../../components/icons";
+import { Button, ConfirmDialog, InlineAlert } from "../../components/ui";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
@@ -133,6 +134,7 @@ export function IdentityEditor({
   const [fromLibrary, setFromLibrary] = useState(false);
   const [mergeInto, setMergeInto] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmMerge, setConfirmMerge] = useState(false);
   const [notice, setNotice] = useState("");
   useEffect(() => {
     setDraft(toDraft(row, defaultThreshold));
@@ -141,6 +143,7 @@ export function IdentityEditor({
     setFromLibrary(false);
     setMergeInto(null);
     setConfirmDelete(false);
+    setConfirmMerge(false);
     setNotice("");
   }, [row?.uid, creating, defaultThreshold]); // eslint-disable-line react-hooks/exhaustive-deps
   const faces = useQuery({
@@ -223,6 +226,7 @@ export function IdentityEditor({
       />
     </label>
   );
+  const mergeName = all.find((x) => x.uid === mergeInto)?.name ?? "";
   if (!row && !creating) return <p className="muted">{t("identities.none")}</p>;
   const title = creating ? t("identities.new") : row!.name;
   return (
@@ -277,7 +281,11 @@ export function IdentityEditor({
           {creating ? t("identities.create") : t("identities.save")}
         </button>
       </form>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <InlineAlert tone="danger" title={t("people.failed")}>
+          {error}
+        </InlineAlert>
+      )}
       {notice && <p role="status">{notice}</p>}
       {row && (
         <>
@@ -329,13 +337,13 @@ export function IdentityEditor({
             <div className="feature-card" style={{ alignItems: "stretch" }}>
               <span>{t("identities.chooseLibraryFace")}</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {libraryFaces.data?.slice(0, 24).map((f) => (
+                {libraryFaces.data?.slice(0, 24).map((f, i) => (
                   <button
                     key={f.id}
                     type="button"
                     className="btn"
                     style={{ padding: 2 }}
-                    aria-label={t("identities.libraryFaceN", { id: f.id })}
+                    aria-label={t("identities.libraryFaceN", { n: i + 1 })}
                     onClick={() =>
                       void run(async () => {
                         await commands.addIdentityReferenceFace(row.uid, f.id);
@@ -394,54 +402,47 @@ export function IdentityEditor({
                   </p>
                 )}
                 <div className="feature-actions" style={{ margin: 0 }}>
-                  <button
-                    className="btn btn-primary"
+                  <Button
+                    variant="primary"
                     disabled={!mergeInto}
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.mergeIdentities(row.uid, mergeInto);
-                        onSaved(mergeInto);
-                      })
-                    }
+                    onClick={() => setConfirmMerge(true)}
                   >
                     {t("identities.merge")}
-                  </button>
-                  <button className="btn" onClick={() => setMergeInto(null)}>
-                    {t("identities.cancel")}
-                  </button>
+                  </Button>
+                  <Button onClick={() => setMergeInto(null)}>{t("identities.cancel")}</Button>
                 </div>
               </div>
             )}
-            {confirmDelete ? (
-              <div
-                role="alertdialog"
-                aria-label={t("identities.deleteConfirm", { name: row.name })}
-                className="feature-card"
-                style={{ alignItems: "stretch" }}
-              >
-                <p style={{ margin: 0 }}>{t("identities.deleteConfirm", { name: row.name })}</p>
-                <div className="feature-actions" style={{ margin: 0 }}>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.deleteIdentity(row.uid);
-                        onDeleted();
-                      })
-                    }
-                  >
-                    {t("identities.confirm")}
-                  </button>
-                  <button className="btn" onClick={() => setConfirmDelete(false)}>
-                    {t("identities.cancel")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-                {t("identities.delete")}
-              </button>
-            )}
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              {t("identities.delete")}
+            </Button>
+            <ConfirmDialog
+              open={confirmMerge && !!mergeInto}
+              onOpenChange={setConfirmMerge}
+              title={t("identities.mergeTitle", { from: row.name, into: mergeName })}
+              message={t("identities.mergeConfirm", { from: row.name, into: mergeName })}
+              confirmLabel={t("identities.mergeButton", { into: mergeName })}
+              danger={false}
+              onConfirm={() =>
+                run(async () => {
+                  await commands.mergeIdentities(row.uid, mergeInto!);
+                  onSaved(mergeInto!);
+                })
+              }
+            />
+            <ConfirmDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title={t("identities.deleteTitle", { name: row.name })}
+              message={t("identities.deleteConfirm", { name: row.name })}
+              confirmLabel={t("identities.deleteButton")}
+              onConfirm={() =>
+                run(async () => {
+                  await commands.deleteIdentity(row.uid);
+                  onDeleted();
+                })
+              }
+            />
           </div>
         </>
       )}

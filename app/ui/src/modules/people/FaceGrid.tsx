@@ -17,7 +17,10 @@ import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
-import { notify, notifyError } from "../../store/toasts";
+import { Skeleton } from "../../components/feedback/Skeleton";
+import { Button, ConfirmDialog, InlineAlert } from "../../components/ui";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import "./people.css";
 import { FaceCrop } from "./FaceCrop";
 import { MergeDialog } from "./MergeDialog";
 import { discardReasonLabel } from "./discardReason";
@@ -69,6 +72,7 @@ export const FaceGrid = forwardRef<
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [mergeHintOpen, setMergeHintOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [width, setWidth] = useState(640);
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -206,31 +210,13 @@ export const FaceGrid = forwardRef<
     setSelection(next, id);
   };
 
-  const refresh = async () => {
-    await qc.invalidateQueries({ queryKey: ["group-faces"] });
-    await qc.invalidateQueries({ queryKey: ["people-groups"] });
-    await qc.invalidateQueries({ queryKey: ["people-sections"] });
-  };
+  const refresh = () => refreshPeople(qc);
 
-  // "Non è la stessa persona": esito nell'unico ToastHost, con annullamento.
-  const showNotSameUndo = () =>
-    notify({
-      key: "people-not-same",
-      tone: "ok",
-      message: t("people.notSameDone"),
-      action: {
-        label: t("people.undo"),
-        run: async () => {
-          try {
-            await commands.undoPeople();
-            await refresh();
-          } catch (err) {
-            notifyError(err);
-          }
-        },
-      },
-    });
-  const correct = async (...corrections: Correction[]) => {
+  /**
+   * Applica le correzioni in ordine. Con `done` l'esito compare come avviso con
+   * "Annulla operazione" (e Ctrl+Z): ogni correzione è una voce del registro del backend.
+   */
+  const correct = async (corrections: Correction[], done?: string) => {
     if (!corrections.length) return;
     setBusy(true);
     setError("");
@@ -239,12 +225,19 @@ export const FaceGrid = forwardRef<
       setSelected([]);
       setMoveTo("");
       await refresh();
+      if (done) notifyPeopleUndo(qc, done, corrections.length);
     } catch (err) {
       setError((err as { detail?: string }).detail ?? String(err));
     } finally {
       setBusy(false);
     }
   };
+
+  const reject = (gid: number) =>
+    correct(
+      selected.map((face): Correction => ({ action: "reject", person: gid, face })),
+      t("people.rejectedDone", { count: selected.length }),
+    );
 
   useImperativeHandle(ref, () => ({
     toggleFocusedSelection() {
@@ -261,9 +254,7 @@ export const FaceGrid = forwardRef<
       const hint = group?.mergeHint;
       const gid = target?.kind === "group" ? target.id : null;
       if (selected.length && gid != null) {
-        void correct(
-          ...selected.map((face): Correction => ({ action: "reject", person: gid, face })),
-        );
+        void reject(gid);
         return true;
       }
       if (!hint || gid == null || busy) return false;
@@ -277,7 +268,7 @@ export const FaceGrid = forwardRef<
             b: hint.otherId,
           });
           await refresh();
-          showNotSameUndo();
+          notifyPeopleUndo(qc, t("people.notSameDone"));
         } catch (err) {
           setError((err as { detail?: string }).detail ?? String(err));
         } finally {
@@ -301,6 +292,8 @@ export const FaceGrid = forwardRef<
             ? t("people.groupOfFaces", { count: group.faces })
             : t("people.facesLabel");
 
+  const labelOf = (g: GroupRow) => g.name ?? t("people.groupOfFaces", { count: g.faces });
+
   const moveOptions = useMemo(() => {
     const seen = new Set<number>();
     const out: GroupRow[] = [];
@@ -311,6 +304,8 @@ export const FaceGrid = forwardRef<
     }
     return out;
   }, [moveTargets.data, groupId]);
+
+  const moveTarget = moveOptions.find((g) => String(g.id) === moveTo) ?? null;
 
   if (!target) {
     return (
@@ -344,9 +339,9 @@ export const FaceGrid = forwardRef<
           borderBottom: "1px solid var(--pc-border)",
         }}
       >
-        <h1 ref={tipAnchor} style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+        <h2 ref={tipAnchor} className="people-title">
           {title}
-        </h1>
+        </h2>
         <Coachmark tip="people" anchor={tipAnchor} learnMore="people" />
         {target.kind === "group" && (
           <>
@@ -376,76 +371,80 @@ export const FaceGrid = forwardRef<
         {selected.length > 0 && (
           <span className="muted">{t("people.selected", { count: selected.length })}</span>
         )}
+        {/* "Sposta in…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
+            una select chiusa); i volti si spostano solo con il pulsante "Sposta". */}
         <select
           ref={moveSelectRef}
           className="field"
           aria-label={t("people.move")}
           value={moveTo}
           disabled={busy || selected.length === 0}
-          onChange={(e) => {
-            const v = e.target.value;
-            setMoveTo(v);
-            if (v && selected.length)
-              void correct({ action: "move", faces: selected, to: Number(v) });
-          }}
+          onChange={(e) => setMoveTo(e.target.value)}
           style={{ maxWidth: 180 }}
         >
           <option value="">{t("people.move")}</option>
           {moveOptions.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.name ?? t("people.groupOfFaces", { count: g.faces })}
+              {labelOf(g)}
             </option>
           ))}
         </select>
+        <Button
+          disabled={busy}
+          disabledReason={
+            selected.length === 0
+              ? t("people.noSelection")
+              : !moveTarget
+                ? t("people.moveDisabled")
+                : undefined
+          }
+          onClick={() =>
+            moveTarget &&
+            correct(
+              [{ action: "move", faces: selected, to: moveTarget.id }],
+              t("people.movedDone", { count: selected.length, name: labelOf(moveTarget) }),
+            )
+          }
+        >
+          {t("people.moveApply")}
+        </Button>
         {groupId != null && (
           <>
-            <button
-              type="button"
-              className="btn"
+            <Button disabled={busy || selected.length === 0} onClick={() => reject(groupId)}>
+              {t("people.reject")}
+            </Button>
+            <Button
               disabled={busy || selected.length === 0}
               onClick={() =>
-                void correct(
-                  ...selected.map((face): Correction => ({
-                    action: "reject",
-                    person: groupId,
-                    face,
-                  })),
+                correct(
+                  [{ action: "separate", person: groupId, faces: selected }],
+                  t("people.separatedDone", { count: selected.length }),
                 )
               }
             >
-              {t("people.reject")}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              disabled={busy || selected.length === 0}
-              onClick={() => void correct({ action: "separate", person: groupId, faces: selected })}
-            >
               {t("people.newGroup")}
-            </button>
+            </Button>
           </>
         )}
-        <button
-          type="button"
-          className="btn"
+        <Button
+          variant="danger"
           disabled={busy || selected.length === 0}
-          onClick={() => {
-            if (!window.confirm(t("people.removeConfirm", { count: selected.length }))) return;
-            void correct(...selected.map((face): Correction => ({ action: "remove", face })));
-          }}
-          style={{ color: "var(--pc-danger, inherit)" }}
+          onClick={() => setRemoveOpen(true)}
         >
           {t("people.remove")}
-        </button>
+        </Button>
         {discardedOnly && (
-          <button
-            type="button"
-            className="btn"
+          <Button
             disabled={busy || selected.length === 0}
-            onClick={() => void correct({ action: "recover", faces: selected })}
+            onClick={() =>
+              correct(
+                [{ action: "recover", faces: selected }],
+                t("people.recoveredDone", { count: selected.length }),
+              )
+            }
           >
             {t("people.recover")}
-          </button>
+          </Button>
         )}
         <span aria-hidden style={{ width: 1, height: 20, background: "var(--pc-border)" }} />
         <span className="muted">{t("people.showLabel")}</span>
@@ -504,17 +503,10 @@ export const FaceGrid = forwardRef<
                 : t("people.mergeSuggestBodyNoScore")}
             </span>
           </div>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={busy}
-            onClick={() => setMergeHintOpen(true)}
-          >
+          <Button variant="primary" disabled={busy} onClick={() => setMergeHintOpen(true)}>
             {t("people.samePerson")}
-          </button>
-          <button
-            type="button"
-            className="btn"
+          </Button>
+          <Button
             disabled={busy}
             onClick={() => {
               void (async () => {
@@ -527,7 +519,7 @@ export const FaceGrid = forwardRef<
                     b: hint.otherId,
                   });
                   await refresh();
-                  showNotSameUndo();
+                  notifyPeopleUndo(qc, t("people.notSameDone"));
                 } catch (err) {
                   setError((err as { detail?: string }).detail ?? String(err));
                 } finally {
@@ -537,15 +529,26 @@ export const FaceGrid = forwardRef<
             }}
           >
             {t("people.notSame")}
-          </button>
+          </Button>
         </div>
       )}
 
       {error && (
-        <p role="alert" style={{ margin: "8px 16px 0" }}>
-          {error}
-        </p>
+        <div className="people-alert">
+          <InlineAlert tone="danger" title={t("people.failed")} onDismiss={() => setError("")}>
+            {error}
+          </InlineAlert>
+        </div>
       )}
+
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title={t("people.removeTitle", { count: selected.length })}
+        message={t("people.removeBody")}
+        confirmLabel={t("people.removeButton", { count: selected.length })}
+        onConfirm={() => correct(selected.map((face): Correction => ({ action: "remove", face })))}
+      />
 
       {mergeHintOpen && group && hint && (
         <MergeDialog
@@ -568,7 +571,7 @@ export const FaceGrid = forwardRef<
       <div
         ref={scrollRef}
         data-testid="face-grid-scroll"
-        role="grid"
+        role="group"
         aria-label={t("people.facesGrid")}
         style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0 }}
         onPointerDown={(e) => {
@@ -623,11 +626,7 @@ export const FaceGrid = forwardRef<
         <QueryView
           query={faces}
           isEmpty={() => items.length === 0}
-          skeleton={
-            <p className="muted" style={{ padding: 16 }}>
-              {t("people.loading")}
-            </p>
-          }
+          skeleton={<Skeleton kind="thumbnail" count={8} />}
           error={t("people.failed")}
           empty={
             <p className="muted" style={{ padding: 16 }}>
@@ -699,6 +698,7 @@ export const FaceGrid = forwardRef<
                           }}
                         >
                           <FaceCrop face={face} size={cell - 4} />
+                          {tip && <span className="visually-hidden">{tip}</span>}
                           <span
                             style={{
                               display: "flex",
