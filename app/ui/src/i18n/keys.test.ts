@@ -107,6 +107,9 @@ const dynamic: Record<string, string[]> = {
   "models.profiles": ["light", "balanced", "performance"],
   "organize.scopes": ["library", "catalog", "selection", "filter"],
   "organize.methods": ["copy", "hardlink", "symlink"],
+  "organize.methodHints": ["copy", "hardlink", "symlink"],
+  "organize.createBody": ["copy", "hardlink", "symlink"],
+  "organize.states": ["running", "done", "failed", "undone"],
   "organize.reasons": [
     "symlink_privilege",
     "symlink_denied",

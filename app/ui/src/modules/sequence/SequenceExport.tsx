@@ -9,6 +9,7 @@ import { useLayout } from "../../store/layout";
 import { useSequence } from "../../store/sequence";
 import { useTagOverview } from "../tags/data";
 import { Icon } from "../../components/icons";
+import { Disclosure } from "../../components/ui";
 
 const TOKENS: Array<[string, string]> = [
   ["{seq}", "seq"],
@@ -140,9 +141,11 @@ export function SequenceExport() {
       setError(errorText(e));
     }
   };
+  /** Uscita facoltativa: nome in parole, nome del file o della cartella e spiegazione. */
   const check = (
     key: keyof SequenceExportOptions,
     label: string,
+    file: string,
     help: string,
     disabled = false,
   ) => (
@@ -154,7 +157,7 @@ export function SequenceExport() {
         onChange={(e) => set({ [key]: e.target.checked } as Partial<SequenceExportOptions>)}
       />
       <span>
-        <span className="mono">{label}</span>
+        {label} <span className="mono muted">{file}</span>
         <br />
         <span className="muted" style={{ fontSize: 12 }}>
           {help}
@@ -325,30 +328,7 @@ export function SequenceExport() {
                       style={{ width: 80 }}
                     />
                   </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {t("seqExport.chroma")}
-                    <select
-                      className="field"
-                      disabled={opts.format === "original"}
-                      value={jpeg.chroma444 === false ? "420" : "444"}
-                      onChange={(e) =>
-                        set({ jpeg: { ...jpeg, chroma444: e.target.value === "444" } })
-                      }
-                    >
-                      <option value="444">4:4:4</option>
-                      <option value="420">4:2:0</option>
-                    </select>
-                  </label>
                 </div>
-                <label style={{ display: "flex", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    disabled={opts.format === "original"}
-                    checked={jpeg.verify !== false}
-                    onChange={(e) => set({ jpeg: { ...jpeg, verify: e.target.checked } })}
-                  />
-                  <span>{t("seqExport.verify")}</span>
-                </label>
                 <label style={{ display: "flex", gap: 8 }}>
                   <input
                     type="checkbox"
@@ -361,6 +341,39 @@ export function SequenceExport() {
                 <span className="muted" style={{ fontSize: 12 }}>
                   {t("seqExport.fidelity")}
                 </span>
+                <Disclosure title={t("seqExport.advanced")} defaultOpen={false}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {t("seqExport.chroma")}
+                      <select
+                        className="field"
+                        disabled={opts.format === "original"}
+                        value={jpeg.chroma444 === false ? "420" : "444"}
+                        onChange={(e) =>
+                          set({ jpeg: { ...jpeg, chroma444: e.target.value === "444" } })
+                        }
+                      >
+                        <option value="444">{t("seqExport.chromaFull")}</option>
+                        <option value="420">{t("seqExport.chromaReduced")}</option>
+                      </select>
+                    </label>
+                    <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        disabled={opts.format === "original"}
+                        checked={jpeg.verify !== false}
+                        onChange={(e) => set({ jpeg: { ...jpeg, verify: e.target.checked } })}
+                      />
+                      <span>
+                        {t("seqExport.verify")}
+                        <br />
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          {t("seqExport.verifyHelp")}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </Disclosure>
               </Section>
             </div>
             <div style={{ flex: "1 1 340px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -368,17 +381,38 @@ export function SequenceExport() {
                 <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                   <input type="checkbox" checked disabled />
                   <span>
-                    <span className="mono">sequenza/</span>
+                    {t("seqExport.sequenceFolder")} <span className="mono muted">sequenza/</span>
                     <br />
                     <span className="muted" style={{ fontSize: 12 }}>
                       {t("seqExport.outSequence")}
                     </span>
                   </span>
                 </label>
-                {check("perTag", "per-tag/<Tag>/", t("seqExport.outPerTag"), !opts.tagSet)}
-                {check("manifest", "manifest.csv", t("seqExport.outManifest"))}
-                {check("zip", "sequenza.zip", t("seqExport.outZip"))}
-                {check("zipPerTag", "per-tag.zip", t("seqExport.outZip"), !opts.perTag)}
+                {check(
+                  "perTag",
+                  t("seqExport.perTagFolders"),
+                  "per-tag/<Tag>/",
+                  t("seqExport.outPerTag"),
+                  !opts.tagSet,
+                )}
+                {check("zip", t("seqExport.zipSequence"), "sequenza.zip", t("seqExport.outZip"))}
+                <Disclosure title={t("seqExport.advanced")} defaultOpen={false}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {check(
+                      "manifest",
+                      t("seqExport.manifest"),
+                      "manifest.csv",
+                      t("seqExport.outManifest"),
+                    )}
+                    {check(
+                      "zipPerTag",
+                      t("seqExport.zipPerTag"),
+                      "per-tag.zip",
+                      t("seqExport.outZip"),
+                      !opts.perTag,
+                    )}
+                  </div>
+                </Disclosure>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {t("seqExport.destination")}
                   <span style={{ display: "flex", gap: 8 }}>
