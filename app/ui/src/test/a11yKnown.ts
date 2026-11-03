@@ -3,8 +3,5 @@
 export const A11Y_KNOWN = {
   none: [],
   library: [],
-  people: [
-    // 7.4: "Ripristina" dentro la riga del gruppo ignorato.
-    'nested: button "Ripristina" in div "Gruppo di',
-  ],
+  people: [],
 } as const satisfies Record<string, readonly string[]>;

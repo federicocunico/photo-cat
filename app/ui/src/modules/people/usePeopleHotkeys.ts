@@ -20,9 +20,16 @@ export type PeopleHotkeyActions = {
   undo: () => void;
 };
 
-/** Una finestra modale aperta (unione, conferme) sospende le scorciatoie della pagina. */
+/**
+ * Una finestra modale aperta (unione, conferme) sospende le scorciatoie della pagina.
+ * `.ui-dialog` è il `Dialog` condiviso (Radix non mette `aria-modal`).
+ */
 function modalOpen(): boolean {
-  return document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]') != null;
+  return (
+    document.querySelector(
+      '[role="dialog"][aria-modal="true"], [role="dialog"].ui-dialog, [role="alertdialog"]',
+    ) != null
+  );
 }
 
 /**

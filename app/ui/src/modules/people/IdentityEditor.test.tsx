@@ -109,7 +109,7 @@ afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 it("lists identities with group filter, link state and store location", async () => {
   await openPeopleSection();
-  const table = screen.getByRole("table", { name: "Identità" });
+  const table = screen.getByRole("list", { name: "Identità" });
   expect(within(table).getByText("Giulia Bianchi")).toBeInTheDocument();
   expect(within(table).getByText("412 foto")).toBeInTheDocument();
   expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
@@ -126,7 +126,7 @@ it("finds an identity by alias", async () => {
     target: { value: "Nonna Rita" },
   });
   await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita"));
-  const table = await waitFor(() => screen.getByRole("table", { name: "Identità" }));
+  const table = await waitFor(() => screen.getByRole("list", { name: "Identità" }));
   await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
   expect(within(table).getByText("Rita Rossi")).toBeInTheDocument();
 });
@@ -190,7 +190,7 @@ it("asks which face to use when the reference image has several", async () => {
 
 it("shows identities without photos in the library as editable", async () => {
   await openPeopleSection();
-  const table = screen.getByRole("table", { name: "Identità" });
+  const table = screen.getByRole("list", { name: "Identità" });
   expect(within(table).getByText("Elena Conti")).toBeInTheDocument();
   expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
   fireEvent.click(within(table).getByText("Elena Conti"));

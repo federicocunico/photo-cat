@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, type ImportPreview } from "../../lib/ipc";
+import { Button, InlineAlert } from "../../components/ui";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
@@ -64,12 +65,8 @@ export function Transfer({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button className="btn" onClick={() => void importFile()}>
-          {t("identities.import")}
-        </button>
-        <button className="btn" onClick={() => void exportFile()}>
-          {t("identities.export")}
-        </button>
+        <Button onClick={() => importFile()}>{t("identities.import")}</Button>
+        <Button onClick={() => exportFile()}>{t("identities.export")}</Button>
         <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
             type="checkbox"
@@ -103,17 +100,19 @@ export function Transfer({ onDone }: { onDone: () => void }) {
             </label>
           ))}
           <div className="feature-actions" style={{ margin: 0 }}>
-            <button className="btn btn-primary" onClick={() => void apply()}>
+            <Button variant="primary" onClick={() => apply()}>
               {t("identities.importApply")}
-            </button>
-            <button className="btn" onClick={() => setPreview(null)}>
-              {t("identities.cancel")}
-            </button>
+            </Button>
+            <Button onClick={() => setPreview(null)}>{t("identities.cancel")}</Button>
           </div>
         </div>
       )}
       {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <InlineAlert tone="danger" title={t("people.failed")}>
+          {error}
+        </InlineAlert>
+      )}
     </div>
   );
 }

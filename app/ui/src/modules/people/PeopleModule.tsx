@@ -19,6 +19,11 @@ import { MergeDialog } from "./MergeDialog";
 import { PersonCard, type PersonCardHandle } from "./PersonCard";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { usePeopleHotkeys } from "./usePeopleHotkeys";
+import { Button } from "../../components/ui";
+import { notify, notifyError } from "../../store/toasts";
+import { runUndo, useUndo } from "../../store/undo";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import "./people.css";
 
 type Arrival = {
   highlight: FaceHighlight;
@@ -252,26 +257,29 @@ export function PeopleModule() {
       if (!g || sectionRef.current === "ignored") return;
       void commands
         .correctPerson({ action: "ignore", group: g.id })
-        .then(() =>
-          Promise.all([
-            qc.invalidateQueries({ queryKey: ["people-groups"] }),
-            qc.invalidateQueries({ queryKey: ["people-sections"] }),
-            qc.invalidateQueries({ queryKey: ["group-faces"] }),
-          ]),
-        );
+        .then(async () => {
+          await refreshPeople(qc);
+          notifyPeopleUndo(qc, t("people.ignoredDone"));
+        })
+        .catch(notifyError);
     },
     undo() {
+      // Di norma Ctrl+Z passa dallo store `undo` (comando globale). Senza una voce registrata,
+      // ad esempio dopo un riavvio, annulla l'ultima correzione del registro del backend.
+      if (useUndo.getState().last) {
+        void runUndo();
+        return;
+      }
       void commands
         .undoPeople()
-        .then(() =>
-          Promise.all([
-            qc.invalidateQueries({ queryKey: ["people-groups"] }),
-            qc.invalidateQueries({ queryKey: ["people-sections"] }),
-            qc.invalidateQueries({ queryKey: ["group-faces"] }),
-            qc.invalidateQueries({ queryKey: ["people"] }),
-            qc.invalidateQueries({ queryKey: ["identities"] }),
-          ]),
-        );
+        .then(async (done) => {
+          await refreshPeople(qc);
+          notify({
+            key: "undo",
+            message: done ? t("people.undoneLast") : t("people.nothingToUndo"),
+          });
+        })
+        .catch(notifyError);
     },
   });
 
@@ -377,30 +385,10 @@ export function PeopleModule() {
         }}
       >
         {arrival && (
-          <div
-            role="status"
-            data-testid="people-arrival"
-            style={{
-              position: "absolute",
-              top: 8,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 5,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "8px 12px",
-              background: "var(--pc-raised)",
-              border: "1px solid var(--pc-border)",
-              borderRadius: 6,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-              maxWidth: "90%",
-            }}
-          >
+          <div role="status" data-testid="people-arrival" className="people-arrival">
             <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
-            <button
-              type="button"
-              className="btn btn-ghost"
+            <Button
+              variant="ghost"
               onClick={() => {
                 const mediaId = arrival.mediaId;
                 setArrival(null);
@@ -409,7 +397,7 @@ export function PeopleModule() {
               }}
             >
               {t("people.backToPhoto")}
-            </button>
+            </Button>
           </div>
         )}
         <GroupList
@@ -441,7 +429,7 @@ export function PeopleModule() {
           }}
         />
 
-        <main
+        <section
           aria-label={t("people.facesLabel")}
           style={{
             flex: "999 1 420px",
@@ -468,7 +456,7 @@ export function PeopleModule() {
               onSelectedFacesChange={setSelectedFaceIds}
             />
           )}
-        </main>
+        </section>
 
         <aside
           aria-label={t("people.cardLabel")}

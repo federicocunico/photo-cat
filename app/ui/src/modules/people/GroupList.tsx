@@ -20,6 +20,10 @@ import {
   type PeopleSections,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
+import { Button } from "../../components/ui";
+import { notifyError } from "../../store/toasts";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import "./people.css";
 import { fmtDate, fmtDec, fmtInt } from "../../lib/format";
 import { useDebounced } from "../library/facets";
 import { clickSelect } from "../../store/library";
@@ -144,12 +148,10 @@ export const GroupList = forwardRef<
     setRestoreBusy(id);
     try {
       await commands.correctPerson({ action: "restore", group: id });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["people"] }),
-        qc.invalidateQueries({ queryKey: ["people-groups"] }),
-        qc.invalidateQueries({ queryKey: ["people-sections"] }),
-        qc.invalidateQueries({ queryKey: ["group-faces"] }),
-      ]);
+      await refreshPeople(qc);
+      notifyPeopleUndo(qc, t("people.restoredDone"));
+    } catch (err) {
+      notifyError(err);
     } finally {
       setRestoreBusy(null);
     }
@@ -465,14 +467,13 @@ export const GroupList = forwardRef<
           <QueryView
             query={identities}
             isEmpty={() => identityRows.length === 0}
-            skeleton={<p className="muted">{t("people.loading")}</p>}
             error={t("people.failed")}
             empty={<p className="muted">{emptyMsg}</p>}
           >
             {() => (
               <>
                 <div
-                  role="table"
+                  role="list"
                   aria-label={t("identities.title")}
                   style={{ display: "flex", flexDirection: "column", gap: 2 }}
                 >
@@ -481,78 +482,77 @@ export const GroupList = forwardRef<
                       (target?.kind === "identity" && target.uid === r.uid) ||
                       (target?.kind === "group" && r.person != null && target.id === r.person);
                     return (
-                      <button
-                        key={r.uid}
-                        type="button"
-                        role="row"
-                        aria-selected={selected}
-                        onClick={() => selectIdentity(r)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "44px 1fr auto",
-                          gap: 10,
-                          alignItems: "center",
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 6,
-                          border: selected
-                            ? "1px solid var(--pc-selection-border)"
-                            : "1px solid transparent",
-                          background: selected ? "var(--pc-selection-bg)" : "transparent",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          color: "inherit",
-                          font: "inherit",
-                        }}
-                      >
-                        <span
-                          aria-hidden
+                      <div key={r.uid} role="listitem">
+                        <button
+                          type="button"
+                          aria-current={selected || undefined}
+                          onClick={() => selectIdentity(r)}
                           style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: "50%",
-                            background: "var(--pc-thumb-bg)",
-                            display: "flex",
+                            display: "grid",
+                            gridTemplateColumns: "44px 1fr auto",
+                            gap: 10,
                             alignItems: "center",
-                            justifyContent: "center",
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: "var(--pc-text-soft)",
+                            width: "100%",
+                            padding: 6,
+                            borderRadius: 6,
+                            border: selected
+                              ? "1px solid var(--pc-selection-border)"
+                              : "1px solid transparent",
+                            background: selected ? "var(--pc-selection-bg)" : "transparent",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            color: "inherit",
+                            font: "inherit",
                           }}
                         >
-                          {r.name
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((w) => w[0]?.toUpperCase())
-                            .join("")}
-                        </span>
-                        <span style={{ minWidth: 0 }}>
                           <span
-                            role="cell"
+                            aria-hidden
                             style={{
-                              display: "block",
-                              fontWeight: 600,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              width: 44,
+                              height: 44,
+                              borderRadius: "50%",
+                              background: "var(--pc-thumb-bg)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: 14,
+                              color: "var(--pc-text-soft)",
                             }}
                           >
-                            {r.name}
+                            {r.name
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((w) => w[0]?.toUpperCase())
+                              .join("")}
                           </span>
-                          <span className="muted" style={{ fontSize: 12 }}>
-                            {r.group ?? t("identities.notLinkedShort")}
-                            {r.faces
-                              ? ` · ${t("identities.refCount", { count: r.faces })}`
-                              : ` · ${t("identities.noRefs")}`}
+                          <span style={{ minWidth: 0 }}>
+                            <span
+                              style={{
+                                display: "block",
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {r.name}
+                            </span>
+                            <span className="muted" style={{ fontSize: 12 }}>
+                              {r.group ?? t("identities.notLinkedShort")}
+                              {r.faces
+                                ? ` · ${t("identities.refCount", { count: r.faces })}`
+                                : ` · ${t("identities.noRefs")}`}
+                            </span>
                           </span>
-                        </span>
-                        <span role="cell" className="mono muted" style={{ fontSize: 12 }}>
-                          {r.person != null && r.photos > 0
-                            ? t("people.photos", { count: r.photos })
-                            : t("people.noPhotosInLibrary")}
-                        </span>
-                      </button>
+                          <span className="mono muted" style={{ fontSize: 12 }}>
+                            {r.person != null && r.photos > 0
+                              ? t("people.photos", { count: r.photos })
+                              : t("people.noPhotosInLibrary")}
+                          </span>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -563,13 +563,17 @@ export const GroupList = forwardRef<
           <QueryView
             query={groups}
             isEmpty={() => rows.length === 0 && counts.singles === 0 && counts.discarded === 0}
-            skeleton={<p className="muted">{t("people.loading")}</p>}
             error={t("people.failed")}
             empty={<p className="muted">{emptyMsg}</p>}
           >
             {() => (
               <>
-                <div style={{ height: virt.getTotalSize(), position: "relative" }}>
+                <div
+                  role="listbox"
+                  aria-label={t("people.listLabel")}
+                  aria-multiselectable
+                  style={{ height: virt.getTotalSize(), position: "relative" }}
+                >
                   {vitems.map((vi) => {
                     const item = virtItems[vi.index];
                     if (!item) return null;
@@ -587,6 +591,7 @@ export const GroupList = forwardRef<
                       >
                         {item.kind === "label" && (
                           <div
+                            role="presentation"
                             className="label"
                             style={{
                               padding: "10px 8px 4px",
@@ -598,77 +603,84 @@ export const GroupList = forwardRef<
                           </div>
                         )}
                         {item.kind === "group" && (
-                          <div
-                            role="option"
-                            tabIndex={0}
-                            data-group-id={item.group.id}
-                            aria-selected={
-                              target?.kind === "group" && target.id === item.group.id
-                                ? true
-                                : selectedIds.includes(item.group.id)
-                            }
-                            onClick={(e) => selectGroup(item.group.id, e, item.group)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                selectGroup(item.group.id, e as unknown as MouseEvent, item.group);
+                          <div className={section === "ignored" ? "people-row" : undefined}>
+                            <div
+                              role="option"
+                              tabIndex={0}
+                              data-group-id={item.group.id}
+                              aria-selected={
+                                target?.kind === "group" && target.id === item.group.id
+                                  ? true
+                                  : selectedIds.includes(item.group.id)
                               }
-                            }}
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "44px 1fr auto",
-                              gap: 10,
-                              alignItems: "center",
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
-                              border:
-                                (target?.kind === "group" && target.id === item.group.id) ||
-                                selectedIds.includes(item.group.id)
-                                  ? "1px solid var(--pc-selection-border)"
-                                  : "1px solid transparent",
-                              background:
-                                (target?.kind === "group" && target.id === item.group.id) ||
-                                selectedIds.includes(item.group.id)
-                                  ? "var(--pc-selection-bg)"
-                                  : "transparent",
-                              cursor: "pointer",
-                              color: "inherit",
-                              font: "inherit",
-                              textAlign: "left",
-                            }}
-                          >
-                            <Cover group={item.group} />
-                            <span style={{ minWidth: 0 }}>
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontWeight: 600,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {groupTitle(item.group, t)}
+                              onClick={(e) => selectGroup(item.group.id, e, item.group)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  selectGroup(
+                                    item.group.id,
+                                    e as unknown as MouseEvent,
+                                    item.group,
+                                  );
+                                }
+                              }}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns:
+                                  section === "ignored" ? "44px 1fr" : "44px 1fr auto",
+                                gap: 10,
+                                alignItems: "center",
+                                minWidth: 0,
+                                padding: 6,
+                                borderRadius: 6,
+                                border:
+                                  (target?.kind === "group" && target.id === item.group.id) ||
+                                  selectedIds.includes(item.group.id)
+                                    ? "1px solid var(--pc-selection-border)"
+                                    : "1px solid transparent",
+                                background:
+                                  (target?.kind === "group" && target.id === item.group.id) ||
+                                  selectedIds.includes(item.group.id)
+                                    ? "var(--pc-selection-bg)"
+                                    : "transparent",
+                                cursor: "pointer",
+                                color: "inherit",
+                                font: "inherit",
+                                textAlign: "left",
+                              }}
+                            >
+                              <Cover group={item.group} />
+                              <span style={{ minWidth: 0 }}>
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontWeight: 600,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {groupTitle(item.group, t)}
+                                </span>
+                                <span className="muted" style={{ fontSize: 12 }}>
+                                  {groupSub(item.group, t)}
+                                </span>
                               </span>
-                              <span className="muted" style={{ fontSize: 12 }}>
-                                {groupSub(item.group, t)}
-                              </span>
-                            </span>
-                            {section === "ignored" ? (
-                              <button
-                                type="button"
-                                className="btn"
+                              {section !== "ignored" && (
+                                <span className="mono muted" style={{ fontSize: 12 }}>
+                                  {t("people.photos", { count: item.group.photos })}
+                                </span>
+                              )}
+                            </div>
+                            {/* "Ripristina" accanto alla riga, non dentro: niente controlli annidati. */}
+                            {section === "ignored" && (
+                              <Button
+                                size="sm"
                                 disabled={restoreBusy === item.group.id}
-                                onClick={(e) => void restoreGroup(item.group.id, e)}
-                                style={{ fontSize: 12, padding: "0 10px", minHeight: 28 }}
+                                onClick={(e) => restoreGroup(item.group.id, e)}
                               >
                                 {t("people.restore")}
-                              </button>
-                            ) : (
-                              <span className="mono muted" style={{ fontSize: 12 }}>
-                                {t("people.photos", { count: item.group.photos })}
-                              </span>
+                              </Button>
                             )}
                           </div>
                         )}
@@ -684,6 +696,7 @@ export const GroupList = forwardRef<
                                 identity: null,
                               })
                             }
+                            role="option"
                             aria-selected={target?.kind === "singles"}
                             style={{
                               display: "grid",
@@ -738,6 +751,7 @@ export const GroupList = forwardRef<
                                 identity: null,
                               })
                             }
+                            role="option"
                             aria-selected={target?.kind === "discarded"}
                             style={{
                               display: "grid",

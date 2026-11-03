@@ -523,7 +523,7 @@ describe("Aggiornamento dopo l'analisi", () => {
 describe("Volti scartati senza gruppo", () => {
   it("compaiono in Da rivedere e si aprono con l'elenco dei volti scartati", async () => {
     renderModule();
-    const entry = await screen.findByRole("button", { name: /18 volti scartati/i });
+    const entry = await screen.findByRole("option", { name: /18 volti scartati/i });
     fireEvent.click(entry);
     await waitFor(() =>
       expect(commandsMock.groupFaces).toHaveBeenCalledWith(

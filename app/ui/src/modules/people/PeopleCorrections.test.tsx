@@ -136,6 +136,30 @@ describe("Unione persone", () => {
         to: 7,
       }),
     );
+
+    // "Persone unite · Annulla operazione": l'avviso annulla tramite lo store `undo`.
+    const toast = await screen.findByText("Persone unite");
+    const notice = toast.closest('[role="status"]') as HTMLElement;
+    fireEvent.click(within(notice).getByRole("button", { name: /^Annulla operazione$/i }));
+    await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
+  });
+
+  it("I ignora il gruppo e Ctrl+Z lo ripristina", async () => {
+    commandsMock.listGroups.mockResolvedValue({
+      items: [row({ id: 12, faces: 61, photos: 58 })],
+      next: null,
+      total: 1,
+    } as never);
+    renderModule();
+    fireEvent.click(await screen.findByText(/Gruppo di 61 volti/i));
+    await screen.findByRole("button", { name: /Ignora questa persona/i });
+    fireEvent.keyDown(document.body, { key: "i" });
+    await waitFor(() =>
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "ignore", group: 12 }),
+    );
+    expect(await screen.findByText("Gruppo ignorato")).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
   });
 
   it("chiede quale nome tenere quando entrambi sono nominati", async () => {
@@ -226,7 +250,7 @@ describe("Persone diverse", () => {
 
     const toast = await screen.findByRole("status");
     expect(toast).toHaveTextContent(/persone diverse/i);
-    fireEvent.click(within(toast).getByRole("button", { name: /^Annulla$/i }));
+    fireEvent.click(within(toast).getByRole("button", { name: /^Annulla operazione$/i }));
     await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
   });
 });

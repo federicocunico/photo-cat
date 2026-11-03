@@ -1,7 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button, Dialog, InlineAlert } from "../../components/ui";
 import { commands, type Correction, type FaceView, type GroupRow } from "../../lib/ipc";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
+import { notifyPeopleUndo } from "./peopleUndo";
 
 function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -39,7 +42,10 @@ function labelOf(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => str
   return g.name ?? t("people.groupOfFaces", { count: g.faces });
 }
 
-/** Dialogo di unione: anteprima, scelta del nome se più di uno ne ha uno. */
+/**
+ * Dialogo di unione: anteprima, scelta del nome se più di uno ne ha uno. L'unione compare
+ * poi come avviso "Persone unite · Annulla operazione" (anche Ctrl+Z).
+ */
 export function MergeDialog({
   sources,
   target,
@@ -52,6 +58,7 @@ export function MergeDialog({
   onMerged: (to: number) => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const parties = [target, ...sources.filter((s) => s.id !== target.id)];
   const named = parties.filter((g) => g.name);
   const needNameChoice = named.length >= 2;
@@ -77,6 +84,7 @@ export function MergeDialog({
           ? { action: "merge", from: absorbed[0]!.id, to: survivor.id }
           : { action: "merge_many", from: absorbed.map((g) => g.id), to: survivor.id };
       await commands.correctPerson(correction);
+      notifyPeopleUndo(qc, t("people.mergedDone"));
       onMerged(survivor.id);
       onClose();
     } catch (e) {
@@ -87,37 +95,26 @@ export function MergeDialog({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        background: "rgba(0,0,0,0.35)",
-        display: "grid",
-        placeItems: "center",
-      }}
-      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !busy && onClose()}
+      title={t("people.mergeDialogTitle")}
+      footer={
+        <>
+          <Button variant="ghost" disabled={busy} onClick={onClose}>
+            {t("people.mergeCancel")}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || absorbed.length === 0}
+            onClick={() => confirm()}
+          >
+            {t("people.mergeInto", { name: labelOf(survivor, t) })}
+          </Button>
+        </>
+      }
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("people.mergeDialogTitle")}
-        onKeyDown={(e) => e.key === "Escape" && !busy && onClose()}
-        style={{
-          width: "min(480px, 92vw)",
-          maxHeight: "86vh",
-          overflow: "auto",
-          border: "1px solid var(--pc-border)",
-          borderRadius: 8,
-          padding: 20,
-          background: "var(--pc-raised)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
-        <strong style={{ fontSize: 16 }}>{t("people.mergeDialogTitle")}</strong>
-
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div
           style={{
             display: "grid",
@@ -194,22 +191,12 @@ export function MergeDialog({
           </fieldset>
         )}
 
-        {error && <p role="alert">{error}</p>}
-
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
-            {t("people.mergeCancel")}
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={busy || absorbed.length === 0}
-            onClick={() => void confirm()}
-          >
-            {t("people.mergeInto", { name: labelOf(survivor, t) })}
-          </button>
-        </div>
+        {error && (
+          <InlineAlert tone="danger" title={t("people.failed")}>
+            {error}
+          </InlineAlert>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }
