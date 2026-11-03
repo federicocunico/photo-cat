@@ -13,6 +13,7 @@ import { sources } from "./sources";
 import { entries } from "./entries";
 import { common } from "./common";
 import { selection } from "./selection";
+import { commandStrings } from "./commands";
 
 export type Language = "it" | "en";
 
@@ -32,6 +33,7 @@ void i18n.use(initReactI18next).init({
         ...entries.it,
         ...common.it,
         ...selection.it,
+        ...commandStrings.it,
       },
     },
     en: {
@@ -48,6 +50,7 @@ void i18n.use(initReactI18next).init({
         ...entries.en,
         ...common.en,
         ...selection.en,
+        ...commandStrings.en,
       },
     },
   },

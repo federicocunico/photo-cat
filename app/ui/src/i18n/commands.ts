@@ -1,0 +1,53 @@
+// Comandi del registro (palette, foglio delle scorciatoie, menu).
+export const commandStrings = {
+  it: {
+    commands: {
+      goTo: "Vai a {{name}}",
+      toggleNav: "Riduci o espandi la navigazione",
+      toggleInspector: "Mostra o nascondi l'ispettore",
+      toggleSidePanels: "Mostra o nascondi i pannelli laterali",
+      undo: "Annulla l'ultima operazione",
+      tagKey: "Tag «{{name}}» sulla selezione",
+      removeSetTags: "Togli i tag del set dalla selezione",
+      clearSelection: "Deseleziona",
+      sessionSelect: "Seleziona la sessione della foto",
+      openViewer: "Apri il visualizzatore",
+      palette: "Cerca comandi, persone, tag…",
+      shortcuts: "Scorciatoie da tastiera",
+      groups: {
+        general: "Generale",
+        navigation: "Navigazione",
+        library: "Libreria",
+        selection: "Selezione",
+        viewer: "Visualizzatore",
+        sequence: "Sequenza",
+        people: "Persone",
+      },
+    },
+  },
+  en: {
+    commands: {
+      goTo: "Go to {{name}}",
+      toggleNav: "Collapse or expand navigation",
+      toggleInspector: "Show or hide the inspector",
+      toggleSidePanels: "Show or hide side panels",
+      undo: "Undo the last operation",
+      tagKey: "Tag “{{name}}” on the selection",
+      removeSetTags: "Remove the set's tags from the selection",
+      clearSelection: "Deselect",
+      sessionSelect: "Select the photo's session",
+      openViewer: "Open the viewer",
+      palette: "Search commands, people, tags…",
+      shortcuts: "Keyboard shortcuts",
+      groups: {
+        general: "General",
+        navigation: "Navigation",
+        library: "Library",
+        selection: "Selection",
+        viewer: "Viewer",
+        sequence: "Sequence",
+        people: "People",
+      },
+    },
+  },
+};

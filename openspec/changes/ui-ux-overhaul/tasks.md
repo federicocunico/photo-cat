@@ -120,7 +120,7 @@
 
 ## 4. Palette e scorciatoie
 
-- [ ] 4.1 Registro dei comandi (`commands/registry.ts`) e `useHotkeys` globale, che ignora i campi di testo; migrare i tasti dei tag e quelli di Sequenza. Verifica: test di digitazione in un campo (nessun tag assegnato).
+- [x] 4.1 Registro dei comandi (`commands/registry.ts`) e `useHotkeys` globale, che ignora i campi di testo; migrare i tasti dei tag e quelli di Sequenza. Verifica: test di digitazione in un campo (nessun tag assegnato).
 - [ ] 4.2 Palette Ctrl+K (aperta anche dal campo di ricerca della barra superiore, spostato qui da 2.4):
   - comandi, persone, tag, cataloghi, luoghi, nomi di file;
   - recenti, "Nessun risultato", azioni sulla selezione;

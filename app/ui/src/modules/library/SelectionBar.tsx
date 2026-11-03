@@ -17,7 +17,7 @@ import {
   type MenuItem,
 } from "../../components/ui";
 import { commands, isTauri, type BulkAction, type Target } from "../../lib/ipc";
-import { isTyping, modalOpen } from "../../lib/keys";
+import { useCommands } from "../../commands/registry";
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { notify, notifyError } from "../../store/toasts";
@@ -41,15 +41,18 @@ type DoneKind =
 
 /** Esc svuota la selezione, salvo nei campi di testo e con menu o dialoghi aperti. */
 function useEscapeToClear(clear: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented || isTyping(e.target) || modalOpen()) return;
-      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
-      clear();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [clear]);
+  const { t } = useTranslation();
+  useCommands([
+    {
+      id: "selection.clear",
+      label: t("commands.clearSelection"),
+      group: "selection",
+      shortcut: { key: "Escape" },
+      // Un menu o un selettore aperto si chiude prima con il suo Esc.
+      when: () => !document.querySelector("[data-radix-popper-content-wrapper]"),
+      run: clear,
+    },
+  ]);
 }
 
 export function SelectMenu() {

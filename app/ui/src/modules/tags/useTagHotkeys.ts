@@ -1,9 +1,10 @@
 // Tasti 1–9 e 0 del set attivo sulla selezione corrente (Libreria e Sequenza).
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { BulkAction, Target } from "../../lib/ipc";
 import { activeSet, useTagOverview } from "./data";
 import { isTyping } from "../../lib/keys";
+import { useCommands } from "../../commands/registry";
 import { useBulkJob } from "../library/bulkJob";
 
 export { isTyping };
@@ -35,23 +36,31 @@ export function useTagHotkeys(selection: () => { target: Target; count: number }
   const ref = useRef({ set, selection, bulk, t });
   ref.current = { set, selection, bulk, t };
 
-  useEffect(() => {
-    if (!enabled) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || isTyping(e.target)) return;
-      const action = hotkeyAction(e.key, ref.current.set);
-      if (!action) return;
-      const { target, count } = ref.current.selection();
-      if (!count) return;
-      e.preventDefault();
-      const { bulk, t } = ref.current;
-      const message =
-        action.action === "add_tag"
-          ? t("selection.done.add_tag", { name: action.name, count })
-          : t("selection.done.remove_tags", { count });
-      void bulk.start(target, action, message);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [enabled]);
+  useCommands(
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((key) => {
+      const action = hotkeyAction(key, set);
+      return {
+        id: `tags.key.${key}`,
+        label:
+          action?.action === "add_tag"
+            ? t("commands.tagKey", { name: action.name })
+            : t("commands.removeSetTags"),
+        group: "selection" as const,
+        shortcut: { key },
+        // Il comando c'è solo se il tasto ha un tag e c'è una selezione.
+        palette: false,
+        when: () => action != null && ref.current.selection().count > 0,
+        run: () => {
+          if (!action) return;
+          const { target, count } = ref.current.selection();
+          const message =
+            action.action === "add_tag"
+              ? t("selection.done.add_tag", { name: action.name, count })
+              : t("selection.done.remove_tags", { count });
+          return ref.current.bulk.start(target, action, message);
+        },
+      };
+    }),
+    enabled,
+  );
 }
