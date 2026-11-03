@@ -1,104 +1,12 @@
-import { BusyButton } from "../../components/feedback/BusyButton";
-import { useTranslation } from "react-i18next";
 import { Panels } from "../../components/shell/Panels";
-import type { SortKey } from "../../lib/ipc";
 import { selCount, selTarget, useLibrary } from "../../store/library";
-import { activeChips } from "./chips";
-import { useLabelName } from "./labelName";
 import { LibraryGrid } from "./Grid";
 import { Inspector } from "./Inspector";
 import { LibrarySidebar } from "./Sidebar";
 import { BulkBar } from "./BulkBar";
 import { FacetPanels } from "./FacetPanel";
+import { LibraryHeader } from "./LibraryHeader";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
-
-import { CatalogHeader } from "./CatalogHeader";
-import { CatalogFeedback } from "./catalogActions";
-import { Icon } from "../../components/icons";
-
-const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
-
-function Toolbar() {
-  const { t } = useTranslation();
-  const { filter, sort, setSort, thumbSize, setThumbSize, setFilter, resetFilter } = useLibrary();
-  const groupSimilar = useLibrary((s) => s.groupSimilar);
-  const setGroupSimilar = useLibrary((s) => s.setGroupSimilar);
-  const names = useLabelName();
-  const chips = activeChips(filter, t as never, names.label);
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 16px",
-        borderBottom: "1px solid var(--pc-border)",
-        background: "var(--pc-toolbar)",
-      }}
-    >
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {t("library.sort")}
-        <select className="field" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-          {filter.excludedFrom != null && (
-            <option value="excluded_at">{t("exclusions.sort")}</option>
-          )}
-          {SORTS.map((s) => (
-            <option key={s} value={s}>
-              {t(`library.sortKeys.${s}`)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {t("library.thumbSize")}
-        <input
-          type="range"
-          min={1}
-          max={5}
-          value={thumbSize}
-          aria-label={t("library.thumbSize")}
-          onChange={(e) => setThumbSize(Number(e.target.value))}
-        />
-      </label>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <input
-          type="checkbox"
-          checked={groupSimilar}
-          onChange={(e) => setGroupSimilar(e.target.checked)}
-        />
-        {t("similar.group")}
-      </label>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <input
-          type="checkbox"
-          checked={filter.similarOnly ?? false}
-          onChange={(e) => setFilter({ similarOnly: e.target.checked })}
-        />
-        {t("similar.only")}
-      </label>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: "auto" }}>
-        {chips.map((c) => (
-          <BusyButton
-            key={c.name}
-            type="button"
-            className="chip"
-            style={{ border: 0, cursor: "pointer" }}
-            aria-label={t("library.removeFilter", { name: c.name })}
-            onClick={() => setFilter(c.clear)}
-          >
-            {c.name} <Icon.Close size={12} />
-          </BusyButton>
-        ))}
-        {chips.length > 1 && (
-          <BusyButton type="button" className="btn btn-ghost" onClick={resetFilter}>
-            {t("library.clearFilters")}
-          </BusyButton>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function LibraryPage() {
   useTagHotkeys(() => {
@@ -110,9 +18,7 @@ export function LibraryPage() {
       left={<LibrarySidebar />}
       center={
         <>
-          <CatalogHeader />
-          <CatalogFeedback />
-          <Toolbar />
+          <LibraryHeader />
           <BulkBar />
           <LibraryGrid />
           <FacetPanels />

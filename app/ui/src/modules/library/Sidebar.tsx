@@ -318,6 +318,14 @@ export function LibrarySidebar() {
         </QueryView>
       </SidebarSection>
       <SidebarSection id="library.filters" title={t("library.filters")} gap={12}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={filter.similarOnly ?? false}
+            onChange={(e) => setFilter({ similarOnly: e.target.checked })}
+          />
+          {t("similar.only")}
+        </label>
         <QueryView query={facets} enabled={isTauri()} isEmpty={() => false}>
           {(data) =>
             data && (

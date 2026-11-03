@@ -182,6 +182,16 @@ export const it = {
     openJob: "Segui l'importazione",
   },
   library: {
+    header: {
+      path: "Percorso",
+      all: "Tutte le foto",
+      excluded: "Escluse",
+      count_one: "{{n}} foto",
+      count_other: "{{n}} foto",
+      sortBy: "Ordina: {{name}}",
+      current: "attuale",
+      view: "Vista",
+    },
     sources: "Sorgenti",
     catalogs: "Cataloghi",
     filters: "Filtri",

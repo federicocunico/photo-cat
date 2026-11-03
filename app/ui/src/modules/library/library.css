@@ -1,0 +1,60 @@
+/* Barra della Libreria (3.1) */
+.lib-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2) var(--pc-space-3);
+  padding: var(--pc-space-2) var(--pc-space-4);
+  border-bottom: 1px solid var(--pc-border);
+  background: var(--pc-toolbar);
+}
+.lib-path {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  font: var(--pc-font-lg) var(--pc-font-ui);
+}
+.lib-path-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pc-accent-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-1);
+}
+.lib-chip {
+  min-height: 24px;
+  border: 0;
+  cursor: pointer;
+}
+.lib-header-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lib-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  margin-left: auto;
+}
+.lib-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  min-width: 220px;
+}
+.lib-view-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}

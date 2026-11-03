@@ -9,7 +9,8 @@ import { useCatalogOperation as useAction } from "./useCatalogAction";
 
 const closeToast = () => useAction.setState({ message: "" });
 
-export function CatalogFeedback() {
+/** Esiti di esclusioni e reinserimenti come avvisi nell'unico ToastHost. */
+export function useCatalogFeedback() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const state = useAction();
@@ -77,5 +78,4 @@ export function CatalogFeedback() {
     // Solo al cambio del messaggio: le funzioni usate leggono lo stato al momento del clic.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.message, state.undoable]);
-  return null;
 }

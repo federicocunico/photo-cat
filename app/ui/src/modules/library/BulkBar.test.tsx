@@ -11,7 +11,12 @@ import {
   selSet,
   useLibrary,
 } from "../../store/library";
-import { CatalogFeedback } from "./catalogActions";
+import { useCatalogFeedback } from "./catalogActions";
+
+function CatalogFeedback() {
+  useCatalogFeedback();
+  return null;
+}
 import { useLive } from "../../store/live";
 import { ToastHost } from "../../components/feedback/ToastHost";
 import { BulkBar } from "./BulkBar";

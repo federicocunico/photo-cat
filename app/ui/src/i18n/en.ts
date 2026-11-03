@@ -182,6 +182,16 @@ export const en: Messages = {
     openJob: "Follow the import",
   },
   library: {
+    header: {
+      path: "Path",
+      all: "All photos",
+      excluded: "Excluded",
+      count_one: "{{n}} photo",
+      count_other: "{{n}} photos",
+      sortBy: "Sort: {{name}}",
+      current: "current",
+      view: "View",
+    },
     sources: "Sources",
     catalogs: "Catalogs",
     filters: "Filters",

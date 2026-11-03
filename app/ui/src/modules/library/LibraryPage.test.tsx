@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import "../../i18n";
 import "../../test/layoutMock";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -298,9 +299,12 @@ describe("Libreria", () => {
   });
 
   it("ordinamento e dimensione miniature", async () => {
+    const user = userEvent.setup();
     renderPage();
     await screen.findByTestId("thumb-1");
-    fireEvent.change(screen.getByLabelText("Ordina"), { target: { value: "name_asc" } });
+    screen.getByRole("button", { name: "Ordina: Data acquisizione ↓" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Nome file" }));
     await waitFor(() =>
       expect(commandsMock.libraryPage).toHaveBeenLastCalledWith(
         expect.anything(),
@@ -309,7 +313,10 @@ describe("Libreria", () => {
         300,
       ),
     );
-    fireEvent.change(screen.getByLabelText("Dimensione miniature"), { target: { value: "5" } });
+    await user.click(screen.getByRole("button", { name: "Vista" }));
+    fireEvent.change(await screen.findByLabelText("Dimensione miniature"), {
+      target: { value: "5" },
+    });
     expect(useLibrary.getState().thumbSize).toBe(5);
     // Miniature grandi: meno colonne, ciascuna almeno 260 px e allargata a riempire la riga.
     expect(parseInt(screen.getByTestId("thumb-1").style.width)).toBeGreaterThanOrEqual(260);
@@ -809,7 +816,12 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
     }),
   );
   expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
+  // Il percorso riporta al catalogo.
+  fireEvent.click(
+    within(screen.getByRole("navigation", { name: "Percorso" })).getByRole("button", {
+      name: "Viaggio",
+    }),
+  );
   expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
 });
 
@@ -842,4 +854,36 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
   fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
   confirm.mockRestore();
+});
+
+describe("contesto della vista", () => {
+  it("Catalogo aperto: percorso, conteggio, Escluse e ritorno a Tutte le foto", async () => {
+    commandsMock.libraryCount.mockResolvedValue(312 as never);
+    commandsMock.listCatalogs.mockResolvedValue([
+      {
+        catalog: { id: 9, name: "Viaggio Toscana", kind: "manual", rules: null, createdAt: 0 },
+        items: 312,
+        excluded: 6,
+      },
+    ] as never);
+    useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 9 } });
+    renderPage();
+    const path = await screen.findByRole("navigation", { name: "Percorso" });
+    await within(path).findByText("Viaggio Toscana");
+    expect(path).toHaveTextContent("Tutte le foto›Viaggio Toscana");
+    expect(await screen.findByTestId("library-header-count")).toHaveTextContent("312 foto");
+    expect(screen.getByRole("button", { name: "Escluse (6)" })).toBeInTheDocument();
+    fireEvent.click(within(path).getByRole("button", { name: "Tutte le foto" }));
+    expect(useLibrary.getState().filter.catalogId).toBeNull();
+  });
+
+  it("Filtro delle foto simili: dal pannello Filtri al chip che lo rimuove", async () => {
+    commandsMock.libraryCount.mockResolvedValue(3 as never);
+    useLibrary.setState({ filter: emptyFilter() });
+    renderPage();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Solo foto con simili" }));
+    expect(useLibrary.getState().filter.similarOnly).toBe(true);
+    fireEvent.click(await screen.findByRole("button", { name: "Rimuovi filtro Con foto simili" }));
+    expect(useLibrary.getState().filter.similarOnly).toBe(false);
+  });
 });

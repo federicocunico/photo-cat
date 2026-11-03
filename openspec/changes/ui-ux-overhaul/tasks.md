@@ -82,7 +82,7 @@
 
 ## 3. Libreria
 
-- [ ] 3.1 `LibraryHeader`:
+- [x] 3.1 `LibraryHeader`:
   - percorso, conteggio, chip, menu "Ordina" e "Vista", interruttore dell'ispettore;
   - rimuove `CatalogHeader`, `CatalogFeedback` e la vecchia `Toolbar`;
   - "Solo foto con simili" va al pannello Filtri, con il suo chip.

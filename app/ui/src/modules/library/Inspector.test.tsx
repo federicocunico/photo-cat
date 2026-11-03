@@ -5,7 +5,12 @@ import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { idsSelection, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
-import { CatalogFeedback } from "./catalogActions";
+import { useCatalogFeedback } from "./catalogActions";
+
+function CatalogFeedback() {
+  useCatalogFeedback();
+  return null;
+}
 import { useLive } from "../../store/live";
 import { ToastHost } from "../../components/feedback/ToastHost";
 import { Inspector } from "./Inspector";
