@@ -35,10 +35,7 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
   );
 }
 
-function labelOf(
-  g: GroupRow,
-  t: (k: string, o?: Record<string, unknown>) => string,
-) {
+function labelOf(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
   return g.name ?? t("people.groupOfFaces", { count: g.faces });
 }
 
@@ -172,7 +169,14 @@ export function MergeDialog({
         </p>
 
         {needNameChoice && (
-          <fieldset style={{ border: "1px solid var(--pc-border)", borderRadius: 6, padding: 10, margin: 0 }}>
+          <fieldset
+            style={{
+              border: "1px solid var(--pc-border)",
+              borderRadius: 6,
+              padding: 10,
+              margin: 0,
+            }}
+          >
             <legend style={{ padding: "0 6px" }}>{t("people.mergeKeepName")}</legend>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {named.map((g) => (

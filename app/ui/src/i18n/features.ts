@@ -79,15 +79,15 @@ export const features = {
       emptyDiscarded: "Nessun volto scartato per qualità.",
       facesSortHint: "Volti ordinati per qualità, poi per data",
       mergeSuggestTitle: "Somiglia a «{{name}}»",
-      mergeSuggestBody: "Somiglianza {{score}}. Se è la stessa persona, uniscili per evitare doppioni.",
+      mergeSuggestBody:
+        "Somiglianza {{score}}. Se è la stessa persona, uniscili per evitare doppioni.",
       mergeSuggestBodyNoScore: "Se è la stessa persona, uniscili per evitare doppioni.",
       samePerson: "Sono la stessa persona",
       notSame: "Sono persone diverse",
       notSameDone: "Segnati come persone diverse",
       undo: "Annulla",
       mergeDialogTitle: "Unisci gruppi",
-      mergeDialogBody_one:
-        "Il volto diventa di «{{name}}». Il gruppo di partenza scompare.",
+      mergeDialogBody_one: "Il volto diventa di «{{name}}». Il gruppo di partenza scompare.",
       mergeDialogBody_other:
         "I {{count}} volti diventano di «{{name}}». Il gruppo di partenza scompare.",
       mergeKeepName: "Quale nome tenere?",
@@ -227,7 +227,8 @@ export const features = {
       emptyDiscarded: "No faces discarded for quality.",
       facesSortHint: "Faces sorted by quality, then by date",
       mergeSuggestTitle: "Looks like «{{name}}»",
-      mergeSuggestBody: "Similarity {{score}}. If it is the same person, merge them to avoid duplicates.",
+      mergeSuggestBody:
+        "Similarity {{score}}. If it is the same person, merge them to avoid duplicates.",
       mergeSuggestBodyNoScore: "If it is the same person, merge them to avoid duplicates.",
       samePerson: "They are the same person",
       notSame: "They are different people",
@@ -235,8 +236,7 @@ export const features = {
       undo: "Undo",
       mergeDialogTitle: "Merge groups",
       mergeDialogBody_one: "The face becomes «{{name}}». The source group disappears.",
-      mergeDialogBody_other:
-        "The {{count}} faces become «{{name}}». The source group disappears.",
+      mergeDialogBody_other: "The {{count}} faces become «{{name}}». The source group disappears.",
       mergeKeepName: "Which name should we keep?",
       mergeInto: "Merge into {{name}}",
       mergeCancel: "Cancel",

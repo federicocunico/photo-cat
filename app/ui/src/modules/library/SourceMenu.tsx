@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Menu "…" di una sorgente nella barra laterale della Libreria: aggiornare,
 // aggiornare una cartella, rimuovere, aprire in Import e gestire i mancanti.
 import { useEffect, useRef, useState } from "react";
@@ -49,7 +50,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
   ];
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button
+      <BusyButton
         type="button"
         className="btn btn-ghost"
         style={{ padding: "0 6px", fontSize: 13 }}
@@ -59,7 +60,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
         onClick={() => setOpen(!open)}
       >
         …
-      </button>
+      </BusyButton>
       {open && (
         <div
           role="menu"
@@ -81,7 +82,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
           }}
         >
           {items.map(([key, f]) => (
-            <button
+            <BusyButton
               key={key}
               type="button"
               role="menuitem"
@@ -94,7 +95,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
               onClick={act(f)}
             >
               {t(key)}
-            </button>
+            </BusyButton>
           ))}
         </div>
       )}

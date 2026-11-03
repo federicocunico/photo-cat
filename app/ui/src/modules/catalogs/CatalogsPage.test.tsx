@@ -6,6 +6,20 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { CatalogsPage } from "./CatalogsPage";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(cleanup);
+it("Errore di caricamento: offers retry instead of an empty catalog list", async () => {
+  commandsMock.listCatalogs.mockRejectedValueOnce(new Error("Catalog unavailable"));
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <CatalogsPage />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent("Catalog unavailable");
+  commandsMock.listCatalogs.mockResolvedValue([]);
+  fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+});
 it("edits nested AND/OR rules, previews the count and saves a smart catalog", async () => {
   commandsMock.libraryCount.mockResolvedValue(42);
   commandsMock.listCatalogs.mockResolvedValue([]);
@@ -14,7 +28,7 @@ it("edits nested AND/OR rules, previews the count and saves a smart catalog", as
       <CatalogsPage />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Nuovo catalogo"));
+  fireEvent.click(await screen.findByText("Nuovo catalogo"));
   fireEvent.change(screen.getByLabelText("Nome catalogo"), { target: { value: "Montagna" } });
   fireEvent.click(screen.getByLabelText("Smart"));
   fireEvent.click(screen.getByText("Aggiungi gruppo"));
@@ -60,7 +74,7 @@ it("i gruppi solo manuali compaiono nell'editor dei cataloghi smart", async () =
       <CatalogsPage />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Nuovo catalogo"));
+  fireEvent.click(await screen.findByText("Nuovo catalogo"));
   fireEvent.change(screen.getByLabelText("Nome catalogo"), { target: { value: "Compleanni" } });
   fireEvent.click(screen.getByLabelText("Smart"));
   await screen.findByRole("option", { name: "Evento" });

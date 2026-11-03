@@ -48,7 +48,9 @@ function face(partial: Partial<FaceView> & { id: number }): FaceView {
   };
 }
 
-function located(partial: Partial<LocatedFace> & Pick<LocatedFace, "faceId" | "section">): LocatedFace {
+function located(
+  partial: Partial<LocatedFace> & Pick<LocatedFace, "faceId" | "section">,
+): LocatedFace {
   return {
     mediaId: 7,
     mediaName: "IMG_4821.JPG",
@@ -169,9 +171,11 @@ describe("PeopleModule", () => {
 
 describe("Preferenza del modulo non più esistente", () => {
   it("migra identities → people sulla sezione Persone", async () => {
-    expect(
-      migrateLayoutState({ module: "identities", leftWidth: 240 }, 0),
-    ).toMatchObject({ module: "people", peopleSection: "people", leftWidth: 240 });
+    expect(migrateLayoutState({ module: "identities", leftWidth: 240 })).toMatchObject({
+      module: "people",
+      peopleSection: "people",
+      leftWidth: 240,
+    });
 
     // setState scrive subito su localStorage: va fatto prima del fixture v0.
     useLayout.setState({ module: "library", peopleSection: "review" });
@@ -226,10 +230,12 @@ describe("Apertura diretta di una persona", () => {
       useLayout.getState().openPeople({ face: 380 });
     });
 
-    await waitFor(() => expect(commandsMock.locateFace).toHaveBeenCalledWith({
-      kind: "face",
-      face_id: 380,
-    }));
+    await waitFor(() =>
+      expect(commandsMock.locateFace).toHaveBeenCalledWith({
+        kind: "face",
+        face_id: 380,
+      }),
+    );
     await waitFor(() => expect(useLayout.getState().peopleSection).toBe("people"));
     expect(useLayout.getState().peopleTarget).toBeNull();
     expect(await screen.findByTestId("people-arrival")).toHaveTextContent(/IMG_4821\.JPG/);
@@ -335,7 +341,10 @@ describe("Apertura diretta di una persona", () => {
     commandsMock.groupFaces.mockImplementation(async (scope) => {
       if (scope && typeof scope === "object" && "kind" in scope && scope.kind === "discarded") {
         return {
-          items: [face({ id: 90, discardReason: "blurred" }), face({ id: 99, discardReason: "blurred" })],
+          items: [
+            face({ id: 90, discardReason: "blurred" }),
+            face({ id: 99, discardReason: "blurred" }),
+          ],
           next: null,
           total: 2,
           goodCount: 8,
@@ -400,9 +409,10 @@ describe("Revisione da tastiera", () => {
     await within(list).findByText(/Gruppo di 10 volti/i);
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() => {
-      expect(
-        within(list).getByRole("option", { name: /Gruppo di 10 volti/i }),
-      ).toHaveAttribute("aria-selected", "true");
+      expect(within(list).getByRole("option", { name: /Gruppo di 10 volti/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     });
 
     fireEvent.keyDown(window, { key: "n" });
@@ -413,13 +423,12 @@ describe("Revisione da tastiera", () => {
     await screen.findByRole("option", { name: /Crea l'identità "Marco"/i });
     fireEvent.keyDown(who, { key: "Enter" });
 
-    await waitFor(() =>
-      expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(1, "uid-new"),
-    );
+    await waitFor(() => expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(1, "uid-new"));
     await waitFor(() => {
-      expect(
-        within(list).getByRole("option", { name: /Gruppo di 20 volti/i }),
-      ).toHaveAttribute("aria-selected", "true");
+      expect(within(list).getByRole("option", { name: /Gruppo di 20 volti/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     });
   });
 
@@ -434,34 +443,22 @@ describe("Revisione da tastiera", () => {
     await within(list).findByText(/Gruppo di 11 volti/i);
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() =>
-      expect(list.querySelector('[data-group-id="1"]')).toHaveAttribute(
-        "aria-selected",
-        "true",
-      ),
+      expect(list.querySelector('[data-group-id="1"]')).toHaveAttribute("aria-selected", "true"),
     );
 
     const filter = screen.getByLabelText(/Filtra per nome/i);
     filter.focus();
     fireEvent.keyDown(filter, { key: "ArrowDown" });
     // Resta sul primo: ↓ nel campo filtro non deve spostare la selezione.
-    expect(list.querySelector('[data-group-id="1"]')).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(list.querySelector('[data-group-id="2"]')).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
+    expect(list.querySelector('[data-group-id="1"]')).toHaveAttribute("aria-selected", "true");
+    expect(list.querySelector('[data-group-id="2"]')).toHaveAttribute("aria-selected", "false");
   });
 });
 
 describe("Aggiornamento dopo l'analisi", () => {
   it("su faces://changed aggiorna elenco e conteggi senza perdere selezione né scorrimento", async () => {
     commandsMock.listGroups.mockResolvedValue({
-      items: [
-        row({ id: 1, faces: 10, photos: 8 }),
-        row({ id: 2, faces: 20, photos: 15 }),
-      ],
+      items: [row({ id: 1, faces: 10, photos: 8 }), row({ id: 2, faces: 20, photos: 15 })],
       next: null,
       total: 2,
     } as never);
@@ -477,9 +474,10 @@ describe("Aggiornamento dopo l'analisi", () => {
     await within(list).findByText(/Gruppo di 10 volti/i);
     fireEvent.click(within(list).getByText(/Gruppo di 20 volti/i));
     await waitFor(() =>
-      expect(
-        within(list).getByRole("option", { name: /Gruppo di 20 volti/i }),
-      ).toHaveAttribute("aria-selected", "true"),
+      expect(within(list).getByRole("option", { name: /Gruppo di 20 volti/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
     );
 
     Object.defineProperty(list, "scrollTop", { value: 120, writable: true, configurable: true });
@@ -504,14 +502,13 @@ describe("Aggiornamento dopo l'analisi", () => {
 
     act(() => emit("facesChanged", undefined));
 
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["people-sections"] }),
-    );
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["people-sections"] }));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["people-groups"] });
     await waitFor(() =>
-      expect(
-        within(list).getByRole("option", { name: /Gruppo di 22 volti/i }),
-      ).toHaveAttribute("aria-selected", "true"),
+      expect(within(list).getByRole("option", { name: /Gruppo di 22 volti/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
     );
     expect(list.scrollTop).toBe(120);
     const tabs = screen.getByRole("tablist");

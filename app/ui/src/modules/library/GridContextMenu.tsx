@@ -1,5 +1,6 @@
 // Menu contestuale della griglia: agisce sulla selezione (o sulla sola
 // miniatura cliccata). Navigabile con le frecce, Invio ed Esc.
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -131,7 +132,7 @@ export function GridContextMenu({
       <div className="muted" style={{ padding: "4px 10px", fontSize: 12 }}>
         {t("externalApps.actsOn", { count: ids.length })}
       </div>
-      <button
+      <BusyButton
         type="button"
         role="menuitem"
         aria-haspopup="menu"
@@ -140,7 +141,7 @@ export function GridContextMenu({
         onClick={() => setSub(!sub)}
       >
         {t("externalApps.openWith")} ▸
-      </button>
+      </BusyButton>
       {sub && (
         <div
           role="menu"
@@ -149,7 +150,7 @@ export function GridContextMenu({
           style={{ paddingLeft: 12 }}
         >
           {apps.map((a) => (
-            <button
+            <BusyButton
               key={a.id}
               type="button"
               role="menuitem"
@@ -157,36 +158,36 @@ export function GridContextMenu({
               onClick={act(() => onOpen(ids, { kind: "app", id: a.id ?? "" }))}
             >
               {a.name}
-            </button>
+            </BusyButton>
           ))}
-          <button
+          <BusyButton
             type="button"
             role="menuitem"
             style={item}
             onClick={act(() => onOpen(ids, { kind: "system" }))}
           >
             {t("externalApps.system")}
-          </button>
+          </BusyButton>
         </div>
       )}
-      <button
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
         onClick={act(() => onOpen(ids, { kind: "system" }))}
       >
         {t("externalApps.openDefault")}
-      </button>
-      <button
+      </BusyButton>
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
         onClick={act(() => onOpen(ids, { kind: "reveal" }))}
       >
         {t("externalApps.reveal")}
-      </button>
+      </BusyButton>
       {(filter.catalogId != null || filter.excludedFrom != null) && (
-        <button
+        <BusyButton
           type="button"
           role="menuitem"
           style={item}
@@ -202,7 +203,7 @@ export function GridContextMenu({
           })}
         >
           {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
-        </button>
+        </BusyButton>
       )}
       <hr style={{ border: 0, borderTop: "1px solid var(--pc-border)", margin: "4px 0" }} />
       {placing ? (
@@ -218,7 +219,7 @@ export function GridContextMenu({
                 setPicked(s);
               }}
             />
-            <button
+            <BusyButton
               type="button"
               className="btn"
               disabled={!place.trim()}
@@ -234,25 +235,30 @@ export function GridContextMenu({
               }}
             >
               {t("place.set")}
-            </button>
+            </BusyButton>
           </div>
         </div>
       ) : (
-        <button type="button" role="menuitem" style={item} onClick={() => setPlacing(true)}>
+        <BusyButton type="button" role="menuitem" style={item} onClick={() => setPlacing(true)}>
           {t("externalApps.setPlace")}
-        </button>
+        </BusyButton>
       )}
-      <button type="button" role="menuitem" style={item} onClick={act(() => onPlace(target, null))}>
+      <BusyButton
+        type="button"
+        role="menuitem"
+        style={item}
+        onClick={act(() => onPlace(target, null))}
+      >
         {t("externalApps.resetPlace")}
-      </button>
-      <button
+      </BusyButton>
+      <BusyButton
         type="button"
         role="menuitem"
         style={item}
         onClick={act(() => void commands.reanalyze(target))}
       >
         {t("externalApps.reanalyze")}
-      </button>
+      </BusyButton>
     </div>
   );
 }

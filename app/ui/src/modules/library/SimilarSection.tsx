@@ -87,22 +87,18 @@ export function SimilarSection({ id }: { id: number }) {
           <button
             type="button"
             className="btn"
-            onClick={() => void run(() => commands.similarSetCover(g.id, id))}
+            onClick={() => run(() => commands.similarSetCover(g.id, id))}
           >
             {t("similar.setCover")}
           </button>
         )}
-        <button
-          type="button"
-          className="btn"
-          onClick={() => void run(() => commands.similarRemove(id))}
-        >
+        <button type="button" className="btn" onClick={() => run(() => commands.similarRemove(id))}>
           {t("similar.remove")}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
-          onClick={() => void run(() => commands.similarDissolve(g.id))}
+          onClick={() => run(() => commands.similarDissolve(g.id))}
         >
           {t("similar.dissolve")}
         </button>

@@ -6,6 +6,28 @@ import { useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { fmtDec, fmtInt, mbToGb } from "../../lib/format";
 import { currentPhase } from "../../lib/jobs";
+import { usePending } from "../../store/pending";
+import { Spinner } from "../feedback/Spinner";
+
+export function PendingIndicator() {
+  const count = usePending((s) => s.count);
+  const [visible, setVisible] = useState(false);
+  const { t } = useTranslation();
+  const active = count > 0;
+  useEffect(() => {
+    if (!active) {
+      setVisible(false);
+      return;
+    }
+    const timer = setTimeout(() => setVisible(true), 300);
+    return () => clearTimeout(timer);
+  }, [active]);
+  return active && visible ? (
+    <span title={t("feedback.pending", { count })} data-testid="pending-ipc">
+      <Spinner label={t("feedback.pending", { count })} />
+    </span>
+  ) : null;
+}
 
 /** Ricerca globale: filtra la Libreria per testo (nome, percorso, luogo, persone, tag). */
 function GlobalSearch() {
@@ -56,7 +78,7 @@ export function JobPill() {
       : t("shell.jobPill", { phase: phaseName, percent });
   return (
     <button type="button" className="pill" onClick={() => setModule("jobs")} data-testid="job-pill">
-      <Icon.Spinner size={14} style={{ color: "var(--pc-accent-text)" }} />
+      {job ? <Spinner size={14} /> : <Icon.Jobs size={14} />}
       <span>{label}</span>
       {job && (
         <span className="bar" style={{ width: 64 }} aria-hidden="true">
@@ -144,6 +166,7 @@ export function TopBar() {
           gap: 10,
         }}
       >
+        <PendingIndicator />
         <JobPill />
         <RamChip />
       </div>

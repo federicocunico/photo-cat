@@ -321,6 +321,16 @@ pub fn face_protocol(
 ) {
     use tauri::Manager;
     let handle = ctx.app_handle().clone();
+    if handle.try_state::<AppState>().is_none() {
+        responder.respond(
+            tauri::http::Response::builder()
+                .status(503)
+                .header("Retry-After", "1")
+                .body(Vec::new())
+                .expect("risposta avvio"),
+        );
+        return;
+    }
     let id = request
         .uri()
         .path()

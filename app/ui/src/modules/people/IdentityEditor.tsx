@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -160,13 +160,22 @@ export function IdentityEditor({
       qc.invalidateQueries({ queryKey: ["people-groups"] }),
       qc.invalidateQueries({ queryKey: ["people-sections"] }),
     ]);
+  // Blocco sincrono: un doppio clic o un doppio invio non manda due volte la stessa azione.
+  const locked = useRef(false);
+  const [busy, setBusy] = useState(false);
   const run = async (fn: () => Promise<unknown>) => {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
     setError("");
     try {
       await fn();
       await refresh();
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      locked.current = false;
+      setBusy(false);
     }
   };
   const save = () =>
@@ -258,7 +267,12 @@ export function IdentityEditor({
             onChange={(e) => setDraft({ ...draft, threshold: Number(e.target.value) / 100 })}
           />
         </label>
-        <button className="btn btn-primary" type="submit" disabled={!draft.name.trim()}>
+        <button
+          className="btn btn-primary"
+          type="submit"
+          disabled={!draft.name.trim()}
+          aria-busy={busy || undefined}
+        >
           {creating ? t("identities.create") : t("identities.save")}
         </button>
       </form>

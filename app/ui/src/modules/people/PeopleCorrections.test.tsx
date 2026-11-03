@@ -102,10 +102,8 @@ describe("Unione persone", () => {
       section: "people",
     });
     commandsMock.listGroups.mockImplementation(async (section: string) => {
-      if (section === "review")
-        return { items: [unnamed], next: null, total: 1 };
-      if (section === "people")
-        return { items: [giulia], next: null, total: 1 };
+      if (section === "review") return { items: [unnamed], next: null, total: 1 };
+      if (section === "people") return { items: [giulia], next: null, total: 1 };
       return { items: [], next: null, total: 0 };
     });
 
@@ -155,10 +153,8 @@ describe("Unione persone", () => {
     });
     // Un gruppo "review" con nome non è tipico, ma copre la scelta del nome nel dialogo.
     commandsMock.listGroups.mockImplementation(async (section: string) => {
-      if (section === "review")
-        return { items: [marco], next: null, total: 1 };
-      if (section === "people")
-        return { items: [giulia], next: null, total: 1 };
+      if (section === "review") return { items: [marco], next: null, total: 1 };
+      if (section === "people") return { items: [giulia], next: null, total: 1 };
       return { items: [], next: null, total: 0 };
     });
 
@@ -242,8 +238,7 @@ describe("Ripristino", () => {
       newFaces: 6,
     });
     commandsMock.listGroups.mockImplementation(async (section: string) => {
-      if (section === "ignored")
-        return { items: [ignored], next: null, total: 1 };
+      if (section === "ignored") return { items: [ignored], next: null, total: 1 };
       return { items: [], next: null, total: 0 };
     });
 

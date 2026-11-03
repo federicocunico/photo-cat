@@ -31,9 +31,7 @@ export interface DiagFilter {
 
 /** Destinazione per aprire il modulo Persone su una persona, un volto o una foto. */
 export type PeopleTarget =
-  | { person: number }
-  | { face: number }
-  | { media: number; person?: number | null };
+  { person: number } | { face: number } | { media: number; person?: number | null };
 
 interface LayoutState {
   module: ModuleId;
@@ -76,7 +74,7 @@ type PersistedLayout = {
 };
 
 /** Migra preferenze: la voce Identità non esiste più → modulo Persone, sezione Persone. */
-export function migrateLayoutState(persisted: unknown, _fromVersion: number): PersistedLayout {
+export function migrateLayoutState(persisted: unknown): PersistedLayout {
   const s = (persisted ?? {}) as PersistedLayout;
   if (s.module === "identities") {
     return { ...s, module: "people", peopleSection: "people" };

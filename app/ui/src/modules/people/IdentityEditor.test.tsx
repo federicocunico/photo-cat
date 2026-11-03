@@ -6,6 +6,7 @@ import type { IdentitiesView, IdentityRow } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { PeopleModule } from "./PeopleModule";
+import { deferred } from "../../test/deferred";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -196,4 +197,23 @@ it("shows identities without photos in the library as editable", async () => {
   expect(screen.getByRole("button", { name: /Esporta/ })).toBeInTheDocument();
   const card = screen.getByLabelText("Scheda del gruppo");
   expect(within(card).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+});
+
+it("Doppio clic su Salva: il salvataggio parte una sola volta", async () => {
+  const pending = deferred<string>();
+  commandsMock.saveIdentity.mockImplementationOnce(() => pending.promise);
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("+ Nuova identità"));
+  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
+    target: { value: "Test identity" },
+  });
+  const save = screen.getByRole("button", { name: "Crea identità" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  fireEvent.submit(save.closest("form")!);
+  await waitFor(() => expect(save).toHaveAttribute("aria-busy", "true"));
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
+  pending.resolve("new-uid");
+  await waitFor(() => expect(commandsMock.listIdentities.mock.calls.length).toBeGreaterThan(1));
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
 });

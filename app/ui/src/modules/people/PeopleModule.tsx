@@ -141,16 +141,13 @@ export function PeopleModule() {
         setTarget({ kind: "group", id: linkedId });
         setSelectedIds([linkedId]);
         setGroup((g) =>
-          g
-            ? { ...g, id: linkedId, section: "people" }
-            : stubGroup(linkedId, "people"),
+          g ? { ...g, id: linkedId, section: "people" } : stubGroup(linkedId, "people"),
         );
         setCreating(false);
         return;
       }
       const order = catalogRef.current.map((r) => r.id);
-      const cur =
-        targetRef.current?.kind === "group" ? targetRef.current.id : linkedId;
+      const cur = targetRef.current?.kind === "group" ? targetRef.current.id : linkedId;
       const idx = order.indexOf(cur);
       const nextId =
         (idx >= 0 ? order.slice(idx + 1).find((id) => id !== linkedId) : undefined) ??
@@ -215,9 +212,7 @@ export function PeopleModule() {
       const order = catalogRef.current;
       if (!order.length) return;
       const cur =
-        targetRef.current?.kind === "group"
-          ? targetRef.current.id
-          : selectedIdsRef.current[0];
+        targetRef.current?.kind === "group" ? targetRef.current.id : selectedIdsRef.current[0];
       const idx = cur != null ? order.findIndex((g) => g.id === cur) : -1;
       const nextIdx =
         idx < 0
@@ -257,24 +252,28 @@ export function PeopleModule() {
       if (personCardRef.current?.ignoreGroup()) return;
       const g = groupRef.current;
       if (!g || sectionRef.current === "ignored") return;
-      void commands.correctPerson({ action: "ignore", group: g.id }).then(() =>
-        Promise.all([
-          qc.invalidateQueries({ queryKey: ["people-groups"] }),
-          qc.invalidateQueries({ queryKey: ["people-sections"] }),
-          qc.invalidateQueries({ queryKey: ["group-faces"] }),
-        ]),
-      );
+      void commands
+        .correctPerson({ action: "ignore", group: g.id })
+        .then(() =>
+          Promise.all([
+            qc.invalidateQueries({ queryKey: ["people-groups"] }),
+            qc.invalidateQueries({ queryKey: ["people-sections"] }),
+            qc.invalidateQueries({ queryKey: ["group-faces"] }),
+          ]),
+        );
     },
     undo() {
-      void commands.undoBulk().then(() =>
-        Promise.all([
-          qc.invalidateQueries({ queryKey: ["people-groups"] }),
-          qc.invalidateQueries({ queryKey: ["people-sections"] }),
-          qc.invalidateQueries({ queryKey: ["group-faces"] }),
-          qc.invalidateQueries({ queryKey: ["people"] }),
-          qc.invalidateQueries({ queryKey: ["identities"] }),
-        ]),
-      );
+      void commands
+        .undoBulk()
+        .then(() =>
+          Promise.all([
+            qc.invalidateQueries({ queryKey: ["people-groups"] }),
+            qc.invalidateQueries({ queryKey: ["people-sections"] }),
+            qc.invalidateQueries({ queryKey: ["group-faces"] }),
+            qc.invalidateQueries({ queryKey: ["people"] }),
+            qc.invalidateQueries({ queryKey: ["identities"] }),
+          ]),
+        );
     },
   });
 
@@ -301,11 +300,7 @@ export function PeopleModule() {
         if (cancelled) return;
         const row = identities.identities.find((r) => r.person === person) ?? null;
         setIdentity(row);
-        setGroup(
-          row
-            ? stubGroup(person, "people", row.name)
-            : await loadGroup("people", person),
-        );
+        setGroup(row ? stubGroup(person, "people", row.name) : await loadGroup("people", person));
         clearPeopleTarget();
         return;
       }
@@ -326,8 +321,7 @@ export function PeopleModule() {
         if (located.section === "people") {
           const identities = await commands.listIdentities(null);
           if (cancelled) return;
-          const row =
-            identities.identities.find((r) => r.person === located.groupId) ?? null;
+          const row = identities.identities.find((r) => r.person === located.groupId) ?? null;
           setIdentity(row);
           setGroup(
             row
@@ -399,9 +393,7 @@ export function PeopleModule() {
             maxWidth: "90%",
           }}
         >
-          <span>
-            {t("people.highlightedFrom", { name: arrival.mediaName })}
-          </span>
+          <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
           <button
             type="button"
             className="btn btn-ghost"

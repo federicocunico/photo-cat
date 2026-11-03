@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
@@ -66,10 +67,7 @@ function FocusedFaces() {
               : face.ignored
                 ? t("library.inspector.ignoredFace")
                 : t("library.inspector.unrecognizedFace"))}
-          <OpenInPeople
-            target={{ face: face.id }}
-            style={{ padding: "0 4px", fontSize: 12 }}
-          />
+          <OpenInPeople target={{ face: face.id }} style={{ padding: "0 4px", fontSize: 12 }} />
         </span>
       ))}
     </div>
@@ -237,7 +235,7 @@ function Card({
   const url = thumbUrl(item.thumb);
   const [over, setOver] = useState(false);
   return (
-    <button
+    <BusyButton
       type="button"
       data-testid={`seq-${item.id}`}
       aria-pressed={selected}
@@ -351,7 +349,7 @@ function Card({
           {item.device ?? t("sequence.otherSources")}
         </span>
       </div>
-    </button>
+    </BusyButton>
   );
 }
 
@@ -476,13 +474,13 @@ function SessionsGrid({
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
-                  <button
+                  <BusyButton
                     className="btn"
                     style={{ marginLeft: "auto" }}
-                    onClick={() => void selectSession(row.session.index)}
+                    onClick={() => selectSession(row.session.index)}
                   >
                     {t("sequence.selectSession")}
-                  </button>
+                  </BusyButton>
                 </div>
               ) : (
                 row.items.map((it) => (
@@ -574,7 +572,7 @@ function Undated({
                   background: url ? `center / cover url("${url}")` : "var(--pc-thumb-bg)",
                 }}
               />
-              <button
+              <BusyButton
                 className="btn"
                 style={{ minHeight: 26, fontSize: 12, padding: "0 6px" }}
                 onClick={() => {
@@ -583,7 +581,7 @@ function Undated({
                 }}
               >
                 {t("sequence.placeAfter")}
-              </button>
+              </BusyButton>
             </div>
           );
         })}
@@ -608,7 +606,7 @@ function Undated({
               </option>
             ))}
           </select>
-          <button
+          <BusyButton
             className="btn btn-primary"
             disabled={!after}
             onClick={() => {
@@ -617,10 +615,10 @@ function Undated({
             }}
           >
             {t("sequence.place")}
-          </button>
-          <button className="btn" onClick={() => setMenu(null)}>
+          </BusyButton>
+          <BusyButton className="btn" onClick={() => setMenu(null)}>
             {t("sequence.cancel")}
-          </button>
+          </BusyButton>
         </div>
       )}
     </section>
@@ -796,9 +794,9 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           </div>
         );
       })}
-      <button className="btn" disabled={selected.length !== 2} onClick={() => void align()}>
+      <BusyButton className="btn" disabled={selected.length !== 2} onClick={() => align()}>
         {t("sequence.align")}
-      </button>
+      </BusyButton>
       {selected.length !== 2 && (
         <span className="muted" style={{ fontSize: 12 }}>
           {t("sequence.alignHelp")}
@@ -811,7 +809,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
       )}
       {error && <p role="alert">{error}</p>}
       <div className="feature-actions" style={{ margin: 0 }}>
-        <button
+        <BusyButton
           className="btn"
           disabled={!dirty.length}
           onClick={() => {
@@ -820,14 +818,14 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           }}
         >
           {t("sequence.discard")}
-        </button>
-        <button className="btn btn-primary" disabled={!dirty.length} onClick={() => void apply()}>
+        </BusyButton>
+        <BusyButton className="btn btn-primary" disabled={!dirty.length} onClick={() => apply()}>
           {t("sequence.apply", { count: dirty.length })}
-        </button>
+        </BusyButton>
       </div>
-      <button className="btn" onClick={() => setView("export")}>
+      <BusyButton className="btn" onClick={() => setView("export")}>
         {t("sequence.export")}
-      </button>
+      </BusyButton>
     </aside>
   );
 }
@@ -955,7 +953,7 @@ export function SequencePage() {
                   offset: offsetText(s.offsetMin),
                 })}
               </span>
-              <button
+              <BusyButton
                 className="btn btn-primary"
                 onClick={() =>
                   void commands
@@ -965,8 +963,8 @@ export function SequencePage() {
                 }
               >
                 {t("sequence.applySuggestion", { offset: offsetText(s.offsetMin) })}
-              </button>
-              <button
+              </BusyButton>
+              <BusyButton
                 className="btn"
                 onClick={() =>
                   void commands
@@ -975,7 +973,7 @@ export function SequencePage() {
                 }
               >
                 {t("sequence.ignore")}
-              </button>
+              </BusyButton>
             </div>
           );
         })}

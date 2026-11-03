@@ -34,11 +34,7 @@ fn resources() -> AiResources {
         .entries
         .retain(|e| e.id == "yunet" || e.id == "sface");
     let models_dir = PathBuf::from(DATA).join("models");
-    let store = Arc::new(ModelStore::new(
-        manifest,
-        models_dir,
-        Some(asset("models")),
-    ));
+    let store = Arc::new(ModelStore::new(manifest, models_dir, Some(asset("models"))));
     store.restore(&store.check_all(), None, &AtomicBool::new(false));
     let gov = MemoryGovernor::new(1024);
     let pool = Arc::new(ModelPool::new(

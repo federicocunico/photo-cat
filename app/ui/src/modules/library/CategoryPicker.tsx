@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Selettore del valore di un gruppo di catalogazione con "Nuova voce…": il
 // campo per il nome compare sul posto (Invio conferma, Esc annulla).
 import { useState } from "react";
@@ -73,12 +74,17 @@ export function CategoryPicker({
             }
           }}
         />
-        <button type="button" className="btn" disabled={busy} onClick={() => void confirm()}>
+        <BusyButton
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={async () => await confirm()}
+        >
           {t("entries.confirm")}
-        </button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={cancel}>
+        </BusyButton>
+        <BusyButton type="button" className="btn btn-ghost" disabled={busy} onClick={cancel}>
           {t("entries.cancel")}
-        </button>
+        </BusyButton>
         {error && (
           <span role="alert" style={{ color: "var(--pc-danger)", fontSize: 13 }}>
             {error}

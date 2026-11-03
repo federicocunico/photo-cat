@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useTranslation } from "react-i18next";
 import { useLabelName, useTaxonomy } from "../library/labelName";
 export type RuleNode =
@@ -59,30 +60,30 @@ export function RuleEditor({
                 onChange({ ...rule, rules: rule.rules.map((v, j) => (i === j ? r : v)) })
               }
             />
-            <button
+            <BusyButton
               className="btn"
               disabled={rule.rules.length === 1}
               onClick={() => onChange({ ...rule, rules: rule.rules.filter((_, j) => j !== i) })}
             >
               {t("catalogs.removeRule")}
-            </button>
+            </BusyButton>
           </div>
         ))}
-        <button
+        <BusyButton
           className="btn"
           onClick={() => onChange({ ...rule, rules: [...rule.rules, newRule()] })}
         >
           {t("catalogs.addRule")}
-        </button>
+        </BusyButton>
         {depth < 5 && (
-          <button
+          <BusyButton
             className="btn"
             onClick={() =>
               onChange({ ...rule, rules: [...rule.rules, { op: "or", rules: [newRule()] }] })
             }
           >
             {t("catalogs.addGroup")}
-          </button>
+          </BusyButton>
         )}
       </fieldset>
     );

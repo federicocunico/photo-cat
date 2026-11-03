@@ -458,6 +458,16 @@ pub fn thumb_protocol(
     request: tauri::http::Request<Vec<u8>>,
     responder: tauri::UriSchemeResponder,
 ) {
+    if ctx.app_handle().try_state::<AppState>().is_none() {
+        responder.respond(
+            tauri::http::Response::builder()
+                .status(503)
+                .header("Retry-After", "1")
+                .body(Vec::new())
+                .expect("risposta avvio"),
+        );
+        return;
+    }
     let path = ctx.app_handle().try_state::<AppState>().and_then(|state| {
         let key = request.uri().path().trim_start_matches('/');
         state.thumbs.path_of(key)

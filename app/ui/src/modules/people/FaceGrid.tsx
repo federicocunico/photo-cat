@@ -11,13 +11,7 @@ import {
   type MouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  commands,
-  isTauri,
-  type Correction,
-  type FaceScope,
-  type GroupRow,
-} from "../../lib/ipc";
+import { commands, isTauri, type Correction, type FaceScope, type GroupRow } from "../../lib/ipc";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
@@ -59,13 +53,7 @@ export const FaceGrid = forwardRef<
     onSelectedFacesChange?: (ids: number[]) => void;
   }
 >(function FaceGrid(
-  {
-    target,
-    group,
-    singlesCount = 0,
-    highlight = null,
-    onSelectedFacesChange,
-  },
+  { target, group, singlesCount = 0, highlight = null, onSelectedFacesChange },
   ref,
 ) {
   const { t } = useTranslation();
@@ -114,8 +102,7 @@ export const FaceGrid = forwardRef<
 
   const faces = useInfiniteQuery({
     queryKey: ["group-faces", scope],
-    queryFn: ({ pageParam }) =>
-      commands.groupFaces(scope!, "quality_desc", pageParam, PAGE),
+    queryFn: ({ pageParam }) => commands.groupFaces(scope!, "quality_desc", pageParam, PAGE),
     initialPageParam: null as { qualityScore: number | null; id: number } | null,
     getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && scope != null,
@@ -134,10 +121,7 @@ export const FaceGrid = forwardRef<
     enabled: isTauri() && target != null,
   });
 
-  const items = useMemo(
-    () => faces.data?.pages.flatMap((p) => p.items) ?? [],
-    [faces.data],
-  );
+  const items = useMemo(() => faces.data?.pages.flatMap((p) => p.items) ?? [], [faces.data]);
   const order = useMemo(() => items.map((i) => i.id), [items]);
   const meta = faces.data?.pages[0];
   const goodCount = meta?.goodCount ?? group?.goodFaces ?? 0;
@@ -156,10 +140,7 @@ export const FaceGrid = forwardRef<
   }, []);
 
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL_MIN + GAP)));
-  const cell = Math.max(
-    CELL_MIN,
-    Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols),
-  );
+  const cell = Math.max(CELL_MIN, Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols));
   const rowHeight = cell + META + GAP;
   const rows = Math.ceil(items.length / cols) || 0;
 
@@ -249,9 +230,7 @@ export const FaceGrid = forwardRef<
       const id = focusedFace ?? items[0]?.id;
       if (id == null) return;
       setFocusedFace(id);
-      const next = selected.includes(id)
-        ? selected.filter((x) => x !== id)
-        : [...selected, id];
+      const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
       setSelection(next, id);
     },
     focusMoveSelect() {
@@ -262,9 +241,7 @@ export const FaceGrid = forwardRef<
       const gid = target?.kind === "group" ? target.id : null;
       if (selected.length && gid != null) {
         void correct(
-          ...selected.map(
-            (face): Correction => ({ action: "reject", person: gid, face }),
-          ),
+          ...selected.map((face): Correction => ({ action: "reject", person: gid, face })),
         );
         return true;
       }
@@ -402,13 +379,11 @@ export const FaceGrid = forwardRef<
               disabled={busy || selected.length === 0}
               onClick={() =>
                 void correct(
-                  ...selected.map(
-                    (face): Correction => ({
-                      action: "reject",
-                      person: groupId,
-                      face,
-                    }),
-                  ),
+                  ...selected.map((face): Correction => ({
+                    action: "reject",
+                    person: groupId,
+                    face,
+                  })),
                 )
               }
             >
@@ -418,9 +393,7 @@ export const FaceGrid = forwardRef<
               type="button"
               className="btn"
               disabled={busy || selected.length === 0}
-              onClick={() =>
-                void correct({ action: "separate", person: groupId, faces: selected })
-              }
+              onClick={() => void correct({ action: "separate", person: groupId, faces: selected })}
             >
               {t("people.newGroup")}
             </button>
@@ -431,15 +404,8 @@ export const FaceGrid = forwardRef<
           className="btn"
           disabled={busy || selected.length === 0}
           onClick={() => {
-            if (
-              !window.confirm(
-                t("people.removeConfirm", { count: selected.length }),
-              )
-            )
-              return;
-            void correct(
-              ...selected.map((face): Correction => ({ action: "remove", face })),
-            );
+            if (!window.confirm(t("people.removeConfirm", { count: selected.length }))) return;
+            void correct(...selected.map((face): Correction => ({ action: "remove", face })));
           }}
           style={{ color: "var(--pc-danger, inherit)" }}
         >
@@ -502,9 +468,7 @@ export const FaceGrid = forwardRef<
           <div style={{ flex: "1 1 220px" }}>
             <b>
               {t("people.mergeSuggestTitle", {
-                name:
-                  hint.otherName ??
-                  t("people.groupOfFaces", { count: hint.otherFaces }),
+                name: hint.otherName ?? t("people.groupOfFaces", { count: hint.otherFaces }),
               })}
             </b>
             <br />
@@ -606,8 +570,7 @@ export const FaceGrid = forwardRef<
         aria-label={t("people.facesGrid")}
         style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0 }}
         onPointerDown={(e) => {
-          if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey))
-            return;
+          if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
           const r = e.currentTarget.getBoundingClientRect();
           drag.current = {
             x: e.clientX - r.left,
@@ -656,108 +619,107 @@ export const FaceGrid = forwardRef<
         }}
       >
         <QueryView
-          isLoading={faces.isLoading}
-          isError={faces.isError}
-          isEmpty={items.length === 0}
-          loading={<p className="muted" style={{ padding: 16 }}>{t("people.loading")}</p>}
-          error={
-            <p role="alert" style={{ padding: 16 }}>
-              {t("people.failed")}
+          query={faces}
+          isEmpty={() => items.length === 0}
+          skeleton={
+            <p className="muted" style={{ padding: 16 }}>
+              {t("people.loading")}
             </p>
           }
+          error={t("people.failed")}
           empty={
             <p className="muted" style={{ padding: 16 }}>
               {discardedOnly ? t("people.emptyDiscarded") : t("people.emptyFaces")}
             </p>
           }
         >
-          <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
-            {box && (
-              <div
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  left: box.x,
-                  top: box.y,
-                  width: box.w,
-                  height: box.h,
-                  border: "1px solid var(--pc-accent)",
-                  background: "var(--pc-accent-soft-bg)",
-                  opacity: 0.5,
-                  pointerEvents: "none",
-                  zIndex: 2,
-                }}
-              />
-            )}
-            {vitems.map((row) => (
-              <div
-                key={row.key}
-                style={{
-                  position: "absolute",
-                  top: row.start + PAD,
-                  left: PAD,
-                  right: PAD,
-                  display: "flex",
-                  gap: GAP,
-                }}
-              >
-                {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
-                  const sel = selected.includes(face.id);
-                  const lit = highlight?.faceId === face.id;
-                  const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
-                  return (
-                    <button
-                      key={face.id}
-                      type="button"
-                      data-testid={`face-${face.id}`}
-                      data-highlighted={lit || undefined}
-                      aria-pressed={sel}
-                      title={tip}
-                      onClick={onFaceClick(face.id)}
-                      style={{
-                        width: cell,
-                        padding: 0,
-                        margin: 0,
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        background: "var(--pc-panel)",
-                        border: `2px solid ${
-                          lit
-                            ? "var(--pc-warn)"
-                            : sel
-                              ? "var(--pc-accent)"
-                              : "var(--pc-raised)"
-                        }`,
-                        color: "inherit",
-                        font: "inherit",
-                        opacity: face.discardReason ? 0.72 : 1,
-                      }}
-                    >
-                      <FaceCrop face={face} size={cell - 4} />
-                      <span
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          padding: "2px 6px",
-                          fontSize: 11,
-                          color: "var(--pc-text-soft)",
-                        }}
-                      >
-                        <span className="mono">
-                          {face.year != null ? String(face.year) : ""}
-                        </span>
-                        {face.qualityScore != null && (
-                          <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+          {() => (
+            <>
+              <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
+                {box && (
+                  <div
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      left: box.x,
+                      top: box.y,
+                      width: box.w,
+                      height: box.h,
+                      border: "1px solid var(--pc-accent)",
+                      background: "var(--pc-accent-soft-bg)",
+                      opacity: 0.5,
+                      pointerEvents: "none",
+                      zIndex: 2,
+                    }}
+                  />
+                )}
+                {vitems.map((row) => (
+                  <div
+                    key={row.key}
+                    style={{
+                      position: "absolute",
+                      top: row.start + PAD,
+                      left: PAD,
+                      right: PAD,
+                      display: "flex",
+                      gap: GAP,
+                    }}
+                  >
+                    {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
+                      const sel = selected.includes(face.id);
+                      const lit = highlight?.faceId === face.id;
+                      const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
+                      return (
+                        <button
+                          key={face.id}
+                          type="button"
+                          data-testid={`face-${face.id}`}
+                          data-highlighted={lit || undefined}
+                          aria-pressed={sel}
+                          title={tip}
+                          onClick={onFaceClick(face.id)}
+                          style={{
+                            width: cell,
+                            padding: 0,
+                            margin: 0,
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            background: "var(--pc-panel)",
+                            border: `2px solid ${
+                              lit ? "var(--pc-warn)" : sel ? "var(--pc-accent)" : "var(--pc-raised)"
+                            }`,
+                            color: "inherit",
+                            font: "inherit",
+                            opacity: face.discardReason ? 0.72 : 1,
+                          }}
+                        >
+                          <FaceCrop face={face} size={cell - 4} />
+                          <span
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "2px 6px",
+                              fontSize: 11,
+                              color: "var(--pc-text-soft)",
+                            }}
+                          >
+                            <span className="mono">
+                              {face.year != null ? String(face.year) : ""}
+                            </span>
+                            {face.qualityScore != null && (
+                              <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </QueryView>
       </div>
 
@@ -773,7 +735,10 @@ export const FaceGrid = forwardRef<
         }}
       >
         <span>{t("people.facesSortHint")}</span>
-        <span className="mono">{fmtInt(items.length)}{meta?.total ? ` / ${fmtInt(meta.total)}` : ""}</span>
+        <span className="mono">
+          {fmtInt(items.length)}
+          {meta?.total ? ` / ${fmtInt(meta.total)}` : ""}
+        </span>
       </div>
     </div>
   );

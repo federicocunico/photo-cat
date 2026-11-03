@@ -34,7 +34,12 @@ function CoverPreview({ group }: { group: GroupRow }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span
         className="label"
-        style={{ fontSize: 12, letterSpacing: "0.06em", color: "var(--pc-text-2)", fontWeight: 600 }}
+        style={{
+          fontSize: 12,
+          letterSpacing: "0.06em",
+          color: "var(--pc-text-2)",
+          fontWeight: 600,
+        }}
       >
         {t("people.cover")}
       </span>
@@ -122,7 +127,7 @@ export const PersonCard = forwardRef<
   const def = identities.data?.defaultThreshold ?? 0.363;
   const row =
     identity ??
-    (group?.identityUid ? everyone.find((r) => r.uid === group.identityUid) ?? null : null);
+    (group?.identityUid ? (everyone.find((r) => r.uid === group.identityUid) ?? null) : null);
 
   const refresh = () =>
     Promise.all([
@@ -174,18 +179,17 @@ export const PersonCard = forwardRef<
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
         <QueryView
-          isLoading={identities.isLoading && !creating && !row}
-          isError={identities.isError}
-          isEmpty={!creating && !row}
-          loading={<p className="muted">{t("people.loading")}</p>}
-          error={<p role="alert">{t("people.failed")}</p>}
+          query={identities}
+          isEmpty={() => !creating && !row}
+          skeleton={<p className="muted">{t("people.loading")}</p>}
+          error={t("people.failed")}
           empty={
             <p className="muted" style={{ margin: 0 }}>
               {t("people.pickGroup")}
             </p>
           }
         >
-          {null}
+          {() => null}
         </QueryView>
         {(creating || row) && (
           <IdentityEditor
@@ -313,11 +317,7 @@ export const PersonCard = forwardRef<
               </option>
             ))}
         </select>
-        <button
-          className="btn"
-          disabled={busy || !mergeTo}
-          onClick={() => setMergeOpen(true)}
-        >
+        <button className="btn" disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
           {t("people.merge")}
         </button>
         {section !== "ignored" && (

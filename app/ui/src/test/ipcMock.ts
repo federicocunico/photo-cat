@@ -3,6 +3,7 @@
 
 import { vi } from "vitest";
 import type {
+  SourceSummary,
   ErrorBatch,
   JobSnapshot,
   LogLine,
@@ -49,6 +50,7 @@ import type {
 type Cb<T> = (p: T) => void;
 
 export const emitters = {
+  boot: [] as Cb<import("../bindings").BootStatus>[],
   job: [] as Cb<JobSnapshot>[],
   resources: [] as Cb<ResourceSnapshot>[],
   log: [] as Cb<LogLine[]>[],
@@ -67,6 +69,14 @@ export function emit<K extends keyof typeof emitters>(
 }
 
 export const commandsMock = {
+  bootStatus: vi.fn(async () => ({
+    phase: "ready",
+    ready: true,
+    error: null as string | null,
+    logsPath: "D:/logs",
+  })),
+  bootRetry: vi.fn(async () => {}),
+  bootChooseFolder: vi.fn(async () => null),
   appInfo: vi.fn(),
   dismissCrashNotice: vi.fn(),
   takeUiRecovery: vi.fn(async () => null),
@@ -85,7 +95,7 @@ export const commandsMock = {
   errorGroups: vi.fn(async () => []),
   logTail: vi.fn(async () => []),
   setLogLevel: vi.fn(async () => null),
-  listSources: vi.fn(async () => []),
+  listSources: vi.fn(async () => [] as SourceSummary[]),
   addSource: vi.fn(),
   updateSource: vi.fn(),
   removeSource: vi.fn(),
@@ -295,6 +305,8 @@ export function ipcMockModule(tauri = false) {
     isTauri: () => tauri,
     EVENTS: { facesChanged: "faces://changed" },
     events: {
+      onBootPhase: reg(emitters.boot),
+      onBootReady: reg(emitters.boot),
       onJobProgress: reg(emitters.job),
       onResources: reg(emitters.resources),
       onLogLines: reg(emitters.log),
