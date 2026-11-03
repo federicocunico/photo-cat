@@ -26,6 +26,15 @@ export const common = {
       dismiss: "Chiudi l'avviso",
       shortcut: "Scorciatoia: {{keys}}",
     },
+    nav: {
+      groups: { browse: "Sfoglia", organize: "Organizza", transfer: "Importa ed esporta" },
+      collapse: "Riduci la navigazione",
+      expand: "Espandi la navigazione",
+      badgeReview_one: "{{count}} persona da rivedere",
+      badgeReview_other: "{{count}} persone da rivedere",
+      badgeRunning_one: "{{count}} attività in corso",
+      badgeRunning_other: "{{count}} attività in corso",
+    },
   },
   en: {
     common: {
@@ -51,6 +60,15 @@ export const common = {
       saved: "Saved",
       dismiss: "Dismiss notice",
       shortcut: "Shortcut: {{keys}}",
+    },
+    nav: {
+      groups: { browse: "Browse", organize: "Organize", transfer: "Import & export" },
+      collapse: "Collapse navigation",
+      expand: "Expand navigation",
+      badgeReview_one: "{{count}} person to review",
+      badgeReview_other: "{{count}} people to review",
+      badgeRunning_one: "{{count}} activity running",
+      badgeRunning_other: "{{count}} activities running",
     },
   },
 };

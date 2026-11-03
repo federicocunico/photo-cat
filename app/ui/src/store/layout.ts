@@ -37,6 +37,8 @@ interface LayoutState {
   module: ModuleId;
   /** Sezione attiva del modulo Persone (Da rivedere / Persone / Ignorati). */
   peopleSection: PeopleSection;
+  /** Navigazione dei moduli a sole icone (Ctrl+B). */
+  navCompact: boolean;
   leftOpen: boolean;
   rightOpen: boolean;
   leftWidth: number;
@@ -49,6 +51,7 @@ interface LayoutState {
   peopleTarget: PeopleTarget | null;
   setModule: (m: ModuleId) => void;
   setPeopleSection: (s: PeopleSection) => void;
+  toggleNav: () => void;
   toggleLeft: () => void;
   toggleRight: () => void;
   setLeftWidth: (w: number) => void;
@@ -65,6 +68,7 @@ const clamp = (v: number, [min, max]: readonly [number, number]) => Math.min(max
 type PersistedLayout = {
   module?: string;
   peopleSection?: PeopleSection;
+  navCompact?: boolean;
   leftOpen?: boolean;
   rightOpen?: boolean;
   leftWidth?: number;
@@ -90,6 +94,7 @@ export const useLayout = create<LayoutState>()(
     (set) => ({
       module: "library",
       peopleSection: "review",
+      navCompact: false,
       leftOpen: true,
       rightOpen: true,
       leftWidth: 240,
@@ -101,6 +106,7 @@ export const useLayout = create<LayoutState>()(
       peopleTarget: null,
       setModule: (module) => set({ module }),
       setPeopleSection: (peopleSection) => set({ peopleSection }),
+      toggleNav: () => set((s) => ({ navCompact: !s.navCompact })),
       toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
       toggleRight: () => set((s) => ({ rightOpen: !s.rightOpen })),
       setLeftWidth: (w) => set({ leftWidth: clamp(w, PANEL_LIMITS.left) }),
@@ -119,6 +125,7 @@ export const useLayout = create<LayoutState>()(
       partialize: (s) => ({
         module: s.module,
         peopleSection: s.peopleSection,
+        navCompact: s.navCompact,
         leftOpen: s.leftOpen,
         rightOpen: s.rightOpen,
         leftWidth: s.leftWidth,

@@ -101,13 +101,13 @@ describe("moduli di navigazione", () => {
       "library",
       "sequence",
       "catalogs",
-      "tags",
       "people",
+      "tags",
       "import",
-      "jobs",
+      "organize",
       "models",
       "diagnostics",
-      "organize",
+      "jobs",
       "settings",
     ]);
   });
@@ -122,13 +122,14 @@ describe("moduli di navigazione", () => {
       tags: "Tag",
       people: "Persone",
       import: "Importa",
-      jobs: "Job",
-      organize: "Esporta e organizza",
+      jobs: "Attività",
+      organize: "Esporta",
       models: "Modelli AI",
       diagnostics: "Diagnostica",
       settings: "Impostazioni",
     };
-    expect(within(nav).getAllByRole("button")).toHaveLength(MODULES.length);
+    // Le voci dei moduli più il comando che riduce la navigazione.
+    expect(within(nav).getAllByRole("button")).toHaveLength(MODULES.length + 1);
     for (const { id } of [...MODULES].reverse()) {
       const button = within(nav).getByRole("button", { name: labels[id] });
       fireEvent.click(button);

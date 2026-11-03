@@ -36,7 +36,6 @@ const BANNED: Record<"it" | "en", Record<string, RegExp>> = {
 const PENDING: Record<string, string[]> = {
   // 2.3 (Attività) e i moduli che rimandano alle attività.
   "it:job": [
-    "modules.jobs",
     "shell.noJobs",
     "shell.uiRecoveredDetail",
     "jobs.title",
@@ -58,7 +57,6 @@ const PENDING: Record<string, string[]> = {
     "sources.removal.jobs_other",
   ],
   "en:job": [
-    "modules.jobs",
     "shell.noJobs",
     "shell.uiRecoveredDetail",
     "jobs.title",

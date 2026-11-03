@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { emit, ipcMockModule, job, resources } from "../../test/ipcMock";
@@ -7,6 +7,8 @@ import { useLive, useLiveEvents } from "../../store/live";
 import { Panels } from "./Panels";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
+import { ModuleNav } from "./ModuleNav";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trackCommand, usePending } from "../../store/pending";
 import { commandsMock } from "../../test/ipcMock";
 import { checkedCleanup } from "../../test/a11y";
@@ -197,5 +199,99 @@ describe("indicatori globali", () => {
     fireEvent.click(screen.getByTestId("error-count"));
     expect(useLayout.getState().module).toBe("diagnostics");
     expect(useLayout.getState().diagFilter).toEqual({ level: "ERROR" });
+  });
+});
+
+function renderNav() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Live>
+        <ModuleNav />
+      </Live>
+    </QueryClientProvider>,
+  );
+}
+
+function setWindowWidth(width: number) {
+  window.matchMedia = ((query: string) => {
+    const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity);
+    return {
+      matches: width <= max,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+  }) as unknown as typeof window.matchMedia;
+}
+
+describe("navigazione dei moduli", () => {
+  beforeEach(() => {
+    setWindowWidth(1280);
+    useLayout.setState({ navCompact: false });
+  });
+
+  it("Gruppi della navigazione: Sfoglia, Organizza, Importa ed esporta, poi Attività e Impostazioni", () => {
+    renderNav();
+    const group = (name: string) =>
+      within(screen.getByRole("group", { name }))
+        .getAllByRole("button")
+        .map((b) => b.textContent);
+    expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
+    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
+    expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta"]);
+    const nav = screen.getByRole("navigation", { name: "Moduli" });
+    const all = within(nav).getAllByRole("button");
+    expect(all[all.length - 3]).toHaveTextContent("Attività");
+    expect(all[all.length - 2]).toHaveTextContent("Impostazioni");
+  });
+
+  it("Scorciatoia di modulo: Ctrl+3 apre Cataloghi, ma non mentre si scrive", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "3", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("catalogs");
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "1", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("catalogs");
+    input.remove();
+  });
+
+  it("Navigazione a icone: Ctrl+B mostra solo le icone, con il nome per il lettore di schermo", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    expect(useLayout.getState().navCompact).toBe(true);
+    const nav = screen.getByRole("navigation", { name: "Moduli" });
+    expect(nav).toHaveAttribute("data-compact");
+    const library = within(nav).getByRole("button", { name: "Libreria" });
+    expect(library).toHaveTextContent("");
+    expect(library).toHaveAttribute("aria-keyshortcuts", "Control+1");
+    fireEvent.click(within(nav).getByRole("button", { name: "Espandi la navigazione" }));
+    expect(useLayout.getState().navCompact).toBe(false);
+  });
+
+  it("Finestra stretta: icone senza cambiare la preferenza salvata", () => {
+    setWindowWidth(900);
+    renderNav();
+    expect(screen.getByRole("navigation", { name: "Moduli" })).toHaveAttribute("data-compact");
+    expect(useLayout.getState().navCompact).toBe(false);
+  });
+
+  it("badge: persone da rivedere e attività in corso", async () => {
+    commandsMock.peopleSections.mockResolvedValueOnce({
+      review: 3,
+      people: 0,
+      ignored: 0,
+      singles: 0,
+      discarded: 0,
+    });
+    renderNav();
+    act(() => emit("job", job({ id: 1, state: "running" })));
+    expect(
+      await screen.findByRole("button", { name: "Persone", description: "3 persone da rivedere" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attività", description: "1 attività in corso" }),
+    ).toBeInTheDocument();
   });
 });
