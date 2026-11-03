@@ -108,7 +108,13 @@ pub fn start(handle: tauri::AppHandle) {
 pub fn open_stores(paths: &AppPaths, mut phase: impl FnMut(&str)) -> AppResult<(Store, AppStore)> {
     phase("opening");
     paths.ensure()?;
-    phase("migration");
+    // "Backup e aggiornamento del catalogo" solo se il catalogo esiste ed è di una versione
+    // precedente: un catalogo nuovo o già aggiornato si apre senza questa fase.
+    if pc_store::migrate::catalog_version(&paths.database())
+        .is_some_and(|v| v > 0 && v < pc_store::migrate::SCHEMA_VERSION)
+    {
+        phase("migration");
+    }
     pc_store::migrate::backup_config_before_migration(
         &paths.database(),
         &paths.config_file(),

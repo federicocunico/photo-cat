@@ -504,16 +504,33 @@ pub fn views_with(
     person: Option<i64>,
     m: &FaceMatch,
 ) -> StoreResult<Vec<FaceView>> {
+    views_limited(c, person, None, m)
+}
+
+/// Volti nell'ordine di qualità del modulo Persone (indice `face_person_rank`),
+/// fermandosi a `limit` righe quando indicato.
+pub fn views_limited(
+    c: &Connection,
+    person: Option<i64>,
+    limit: Option<i64>,
+    m: &FaceMatch,
+) -> StoreResult<Vec<FaceView>> {
+    let filter = if person.is_some() {
+        "f.person_id = ?1"
+    } else {
+        "?1 IS NULL"
+    };
     let sql = format!(
         "SELECT {FACE_VIEW_COLS} FROM face f \
          JOIN media_item m ON m.id = f.media_id \
          LEFT JOIN media_dates d ON d.media_id = f.media_id \
-         WHERE (?1 IS NULL OR f.person_id = ?1) \
-         ORDER BY COALESCE(f.quality_score, f.quality) DESC, f.id"
+         WHERE {filter} \
+         ORDER BY COALESCE(f.quality_score, f.quality) DESC, f.id DESC \
+         LIMIT ?2"
     );
     let mut q = c.prepare(&sql)?;
     let rows = q
-        .query_map([person], |r| {
+        .query_map(params![person, limit.unwrap_or(-1)], |r| {
             Ok((
                 r.get(0)?,
                 r.get(1)?,
@@ -759,7 +776,9 @@ fn cover_face(
             )?));
         }
     }
-    Ok(views_with(c, Some(person), m)?.into_iter().next())
+    Ok(views_limited(c, Some(person), Some(1), m)?
+        .into_iter()
+        .next())
 }
 
 fn merge_hint_for(c: &Connection, id: i64, m: &FaceMatch) -> StoreResult<Option<MergeHint>> {
@@ -793,6 +812,89 @@ fn merge_hint_for(c: &Connection, id: i64, m: &FaceMatch) -> StoreResult<Option<
     }))
 }
 
+type GroupTuple = (
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<i64>,
+    i64,
+    Option<i64>,
+    i64,
+    i64,
+    i64,
+);
+
+fn group_row_from(
+    c: &Connection,
+    section: PeopleSection,
+    row: GroupTuple,
+    m: &FaceMatch,
+) -> StoreResult<GroupRow> {
+    let (id, name, identity_uid, ignored_at, ignored_faces, cover_id, faces, photos, discarded) =
+        row;
+    let new_faces = if ignored_at.is_some() {
+        (faces - ignored_faces).max(0)
+    } else {
+        0
+    };
+    Ok(GroupRow {
+        id,
+        name,
+        identity_uid,
+        section,
+        faces,
+        good_faces: (faces - discarded).max(0),
+        discarded_faces: discarded,
+        photos,
+        cover: cover_face(c, id, cover_id, m)?,
+        ignored_at,
+        new_faces,
+        name_hint: None,
+        merge_hint: merge_hint_for(c, id, m)?,
+    })
+}
+
+/// Un singolo gruppo con i dati dell'elenco Persone (sezione compresa), se esiste.
+pub fn group_row(c: &Connection, id: i64, m: &FaceMatch) -> StoreResult<Option<GroupRow>> {
+    let discarded = discarded_sql(m);
+    let row: Option<GroupTuple> = c
+        .query_row(
+            &format!(
+                "SELECT p.id, p.name, p.identity_uid, p.ignored_at, p.ignored_faces, \
+                        p.cover_face_id, count(f.id), count(DISTINCT f.media_id), \
+                        COALESCE(sum(CASE WHEN {discarded} THEN 1 ELSE 0 END), 0) \
+                 FROM person p LEFT JOIN face f ON f.person_id = p.id \
+                 WHERE p.id = ?1 GROUP BY p.id"
+            ),
+            [id],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                    r.get(8)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let section = if row.3.is_some() {
+        PeopleSection::Ignored
+    } else if row.2.is_some() {
+        PeopleSection::People
+    } else {
+        PeopleSection::Review
+    };
+    group_row_from(c, section, row, m).map(Some)
+}
+
 /// Elenco paginato dei gruppi di una sezione del modulo Persone.
 pub fn list_groups(
     c: &Connection,
@@ -810,12 +912,10 @@ pub fn list_groups(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_lowercase());
-    let search_sql = if qnorm.is_some() {
-        "AND (lower(COALESCE(p.name,'')) LIKE '%' || ?1 || '%' \
-              OR lower(COALESCE(p.identity_uid,'')) LIKE '%' || ?1 || '%')"
-    } else {
-        ""
-    };
+    // `?1` compare sempre, così il numero di parametri non dipende dalla ricerca.
+    let search_sql = "AND (?1 IS NULL \
+              OR lower(COALESCE(p.name,'')) LIKE '%' || ?1 || '%' \
+              OR lower(COALESCE(p.identity_uid,'')) LIKE '%' || ?1 || '%')";
     let having = match section {
         PeopleSection::People => {
             "HAVING faces > 0 OR p.name IS NOT NULL OR p.identity_uid IS NOT NULL"
@@ -823,20 +923,50 @@ pub fn list_groups(
         PeopleSection::Ignored => "HAVING faces > 0 OR p.ignored_at IS NOT NULL",
         PeopleSection::Review => "HAVING faces > 0",
     };
-    let sql = format!(
-        "SELECT p.id, p.name, p.identity_uid, p.ignored_at, p.ignored_faces, p.cover_face_id, \
-                count(f.id) AS faces, \
-                count(DISTINCT f.media_id) AS photos, \
-                COALESCE(sum(CASE WHEN {discarded} THEN 1 ELSE 0 END), 0) AS discarded_faces \
-         FROM person p \
-         LEFT JOIN face f ON f.person_id = p.id \
-         WHERE {section_sql} {search_sql} \
-         GROUP BY p.id {having}"
+    // Chiave d'ordinamento come tupla SQL: il cursore `after` riparte dalla riga successiva
+    // a quella con quell'id, senza caricare né ordinare tutti i gruppi in memoria.
+    let (order, cmp) = match sort {
+        GroupSort::PhotosDesc => (
+            "g.photos DESC, g.id DESC",
+            "(g.photos, g.id) < (k.photos, k.id)",
+        ),
+        GroupSort::FacesDesc => (
+            "g.faces DESC, g.id DESC",
+            "(g.faces, g.id) < (k.faces, k.id)",
+        ),
+        GroupSort::NameAsc => (
+            "g.unnamed, g.lname, g.id",
+            "(g.unnamed, g.lname, g.id) > (k.unnamed, k.lname, k.id)",
+        ),
+    };
+    let base = format!(
+        "WITH g AS ( \
+           SELECT p.id, p.name, p.identity_uid, p.ignored_at, p.ignored_faces, p.cover_face_id, \
+                  count(f.id) AS faces, \
+                  count(DISTINCT f.media_id) AS photos, \
+                  COALESCE(sum(CASE WHEN {discarded} THEN 1 ELSE 0 END), 0) AS discarded_faces, \
+                  (p.name IS NULL) AS unnamed, \
+                  COALESCE(lower(p.name), '') AS lname \
+           FROM person p \
+           LEFT JOIN face f ON f.person_id = p.id \
+           WHERE {section_sql} {search_sql} \
+           GROUP BY p.id {having})"
     );
-    let mut all = Vec::new();
-    if let Some(ref q) = qnorm {
-        let mut st = c.prepare(&sql)?;
-        let mapped = st.query_map([q.as_str()], |r| {
+    let total: i64 = c.query_row(
+        &format!("{base} SELECT count(*) FROM g"),
+        params![qnorm.as_deref()],
+        |r| r.get(0),
+    )?;
+    let page_sql = format!(
+        "{base} SELECT g.id, g.name, g.identity_uid, g.ignored_at, g.ignored_faces, \
+                g.cover_face_id, g.faces, g.photos, g.discarded_faces \
+         FROM g LEFT JOIN g AS k ON k.id = ?2 \
+         WHERE ?2 IS NULL OR k.id IS NULL OR {cmp} \
+         ORDER BY {order} LIMIT ?3"
+    );
+    let mut st = c.prepare(&page_sql)?;
+    let page: Vec<GroupTuple> = st
+        .query_map(params![qnorm.as_deref(), after, limit], |r| {
             Ok((
                 r.get::<_, i64>(0)?,
                 r.get::<_, Option<String>>(1)?,
@@ -848,82 +978,13 @@ pub fn list_groups(
                 r.get::<_, i64>(7)?,
                 r.get::<_, i64>(8)?,
             ))
-        })?;
-        for row in mapped {
-            all.push(row?);
-        }
-    } else {
-        let mut st = c.prepare(&sql)?;
-        let mapped = st.query_map([], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, Option<String>>(1)?,
-                r.get::<_, Option<String>>(2)?,
-                r.get::<_, Option<i64>>(3)?,
-                r.get::<_, i64>(4)?,
-                r.get::<_, Option<i64>>(5)?,
-                r.get::<_, i64>(6)?,
-                r.get::<_, i64>(7)?,
-                r.get::<_, i64>(8)?,
-            ))
-        })?;
-        for row in mapped {
-            all.push(row?);
-        }
-    }
-    let total = all.len() as i64;
-    all.sort_by(|a, b| match sort {
-        GroupSort::PhotosDesc => b.7.cmp(&a.7).then(b.0.cmp(&a.0)),
-        GroupSort::FacesDesc => b.6.cmp(&a.6).then(b.0.cmp(&a.0)),
-        GroupSort::NameAsc => match (&a.1, &b.1) {
-            (None, None) => a.0.cmp(&b.0),
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (Some(an), Some(bn)) => an
-                .to_lowercase()
-                .cmp(&bn.to_lowercase())
-                .then(a.0.cmp(&b.0)),
-        },
-    });
-    let start = after
-        .and_then(|id| all.iter().position(|r| r.0 == id).map(|i| i + 1))
-        .unwrap_or(0);
-    let page: Vec<_> = all.into_iter().skip(start).take(limit as usize).collect();
-    let mut items = Vec::with_capacity(page.len());
-    for (
-        id,
-        name,
-        identity_uid,
-        ignored_at,
-        ignored_faces,
-        cover_id,
-        faces,
-        photos,
-        discarded_faces,
-    ) in page
-    {
-        let good_faces = (faces - discarded_faces).max(0);
-        let new_faces = if ignored_at.is_some() {
-            (faces - ignored_faces).max(0)
-        } else {
-            0
-        };
-        items.push(GroupRow {
-            id,
-            name,
-            identity_uid,
-            section,
-            faces,
-            good_faces,
-            discarded_faces,
-            photos,
-            cover: cover_face(c, id, cover_id, m)?,
-            ignored_at,
-            new_faces,
-            name_hint: None,
-            merge_hint: merge_hint_for(c, id, m)?,
-        });
-    }
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(st);
+    let items = page
+        .into_iter()
+        .map(|row| group_row_from(c, section, row, m))
+        .collect::<StoreResult<Vec<_>>>()?;
     let next = if items.len() == limit as usize {
         items.last().map(|r| r.id)
     } else {
@@ -2084,13 +2145,16 @@ pub fn merge_many(c: &Connection, from: &[i64], to: i64) -> StoreResult<()> {
     if from.is_empty() {
         return Err(StoreError::Invalid("nessun gruppo da unire".into()));
     }
+    // Centroidi e media si ricalcolano una volta sola, non per ogni gruppo unito.
+    let mut media = HashSet::new();
     for id in from {
         if *id == to {
             continue;
         }
-        merge(c, *id, to)?;
+        media.extend(merge_rows(c, *id, to)?);
     }
-    Ok(())
+    refresh_centroids(c)?;
+    refresh_media(c, &media)
 }
 
 /// Sposta i volti su un gruppo (assegnazione manuale).
@@ -2488,7 +2552,8 @@ pub fn reject(c: &Connection, face: i64, person: i64) -> StoreResult<()> {
     refresh_centroids(c)?;
     repo::fts::refresh(c, f.media_id)
 }
-pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
+/// Unione senza ricalcolo di centroidi e media: restituisce i media da aggiornare.
+fn merge_rows(c: &Connection, from: i64, to: i64) -> StoreResult<HashSet<i64>> {
     if from == to {
         return Err(StoreError::Invalid("persone coincidenti".into()));
     }
@@ -2567,6 +2632,11 @@ pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
     }
     c.execute("DELETE FROM person_suggestion WHERE a=?1 OR b=?1", [from])?;
     c.execute("DELETE FROM person WHERE id=?1", [from])?;
+    Ok(media)
+}
+
+pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
+    let media = merge_rows(c, from, to)?;
     refresh_centroids(c)?;
     refresh_media(c, &media)
 }

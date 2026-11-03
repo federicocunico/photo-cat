@@ -134,6 +134,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             people::list_people,
             people::people_sections,
             people::list_groups,
+            people::get_group,
             people::group_faces,
             people::locate_face,
             people::face_count,

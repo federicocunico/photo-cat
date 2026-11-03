@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Correction, type FaceScope, type GroupRow } from "../../lib/ipc";
+import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
@@ -114,10 +115,10 @@ export const FaceGrid = forwardRef<
     queryKey: ["people-move-targets"],
     queryFn: async () => {
       const [review, people] = await Promise.all([
-        commands.listGroups("review", null, "photos_desc", null, 200),
-        commands.listGroups("people", null, "name_asc", null, 200),
+        listAllGroups("review", "photos_desc"),
+        listAllGroups("people", "name_asc"),
       ]);
-      return [...people.items, ...review.items];
+      return [...people, ...review];
     },
     enabled: isTauri() && target != null,
   });
@@ -677,6 +678,7 @@ export const FaceGrid = forwardRef<
                           key={face.id}
                           type="button"
                           data-testid={`face-${face.id}`}
+                          data-face-tile
                           data-highlighted={lit || undefined}
                           aria-pressed={sel}
                           title={tip}

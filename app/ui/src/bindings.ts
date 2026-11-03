@@ -94,6 +94,8 @@ export const commands = {
 	listPeople: () => __TAURI_INVOKE<PersonView[]>("list_people"),
 	peopleSections: () => __TAURI_INVOKE<PeopleSections>("people_sections"),
 	listGroups: (section: PeopleSection, query: string | null, sort: GroupSort, after: number | null, limit: number | null) => __TAURI_INVOKE<GroupPage>("list_groups", { section, query, sort, after, limit }),
+	/**  Un singolo gruppo, in qualunque sezione: `None` se non esiste più. */
+	getGroup: (id: number) => __TAURI_INVOKE<GroupRow | null>("get_group", { id }),
 	groupFaces: (scope: FaceScope, sort: FaceSort, after: FaceCursor | null, limit: number | null) => __TAURI_INVOKE<FacePage>("group_faces", { scope, sort, after, limit }),
 	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),

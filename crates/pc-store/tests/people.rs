@@ -1235,3 +1235,52 @@ fn people_undo_restores_full_face_state_and_ignores_other_actions() {
         .unwrap();
     assert_eq!(tagged, 1);
 }
+
+#[test]
+fn group_row_reports_section_and_missing_groups() {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1)",[]).unwrap();
+    people::save_faces(&c, 1, &[face(0.1, 0), face(0.5, 1)], "m", "d+m", 0.363).unwrap();
+    let ids: Vec<i64> = people::records(&c, Some(1))
+        .unwrap()
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    let m = people::default_face_match();
+    let a = people::create_person(&c, None).unwrap();
+    let b = people::create_person(&c, None).unwrap();
+    let keep = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[ids[0]], a).unwrap();
+    people::assign(&c, &[ids[1]], b).unwrap();
+
+    let row = people::group_row(&c, a, &m).unwrap().unwrap();
+    assert_eq!(row.section, people::PeopleSection::Review);
+    assert_eq!(row.faces, 1);
+    assert_eq!(row.cover.map(|f| f.id), Some(ids[0]));
+    assert!(people::group_row(&c, 9999, &m).unwrap().is_none());
+
+    // Unione di più gruppi in un colpo solo: i volti passano tutti alla destinazione.
+    people::merge_many(&c, &[a, b], keep).unwrap();
+    assert!(people::group_row(&c, a, &m).unwrap().is_none());
+    assert_eq!(people::group_row(&c, keep, &m).unwrap().unwrap().faces, 2);
+}
+
+#[test]
+fn face_pages_use_the_rank_index() {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    let plan: Vec<String> = c
+        .prepare(
+            "EXPLAIN QUERY PLAN SELECT f.id FROM face f WHERE f.person_id = 1 \
+             ORDER BY COALESCE(f.quality_score, f.quality) DESC, f.id DESC LIMIT 1",
+        )
+        .unwrap()
+        .query_map([], |r| r.get::<_, String>(3))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let plan = plan.join(" | ");
+    assert!(plan.contains("face_person_rank"), "{plan}");
+    assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+}

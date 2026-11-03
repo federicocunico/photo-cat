@@ -10,6 +10,7 @@ import {
   type LocateFaceRequest,
   type PeopleSection,
 } from "../../lib/ipc";
+import { listAllGroups } from "./allGroups";
 import { useLayout, type PeopleTarget } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { FaceGrid, type FaceGridHandle, type FaceHighlight } from "./FaceGrid";
@@ -43,8 +44,7 @@ function stubGroup(id: number, section: PeopleSection, name: string | null = nul
 }
 
 async function loadGroup(section: PeopleSection, id: number): Promise<GroupRow> {
-  const page = await commands.listGroups(section, null, "photos_desc", null, 200);
-  return page.items.find((g) => g.id === id) ?? stubGroup(id, section);
+  return (await commands.getGroup(id)) ?? stubGroup(id, section);
 }
 
 function toLocateRequest(target: PeopleTarget): LocateFaceRequest | null {
@@ -90,21 +90,18 @@ export function PeopleModule() {
 
   const mergeCandidates = useQuery({
     queryKey: ["people-groups", "review", "", "photos_desc", "merge-candidates"],
-    queryFn: () => commands.listGroups("review", null, "photos_desc", null, 50),
+    queryFn: () => listAllGroups("review", "photos_desc"),
     enabled: isTauri() && section !== "people",
   });
   const peopleCandidates = useQuery({
     queryKey: ["people-groups", "people", "", "photos_desc", "merge-candidates"],
-    queryFn: () => commands.listGroups("people", null, "photos_desc", null, 50),
+    queryFn: () => listAllGroups("people", "photos_desc"),
     enabled: isTauri() && section !== "people",
   });
   const candidates = (() => {
     const seen = new Set<number>();
     const out: GroupRow[] = [];
-    for (const g of [
-      ...(mergeCandidates.data?.items ?? []),
-      ...(peopleCandidates.data?.items ?? []),
-    ]) {
+    for (const g of [...(mergeCandidates.data ?? []), ...(peopleCandidates.data ?? [])]) {
       if (seen.has(g.id)) continue;
       seen.add(g.id);
       out.push(g);

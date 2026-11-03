@@ -4,7 +4,7 @@ use crate::state::AppState;
 use pc_core::{AppError, AppResult};
 use pc_store::bulk::{self, UndoAction};
 use pc_store::people::{
-    self, FaceCursor, FacePage, FaceScope, FaceSort, FaceView, GroupPage, GroupSort,
+    self, FaceCursor, FacePage, FaceScope, FaceSort, FaceView, GroupPage, GroupRow, GroupSort,
     LocateFaceRequest, LocatedFace, PeopleSection, PeopleSections, PersonView,
 };
 use serde::{Deserialize, Serialize};
@@ -83,6 +83,19 @@ pub async fn list_groups(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Un singolo gruppo, in qualunque sezione: `None` se non esiste più.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_group(state: State<'_, AppState>, id: i64) -> AppResult<Option<GroupRow>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::group_row(c, id, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn group_faces(
@@ -137,14 +150,10 @@ pub async fn person_faces(
 ) -> AppResult<Vec<FaceView>> {
     let (db, m) = (state.store.clone(), face_match(&state));
     // Memoria limitata anche per le persone con migliaia di volti.
-    let limit = limit.unwrap_or(500).clamp(1, 2000) as usize;
+    let limit = i64::from(limit.unwrap_or(500).clamp(1, 2000));
     tauri::async_runtime::spawn_blocking(move || {
-        db.read(move |c| {
-            let mut v = people::views_with(c, person, &m)?;
-            v.truncate(limit);
-            Ok(v)
-        })
-        .map_err(Into::into)
+        db.read(move |c| people::views_limited(c, person, Some(limit), &m))
+            .map_err(Into::into)
     })
     .await
     .map_err(|e| AppError::internal(e.to_string()))?

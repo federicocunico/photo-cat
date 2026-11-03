@@ -13,10 +13,13 @@ export function App() {
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    // `stopped`: interfaccia pronta o preparazione fallita. In entrambi i casi la lettura
+    // periodica si ferma; dopo un errore riparte solo da "Riprova" (nuovo `attempt`).
     let cancelled = false,
-      preparing = false;
+      preparing = false,
+      stopped = false;
     const update = async (next: BootStatus) => {
-      if (cancelled || preparing) return;
+      if (cancelled || preparing || stopped) return;
       setStatus(next);
       if (!next.ready) return;
       preparing = true;
@@ -38,9 +41,13 @@ export function App() {
           useLayout.getState().setTheme(cfg.ui.theme);
           useLayout.getState().setLanguage(cfg.ui.language);
         }
+        stopped = true;
+        clearInterval(timer);
         setLoaded({ View: ReadyApp, data: { onboarding: !done, info } });
       } catch (e) {
         preparing = false;
+        stopped = true;
+        clearInterval(timer);
         if (!cancelled)
           setStatus({
             ...next,
@@ -50,7 +57,7 @@ export function App() {
       }
     };
     const read = () => {
-      if (cancelled || preparing) return;
+      if (cancelled || preparing || stopped) return;
       if (isTauri())
         void commands
           .bootStatus()
@@ -64,8 +71,9 @@ export function App() {
       events.onBootPhase((s) => void update(s)),
       events.onBootReady((s) => void update(s)),
     ];
-    read();
+    // Dichiarato qui: `update` lo usa solo dopo un await, quindi è già inizializzato.
     const timer = setInterval(read, 1000);
+    read();
     return () => {
       cancelled = true;
       clearInterval(timer);

@@ -151,6 +151,15 @@ export const commandsMock = {
       limit: number | null,
     ) => Promise<GroupPage>
   >(async () => ({ items: [], next: null, total: 0 })),
+  // Di default cerca il gruppo nelle pagine simulate da `listGroups`.
+  getGroup: vi.fn(async (id: number) => {
+    for (const section of ["review", "people", "ignored"] as const) {
+      const page = await commandsMock.listGroups(section, null, "photos_desc", null, 200);
+      const found = page?.items?.find((g) => g.id === id);
+      if (found) return found;
+    }
+    return null;
+  }),
   groupFaces: vi.fn<
     (
       scope: FaceScope,

@@ -17,6 +17,9 @@ import { trackCommand } from "../store/pending";
 export const commands: typeof generated = new Proxy(generated, {
   get(target, key: keyof typeof generated) {
     const command = target[key];
+    // Solo i comandi sono tracciati: le altre proprietà (es. `then` quando qualcuno fa
+    // `await commands`) restano quelle originali.
+    if (typeof command !== "function") return command;
     return (...args: unknown[]) =>
       trackCommand(key, () => (command as (...args: unknown[]) => Promise<unknown>)(...args));
   },

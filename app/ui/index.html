@@ -8,9 +8,10 @@
   <body>
     <div id="root">
       <main
+        id="splash"
         style="
-          background: #191b1e;
-          color: #eee;
+          background: #1b1b1c;
+          color: #e8e8ea;
           min-height: 100vh;
           display: grid;
           place-content: center;
@@ -21,6 +22,24 @@
         <p role="status">Apertura… / Opening…</p>
       </main>
     </div>
+    <script>
+      // Schermata statica nel tema salvato (o in quello del sistema).
+      (function () {
+        var theme;
+        try {
+          var saved = JSON.parse(localStorage.getItem("photo-cat.layout") || "null");
+          theme = saved && saved.state && saved.state.theme;
+        } catch (e) {}
+        if (theme !== "light" && theme !== "dark")
+          theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        if (theme === "light") {
+          var el = document.getElementById("splash");
+          el.style.background = "#f4f4f5";
+          el.style.color = "#1b1b1c";
+        }
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
