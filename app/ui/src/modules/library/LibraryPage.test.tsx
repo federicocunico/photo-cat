@@ -439,8 +439,10 @@ describe("cartelle, luogo e Apri con", () => {
     );
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
-    // Scenario "Apertura da tastiera": Maiusc+F10, poi frecce.
-    fireEvent.keyDown(screen.getByTestId("thumb-4"), { key: "F10", shiftKey: true });
+    // Scenario "Apertura da tastiera": la griglia ha il focus su thumb-4, Maiusc+F10, poi frecce.
+    fireEvent.click(screen.getByTestId("thumb-4"));
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "F10", shiftKey: true });
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     const items = screen.getAllByRole("menuitem");
     await waitFor(() => expect(items[0]).toHaveFocus());
@@ -450,7 +452,7 @@ describe("cartelle, luogo e Apri con", () => {
     fireEvent.keyDown(menu, { key: "ArrowUp" });
     expect(items[items.length - 1]).toHaveFocus();
     fireEvent.keyDown(menu, { key: "Escape" });
-    fireEvent.keyDown(screen.getByTestId("thumb-4"), { key: "ContextMenu" });
+    fireEvent.keyDown(grid, { key: "ContextMenu" });
     expect(screen.getByRole("menu", { name: "Azioni sulle foto" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "Mostra nella cartella" }));
     await waitFor(() =>
@@ -894,5 +896,41 @@ describe("contesto della vista", () => {
     expect(useLibrary.getState().filter.similarOnly).toBe(true);
     fireEvent.click(await screen.findByRole("button", { name: "Rimuovi filtro Con foto simili" }));
     expect(useLibrary.getState().filter.similarOnly).toBe(false);
+  });
+});
+
+describe("navigazione da tastiera nella griglia", () => {
+  const active = () => screen.getByTestId("grid-scroll").getAttribute("aria-activedescendant");
+
+  it("frecce, Home e Fine spostano il focus senza cambiare la selezione", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    expect(grid).toHaveAttribute("role", "listbox");
+    expect(active()).toBe("thumb-opt-1");
+    fireEvent.keyDown(grid, { key: "ArrowRight" });
+    expect(active()).toBe("thumb-opt-2");
+    expect(screen.getByTestId("thumb-2")).toHaveAttribute("data-cursor", "true");
+    fireEvent.keyDown(grid, { key: "End" });
+    expect(active()).toBe("thumb-opt-12");
+    fireEvent.keyDown(grid, { key: "Home" });
+    expect(active()).toBe("thumb-opt-1");
+    expect(selCount(useLibrary.getState().selection)).toBe(0);
+  });
+
+  it("Maiusc+freccia estende, Ctrl+Spazio aggiunge o toglie, Ctrl+A seleziona tutto", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    commandsMock.librarySelection.mockResolvedValue({ count: 12, maxId: 12 });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
+    fireEvent.keyDown(grid, { key: " ", ctrlKey: true });
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2]);
+    fireEvent.keyDown(grid, { key: "a", ctrlKey: true });
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(12));
   });
 });

@@ -104,7 +104,7 @@
   - selezione multipla con valori comuni.
 
   Verifica: `Inspector.test.tsx`.
-- [ ] 3.5 Griglia:
+- [x] 3.5 Griglia:
   - focus "roving" con frecce, Home/Fine, Pagina su/giù, Maiusc+freccia, Ctrl+Spazio, Ctrl+A;
   - focus distinto dalla selezione;
   - il gruppo di simili diventa un pulsante separato (niente controlli annidati).

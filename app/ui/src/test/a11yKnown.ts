@@ -6,8 +6,6 @@ export const A11Y_KNOWN = {
     // 3.7: frecce delle cartelle nella barra laterale a 20 px.
     'size: button "Mostra le cartelle di',
     'size: button "Nascondi le cartelle di',
-    // 3.5: il gruppo di simili diventa un pulsante separato dalla miniatura.
-    "nested: span[data-testid=group-badge-",
   ],
   people: [
     // 7.4: "Ripristina" dentro la riga del gruppo ignorato.

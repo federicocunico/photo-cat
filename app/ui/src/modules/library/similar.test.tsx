@@ -98,7 +98,7 @@ describe("griglia raggruppata", () => {
       300,
     );
     // Il conteggio dei risultati resta sulle 10 foto.
-    expect(screen.getByRole("region")).toHaveAttribute("aria-label", "10 elementi");
+    expect(screen.getByRole("listbox")).toHaveAttribute("aria-label", "10 elementi");
     // Selezionare il gruppo chiuso seleziona tutte le sue foto.
     fireEvent.click(screen.getByTestId("thumb-2"));
     await waitFor(() =>

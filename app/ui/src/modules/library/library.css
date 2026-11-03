@@ -132,3 +132,32 @@
   color: var(--pc-text-soft);
   word-break: break-all;
 }
+
+/* Griglia: focus della tastiera distinto dalla selezione (3.5) */
+.grid-scroll:focus-visible {
+  outline: none;
+}
+.grid-scroll:focus-visible [data-cursor] {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}
+.thumb-cell {
+  position: relative;
+  flex: none;
+}
+.thumb-group {
+  position: absolute;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--pc-radius-pill);
+  background: var(--pc-accent);
+  color: var(--pc-on-accent);
+  font: 600 12px/1 var(--pc-font-ui);
+  cursor: pointer;
+}
