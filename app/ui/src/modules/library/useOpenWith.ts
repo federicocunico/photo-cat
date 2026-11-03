@@ -2,6 +2,7 @@
 // file manager; oltre il limite del backend chiede conferma.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { askConfirm } from "../../store/confirm";
 import { commands, type OpenTarget } from "../../lib/ipc";
 
 export function useOpenWith() {
@@ -13,7 +14,11 @@ export function useOpenWith() {
       const r = await commands.openWith(ids, target, false);
       if (
         r.needsConfirmation &&
-        window.confirm(t("externalApps.confirmMany", { count: ids.length }))
+        (await askConfirm({
+          title: t("externalApps.confirmMany", { count: ids.length }),
+          confirmLabel: t("externalApps.openMany", { count: ids.length }),
+          danger: false,
+        }))
       )
         await commands.openWith(ids, target, true);
     } catch (e) {

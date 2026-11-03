@@ -4,10 +4,9 @@ import { useTranslation } from "react-i18next";
 import { commands } from "../../lib/ipc";
 import { useLive } from "../../store/live";
 import { useLibrary } from "../../store/library";
-import { notify, notifyError } from "../../store/toasts";
+import { notify } from "../../store/toasts";
+import { notifyUndoable } from "../../store/undo";
 import { useCatalogOperation as useAction } from "./useCatalogAction";
-
-const closeToast = () => useAction.setState({ message: "" });
 
 /** Esiti di esclusioni e reinserimenti come avvisi nell'unico ToastHost. */
 export function useCatalogFeedback() {
@@ -49,33 +48,23 @@ export function useCatalogFeedback() {
     // La query viene invalidata solo al termine del job seguito.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
-  // L'esito va nell'unico ToastHost; un nuovo esito sostituisce il precedente.
+  // L'esito va nell'unico ToastHost; un nuovo esito sostituisce il precedente. Le
+  // operazioni annullabili passano dal registro globale: l'avviso e Ctrl+Z annullano lo stesso.
   useEffect(() => {
     if (!state.message) return;
-    notify({
-      key: "catalog-operation",
-      message: state.message,
-      tone: state.undoable ? "ok" : "info",
-      onDismiss: closeToast,
-      action: state.undoable
-        ? {
-            label: t("exclusions.undo"),
-            run: async () => {
-              if (useAction.getState().busy) return;
-              useAction.setState({ busy: true });
-              try {
-                await commands.undoBulk();
-                refresh();
-                useAction.setState({ busy: false, undoable: false });
-              } catch (error) {
-                useAction.setState({ busy: false, undoable: false });
-                notifyError(error);
-              }
-            },
-          }
-        : undefined,
-    });
-    // Solo al cambio del messaggio: le funzioni usate leggono lo stato al momento del clic.
+    const message = state.message;
+    if (state.undoable)
+      notifyUndoable({
+        key: "catalog-operation",
+        message,
+        run: async () => {
+          await commands.undoBulk();
+          refresh();
+        },
+      });
+    else notify({ key: "catalog-operation", message, tone: "info" });
+    // Consumato: lo stesso esito potrà ricomparire alla prossima operazione.
+    useAction.setState({ message: "", undoable: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.message, state.undoable]);
 }

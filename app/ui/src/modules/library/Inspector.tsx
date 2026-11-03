@@ -12,7 +12,6 @@ import {
 } from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
-import { useLive } from "../../store/live";
 import { thumbUrl } from "./thumbUrl";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
@@ -23,6 +22,7 @@ import { CategoryPicker } from "./CategoryPicker";
 import { OpenInPeople } from "../people/OpenInPeople";
 
 import { useCatalogAction } from "./useCatalogAction";
+import { useBulkJob } from "./bulkJob";
 
 function faceChipLabel(face: MediaFaceView, t: (k: string, o?: Record<string, unknown>) => string) {
   if (face.personName) return face.personName;
@@ -55,8 +55,6 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
-
 /** Correzioni sul file ispezionato: catalogazione, tag e cataloghi (operazioni bulk su un solo id). */
 function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const { t } = useTranslation();
@@ -78,24 +76,21 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
   const [value, setValue] = useState(current);
   const [tag, setTag] = useState("");
   const [catalog, setCatalog] = useState("");
-  const [job, setJob] = useState<number | null>(null);
-  const [error, setError] = useState("");
-  const result = useLive((s) => (job === null ? undefined : s.jobs[job]));
   useEffect(() => setValue(current), [current]);
-  useEffect(() => {
-    if (result && FINAL.includes(result.state)) {
-      void qc.invalidateQueries({ queryKey: ["media-detail", id] });
-      void qc.invalidateQueries({ queryKey: ["library"] });
-      void qc.invalidateQueries({ queryKey: ["catalogs"] });
-    }
-  }, [result, qc, id]);
-  const apply = async (operation: BulkAction) => {
-    setError("");
-    try {
-      setJob(await commands.startBulk({ kind: "ids", ids: [id] }, operation, false));
-    } catch (e) {
-      setError((e as { detail?: string }).detail ?? String(e));
-    }
+  // Esito e "Annulla operazione" nell'unico ToastHost, come per la barra delle azioni.
+  const bulk = useBulkJob();
+  const apply = (operation: BulkAction) => {
+    const name =
+      operation.action === "add_tag"
+        ? operation.name
+        : operation.action === "add_catalog"
+          ? (catalogs.data?.find((c) => c.catalog.id === operation.catalog)?.catalog.name ?? "")
+          : "";
+    return bulk.start(
+      { kind: "ids", ids: [id] },
+      operation,
+      t(`selection.done.${operation.action}`, { name, count: 1 }),
+    );
   };
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -122,7 +117,6 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
             const r = await commands.addCategory(group, label, [], { kind: "ids", ids: [id] });
             await qc.invalidateQueries({ queryKey: ["taxonomy"] });
             setValue(r.id);
-            if (r.job != null) setJob(r.job);
           }}
         />
         <BusyButton
@@ -176,7 +170,6 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
           {t("bulk.actions.add_catalog")}
         </BusyButton>
       </div>
-      {error && <p role="alert">{error}</p>}
     </section>
   );
 }

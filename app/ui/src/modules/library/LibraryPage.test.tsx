@@ -859,7 +859,7 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
   expect(
     (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
   ).not.toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+  fireEvent.click(screen.getByRole("button", { name: "Annulla operazione" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
   confirm.mockRestore();
 });

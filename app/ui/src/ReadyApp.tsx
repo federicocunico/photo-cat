@@ -21,6 +21,7 @@ import { destinationFor, useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents, useTrimCaches } from "./store/live";
 import { useImportRefresh } from "./modules/import/sourceActions";
 import { ToastHost } from "./components/feedback/ToastHost";
+import { ConfirmHost } from "./components/feedback/ConfirmHost";
 import { applyTheme } from "./theme/tokens";
 
 function ModuleView({ module }: { module: ModuleId }) {
@@ -98,6 +99,7 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
       <>
         <Onboarding onDone={() => setOnboarding(false)} />
         <ToastHost />
+        <ConfirmHost />
       </>
     );
   return (
@@ -111,6 +113,7 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
     >
       <ModuleView module={module} />
       <ToastHost />
+      <ConfirmHost />
       <StatusBar>
         {module === "library" && (
           <>

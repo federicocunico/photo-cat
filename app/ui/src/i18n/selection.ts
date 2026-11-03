@@ -49,6 +49,7 @@ export const selection = {
       done: {
         add_tag: "Tag «{{name}}» aggiunto a {{count}} foto",
         remove_tag: "Tag «{{name}}» tolto da {{count}} foto",
+        remove_tags: "Tag del set tolti da {{count}} foto",
         add_catalog: "{{count}} foto aggiunte a «{{name}}»",
         set_label: "Categoria impostata su {{count}} foto",
         set_place: "Luogo «{{name}}» impostato su {{count}} foto",
@@ -109,6 +110,7 @@ export const selection = {
       done: {
         add_tag: "Tag “{{name}}” added to {{count}} photos",
         remove_tag: "Tag “{{name}}” removed from {{count}} photos",
+        remove_tags: "Set tags removed from {{count}} photos",
         add_catalog: "{{count}} photos added to “{{name}}”",
         set_label: "Category set on {{count}} photos",
         set_place: "Place “{{name}}” set on {{count}} photos",

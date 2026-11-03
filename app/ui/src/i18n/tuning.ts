@@ -11,6 +11,7 @@ export const tuning = {
       rename: "Rinomina…",
       renameOf: "Rinomina il luogo {{name}}",
       renameTitle: "Rinomina luogo",
+      renamed: "Luogo «{{from}}» rinominato in «{{to}}»",
       renameTo: "Nuovo nome",
       renameCount_one: "Il nuovo nome verrà assegnato a {{count}} foto come correzione manuale.",
       renameCount_other: "Il nuovo nome verrà assegnato a {{count}} foto come correzione manuale.",
@@ -50,6 +51,7 @@ export const tuning = {
       actsOn_one: "{{count}} foto",
       actsOn_other: "{{count}} foto",
       confirmMany: "Aprire {{count}} file insieme?",
+      openMany: "Apri {{count}} file",
       ignoredFolders: "Cartelle da ignorare per il luogo (una per riga)",
       ignoredHint:
         "Nomi di cartella che non indicano un luogo (es. Selezionate, Da stampare). Le cartelle dei dispositivi (D7000, Telefono, …) sono già riconosciute.",
@@ -105,6 +107,7 @@ export const tuning = {
       rename: "Rename…",
       renameOf: "Rename place {{name}}",
       renameTitle: "Rename place",
+      renamed: "Place “{{from}}” renamed to “{{to}}”",
       renameTo: "New name",
       renameCount_one: "The new name will be given to {{count}} photo as a manual correction.",
       renameCount_other: "The new name will be given to {{count}} photos as a manual correction.",
@@ -144,6 +147,7 @@ export const tuning = {
       actsOn_one: "{{count}} photo",
       actsOn_other: "{{count}} photos",
       confirmMany: "Open {{count}} files at once?",
+      openMany: "Open {{count}} files",
       ignoredFolders: "Folders to ignore for the place (one per line)",
       ignoredHint:
         "Folder names that are not places (e.g. Selected, To print). Device folders (D7000, Phone, …) are already recognised.",

@@ -20,17 +20,14 @@ import { commands, isTauri, type BulkAction, type Target } from "../../lib/ipc";
 import { isTyping, modalOpen } from "../../lib/keys";
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
-import { useLive } from "../../store/live";
 import { notify, notifyError } from "../../store/toasts";
-import { notifyUndoable } from "../../store/undo";
 import { useTagOverview } from "../tags/data";
 import { CategoryPicker } from "./CategoryPicker";
 import { useLabelName, useTaxonomy } from "./labelName";
 import { useCatalogAction } from "./useCatalogAction";
 import { useOpenWith } from "./useOpenWith";
 import { useSelectItems } from "./useSelectItems";
-
-const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
+import { useBulkJob } from "./bulkJob";
 
 type DoneKind =
   | "add_tag"
@@ -41,84 +38,6 @@ type DoneKind =
   | "reset_place"
   | "assign_person"
   | "remove_library";
-
-/** Operazioni bulk con annullamento lato backend (inventario in tasks.md, 1.5). */
-const UNDOABLE: ReadonlySet<DoneKind> = new Set([
-  "add_tag",
-  "remove_tag",
-  "add_catalog",
-  "set_label",
-  "set_place",
-  "reset_place",
-]);
-
-type Pending = { job: number; kind: DoneKind; name: string; count: number };
-
-/** Avvia un'operazione bulk e, alla fine, mostra l'esito con "Annulla operazione". */
-function useBulkRunner() {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [pending, setPending] = useState<Pending | null>(null);
-  const result = useLive((s) => (pending ? s.jobs[pending.job] : undefined));
-  useEffect(() => {
-    if (!pending || !result || !FINAL.includes(result.state)) return;
-    for (const key of ["library", "library-count", "catalogs", "facets", "media-detail", "tags"])
-      void qc.invalidateQueries({ queryKey: [key] });
-    void qc.invalidateQueries({ queryKey: ["last-undo"] });
-    const message = t(`selection.done.${pending.kind}`, {
-      name: pending.name,
-      count: pending.count,
-    });
-    if (result.state === "completed" && UNDOABLE.has(pending.kind)) {
-      notifyUndoable({
-        key: "selection-result",
-        message,
-        run: async () => {
-          await commands.undoBulk();
-          await qc.invalidateQueries();
-        },
-      });
-    } else if (result.state === "completed") {
-      notify({ key: "selection-result", message, tone: "ok" });
-    } else {
-      notify({
-        key: "selection-result",
-        tone: "error",
-        message: t("selection.failed", { failed: result.failed }),
-        action: {
-          label: t("common.details"),
-          run: () =>
-            useLayout.getState().openModule({
-              module: "settings",
-              section: "diagnostics",
-              target: { jobId: pending.job },
-            }),
-        },
-      });
-    }
-    setPending(null);
-  }, [pending, result, qc, t]);
-
-  const start = async (
-    target: Target,
-    operation: BulkAction,
-    kind: DoneKind,
-    name: string,
-    count: number,
-  ) => {
-    try {
-      const job = await commands.startBulk(
-        target,
-        operation,
-        operation.action === "remove_library",
-      );
-      setPending({ job, kind, name, count });
-    } catch (error) {
-      notifyError(error);
-    }
-  };
-  return { start, busy: pending != null };
-}
 
 /** Esc svuota la selezione, salvo nei campi di testo e con menu o dialoghi aperti. */
 function useEscapeToClear(clear: () => void) {
@@ -185,7 +104,7 @@ export function SelectionBar() {
   const count = selCount(selection);
   const target = selTarget(selection);
   const ids = selection.mode === "ids" ? [...selection.ids] : null;
-  const runner = useBulkRunner();
+  const bulk = useBulkJob();
   const catalogAction = useCatalogAction();
   const openWith = useOpenWith();
   const selectItems = useSelectItems();
@@ -213,7 +132,7 @@ export function SelectionBar() {
   useEscapeToClear(clear);
 
   const start = (operation: BulkAction, kind: DoneKind, name = "") =>
-    runner.start(target, operation, kind, name, count);
+    bulk.start(target, operation, t(`selection.done.${kind}`, { name, count }));
 
   const tagOptions = (tags.data?.tags ?? []).map((x) => ({
     value: x.name,

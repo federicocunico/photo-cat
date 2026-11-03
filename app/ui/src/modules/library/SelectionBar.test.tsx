@@ -14,7 +14,7 @@ import {
 } from "../../store/library";
 import { useLive } from "../../store/live";
 import { useLayout } from "../../store/layout";
-import { useUndo } from "../../store/undo";
+import { useUndo, useUndoHotkey } from "../../store/undo";
 import { ToastHost } from "../../components/feedback/ToastHost";
 import { useCatalogFeedback } from "./catalogActions";
 import { LibraryHeader } from "./LibraryHeader";
@@ -301,4 +301,34 @@ it("assegnare una persona chiede conferma perché non si annulla da qui", async 
       false,
     ),
   );
+});
+
+function UndoKeys() {
+  useUndoHotkey();
+  return null;
+}
+
+it("Annullamento dopo aver cambiato pagina: Ctrl+Z annulla l'ultima operazione della Libreria", async () => {
+  const user = userEvent.setup();
+  commandsMock.startBulk.mockResolvedValue(77 as never);
+  useLibrary.setState({ filter: emptyFilter(), selection: idsSelection([1, 2]) });
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UndoKeys />
+      <Bars />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole("button", { name: "Tag" }));
+  await user.type(await screen.findByRole("combobox"), "mare{Enter}");
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalled());
+  finish(77);
+  await waitFor(() => expect(useUndo.getState().last?.label).toBe("Tag «mare» aggiunto a 2 foto"));
+  // Si lascia la Libreria: resta solo il gestore globale di Ctrl+Z.
+  view.rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <UndoKeys />
+    </QueryClientProvider>,
+  );
+  fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+  await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
 });

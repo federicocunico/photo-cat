@@ -96,7 +96,7 @@
   - mantenere tutte le azioni e i test di `bulk-operations`.
 
   Verifica: `BulkBar.test.tsx` riscritto come `SelectionBar.test.tsx`.
-- [ ] 3.3 Tutte le operazioni della Libreria registrate nello store `undo`, con avvisi "Annulla operazione"; nessun `window.confirm` (la rimozione dalla libreria diventa annullabile oppure usa `ConfirmDialog`, secondo 1.5).
+- [x] 3.3 Tutte le operazioni della Libreria registrate nello store `undo`, con avvisi "Annulla operazione"; nessun `window.confirm` (la rimozione dalla libreria diventa annullabile oppure usa `ConfirmDialog`, secondo 1.5).
 - [ ] 3.4 Inspector:
   - nuovo ordine delle sezioni;
   - `Disclosure` persistite;
