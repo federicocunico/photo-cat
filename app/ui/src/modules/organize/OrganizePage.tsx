@@ -13,6 +13,7 @@ import {
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { fmtBytes } from "../../lib/format";
+import { PageHeader } from "../../components/ui";
 import { Icon } from "../../components/icons";
 const LEVELS = [
   "place",
@@ -106,12 +107,15 @@ export function OrganizePage() {
   const queued = (id: number) => setNotice(t("organize.queued", { id }));
   return (
     <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-      <h1>{t("organize.title")}</h1>
+      <PageHeader title={t("modules.organize")} />
       {error && <p role="alert">{error}</p>}
       {notice && (
         <p role="status">
           {notice}{" "}
-          <BusyButton className="btn" onClick={() => useLayout.getState().setModule("jobs")}>
+          <BusyButton
+            className="btn"
+            onClick={() => useLayout.getState().openModule({ module: "jobs" })}
+          >
             {t("organize.jobs")}
           </BusyButton>
         </p>

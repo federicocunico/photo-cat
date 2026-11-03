@@ -1,7 +1,7 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type React from "react";
 import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,8 @@ import { commands, isTauri, type FacetValue, type Source } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { latestOnly, retryUnlessSuperseded } from "../../lib/latest";
 import { useLibrary } from "../../store/library";
+import { useLayout } from "../../store/layout";
+import { Disclosure } from "../../components/ui";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
@@ -159,6 +161,29 @@ function FolderTree({
   );
 }
 
+/** Sezione del pannello sinistro richiudibile; lo stato è ricordato tra i riavvii. */
+function SidebarSection({
+  id,
+  title,
+  gap = 4,
+  children,
+}: {
+  id: string;
+  title: string;
+  gap?: number;
+  children: ReactNode;
+}) {
+  const collapsed = useLayout((s) => s.collapsedSections.includes(id));
+  const toggle = useLayout((s) => s.toggleSection);
+  return (
+    <section aria-label={title}>
+      <Disclosure title={title} level={2} open={!collapsed} onOpenChange={() => toggle(id)}>
+        <div style={{ display: "flex", flexDirection: "column", gap }}>{children}</div>
+      </Disclosure>
+    </section>
+  );
+}
+
 export function LibrarySidebar() {
   const { t } = useTranslation();
   const filter = useLibrary((s) => s.filter);
@@ -197,8 +222,7 @@ export function LibrarySidebar() {
   // nasconde cartelle e cataloghi.
   return (
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
-      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <h2 className="section-title">{t("library.sources")}</h2>
+      <SidebarSection id="library.sources" title={t("library.sources")}>
         <QueryView query={sources} enabled={isTauri()} isEmpty={() => false}>
           {(list = []) => (
             <>
@@ -268,9 +292,8 @@ export function LibrarySidebar() {
             </>
           )}
         </QueryView>
-      </section>
-      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <h2 className="section-title">{t("library.catalogs")}</h2>
+      </SidebarSection>
+      <SidebarSection id="library.catalogs" title={t("library.catalogs")}>
         <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
           {(list = []) => (
             <>
@@ -293,12 +316,8 @@ export function LibrarySidebar() {
             </>
           )}
         </QueryView>
-      </section>
-      <section
-        style={{ display: "flex", flexDirection: "column", gap: 12 }}
-        aria-label={t("library.filters")}
-      >
-        <h2 className="section-title">{t("library.filters")}</h2>
+      </SidebarSection>
+      <SidebarSection id="library.filters" title={t("library.filters")} gap={12}>
         <QueryView query={facets} enabled={isTauri()} isEmpty={() => false}>
           {(data) =>
             data && (
@@ -395,7 +414,7 @@ export function LibrarySidebar() {
             )
           }
         </QueryView>
-      </section>
+      </SidebarSection>
     </div>
   );
 }

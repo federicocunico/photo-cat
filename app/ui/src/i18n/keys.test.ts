@@ -18,6 +18,17 @@ for (const text of Object.values(files)) {
 
 // Chiavi composte a runtime (t(`prefisso.${valore}`)): valori elencati qui.
 const dynamic: Record<string, string[]> = {
+  "nav.groups": ["browse", "organize", "transfer"],
+  "shell.ramState": ["pressure", "critical"],
+  "sequence.keys": ["assign", "remove", "session", "fullscreen"],
+  "shell.models": ["ready", "missing", "update", "error"],
+  "jobs.kinds": [
+    "other",
+    ...["import", "relink", "export", "organize", "sequence_export", "bulk", "analysis"].flatMap(
+      (k) => [k, `${k}_of`],
+    ),
+    ...["models", "similar", "face_quality", "retune", "time_backfill"],
+  ],
   "tags.colors": ["blue", "teal", "yellow", "coral", "purple", "gray"],
   "seqExport.tokens": [
     "seq",

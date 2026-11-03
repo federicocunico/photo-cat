@@ -1,11 +1,10 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commands,
-  events,
   isTauri,
   type ExecutionProvider,
   type ModelState,
@@ -14,6 +13,7 @@ import {
 } from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt, mbToGb } from "../../lib/format";
 import { Icon } from "../../components/icons";
+import { useModelStatuses } from "../../lib/models";
 
 const card = {
   background: "var(--pc-panel)",
@@ -56,20 +56,7 @@ async function pickModelFile(filterName: string): Promise<string | null> {
   return typeof res === "string" ? res : null;
 }
 
-function useModels() {
-  const [models, setModels] = useState<ModelStatus[]>([]);
-  const list = useQuery({ queryKey: ["models"], queryFn: commands.listModels, enabled: isTauri() });
-  useEffect(() => {
-    if (list.data) setModels(list.data);
-  }, [list.data]);
-  useEffect(() => {
-    const un = events.onModels(setModels);
-    return () => {
-      un.then((f) => f());
-    };
-  }, []);
-  return models;
-}
+const useModels = useModelStatuses;
 
 function ModelRow({ m }: { m: ModelStatus }) {
   const { t } = useTranslation();
@@ -231,7 +218,7 @@ export function ModelsPage() {
             gap: 20,
           }}
         >
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("models.title")}</h1>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{t("models.title")}</h2>
           {error && (
             <p role="alert" style={{ color: "var(--pc-danger)", margin: 0 }}>
               {error}

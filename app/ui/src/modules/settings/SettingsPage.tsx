@@ -17,7 +17,41 @@ import { cleanSettings } from "./cleanSettings";
 import { ExternalAppsSection } from "./ExternalAppsSection";
 import { ThresholdsSection } from "./ThresholdsSection";
 import { TaxonomySection } from "./TaxonomySection";
+import { ModelsPage } from "../models/ModelsPage";
+import { DiagnosticsPage } from "../diagnostics/DiagnosticsPage";
+import { PageHeader, Tabs } from "../../components/ui";
+import type { SettingsSection } from "../../store/layout";
+
+/**
+ * Impostazioni a sezioni (design D2, D9). Modelli AI e Diagnostica sono sezioni, non più
+ * moduli: si aprono con `openModule({ module: "settings", section })`.
+ */
 export function SettingsPage() {
+  const { t } = useTranslation();
+  const section = useLayout((s) => s.settingsSection);
+  const setSection = useLayout((s) => s.setSettingsSection);
+  return (
+    <div className="settings-page">
+      <PageHeader title={t("settings.title")} />
+      <Tabs<SettingsSection>
+        label={t("settings.sections.label")}
+        value={section}
+        onChange={setSection}
+        tabs={[
+          { value: "general", label: t("settings.sections.general"), content: <GeneralSettings /> },
+          { value: "models", label: t("settings.sections.models"), content: <ModelsPage /> },
+          {
+            value: "diagnostics",
+            label: t("settings.sections.diagnostics"),
+            content: <DiagnosticsPage />,
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function GeneralSettings() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const config = useQuery({
@@ -120,7 +154,6 @@ export function SettingsPage() {
                     <QueryView query={faces} enabled={isTauri()} isEmpty={() => false}>
                       {() => (
                         <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-                          <h1>{t("settings.title")}</h1>
                           {error && <p role="alert">{error}</p>}
                           {notice && <p role="status">{notice}</p>}
                           <div className="feature-card" style={{ alignItems: "stretch" }}>

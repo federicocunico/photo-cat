@@ -61,22 +61,24 @@
 
 ## 2. Shell e navigazione
 
-- [ ] 2.1 `modules/registry.ts` a gruppi (Sfoglia, Organizza, Importa ed esporta, più le voci in fondo); `ModuleNav` con etichette di gruppo, badge (Persone da rivedere, Attività in corso), modalità compatta (Ctrl+B) e passaggio automatico sotto i 1.008 px. Verifica: `shell.test.tsx`.
-- [ ] 2.2 Modelli AI e Diagnostica come sezioni di Impostazioni:
+- [x] 2.1 `modules/registry.ts` a gruppi (Sfoglia, Organizza, Importa ed esporta, più le voci in fondo); `ModuleNav` con etichette di gruppo, badge (Persone da rivedere, Attività in corso), modalità compatta (Ctrl+B) e passaggio automatico sotto i 1.008 px. Verifica: `shell.test.tsx`.
+- [x] 2.2 Modelli AI e Diagnostica come sezioni di Impostazioni:
   - `openModule({ module, section, target })` al posto di `setModule` e `openDiagnostics`;
   - migrazione di `store/layout.ts` (`version` +1, `models` / `diagnostics` → `settings/<sezione>`, insieme a quella di Identità);
   - aggiornare tutti i collegamenti (barra di stato, avvisi di crash, Attività › "Vedi errori").
 
   Verifica: test della migrazione da preferenze salvate con i vecchi valori.
-- [ ] 2.3 Modulo **Attività** (ex Job):
+- [x] 2.3 Modulo **Attività** (ex Job):
   - titoli in parole (tipo + oggetto);
   - "Interrompi" con conferma solo se l'attività scrive file;
   - gestione degli errori dei comandi pausa/riprendi/interrompi;
   - storico con titolo, date e operazioni annullabili;
   - stato vuoto con "Importa una cartella".
-- [ ] 2.4 Barra superiore: campo che apre la palette, indicatore delle attività in parole, menu Aiuto. Barra di stato: aggiungere RAM (spostata dalla barra superiore, con icona di pressione) e modelli; scorciatoie contestuali al posto del testo lungo di Sequenza.
-- [ ] 2.5 Pannelli: Tab nasconde e mostra i laterali, Ctrl+I l'ispettore; sezioni del pannello sinistro richiudibili e persistite. Verifica: test di `Panels`.
-- [ ] 2.6 `PageHeader` su tutte le pagine dei moduli, con titolo uguale alla voce di navigazione (Importa, Esporta, Attività, Sequenza…).
+- [x] 2.4 Barra superiore: indicatore delle attività in parole, menu Aiuto (Diagnostica, Informazioni; le voci della guida si aggiungono con 5.4). Il campo che apre la palette si fa con 4.2, dove nasce la palette: fino ad allora il campo filtra la Libreria come prima. Barra di stato: aggiungere RAM (spostata dalla barra superiore, con icona di pressione) e modelli; scorciatoie contestuali al posto del testo lungo di Sequenza.
+- [x] 2.5 Pannelli: Ctrl+Maiusc+B nasconde e mostra i laterali, Ctrl+I l'ispettore; sezioni del pannello sinistro richiudibili e persistite. Verifica: test di `Panels`.
+  - Tab resta allo spostamento del focus (WCAG 2.1.1): scelta dell'utente del 3 novembre 2026, spec `desktop-shell` e `command-palette` aggiornate.
+- [x] 2.6 `PageHeader` su tutte le pagine dei moduli, con titolo uguale alla voce di navigazione (Importa, Esporta, Attività, Sequenza…).
+  - `ModulePage` per Sequenza, Persone e Tag; `PageHeader` in Importa, Esporta, Cataloghi, Attività e Impostazioni. La Libreria ha la sua intestazione con il percorso in 3.1 (`LibraryHeader`).
 
 ## 3. Libreria
 
@@ -118,7 +120,7 @@
 ## 4. Palette e scorciatoie
 
 - [ ] 4.1 Registro dei comandi (`commands/registry.ts`) e `useHotkeys` globale, che ignora i campi di testo; migrare i tasti dei tag e quelli di Sequenza. Verifica: test di digitazione in un campo (nessun tag assegnato).
-- [ ] 4.2 Palette Ctrl+K:
+- [ ] 4.2 Palette Ctrl+K (aperta anche dal campo di ricerca della barra superiore, spostato qui da 2.4):
   - comandi, persone, tag, cataloghi, luoghi, nomi di file;
   - recenti, "Nessun risultato", azioni sulla selezione;
   - apertura della Libreria filtrata.

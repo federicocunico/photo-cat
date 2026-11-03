@@ -1,0 +1,160 @@
+/* Navigazione dei moduli (ui-ux-overhaul 2.1). */
+.module-nav {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-3) var(--pc-space-2);
+  background: var(--pc-panel);
+  border-right: 1px solid var(--pc-border);
+  overflow-y: auto;
+  transition: flex-basis var(--pc-motion-normal) ease;
+}
+.module-nav[data-compact] {
+  flex-basis: 56px;
+  align-items: center;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.nav-bottom {
+  margin-top: auto;
+}
+.module-nav[data-compact] .nav-group + .nav-group:not(.nav-bottom) {
+  border-top: 1px solid var(--pc-border);
+  padding-top: var(--pc-space-3);
+}
+
+.nav-group-label {
+  padding: 0 var(--pc-space-3) var(--pc-space-1);
+  font: 600 var(--pc-font-xs) var(--pc-font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pc-text-secondary);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 var(--pc-space-3);
+  border: 0;
+  border-radius: var(--pc-radius-md);
+  background: transparent;
+  color: var(--pc-text-soft);
+  text-align: left;
+  cursor: pointer;
+}
+.module-nav[data-compact] .nav-item {
+  justify-content: center;
+  padding: 0;
+  position: relative;
+}
+.nav-item:hover {
+  background: var(--pc-raised);
+}
+.nav-item[aria-current="page"] {
+  background: var(--pc-raised);
+  color: var(--pc-text);
+  font-weight: 600;
+}
+.nav-item[aria-current="page"] .nav-icon {
+  color: var(--pc-accent-text);
+}
+.nav-label {
+  flex: 1;
+}
+.nav-toggle {
+  color: var(--pc-text-secondary);
+}
+
+.nav-badge {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--pc-radius-pill);
+  background: var(--pc-accent-soft-bg);
+  color: var(--pc-accent-soft-text);
+  font: 600 11px/18px var(--pc-font-ui);
+  text-align: center;
+}
+.module-nav[data-compact] .nav-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 16px;
+  padding: 0 4px;
+  line-height: 16px;
+}
+
+/* Impostazioni a sezioni (2.2; il layout completo arriva con 6.1). */
+.settings-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-page > .ui-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-page .ui-tab-list {
+  padding: 0 var(--pc-space-5);
+}
+.settings-page .ui-tab-panel[data-state="active"] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Barra di stato (2.4) */
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--pc-radius-sm);
+  background: transparent;
+  color: var(--pc-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.status-item:hover {
+  background: var(--pc-raised);
+  color: var(--pc-text);
+}
+.help-about {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.help-about dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.status-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-3);
+}
+
+/* Pagina di un modulo (2.6) */
+.module-page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

@@ -229,7 +229,7 @@ describe("Apertura diretta di una persona", () => {
 
     renderModule();
     act(() => {
-      useLayout.getState().openPeople({ face: 380 });
+      useLayout.getState().openModule({ module: "people", target: { face: 380 } });
     });
 
     await waitFor(() =>
@@ -275,7 +275,7 @@ describe("Apertura diretta di una persona", () => {
 
     renderModule();
     act(() => {
-      useLayout.getState().openPeople({ media: 7, person: null });
+      useLayout.getState().openModule({ module: "people", target: { media: 7, person: null } });
     });
 
     await waitFor(() =>
@@ -316,7 +316,7 @@ describe("Apertura diretta di una persona", () => {
 
     renderModule();
     act(() => {
-      useLayout.getState().openPeople({ face: 55 });
+      useLayout.getState().openModule({ module: "people", target: { face: 55 } });
     });
 
     await waitFor(() => expect(useLayout.getState().peopleSection).toBe("ignored"));
@@ -364,7 +364,7 @@ describe("Apertura diretta di una persona", () => {
 
     renderModule();
     act(() => {
-      useLayout.getState().openPeople({ face: 99 });
+      useLayout.getState().openModule({ module: "people", target: { face: 99 } });
     });
 
     await waitFor(() => expect(useLayout.getState().peopleSection).toBe("review"));
@@ -541,7 +541,7 @@ describe("Volti scartati senza gruppo", () => {
     );
     renderModule();
     act(() => {
-      useLayout.getState().openPeople({ face: 55 });
+      useLayout.getState().openModule({ module: "people", target: { face: 55 } });
     });
     await waitFor(() =>
       expect(commandsMock.groupFaces).toHaveBeenCalledWith(
@@ -552,4 +552,9 @@ describe("Volti scartati senza gruppo", () => {
       ),
     );
   });
+});
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderModule();
+  expect(await screen.findByRole("heading", { level: 1, name: "Persone" })).toBeInTheDocument();
 });

@@ -9,6 +9,7 @@ import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
 import { FORMAT_GROUPS, splitPatterns } from "./formats";
 import { RelinkDialog, RemoveMissingDialog, RemoveSourceDialog, UpdateSummaryView } from "./manage";
+import { PageHeader } from "../../components/ui";
 import { pickFolder, updateFolder, useImportUpdates } from "./sourceActions";
 
 const card = {
@@ -143,7 +144,7 @@ function SourcesList({ sources }: { sources: SourceSummary[] }) {
 function ScanSummary() {
   const { t } = useTranslation();
   const jobs = useLive((s) => s.jobs);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const job = activeJobs(jobs).find((j) => j.kind === "import");
   if (!job) return null;
   const ph = (n: string) => job.phases.find((p) => p.name === n);
@@ -178,7 +179,7 @@ function ScanSummary() {
         type="button"
         className="btn btn-ghost"
         style={{ alignSelf: "flex-start" }}
-        onClick={() => setModule("jobs")}
+        onClick={() => openModule({ module: "jobs" })}
       >
         {t("import.openJob")}
       </BusyButton>
@@ -189,7 +190,7 @@ function ScanSummary() {
 export function ImportPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const [path, setPath] = useState("");
   const [recursive, setRecursive] = useState(true);
   const [watch, setWatch] = useState(false);
@@ -220,7 +221,7 @@ export function ImportPage() {
       await commands.startImport(id, null);
       await qc.invalidateQueries({ queryKey: ["sources"] });
       setPath("");
-      setModule("jobs");
+      openModule({ module: "jobs" });
     } catch (e) {
       const err = e as { detail?: string; messageKey?: string };
       setError(err.detail ?? String(e));
@@ -240,12 +241,7 @@ export function ImportPage() {
         gap: 24,
       }}
     >
-      <div>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("import.title")}</h1>
-        <p className="muted" style={{ margin: "6px 0 0" }}>
-          {t("import.subtitle")}
-        </p>
-      </div>
+      <PageHeader title={t("modules.import")} description={t("import.subtitle")} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
         <section
           style={{

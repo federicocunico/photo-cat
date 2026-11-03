@@ -17,6 +17,7 @@ import { FaceGrid, type FaceGridHandle, type FaceHighlight } from "./FaceGrid";
 import { GroupList, type GroupListHandle, type GroupListTarget } from "./GroupList";
 import { MergeDialog } from "./MergeDialog";
 import { PersonCard, type PersonCardHandle } from "./PersonCard";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { usePeopleHotkeys } from "./usePeopleHotkeys";
 
 type Arrival = {
@@ -62,7 +63,7 @@ export function PeopleModule() {
   const setPeopleSection = useLayout((s) => s.setPeopleSection);
   const peopleTarget = useLayout((s) => s.peopleTarget);
   const clearPeopleTarget = useLayout((s) => s.clearPeopleTarget);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const setSelection = useLibrary((s) => s.setSelection);
   const [target, setTarget] = useState<GroupListTarget>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -362,177 +363,179 @@ export function PeopleModule() {
   }, [peopleTarget, clearPeopleTarget, setPeopleSection]);
 
   return (
-    <section
-      aria-label={t("people.title")}
-      style={{
-        flex: 1,
-        minWidth: 0,
-        minHeight: 0,
-        display: "flex",
-        flexWrap: "wrap",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {arrival && (
-        <div
-          role="status"
-          data-testid="people-arrival"
-          style={{
-            position: "absolute",
-            top: 8,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 5,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px 12px",
-            background: "var(--pc-raised)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 6,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-            maxWidth: "90%",
-          }}
-        >
-          <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              const mediaId = arrival.mediaId;
-              setArrival(null);
-              setSelection([mediaId], mediaId);
-              setModule("library");
+    <ModulePage title={t("modules.people")}>
+      <section
+        aria-label={t("people.title")}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          display: "flex",
+          flexWrap: "wrap",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {arrival && (
+          <div
+            role="status"
+            data-testid="people-arrival"
+            style={{
+              position: "absolute",
+              top: 8,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 5,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 12px",
+              background: "var(--pc-raised)",
+              border: "1px solid var(--pc-border)",
+              borderRadius: 6,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+              maxWidth: "90%",
             }}
           >
-            {t("people.backToPhoto")}
-          </button>
-        </div>
-      )}
-      <GroupList
-        ref={groupListRef}
-        section={section}
-        onSectionChange={(s) => {
-          setPeopleSection(s);
-          clearSelection();
-        }}
-        target={target}
-        selectedIds={selectedIds}
-        onCatalogChange={onCatalogChange}
-        onCreateIdentity={() => {
-          setCreating(true);
-          setIdentity(null);
-          setGroup(null);
-          setTarget(null);
-          setSelectedIds([]);
-          setArrival(null);
-        }}
-        onSelect={({ target: next, selectedIds: ids, group: g, identity: id }) => {
-          setTarget(next);
-          setSelectedIds(ids);
-          setGroup(g);
-          setIdentity(id);
-          setCreating(false);
-          setSelectedFaceIds([]);
-          setArrival(null);
-        }}
-      />
-
-      <main
-        aria-label={t("people.facesLabel")}
-        style={{
-          flex: "999 1 420px",
-          minWidth: 0,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          borderRight: "1px solid var(--pc-border)",
-          background: "var(--pc-bg)",
-        }}
-      >
-        {target?.kind === "identity" ? (
-          <div style={{ padding: 16 }}>
-            <p className="muted" style={{ margin: 0 }}>
-              {t("people.noPhotosInLibrary")}
-            </p>
+            <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                const mediaId = arrival.mediaId;
+                setArrival(null);
+                setSelection([mediaId], mediaId);
+                openModule({ module: "library" });
+              }}
+            >
+              {t("people.backToPhoto")}
+            </button>
           </div>
-        ) : (
-          <FaceGrid
-            ref={faceGridRef}
+        )}
+        <GroupList
+          ref={groupListRef}
+          section={section}
+          onSectionChange={(s) => {
+            setPeopleSection(s);
+            clearSelection();
+          }}
+          target={target}
+          selectedIds={selectedIds}
+          onCatalogChange={onCatalogChange}
+          onCreateIdentity={() => {
+            setCreating(true);
+            setIdentity(null);
+            setGroup(null);
+            setTarget(null);
+            setSelectedIds([]);
+            setArrival(null);
+          }}
+          onSelect={({ target: next, selectedIds: ids, group: g, identity: id }) => {
+            setTarget(next);
+            setSelectedIds(ids);
+            setGroup(g);
+            setIdentity(id);
+            setCreating(false);
+            setSelectedFaceIds([]);
+            setArrival(null);
+          }}
+        />
+
+        <main
+          aria-label={t("people.facesLabel")}
+          style={{
+            flex: "999 1 420px",
+            minWidth: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid var(--pc-border)",
+            background: "var(--pc-bg)",
+          }}
+        >
+          {target?.kind === "identity" ? (
+            <div style={{ padding: 16 }}>
+              <p className="muted" style={{ margin: 0 }}>
+                {t("people.noPhotosInLibrary")}
+              </p>
+            </div>
+          ) : (
+            <FaceGrid
+              ref={faceGridRef}
+              target={target}
+              group={group}
+              highlight={arrival?.highlight ?? null}
+              onSelectedFacesChange={setSelectedFaceIds}
+            />
+          )}
+        </main>
+
+        <aside
+          aria-label={t("people.cardLabel")}
+          style={{
+            flex: "1 1 260px",
+            maxWidth: 340,
+            minWidth: 0,
+            minHeight: 0,
+            background: "var(--pc-panel)",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "auto",
+            borderLeft: "1px solid var(--pc-border)",
+          }}
+        >
+          <PersonCard
+            ref={personCardRef}
+            section={section}
             target={target}
             group={group}
-            highlight={arrival?.highlight ?? null}
-            onSelectedFacesChange={setSelectedFaceIds}
+            identity={identity}
+            creating={creating}
+            selectedFaceIds={selectedFaceIds}
+            mergeCandidates={candidates}
+            onLinked={advanceAfterLink}
+            onIdentitySaved={(uid) => {
+              setCreating(false);
+              void commands.listIdentities(null).then((v) => {
+                const row = v.identities.find((r) => r.uid === uid) ?? null;
+                setIdentity(row);
+                if (row?.person != null) {
+                  setTarget({ kind: "group", id: row.person });
+                  setSelectedIds([row.person]);
+                  setGroup({
+                    ...stubGroup(row.person, "people", row.name),
+                    identityUid: row.uid,
+                    photos: row.photos,
+                  });
+                } else {
+                  setTarget({ kind: "identity", uid });
+                  setSelectedIds([]);
+                  setGroup(null);
+                }
+              });
+            }}
+            onIdentityDeleted={clearSelection}
+            onCreatingChange={setCreating}
+          />
+        </aside>
+
+        {multiMerge && multiMerge.length >= 2 && (
+          <MergeDialog
+            sources={multiMerge.slice(1)}
+            target={multiMerge[0]!}
+            onClose={() => setMultiMerge(null)}
+            onMerged={(to) => {
+              setMultiMerge(null);
+              void Promise.all([
+                qc.invalidateQueries({ queryKey: ["people-groups"] }),
+                qc.invalidateQueries({ queryKey: ["people-sections"] }),
+                qc.invalidateQueries({ queryKey: ["group-faces"] }),
+              ]).then(() => advanceAfterLink(to));
+            }}
           />
         )}
-      </main>
-
-      <aside
-        aria-label={t("people.cardLabel")}
-        style={{
-          flex: "1 1 260px",
-          maxWidth: 340,
-          minWidth: 0,
-          minHeight: 0,
-          background: "var(--pc-panel)",
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "auto",
-          borderLeft: "1px solid var(--pc-border)",
-        }}
-      >
-        <PersonCard
-          ref={personCardRef}
-          section={section}
-          target={target}
-          group={group}
-          identity={identity}
-          creating={creating}
-          selectedFaceIds={selectedFaceIds}
-          mergeCandidates={candidates}
-          onLinked={advanceAfterLink}
-          onIdentitySaved={(uid) => {
-            setCreating(false);
-            void commands.listIdentities(null).then((v) => {
-              const row = v.identities.find((r) => r.uid === uid) ?? null;
-              setIdentity(row);
-              if (row?.person != null) {
-                setTarget({ kind: "group", id: row.person });
-                setSelectedIds([row.person]);
-                setGroup({
-                  ...stubGroup(row.person, "people", row.name),
-                  identityUid: row.uid,
-                  photos: row.photos,
-                });
-              } else {
-                setTarget({ kind: "identity", uid });
-                setSelectedIds([]);
-                setGroup(null);
-              }
-            });
-          }}
-          onIdentityDeleted={clearSelection}
-          onCreatingChange={setCreating}
-        />
-      </aside>
-
-      {multiMerge && multiMerge.length >= 2 && (
-        <MergeDialog
-          sources={multiMerge.slice(1)}
-          target={multiMerge[0]!}
-          onClose={() => setMultiMerge(null)}
-          onMerged={(to) => {
-            setMultiMerge(null);
-            void Promise.all([
-              qc.invalidateQueries({ queryKey: ["people-groups"] }),
-              qc.invalidateQueries({ queryKey: ["people-sections"] }),
-              qc.invalidateQueries({ queryKey: ["group-faces"] }),
-            ]).then(() => advanceAfterLink(to));
-          }}
-        />
-      )}
-    </section>
+      </section>
+    </ModulePage>
   );
 }

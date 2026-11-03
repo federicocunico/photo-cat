@@ -11,6 +11,7 @@ import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { TAG_COLORS, tagColorVar } from "../../theme/tokens";
 import { activeSet, errorText, refreshTags, useTagOverview } from "./data";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { Icon } from "../../components/icons";
 
 type Pending =
@@ -41,7 +42,7 @@ function openInLibrary(filter: { tags?: string[] }, ids?: number[]) {
   lib.resetFilter();
   if (filter.tags) lib.setFilter({ ...emptyFilter(), tags: filter.tags });
   if (ids) lib.setSelection(ids, ids[0] ?? null);
-  useLayout.getState().setModule("library");
+  useLayout.getState().openModule({ module: "library" });
 }
 
 function SetList({
@@ -247,7 +248,7 @@ function SetDetail({
     >
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         {renaming === null ? (
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{set.name}</h1>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{set.name}</h2>
         ) : (
           <form
             onSubmit={(e) => {
@@ -754,133 +755,144 @@ export function TagsPage() {
           ? t("tags.deleteSetConfirm", { name: pending.set.name })
           : "";
   return (
-    <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <div style={{ flex: 1, display: "flex", flexWrap: "wrap", minWidth: 0, overflow: "auto" }}>
-          <datalist id="pc-all-tags">
-            {o?.tags.map((x) => (
-              <option key={x.name} value={x.name} />
-            ))}
-          </datalist>
-          <SetList
-            sets={o?.sets ?? []}
-            active={o?.activeSet ?? null}
-            current={current?.id ?? null}
-            onSelect={setSetId}
-            onCreated={setSetId}
-          />
+    <ModulePage title={t("modules.tags")}>
+      <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
+        {() => (
           <div
-            style={{ flex: "999 1 480px", minWidth: 0, display: "flex", flexDirection: "column" }}
+            style={{ flex: 1, display: "flex", flexWrap: "wrap", minWidth: 0, overflow: "auto" }}
           >
-            {current && (
-              <SetDetail
-                set={current}
-                tags={o?.tags ?? []}
-                isActive={current.id === o?.activeSet}
-                onSelectTag={setTagName}
-                onRenameTag={(name) => {
-                  setTagName(name);
-                  setTimeout(() => nameRef.current?.focus(), 0);
-                }}
-                onAskDelete={() => setPending({ kind: "deleteSet", set: current })}
-                onDuplicated={setSetId}
-              />
-            )}
-            <section
-              style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 12 }}
-            >
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("tags.allTags")}</h2>
-                <span className="muted">{t("tags.tagCount", { count: o?.tags.length ?? 0 })}</span>
-                <input
-                  type="search"
-                  className="field"
-                  aria-label={t("tags.filter")}
-                  placeholder={t("tags.filterPlaceholder")}
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  style={{ marginLeft: "auto", width: 180 }}
-                />
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {shown.map((x) => {
-                  const inSet = current?.tags.some(
-                    (s) => s.name.toLowerCase() === x.name.toLowerCase(),
-                  );
-                  const sel = x.name === tag?.name;
-                  return (
-                    <BusyButton
-                      key={x.name}
-                      type="button"
-                      className="pill"
-                      aria-pressed={sel}
-                      onClick={() => setTagName(x.name)}
-                      style={{
-                        background: sel ? "var(--pc-accent-soft-bg)" : undefined,
-                        borderColor: sel
-                          ? "var(--pc-accent)"
-                          : inSet
-                            ? "var(--pc-selection-border)"
-                            : undefined,
-                      }}
-                    >
-                      <Swatch color={x.color} size={10} />
-                      <span>{x.name}</span>
-                      <span className="muted mono" style={{ fontSize: 12 }}>
-                        {fmtInt(x.count)}
-                      </span>
-                    </BusyButton>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-          <aside
-            aria-label={t("tags.selected")}
-            style={{
-              flex: "1 1 300px",
-              maxWidth: 340,
-              padding: 20,
-              background: "var(--pc-panel)",
-              borderLeft: "1px solid var(--pc-border)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-            }}
-          >
-            {pending && (
-              <div
-                role="alertdialog"
-                aria-label={question}
-                className="feature-card"
-                style={{ alignItems: "stretch", borderColor: "var(--pc-warn)" }}
-              >
-                <p style={{ margin: 0 }}>{question}</p>
-                <div className="feature-actions" style={{ margin: 0 }}>
-                  <BusyButton
-                    className={pending.kind === "merge" ? "btn btn-primary" : "btn btn-danger"}
-                    autoFocus
-                    onClick={async () => await confirm()}
-                  >
-                    {t("tags.confirm")}
-                  </BusyButton>
-                  <BusyButton className="btn" onClick={() => setPending(null)}>
-                    {t("tags.cancel")}
-                  </BusyButton>
-                </div>
-              </div>
-            )}
-            {error && <p role="alert">{error}</p>}
-            <TagPanel
-              tag={tag}
+            <datalist id="pc-all-tags">
+              {o?.tags.map((x) => (
+                <option key={x.name} value={x.name} />
+              ))}
+            </datalist>
+            <SetList
               sets={o?.sets ?? []}
-              nameRef={nameRef}
-              onAsk={setPending}
-              onError={setError}
+              active={o?.activeSet ?? null}
+              current={current?.id ?? null}
+              onSelect={setSetId}
+              onCreated={setSetId}
             />
-          </aside>
-        </div>
-      )}
-    </QueryView>
+            <div
+              style={{ flex: "999 1 480px", minWidth: 0, display: "flex", flexDirection: "column" }}
+            >
+              {current && (
+                <SetDetail
+                  set={current}
+                  tags={o?.tags ?? []}
+                  isActive={current.id === o?.activeSet}
+                  onSelectTag={setTagName}
+                  onRenameTag={(name) => {
+                    setTagName(name);
+                    setTimeout(() => nameRef.current?.focus(), 0);
+                  }}
+                  onAskDelete={() => setPending({ kind: "deleteSet", set: current })}
+                  onDuplicated={setSetId}
+                />
+              )}
+              <section
+                style={{
+                  padding: "0 24px 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("tags.allTags")}</h2>
+                  <span className="muted">
+                    {t("tags.tagCount", { count: o?.tags.length ?? 0 })}
+                  </span>
+                  <input
+                    type="search"
+                    className="field"
+                    aria-label={t("tags.filter")}
+                    placeholder={t("tags.filterPlaceholder")}
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    style={{ marginLeft: "auto", width: 180 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {shown.map((x) => {
+                    const inSet = current?.tags.some(
+                      (s) => s.name.toLowerCase() === x.name.toLowerCase(),
+                    );
+                    const sel = x.name === tag?.name;
+                    return (
+                      <BusyButton
+                        key={x.name}
+                        type="button"
+                        className="pill"
+                        aria-pressed={sel}
+                        onClick={() => setTagName(x.name)}
+                        style={{
+                          background: sel ? "var(--pc-accent-soft-bg)" : undefined,
+                          borderColor: sel
+                            ? "var(--pc-accent)"
+                            : inSet
+                              ? "var(--pc-selection-border)"
+                              : undefined,
+                        }}
+                      >
+                        <Swatch color={x.color} size={10} />
+                        <span>{x.name}</span>
+                        <span className="muted mono" style={{ fontSize: 12 }}>
+                          {fmtInt(x.count)}
+                        </span>
+                      </BusyButton>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+            <aside
+              aria-label={t("tags.selected")}
+              style={{
+                flex: "1 1 300px",
+                maxWidth: 340,
+                padding: 20,
+                background: "var(--pc-panel)",
+                borderLeft: "1px solid var(--pc-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+              }}
+            >
+              {pending && (
+                <div
+                  role="alertdialog"
+                  aria-label={question}
+                  className="feature-card"
+                  style={{ alignItems: "stretch", borderColor: "var(--pc-warn)" }}
+                >
+                  <p style={{ margin: 0 }}>{question}</p>
+                  <div className="feature-actions" style={{ margin: 0 }}>
+                    <BusyButton
+                      className={pending.kind === "merge" ? "btn btn-primary" : "btn btn-danger"}
+                      autoFocus
+                      onClick={async () => await confirm()}
+                    >
+                      {t("tags.confirm")}
+                    </BusyButton>
+                    <BusyButton className="btn" onClick={() => setPending(null)}>
+                      {t("tags.cancel")}
+                    </BusyButton>
+                  </div>
+                </div>
+              )}
+              {error && <p role="alert">{error}</p>}
+              <TagPanel
+                tag={tag}
+                sets={o?.sets ?? []}
+                nameRef={nameRef}
+                onAsk={setPending}
+                onError={setError}
+              />
+            </aside>
+          </div>
+        )}
+      </QueryView>
+    </ModulePage>
   );
 }

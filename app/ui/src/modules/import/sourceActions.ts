@@ -54,10 +54,10 @@ export function useImportUpdates() {
 
 /** Apre la Libreria sui soli elementi indicati. */
 export function useShowInLibrary() {
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   return (ids: number[]) => {
     useLibrary.getState().setFilter({ ...emptyFilter(), ids });
-    setModule("library");
+    openModule({ module: "library" });
   };
 }
 

@@ -78,8 +78,8 @@ export const screens = {
       title: "Esporta e organizza",
       levelUp: "Sposta su il livello {{n}}",
       levelRemove: "Rimuovi il livello {{n}}",
-      queued: "Job #{{id}} accodato.",
-      jobs: "Vai ai job",
+      queued: "Attività avviata.",
+      jobs: "Vai ad Attività",
       scope: "Ambito",
       scopes: {
         library: "Tutta la libreria",
@@ -138,6 +138,12 @@ export const screens = {
     },
     settings: {
       title: "Impostazioni",
+      sections: {
+        label: "Sezioni delle impostazioni",
+        general: "Generale",
+        models: "Modelli AI e sistema",
+        diagnostics: "Diagnostica",
+      },
       loading: "Caricamento impostazioni…",
       saved: "Impostazioni salvate.",
       profile: "Profilo risorse",
@@ -198,8 +204,8 @@ export const screens = {
       title: "Export & organize",
       levelUp: "Move level {{n}} up",
       levelRemove: "Remove level {{n}}",
-      queued: "Job #{{id}} queued.",
-      jobs: "Go to jobs",
+      queued: "Activity started.",
+      jobs: "Go to Activity",
       scope: "Scope",
       scopes: {
         library: "Whole library",
@@ -257,6 +263,12 @@ export const screens = {
     },
     settings: {
       title: "Settings",
+      sections: {
+        label: "Settings sections",
+        general: "General",
+        models: "AI models & system",
+        diagnostics: "Diagnostics",
+      },
       loading: "Loading settings…",
       saved: "Settings saved.",
       profile: "Resource profile",

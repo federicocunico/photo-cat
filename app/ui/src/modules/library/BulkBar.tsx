@@ -76,7 +76,7 @@ export function BulkBar() {
       return;
     }
     if (action === "export" || action === "organize") {
-      useLayout.getState().setModule("organize");
+      useLayout.getState().openModule({ module: "organize" });
       return;
     }
     const destructive = action === "remove_library";
@@ -311,7 +311,13 @@ export function BulkBar() {
           {Math.round(result.overallPercent ?? 0)}%{" "}
           <BusyButton
             className="btn"
-            onClick={() => useLayout.getState().openDiagnostics({ jobId: result.id })}
+            onClick={() =>
+              useLayout.getState().openModule({
+                module: "settings",
+                section: "diagnostics",
+                target: { jobId: result.id },
+              })
+            }
           >
             {t("bulk.details")}
           </BusyButton>

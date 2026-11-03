@@ -1,4 +1,6 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { emit, ipcMockModule, job, resources } from "../../test/ipcMock";
@@ -7,6 +9,8 @@ import { useLive, useLiveEvents } from "../../store/live";
 import { Panels } from "./Panels";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
+import { ModuleNav } from "./ModuleNav";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trackCommand, usePending } from "../../store/pending";
 import { commandsMock } from "../../test/ipcMock";
 import { checkedCleanup } from "../../test/a11y";
@@ -50,6 +54,10 @@ it("Nessun job attivo: idle job pill contains no animated spinner", () => {
 
 vi.mock("../../lib/ipc", () => ipcMockModule());
 
+/** Barra superiore e di stato leggono anche dalle query (menu Aiuto, modelli). */
+const render = (ui: ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+
 function Live({ children }: { children: React.ReactNode }) {
   useLiveEvents();
   return <>{children}</>;
@@ -63,6 +71,31 @@ beforeEach(() => {
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("layout a pannelli", () => {
+  it("Concentrazione sulla griglia: Ctrl+Maiusc+B nasconde e ripristina i pannelli laterali", () => {
+    render(<Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />);
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
+    expect(screen.queryByTestId("left-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    // Tab resta allo spostamento del focus.
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(screen.queryByTestId("left-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
+    expect(screen.getByTestId("left-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument();
+  });
+
+  it("Ctrl+I mostra e nasconde l'ispettore, ma non mentre si scrive", () => {
+    render(
+      <Panels left={<div>sx</div>} center={<input aria-label="campo" />} right={<div>dx</div>} />,
+    );
+    fireEvent.keyDown(window, { key: "i", ctrlKey: true });
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText("campo"), { key: "i", ctrlKey: true });
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "i", ctrlKey: true });
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument();
+  });
+
   it("lo stato dei pannelli è persistito e ripristinato", async () => {
     const { unmount } = render(
       <Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />,
@@ -100,14 +133,16 @@ describe("indicatori globali", () => {
     render(
       <Live>
         <TopBar />
+        <StatusBar />
       </Live>,
     );
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessun job attivo");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
     act(() =>
       emit(
         "job",
         job({
           id: 3,
+          kind: "analysis",
           overallPercent: 62.4,
           phases: [
             {
@@ -136,17 +171,17 @@ describe("indicatori globali", () => {
         }),
       ),
     );
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Analisi AI 62%");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Analisi AI · 62%");
 
     act(() => emit("resources", resources()));
     expect(screen.getByTestId("ram-chip")).toHaveTextContent("RAM 5,1/16 GB");
 
-    // Un clic porta alla schermata Job.
+    // Un clic porta ad Attività, su quell'attività.
     fireEvent.click(screen.getByTestId("job-pill"));
-    expect(useLayout.getState().module).toBe("jobs");
+    expect(useLayout.getState()).toMatchObject({ module: "jobs", jobFocus: 3 });
 
     act(() => emit("job", job({ id: 3, state: "completed", overallPercent: 100 })));
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessun job attivo");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
   });
 
   it("la barra di stato conta gli errori e apre la diagnostica", () => {
@@ -195,7 +230,142 @@ describe("indicatori globali", () => {
     });
     expect(screen.getByTestId("error-count")).toHaveTextContent("1250 errori nel log");
     fireEvent.click(screen.getByTestId("error-count"));
-    expect(useLayout.getState().module).toBe("diagnostics");
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
     expect(useLayout.getState().diagFilter).toEqual({ level: "ERROR" });
+  });
+});
+
+function renderNav() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Live>
+        <ModuleNav />
+      </Live>
+    </QueryClientProvider>,
+  );
+}
+
+function setWindowWidth(width: number) {
+  window.matchMedia = ((query: string) => {
+    const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity);
+    return {
+      matches: width <= max,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+  }) as unknown as typeof window.matchMedia;
+}
+
+describe("navigazione dei moduli", () => {
+  beforeEach(() => {
+    setWindowWidth(1280);
+    useLayout.setState({ navCompact: false });
+  });
+
+  it("Gruppi della navigazione: Sfoglia, Organizza, Importa ed esporta, poi Attività e Impostazioni", () => {
+    renderNav();
+    const group = (name: string) =>
+      within(screen.getByRole("group", { name }))
+        .getAllByRole("button")
+        .map((b) => b.textContent);
+    expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
+    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
+    expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta"]);
+    const nav = screen.getByRole("navigation", { name: "Moduli" });
+    const all = within(nav).getAllByRole("button");
+    expect(all[all.length - 3]).toHaveTextContent("Attività");
+    expect(all[all.length - 2]).toHaveTextContent("Impostazioni");
+  });
+
+  it("Scorciatoia di modulo: Ctrl+3 apre Cataloghi, ma non mentre si scrive", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "3", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("catalogs");
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "1", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("catalogs");
+    input.remove();
+  });
+
+  it("Navigazione a icone: Ctrl+B mostra solo le icone, con il nome per il lettore di schermo", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    expect(useLayout.getState().navCompact).toBe(true);
+    const nav = screen.getByRole("navigation", { name: "Moduli" });
+    expect(nav).toHaveAttribute("data-compact");
+    const library = within(nav).getByRole("button", { name: "Libreria" });
+    expect(library).toHaveTextContent("");
+    expect(library).toHaveAttribute("aria-keyshortcuts", "Control+1");
+    fireEvent.click(within(nav).getByRole("button", { name: "Espandi la navigazione" }));
+    expect(useLayout.getState().navCompact).toBe(false);
+  });
+
+  it("Finestra stretta: icone senza cambiare la preferenza salvata", () => {
+    setWindowWidth(900);
+    renderNav();
+    expect(screen.getByRole("navigation", { name: "Moduli" })).toHaveAttribute("data-compact");
+    expect(useLayout.getState().navCompact).toBe(false);
+  });
+
+  it("badge: persone da rivedere e attività in corso", async () => {
+    commandsMock.peopleSections.mockResolvedValueOnce({
+      review: 3,
+      people: 0,
+      ignored: 0,
+      singles: 0,
+      discarded: 0,
+    });
+    renderNav();
+    act(() => emit("job", job({ id: 1, state: "running" })));
+    expect(
+      await screen.findByRole("button", { name: "Persone", description: "3 persone da rivedere" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attività", description: "1 attività in corso" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("barra di stato e menu Aiuto", () => {
+  it("RAM sotto pressione: icona e testo, non solo colore", () => {
+    render(
+      <Live>
+        <StatusBar />
+      </Live>,
+    );
+    act(() => emit("resources", { ...resources(), state: "pressure" }));
+    expect(screen.getByTestId("ram-chip")).toHaveTextContent("memoria sotto pressione");
+    fireEvent.click(screen.getByTestId("ram-chip"));
+    expect(useLayout.getState().module).toBe("jobs");
+  });
+
+  it("stato dei modelli AI con accesso a Impostazioni", () => {
+    render(<StatusBar />);
+    expect(screen.queryByTestId("models-chip")).not.toBeInTheDocument();
+    act(() =>
+      emit("models", [
+        { entry: {}, state: { state: "verified" }, selfTest: null },
+        { entry: {}, state: { state: "missing" }, selfTest: null },
+      ] as never),
+    );
+    const chip = screen.getByTestId("models-chip");
+    expect(chip).toHaveTextContent("Modelli AI da scaricare");
+    fireEvent.click(chip);
+    expect(useLayout.getState()).toMatchObject({ module: "settings", settingsSection: "models" });
+  });
+
+  it("menu Aiuto: Diagnostica e Informazioni", async () => {
+    render(<TopBar />);
+    const user = userEvent.setup();
+    screen.getByRole("button", { name: "Aiuto" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Informazioni su photo-cat" }));
+    expect(await screen.findByRole("dialog", { name: "photo-cat" })).toBeInTheDocument();
   });
 });

@@ -176,3 +176,8 @@ it("reports conflicts when a set becomes exclusive and opens them in Library", a
   expect(selIds(useLibrary.getState().selection)).toEqual([4, 5, 6, 7, 8, 9]);
   expect(useLayout.getState().module).toBe("library");
 });
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: "Tag" })).toBeInTheDocument();
+});

@@ -88,9 +88,9 @@ export const tuning = {
       belowFloor_other:
         "{{count}} foto sono state analizzate con un minimo più alto: i nuovi risultati emergeranno solo con una rianalisi.",
       reanalyze: "Rianalizza",
-      reanalyzeStarted: "Rianalisi avviata: segui l'avanzamento nella schermata Job.",
+      reanalyzeStarted: "Rianalisi avviata: segui l'avanzamento in Attività.",
       apply: "Applica soglie",
-      applied: "Soglie salvate: la rivalutazione è in corso nella schermata Job.",
+      applied: "Soglie salvate: la rivalutazione è in corso in Attività.",
       defaults: "Ripristina predefiniti",
     },
   },
@@ -182,9 +182,9 @@ export const tuning = {
       belowFloor_other:
         "{{count}} photos were analysed with a higher minimum: new results will appear only after re-analysis.",
       reanalyze: "Re-analyse",
-      reanalyzeStarted: "Re-analysis started: follow it in the Jobs screen.",
+      reanalyzeStarted: "Re-analysis started: follow it in Activity.",
       apply: "Apply thresholds",
-      applied: "Thresholds saved: re-evaluation is running in the Jobs screen.",
+      applied: "Thresholds saved: re-evaluation is running in Activity.",
       defaults: "Restore defaults",
     },
   },

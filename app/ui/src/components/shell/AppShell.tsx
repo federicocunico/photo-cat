@@ -22,7 +22,7 @@ const time = (iso: string) => fmtDateTime(iso);
 /** Avviso di chiusura anomala della sessione precedente. */
 export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss: () => void }) {
   const { t } = useTranslation();
-  const openDiagnostics = useLayout((s) => s.openDiagnostics);
+  const openModule = useLayout((s) => s.openModule);
   const kind = crash.kind ?? "panic";
   return (
     <div role="alert" style={bannerStyle}>
@@ -46,7 +46,7 @@ export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss:
         type="button"
         className="btn"
         style={{ marginLeft: "auto" }}
-        onClick={() => openDiagnostics({})}
+        onClick={() => openModule({ module: "settings", section: "diagnostics", target: {} })}
       >
         {t("shell.crashOpen")}
       </button>
@@ -66,7 +66,7 @@ export function UiRecoveredBanner({
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
-  const openDiagnostics = useLayout((s) => s.openDiagnostics);
+  const openModule = useLayout((s) => s.openModule);
   return (
     <div role="alert" style={bannerStyle} data-testid="ui-recovered">
       <strong>{t("shell.uiRecovered")}</strong>
@@ -80,7 +80,7 @@ export function UiRecoveredBanner({
         type="button"
         className="btn"
         style={{ marginLeft: "auto" }}
-        onClick={() => openDiagnostics({})}
+        onClick={() => openModule({ module: "settings", section: "diagnostics", target: {} })}
       >
         {t("shell.crashOpen")}
       </button>

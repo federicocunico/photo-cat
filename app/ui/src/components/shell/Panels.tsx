@@ -1,10 +1,34 @@
 // Layout a tre colonne del modulo: pannello sinistro e ispettore ridimensionabili
 // (trascinamento o frecce da tastiera) e richiudibili; lo stato è persistito.
 
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { useLayout } from "../../store/layout";
+import { isTyping, modalOpen } from "../../lib/keys";
+
+/**
+ * Ctrl+I mostra o nasconde l'ispettore; Ctrl+Maiusc+B nasconde entrambi i pannelli
+ * laterali e li ripristina com'erano. Tab resta allo spostamento del focus.
+ */
+function usePanelHotkeys(hasRight: boolean) {
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || !(e.ctrlKey || e.metaKey)) return;
+      if (isTyping(e.target) || modalOpen()) return;
+      const key = e.key.toLowerCase();
+      if (e.shiftKey && key === "b") {
+        e.preventDefault();
+        useLayout.getState().toggleSidePanels();
+      } else if (!e.shiftKey && key === "i" && hasRight) {
+        e.preventDefault();
+        useLayout.getState().toggleRight();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasRight]);
+}
 
 function Resizer({ label, onDelta }: { label: string; onDelta: (dx: number) => void }) {
   const last = useRef<number | null>(null);
@@ -76,6 +100,7 @@ export function Panels({
 }) {
   const { t } = useTranslation();
   const s = useLayout();
+  usePanelHotkeys(Boolean(right));
   return (
     <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
       {left &&
@@ -144,6 +169,7 @@ export function Panels({
                 type="button"
                 className="btn btn-ghost icon-btn"
                 aria-label={t("shell.collapseRight")}
+                aria-keyshortcuts="Control+I"
                 onClick={s.toggleRight}
                 style={{ position: "absolute", top: 8, right: 8, border: 0 }}
               >

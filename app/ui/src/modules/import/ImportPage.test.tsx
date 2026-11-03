@@ -132,7 +132,7 @@ describe("gestione delle importazioni", () => {
     expect(within(dialog).getByText(/Estate \(7\)/)).toBeTruthy();
     expect(within(dialog).getByText(/Giulia, Marco/)).toBeTruthy();
     expect(
-      within(dialog).getByText(/2 job in corso su questa sorgente verranno annullati/),
+      within(dialog).getByText(/2 attività in corso su questa cartella verranno interrotte/),
     ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Annulla" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -258,4 +258,9 @@ describe("gestione delle importazioni", () => {
     await waitFor(() => expect(commandsMock.removeMissing).toHaveBeenCalledWith(1, true));
     expect(await within(dialog).findByText("3 file rimossi")).toBeTruthy();
   });
+});
+
+it("il titolo della pagina è quello della voce di navigazione", async () => {
+  renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: "Importa" })).toBeInTheDocument();
 });

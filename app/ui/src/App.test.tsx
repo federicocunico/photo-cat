@@ -101,13 +101,11 @@ describe("moduli di navigazione", () => {
       "library",
       "sequence",
       "catalogs",
-      "tags",
       "people",
+      "tags",
       "import",
-      "jobs",
-      "models",
-      "diagnostics",
       "organize",
+      "jobs",
       "settings",
     ]);
   });
@@ -122,13 +120,12 @@ describe("moduli di navigazione", () => {
       tags: "Tag",
       people: "Persone",
       import: "Importa",
-      jobs: "Job",
-      organize: "Esporta e organizza",
-      models: "Modelli AI",
-      diagnostics: "Diagnostica",
+      jobs: "Attività",
+      organize: "Esporta",
       settings: "Impostazioni",
     };
-    expect(within(nav).getAllByRole("button")).toHaveLength(MODULES.length);
+    // Le voci dei moduli più il comando che riduce la navigazione.
+    expect(within(nav).getAllByRole("button")).toHaveLength(MODULES.length + 1);
     for (const { id } of [...MODULES].reverse()) {
       const button = within(nav).getByRole("button", { name: labels[id] });
       fireEvent.click(button);
@@ -160,8 +157,11 @@ describe("cattura dei crash", () => {
     expect(screen.getByText("panicked at 'index out of bounds'")).toBeInTheDocument();
     expect(screen.getByText("page:library")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Apri diagnostica" }));
-    expect(await screen.findByText("page:diagnostics")).toBeInTheDocument();
-    expect(useLayout.getState().module).toBe("diagnostics");
+    expect(await screen.findByText("page:settings")).toBeInTheDocument();
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
     // L'avviso resta finché non viene chiuso esplicitamente.
     expect(banner).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
@@ -205,10 +205,13 @@ describe("recupero dell'interfaccia", () => {
     act(() => emit("uiRecovered", undefined));
     const banner = await screen.findByTestId("ui-recovered");
     expect(banner).toHaveTextContent("L'interfaccia si è chiusa ed è stata ricaricata.");
-    expect(banner).toHaveTextContent("I job in corso continuano");
+    expect(banner).toHaveTextContent("Le attività in corso continuano");
     expect(banner).toHaveTextContent("processo render");
     fireEvent.click(within(banner).getByRole("button", { name: "Apri diagnostica" }));
-    expect(useLayout.getState().module).toBe("diagnostics");
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
     fireEvent.click(within(banner).getByRole("button", { name: "Chiudi" }));
     expect(screen.queryByTestId("ui-recovered")).not.toBeInTheDocument();
   });

@@ -19,7 +19,7 @@ export const similar = {
       preview: "Gruppi con questa soglia: {{n}} (ora {{current}})",
       propose: "Le foto già analizzate non hanno ancora i gruppi di foto simili.",
       start: "Analizza i gruppi",
-      started: "Analisi dei gruppi accodata nei Job",
+      started: "Ricerca dei gruppi avviata tra le attività",
     },
   },
   en: {
@@ -42,7 +42,7 @@ export const similar = {
       preview: "Groups with this threshold: {{n}} (now {{current}})",
       propose: "Photos analyzed earlier do not have similar photo groups yet.",
       start: "Analyze groups",
-      started: "Group analysis queued in Jobs",
+      started: "Group search started in Activity",
     },
   },
 };

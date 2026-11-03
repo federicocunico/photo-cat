@@ -14,7 +14,7 @@ type Dialog = "remove" | "relink" | "missing" | null;
 
 export function SourceMenu({ summary, label }: { summary: SourceSummary; label: string }) {
   const { t } = useTranslation();
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const { source, missing } = summary;
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -40,7 +40,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
   const items: Array<[string, () => unknown]> = [
     ["sources.update", () => commands.startImport(source.id, null)],
     ["sources.updateFolder", () => updateFolder(source)],
-    ["sources.openImport", () => setModule("import")],
+    ["sources.openImport", () => openModule({ module: "import" })],
     ...(missing > 0
       ? ([
           ["sources.relink", () => setDialog("relink")],
