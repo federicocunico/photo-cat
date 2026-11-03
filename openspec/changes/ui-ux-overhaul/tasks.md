@@ -29,7 +29,7 @@
   - `FolderPicker`, `DataTable` (righe selezionabili da tastiera).
 
   Verifica: un test vitest per componente su ruoli, focus, Esc, ritorno del focus e Invio.
-- [ ] 1.4 `ToastHost` unico, a partire dal Toast di `loading-feedback`: pila, chiusura, azione, durata, `role="status"` e `alert` per gli errori, nessuna copertura del focus. Verifica con un test sulla pila di due avvisi.
+- [x] 1.4 `ToastHost` unico, a partire dal Toast di `loading-feedback`: pila, chiusura, azione, durata, `role="status"` e `alert` per gli errori, nessuna copertura del focus. Verifica con un test sulla pila di due avvisi.
 - [ ] 1.5 Store `undo`, il registro globale dell'ultima operazione annullabile, e scorciatoia Ctrl+Z.
   - Elencare le operazioni annullabili esistenti e i loro comandi di annullamento.
   - Annotare qui quelle che non hanno un annullamento lato backend prima di continuare.

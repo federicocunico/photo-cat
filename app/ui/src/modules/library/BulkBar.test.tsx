@@ -13,6 +13,7 @@ import {
 } from "../../store/library";
 import { CatalogFeedback } from "./catalogActions";
 import { useLive } from "../../store/live";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { BulkBar } from "./BulkBar";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(cleanup);
@@ -193,6 +194,7 @@ it("reinserisce dalla vista escluse senza conferma", async () => {
     <QueryClientProvider client={new QueryClient()}>
       <BulkBar />
       <CatalogFeedback />
+      <ToastHost />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Reinserisci nel catalogo" }));

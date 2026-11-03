@@ -19,6 +19,7 @@ import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
 import { deferred } from "../../test/deferred";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { LibraryStatus } from "./LibraryStatus";
 
 it("Primo caricamento della griglia: placeholders and calculating count, never an empty library", () => {
@@ -221,6 +222,7 @@ function renderPage() {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <LibraryPage />
+      <ToastHost />
     </QueryClientProvider>,
   );
 }
@@ -804,7 +806,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
       jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect(await screen.findByText(/foto reinserite/)).toHaveAttribute("role", "status");
+  expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
   expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
 });
@@ -832,7 +834,9 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
       jobs: { 800: { id: 800, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect(await screen.findByText(/file non sono stati toccati/)).toHaveAttribute("role", "status");
+  expect(
+    (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
+  ).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
   confirm.mockRestore();

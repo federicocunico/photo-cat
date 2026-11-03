@@ -7,6 +7,7 @@ import { idsSelection, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { CatalogFeedback } from "./catalogActions";
 import { useLive } from "../../store/live";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { Inspector } from "./Inspector";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -295,6 +296,7 @@ it("esclude dal catalogo smart nell'Inspector", async () => {
     <QueryClientProvider client={new QueryClient()}>
       <Inspector />
       <CatalogFeedback />
+      <ToastHost />
     </QueryClientProvider>,
   );
   fireEvent.click(await screen.findByRole("button", { name: "Escludi dal catalogo" }));

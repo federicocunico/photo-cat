@@ -16,7 +16,7 @@ import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
-import { Toast } from "../../components/feedback/Toast";
+import { notify, notifyError } from "../../store/toasts";
 import { FaceCrop } from "./FaceCrop";
 import { MergeDialog } from "./MergeDialog";
 import { discardReasonLabel } from "./discardReason";
@@ -67,7 +67,6 @@ export const FaceGrid = forwardRef<
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [mergeHintOpen, setMergeHintOpen] = useState(false);
-  const [undoToast, setUndoToast] = useState<string | null>(null);
   const [width, setWidth] = useState(640);
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -211,6 +210,24 @@ export const FaceGrid = forwardRef<
     await qc.invalidateQueries({ queryKey: ["people-sections"] });
   };
 
+  // "Non è la stessa persona": esito nell'unico ToastHost, con annullamento.
+  const showNotSameUndo = () =>
+    notify({
+      key: "people-not-same",
+      tone: "ok",
+      message: t("people.notSameDone"),
+      action: {
+        label: t("people.undo"),
+        run: async () => {
+          try {
+            await commands.undoPeople();
+            await refresh();
+          } catch (err) {
+            notifyError(err);
+          }
+        },
+      },
+    });
   const correct = async (...corrections: Correction[]) => {
     if (!corrections.length) return;
     setBusy(true);
@@ -258,7 +275,7 @@ export const FaceGrid = forwardRef<
             b: hint.otherId,
           });
           await refresh();
-          setUndoToast(t("people.notSameDone"));
+          showNotSameUndo();
         } catch (err) {
           setError((err as { detail?: string }).detail ?? String(err));
         } finally {
@@ -505,7 +522,7 @@ export const FaceGrid = forwardRef<
                     b: hint.otherId,
                   });
                   await refresh();
-                  setUndoToast(t("people.notSameDone"));
+                  showNotSameUndo();
                 } catch (err) {
                   setError((err as { detail?: string }).detail ?? String(err));
                 } finally {
@@ -541,30 +558,6 @@ export const FaceGrid = forwardRef<
           onClose={() => setMergeHintOpen(false)}
           onMerged={() => void refresh()}
         />
-      )}
-
-      {undoToast && (
-        <Toast onClose={() => setUndoToast(null)}>
-          {undoToast}{" "}
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void commands
-                .undoPeople()
-                .then(() => {
-                  setUndoToast(null);
-                  return refresh();
-                })
-                .catch((err) => {
-                  setError(String(err));
-                  setUndoToast(null);
-                });
-            }}
-          >
-            {t("people.undo")}
-          </button>
-        </Toast>
       )}
 
       <div

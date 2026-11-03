@@ -5,6 +5,7 @@ import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import type { FaceView, GroupRow } from "../../lib/ipc";
+import { ToastHost } from "../../components/feedback/ToastHost";
 import { PeopleModule } from "./PeopleModule";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -51,6 +52,7 @@ function renderModule() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <PeopleModule />
+      <ToastHost />
     </QueryClientProvider>,
   );
 }

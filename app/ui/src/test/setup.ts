@@ -14,3 +14,8 @@ if (typeof window !== "undefined") {
   proto.releasePointerCapture ??= () => {};
   proto.scrollIntoView ??= () => {};
 }
+
+// Gli avvisi vivono in uno store globale: ogni test parte senza avvisi.
+import { afterEach } from "vitest";
+import { useToast } from "../store/toasts";
+afterEach(() => useToast.setState({ notices: [] }));
