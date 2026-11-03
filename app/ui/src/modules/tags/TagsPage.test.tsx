@@ -1,31 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { TagOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { selIds, useLibrary } from "../../store/library";
+import { useGuide } from "../../store/guide";
+import { useToast } from "../../store/toasts";
+import { runUndo, useUndo } from "../../store/undo";
 import { TagsPage } from "./TagsPage";
 import { deferred } from "../../test/deferred";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 
-it("Doppio clic: a pending tag rename submits only once", async () => {
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Rinomina Paesaggi" }));
-  const name = await screen.findByLabelText("Nome");
-  fireEvent.change(name, { target: { value: "Panorami" } });
-  const pending = deferred<Awaited<ReturnType<typeof commandsMock.renameTag>>>();
-  commandsMock.renameTag.mockImplementationOnce(() => pending.promise);
-  const save = screen.getByRole("button", { name: "Rinomina" });
-  fireEvent.click(save);
-  fireEvent.click(save);
-  expect(commandsMock.renameTag).toHaveBeenCalledOnce();
-  expect(save).toHaveAttribute("aria-busy", "true");
-  pending.resolve({ outcome: "renamed" } as never);
-  await waitFor(() => expect(save).toBeEnabled());
-});
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 
 const overview = (): TagOverview => ({
@@ -72,15 +60,27 @@ function renderPage() {
   );
 }
 
+const messages = () => useToast.getState().notices.map((n) => n.message);
+
+/** Sceglie il tag nell'elenco di tutti i tag e apre la modifica del suo nome. */
+async function editTagName(name: string) {
+  fireEvent.click((await screen.findAllByRole("button", { name: new RegExp(`^${name}`) }))[0]);
+  const panel = screen.getByRole("complementary", { name: "Tag selezionato" });
+  fireEvent.click(within(panel).getByRole("button", { name: `Nome: ${name}. Modifica` }));
+  return within(panel).getByRole("textbox", { name: "Nome" });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   commandsMock.tagOverview.mockResolvedValue(overview());
+  useUndo.setState({ last: null, busy: false });
+  useToast.setState({ notices: [] });
 });
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 it("shows the active set with keys and counts", async () => {
   renderPage();
-  expect(await screen.findByRole("heading", { name: "Viaggio USA 2026" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: /Viaggio USA 2026/ })).toBeInTheDocument();
   const table = screen.getByRole("table", { name: "Viaggio USA 2026" });
   expect(within(table).getByText("Città")).toBeInTheDocument();
   expect(within(table).getByText("201")).toBeInTheDocument();
@@ -89,33 +89,62 @@ it("shows the active set with keys and counts", async () => {
   expect(screen.getByRole("button", { name: "Togli Città dal set" })).toBeInTheDocument();
 });
 
-it("renames a tag from its panel", async () => {
+it("un solo modo di rinominare: il nome modificabile sul campo", async () => {
   renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Rinomina Paesaggi" }));
-  const name = await screen.findByLabelText("Nome");
-  await waitFor(() => expect(name).toHaveValue("Paesaggi"));
-  fireEvent.change(name, { target: { value: "Panorami" } });
-  fireEvent.click(screen.getByRole("button", { name: "Rinomina" }));
-  await waitFor(() => expect(commandsMock.renameTag).toHaveBeenCalledWith("Paesaggi", "Panorami"));
-  expect(commandsMock.tagOverview.mock.calls.length).toBeGreaterThan(1);
+  await screen.findByRole("table", { name: "Viaggio USA 2026" });
+  expect(screen.queryAllByRole("button", { name: /^Rinomina/ })).toEqual([]);
 });
 
-it("proposes a merge when the new name exists, and merges only after confirmation", async () => {
+it("Doppio clic: a pending tag rename submits only once", async () => {
+  renderPage();
+  const name = await editTagName("Paesaggi");
+  fireEvent.change(name, { target: { value: "Panorami" } });
+  const pending = deferred<Awaited<ReturnType<typeof commandsMock.renameTag>>>();
+  commandsMock.renameTag.mockImplementationOnce(() => pending.promise);
+  const save = screen.getByRole("button", { name: "Salva" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  expect(commandsMock.renameTag).toHaveBeenCalledOnce();
+  expect(save).toHaveAttribute("aria-busy", "true");
+  await act(async () => pending.resolve({ outcome: "renamed" } as never));
+});
+
+it("Annullamento: la rinomina si annulla dallo store undo (avviso e Ctrl+Z)", async () => {
+  commandsMock.renameTag.mockResolvedValueOnce({ outcome: "renamed" } as never);
+  renderPage();
+  const name = await editTagName("Paesaggi");
+  // La nota non rimanda più a un "Annulla" della Libreria.
+  expect(screen.getByText(/Annulla operazione.*Ctrl\+Z/)).toBeInTheDocument();
+  fireEvent.change(name, { target: { value: "Panorami" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salva" }));
+  await waitFor(() => expect(commandsMock.renameTag).toHaveBeenCalledWith("Paesaggi", "Panorami"));
+  await waitFor(() => expect(messages()).toContain("Tag «Paesaggi» rinominato in «Panorami»"));
+  const notice = useToast.getState().notices.find((n) => n.message.includes("Panorami"))!;
+  expect(notice.action?.label).toBe("Annulla operazione");
+  expect(useUndo.getState().last?.label).toBe("Tag «Paesaggi» rinominato in «Panorami»");
+  await act(async () => {
+    await runUndo();
+  });
+  expect(commandsMock.undoBulk).toHaveBeenCalledOnce();
+});
+
+it("proposes a merge next to the name when the new name exists, and merges only on request", async () => {
   commandsMock.renameTag.mockResolvedValueOnce({ outcome: "needsMerge", target: "Tramonti" });
   renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: /^Sunset/ }));
-  const name = screen.getByLabelText("Nome");
-  await waitFor(() => expect(name).toHaveValue("Sunset"));
+  const name = await editTagName("Sunset");
   fireEvent.change(name, { target: { value: "tramonti" } });
-  fireEvent.click(screen.getByRole("button", { name: "Rinomina" }));
-  const dialog = await screen.findByRole("alertdialog");
-  expect(dialog).toHaveTextContent('Esiste già il tag "Tramonti"');
+  fireEvent.click(screen.getByRole("button", { name: "Salva" }));
+  const panel = screen.getByRole("complementary", { name: "Tag selezionato" });
+  const alert = await within(panel).findByText(/Esiste già il tag «Tramonti»/);
+  expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(commandsMock.mergeTag).not.toHaveBeenCalled();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+  const box = alert.closest(".ui-alert") as HTMLElement;
+  fireEvent.click(within(box).getByRole("button", { name: "Unisci" }));
   await waitFor(() => expect(commandsMock.mergeTag).toHaveBeenCalledWith("Sunset", "Tramonti"));
+  await waitFor(() => expect(messages()).toContain("Tag «Sunset» unito in «Tramonti»"));
 });
 
-it("merges into another tag with confirmation, and cancel does nothing", async () => {
+it("merges into another tag without a dialog, with undo", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: /^Sunset/ }));
   fireEvent.click(screen.getByText("Unisci in un altro tag…"));
@@ -123,26 +152,59 @@ it("merges into another tag with confirmation, and cancel does nothing", async (
     target: { value: "Tramonti" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Unisci" }));
-  let dialog = await screen.findByRole("alertdialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Annulla" }));
-  expect(screen.queryByRole("alertdialog")).toBeNull();
-  expect(commandsMock.mergeTag).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Unisci" }));
-  dialog = await screen.findByRole("alertdialog");
-  expect(dialog).toHaveTextContent('Unire "Sunset" in "Tramonti"?');
-  fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
   await waitFor(() => expect(commandsMock.mergeTag).toHaveBeenCalledWith("Sunset", "Tramonti"));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  await waitFor(() => expect(useUndo.getState().last).not.toBeNull());
 });
 
-it("deletes a tag after a confirmation that shows the file count", async () => {
+it("deletes a tag at once and offers undo", async () => {
+  const confirm = vi.spyOn(window, "confirm");
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: /^Scartate/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Elimina tag (da 410 foto)…" }));
-  const dialog = await screen.findByRole("alertdialog");
-  expect(dialog).toHaveTextContent("410 foto");
-  expect(commandsMock.deleteTag).not.toHaveBeenCalled();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+  fireEvent.click(screen.getByRole("button", { name: "Elimina tag (da 410 foto)" }));
   await waitFor(() => expect(commandsMock.deleteTag).toHaveBeenCalledWith("Scartate", true));
+  await waitFor(() => expect(messages()).toContain("Tag «Scartate» eliminato"));
+  await act(async () => {
+    await runUndo();
+  });
+  expect(commandsMock.undoBulk).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it("deletes a set only after ConfirmDialog", async () => {
+  renderPage();
+  await screen.findByRole("table", { name: "Viaggio USA 2026" });
+  fireEvent.click(screen.getByRole("button", { name: "Elimina set" }));
+  const dialog = await screen.findByRole("alertdialog");
+  expect(dialog).toHaveTextContent("Eliminare il set «Viaggio USA 2026»?");
+  expect(commandsMock.deleteTagSet).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Annulla" }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(commandsMock.deleteTagSet).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Elimina set" }));
+  fireEvent.click(
+    within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Elimina set" }),
+  );
+  await waitFor(() => expect(commandsMock.deleteTagSet).toHaveBeenCalledWith(2));
+  await waitFor(() => expect(messages()).toContain("Set «Viaggio USA 2026» eliminato"));
+});
+
+it("renames a set from its name", async () => {
+  renderPage();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Nome del set: Viaggio USA 2026. Modifica" }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Nome del set" }), {
+    target: { value: "USA" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Salva" }));
+  await waitFor(() =>
+    expect(commandsMock.saveTagSet).toHaveBeenCalledWith(2, "USA", [
+      "Paesaggi",
+      "Città",
+      "Tramonti",
+    ]),
+  );
 });
 
 it("creates a new set", async () => {
@@ -161,7 +223,7 @@ it("moves between sets with the arrow keys", async () => {
   fireEvent.keyDown(active, { key: "ArrowUp" });
   const base = await screen.findByRole("button", { name: /^Base/, pressed: true });
   expect(base).toHaveFocus();
-  expect(screen.getByRole("heading", { name: "Base" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /Base/ })).toBeInTheDocument();
 });
 
 it("reports conflicts when a set becomes exclusive and opens them in Library", async () => {
@@ -180,4 +242,10 @@ it("reports conflicts when a set becomes exclusive and opens them in Library", a
 it("il titolo della pagina è quello della voce di navigazione", async () => {
   renderPage();
   expect(await screen.findByRole("heading", { level: 1, name: "Tag" })).toBeInTheDocument();
+});
+
+it("mantiene il suggerimento al primo uso accanto ai set", async () => {
+  useGuide.getState().resetTips();
+  renderPage();
+  expect(await screen.findByText(/Un set assegna i tasti 1–9/)).toBeInTheDocument();
 });

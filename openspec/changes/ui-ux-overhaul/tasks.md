@@ -161,7 +161,7 @@
   - stato vuoto.
 
   Verifica: test dell'editor (nessun id interno nel DOM).
-- [ ] 7.3 **Tag**: conferme vicino al comando o `ConfirmDialog`; annullamento tramite lo store `undo` (la nota non rimanda più alla Libreria); errori dei tasti rapidi segnalati con un avviso; un solo "Rinomina".
+- [x] 7.3 **Tag**: conferme vicino al comando o `ConfirmDialog`; annullamento tramite lo store `undo` (la nota non rimanda più alla Libreria); errori dei tasti rapidi segnalati con un avviso; un solo "Rinomina".
 - [ ] 7.4 **Persone**: allineare `PeopleModule` di `people-faces-workspace` ai componenti condivisi, al glossario e allo store `undo` (unione, separazione, ignora), senza cambiarne il flusso.
 - [ ] 7.5 **Sequenza**:
   - `PageHeader`;
