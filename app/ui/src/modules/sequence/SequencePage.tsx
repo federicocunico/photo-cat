@@ -27,6 +27,7 @@ import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { isTyping, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
+import { Kbd } from "../../components/ui";
 import { SequenceExport } from "./SequenceExport";
 
 /** Chip dei volti della foto focalizzata → Apri in Persone. */
@@ -1020,7 +1021,20 @@ export function SequenceStatus() {
         })}
       </span>
       <span>{t("sequence.selected", { count: selected })}</span>
-      <span>{t("sequence.keysHint")}</span>
+      <span className="status-keys" aria-label={t("sequence.keysLabel")}>
+        {(
+          [
+            [["1–9"], "keys.assign"],
+            [["0"], "keys.remove"],
+            [["A"], "keys.session"],
+            [[t("sequence.keys.space")], "keys.fullscreen"],
+          ] as const
+        ).map(([keys, label]) => (
+          <span key={label}>
+            <Kbd keys={[...keys]} /> {t(`sequence.${label}`)}
+          </span>
+        ))}
+      </span>
     </>
   );
 }

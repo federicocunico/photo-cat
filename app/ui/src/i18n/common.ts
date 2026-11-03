@@ -26,6 +26,15 @@ export const common = {
       dismiss: "Chiudi l'avviso",
       shortcut: "Scorciatoia: {{keys}}",
     },
+    help: {
+      menu: "Aiuto",
+      diagnostics: "Diagnostica e registri",
+      about: "Informazioni su photo-cat",
+      aboutTitle: "photo-cat",
+      tagline: "Catalogo delle foto sul tuo computer, senza cloud.",
+      version: "Versione",
+      dataDir: "Dati dell'app",
+    },
     nav: {
       groups: { browse: "Sfoglia", organize: "Organizza", transfer: "Importa ed esporta" },
       collapse: "Riduci la navigazione",
@@ -60,6 +69,15 @@ export const common = {
       saved: "Saved",
       dismiss: "Dismiss notice",
       shortcut: "Shortcut: {{keys}}",
+    },
+    help: {
+      menu: "Help",
+      diagnostics: "Diagnostics and logs",
+      about: "About photo-cat",
+      aboutTitle: "photo-cat",
+      tagline: "A photo catalog on your computer, with no cloud.",
+      version: "Version",
+      dataDir: "App data",
     },
     nav: {
       groups: { browse: "Browse", organize: "Organize", transfer: "Import & export" },

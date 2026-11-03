@@ -1,7 +1,7 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
@@ -164,7 +164,9 @@ export function JobCard({
     >
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <h2 style={{ margin: 0, fontSize: 17 }}>{name}</h2>
+          <h2 tabIndex={-1} style={{ margin: 0, fontSize: 17 }}>
+            {name}
+          </h2>
           <span className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={badgeStyle(job.state)}>{t(`jobs.states.${job.state}`)}</span>
             {job.memoryPaused && (
@@ -474,6 +476,15 @@ export function JobsPage() {
     .sort((a, b) => b.id - a.id);
   const shown = [...live, ...finished.slice(0, 3)];
   const names = useJobNames(history.data);
+  const jobFocus = useLayout((s) => s.jobFocus);
+  useEffect(() => {
+    if (jobFocus == null) return;
+    const card = document.querySelector<HTMLElement>(`[data-testid="job-${jobFocus}"]`);
+    if (!card) return;
+    card.scrollIntoView?.({ block: "nearest" });
+    card.querySelector<HTMLElement>("h2")?.focus();
+    useLayout.setState({ jobFocus: null });
+  }, [jobFocus, shown.length]);
   return (
     <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
       {() => (

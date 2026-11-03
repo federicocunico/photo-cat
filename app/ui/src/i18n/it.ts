@@ -21,7 +21,16 @@ export const it = {
   },
   shell: {
     noJobs: "Nessuna attività",
-    jobPill: "{{phase}} {{percent}}%",
+    jobPill: "{{title}} · {{percent}}%",
+    jobPillCounting: "{{title}} · {{found}}",
+    ramState: { pressure: "memoria sotto pressione", critical: "memoria quasi esaurita" },
+    models: {
+      ready: "Modelli AI pronti",
+      missing: "Modelli AI da scaricare",
+      update: "Aggiornamento dei modelli AI disponibile",
+      error: "Problema con i modelli AI",
+      downloading: "Download dei modelli AI · {{percent}}%",
+    },
     ram: "RAM {{used}}/{{total}} GB",
     ramTitle: "App {{app}} MB · budget {{budget}} MB · disponibile {{available}} MB",
     items: "{{count}} elementi",

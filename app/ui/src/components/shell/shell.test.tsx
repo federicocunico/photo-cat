@@ -1,4 +1,6 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { emit, ipcMockModule, job, resources } from "../../test/ipcMock";
@@ -52,6 +54,10 @@ it("Nessun job attivo: idle job pill contains no animated spinner", () => {
 
 vi.mock("../../lib/ipc", () => ipcMockModule());
 
+/** Barra superiore e di stato leggono anche dalle query (menu Aiuto, modelli). */
+const render = (ui: ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+
 function Live({ children }: { children: React.ReactNode }) {
   useLiveEvents();
   return <>{children}</>;
@@ -102,6 +108,7 @@ describe("indicatori globali", () => {
     render(
       <Live>
         <TopBar />
+        <StatusBar />
       </Live>,
     );
     expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
@@ -110,6 +117,7 @@ describe("indicatori globali", () => {
         "job",
         job({
           id: 3,
+          kind: "analysis",
           overallPercent: 62.4,
           phases: [
             {
@@ -138,14 +146,14 @@ describe("indicatori globali", () => {
         }),
       ),
     );
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Analisi AI 62%");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Analisi AI · 62%");
 
     act(() => emit("resources", resources()));
     expect(screen.getByTestId("ram-chip")).toHaveTextContent("RAM 5,1/16 GB");
 
-    // Un clic porta alla schermata Job.
+    // Un clic porta ad Attività, su quell'attività.
     fireEvent.click(screen.getByTestId("job-pill"));
-    expect(useLayout.getState().module).toBe("jobs");
+    expect(useLayout.getState()).toMatchObject({ module: "jobs", jobFocus: 3 });
 
     act(() => emit("job", job({ id: 3, state: "completed", overallPercent: 100 })));
     expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
@@ -296,5 +304,43 @@ describe("navigazione dei moduli", () => {
     expect(
       screen.getByRole("button", { name: "Attività", description: "1 attività in corso" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("barra di stato e menu Aiuto", () => {
+  it("RAM sotto pressione: icona e testo, non solo colore", () => {
+    render(
+      <Live>
+        <StatusBar />
+      </Live>,
+    );
+    act(() => emit("resources", { ...resources(), state: "pressure" }));
+    expect(screen.getByTestId("ram-chip")).toHaveTextContent("memoria sotto pressione");
+    fireEvent.click(screen.getByTestId("ram-chip"));
+    expect(useLayout.getState().module).toBe("jobs");
+  });
+
+  it("stato dei modelli AI con accesso a Impostazioni", () => {
+    render(<StatusBar />);
+    expect(screen.queryByTestId("models-chip")).not.toBeInTheDocument();
+    act(() =>
+      emit("models", [
+        { entry: {}, state: { state: "verified" }, selfTest: null },
+        { entry: {}, state: { state: "missing" }, selfTest: null },
+      ] as never),
+    );
+    const chip = screen.getByTestId("models-chip");
+    expect(chip).toHaveTextContent("Modelli AI da scaricare");
+    fireEvent.click(chip);
+    expect(useLayout.getState()).toMatchObject({ module: "settings", settingsSection: "models" });
+  });
+
+  it("menu Aiuto: Diagnostica e Informazioni", async () => {
+    render(<TopBar />);
+    const user = userEvent.setup();
+    screen.getByRole("button", { name: "Aiuto" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Informazioni su photo-cat" }));
+    expect(await screen.findByRole("dialog", { name: "photo-cat" })).toBeInTheDocument();
   });
 });

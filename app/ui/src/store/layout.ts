@@ -40,6 +40,7 @@ export type PeopleTarget =
 /** Dove portare l'utente: un modulo, ed eventualmente una sezione o un elemento. */
 export type Destination =
   | { module: ModuleId }
+  | { module: "jobs"; target: number }
   | { module: "people"; target: PeopleTarget }
   | { module: "settings"; section: Exclude<SettingsSection, "diagnostics"> }
   | { module: "settings"; section: "diagnostics"; target?: DiagFilter };
@@ -62,6 +63,8 @@ interface LayoutState {
   diagFilter: DiagFilter;
   /** Destinazione consumata da PeopleModule (non persistita). */
   peopleTarget: PeopleTarget | null;
+  /** Attività da mostrare all'apertura di Attività (non persistita). */
+  jobFocus: number | null;
   /** Apre un modulo, una sezione di Impostazioni o un elemento (persona, filtro degli errori). */
   openModule: (to: Destination) => void;
   setSettingsSection: (s: SettingsSection) => void;
@@ -142,11 +145,13 @@ export const useLayout = create<LayoutState>()(
       language: "it",
       diagFilter: {},
       peopleTarget: null,
+      jobFocus: null,
       openModule: (to) => {
         const next: Partial<LayoutState> = { module: to.module };
         if ("section" in to) next.settingsSection = to.section;
         if ("target" in to) {
           if (to.module === "people") next.peopleTarget = to.target;
+          else if (to.module === "jobs") next.jobFocus = to.target;
           else next.diagFilter = to.target ?? {};
         } else if ("section" in to && to.section === "diagnostics") next.diagFilter = {};
         set(next);

@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { activeJobs, useLive } from "../../store/live";
 import { useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
-import { fmtDec, fmtInt, mbToGb } from "../../lib/format";
-import { currentPhase } from "../../lib/jobs";
+import { fmtInt } from "../../lib/format";
+import { currentPhase, jobTitle } from "../../lib/jobs";
+import { commands, isTauri } from "../../lib/ipc";
+import { Dialog, Menu } from "../ui";
 import { usePending } from "../../store/pending";
 import { Spinner } from "../feedback/Spinner";
 
@@ -70,17 +73,21 @@ export function JobPill() {
   const job = activeJobs(jobs)[0];
   const percent = job ? Math.floor(job.overallPercent ?? 0) : 0;
   const phase = job ? currentPhase(job) : undefined;
-  const phaseName = phase ? t(`jobs.phases.${phase.name}`, { defaultValue: phase.name }) : "";
+  // In parole: che cosa sta facendo, mai un identificatore interno.
+  const title = job ? jobTitle(t, job.kind, null) : "";
   const label = !job
     ? t("shell.noJobs")
     : phase && !phase.totalKnown
-      ? `${phaseName} · ${t("jobs.indeterminate", { n: fmtInt(phase.done) })}`
-      : t("shell.jobPill", { phase: phaseName, percent });
+      ? t("shell.jobPillCounting", {
+          title,
+          found: t("jobs.indeterminate", { n: fmtInt(phase.done) }),
+        })
+      : t("shell.jobPill", { title, percent });
   return (
     <button
       type="button"
       className="pill"
-      onClick={() => openModule({ module: "jobs" })}
+      onClick={() => openModule(job ? { module: "jobs", target: job.id } : { module: "jobs" })}
       data-testid="job-pill"
     >
       {job ? <Spinner size={14} /> : <Icon.Jobs size={14} />}
@@ -94,35 +101,51 @@ export function JobPill() {
   );
 }
 
-export function RamChip() {
+/** Menu Aiuto: le voci della guida si aggiungono con in-app-guidance (5.4). */
+export function HelpMenu() {
   const { t } = useTranslation();
-  const res = useLive((s) => s.resources);
   const openModule = useLayout((s) => s.openModule);
-  if (!res) return null;
-  const { system, governor } = res;
-  const used = system.totalMb - system.availableMb;
-  const color =
-    res.state === "normal"
-      ? "var(--pc-ok)"
-      : res.state === "pressure"
-        ? "var(--pc-warn)"
-        : "var(--pc-danger)";
+  const [about, setAbout] = useState(false);
+  const info = useQuery({
+    queryKey: ["app-info"],
+    queryFn: () => commands.appInfo(),
+    enabled: isTauri() && about,
+  });
   return (
-    <button
-      type="button"
-      className="pill mono"
-      style={{ fontSize: 12 }}
-      onClick={() => openModule({ module: "jobs" })}
-      title={t("shell.ramTitle", {
-        app: system.processMb,
-        budget: governor.budgetMb,
-        available: system.availableMb,
-      })}
-      data-testid="ram-chip"
-    >
-      <Icon.Ram size={14} style={{ color }} />
-      <span>{t("shell.ram", { used: mbToGb(used), total: fmtDec(system.totalMb / 1024, 0) })}</span>
-    </button>
+    <>
+      <Menu
+        align="end"
+        trigger={
+          <button type="button" className="btn btn-ghost icon-btn" aria-label={t("help.menu")}>
+            <Icon.Help size={18} aria-hidden="true" />
+          </button>
+        }
+        items={[
+          {
+            label: t("help.diagnostics"),
+            icon: <Icon.Diagnostics size={14} />,
+            onSelect: () => openModule({ module: "settings", section: "diagnostics" }),
+          },
+          { kind: "separator" },
+          {
+            label: t("help.about"),
+            icon: <Icon.Info size={14} />,
+            onSelect: () => setAbout(true),
+          },
+        ]}
+      />
+      <Dialog open={about} onOpenChange={setAbout} title={t("help.aboutTitle")}>
+        <p>{t("help.tagline")}</p>
+        {info.data && (
+          <dl className="help-about">
+            <dt>{t("help.version")}</dt>
+            <dd>{info.data.version}</dd>
+            <dt>{t("help.dataDir")}</dt>
+            <dd className="mono">{info.data.dataDir}</dd>
+          </dl>
+        )}
+      </Dialog>
+    </>
   );
 }
 
@@ -173,7 +196,7 @@ export function TopBar() {
       >
         <PendingIndicator />
         <JobPill />
-        <RamChip />
+        <HelpMenu />
       </div>
     </header>
   );

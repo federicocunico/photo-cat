@@ -204,8 +204,14 @@ export const modules = {
       status: "{{total}} foto · {{devices}} dispositivi · {{sessions}} sessioni",
       selected_one: "{{count}} selezionata",
       selected_other: "{{count}} selezionate",
-      keysHint:
-        "1–9 assegna · 0 rimuove · A sessione · Spazio schermo intero · Maiusc+clic intervallo",
+      keysLabel: "Scorciatoie",
+      keys: {
+        assign: "tag",
+        remove: "togli tag",
+        session: "sessione",
+        fullscreen: "schermo intero",
+        space: "Spazio",
+      },
     },
     seqExport: {
       title: "Esporta sequenza",
@@ -474,7 +480,14 @@ export const modules = {
       status: "{{total}} photos · {{devices}} devices · {{sessions}} sessions",
       selected_one: "{{count}} selected",
       selected_other: "{{count}} selected",
-      keysHint: "1–9 assign · 0 remove · A session · Space full screen · Shift+click range",
+      keysLabel: "Shortcuts",
+      keys: {
+        assign: "tag",
+        remove: "remove tag",
+        session: "session",
+        fullscreen: "full screen",
+        space: "Space",
+      },
     },
     seqExport: {
       title: "Export sequence",

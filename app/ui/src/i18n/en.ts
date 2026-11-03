@@ -22,7 +22,16 @@ export const en: Messages = {
   },
   shell: {
     noJobs: "No activity",
-    jobPill: "{{phase}} {{percent}}%",
+    jobPill: "{{title}} · {{percent}}%",
+    jobPillCounting: "{{title}} · {{found}}",
+    ramState: { pressure: "memory under pressure", critical: "memory almost full" },
+    models: {
+      ready: "AI models ready",
+      missing: "AI models to download",
+      update: "AI model update available",
+      error: "Problem with AI models",
+      downloading: "Downloading AI models · {{percent}}%",
+    },
     ram: "RAM {{used}}/{{total}} GB",
     ramTitle: "App {{app}} MB · budget {{budget}} MB · available {{available}} MB",
     items: "{{count}} items",
