@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, emit, ipcMockModule, job, resources } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { useLive, useLiveEvents } from "../../store/live";
 import { JobsPage } from "./JobsPage";
+import { registerUndo, useUndo } from "../../store/undo";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 
@@ -35,6 +36,7 @@ const phase = (name: string, over: object) => ({
 });
 
 beforeEach(() => {
+  useUndo.setState({ last: null, busy: false });
   useLive.setState({ jobs: {}, resources: null, errorCount: 0, tail: [] });
   vi.clearAllMocks();
 });
@@ -68,7 +70,9 @@ describe("schermata Job", () => {
 
   it("mostra fasi, percentuali, conteggi, ETA e controlli", () => {
     render(<Harness />);
-    expect(screen.getByText("Nessun job. Avvia un import per iniziare.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Nessuna attività in corso. Importa una cartella per cominciare."),
+    ).toBeInTheDocument();
     act(() =>
       emit(
         "job",
@@ -110,7 +114,8 @@ describe("schermata Job", () => {
 
     fireEvent.click(within(card).getByRole("button", { name: "Pausa" }));
     expect(commandsMock.pauseJob).toHaveBeenCalledWith(7);
-    fireEvent.click(within(card).getByRole("button", { name: "Annulla" }));
+    // Un'importazione non scrive file: si interrompe senza conferma.
+    fireEvent.click(within(card).getByRole("button", { name: "Interrompi" }));
     expect(commandsMock.cancelJob).toHaveBeenCalledWith(7);
 
     fireEvent.click(within(card).getByRole("button", { name: /4 errori · Vedi errori/ }));
@@ -147,9 +152,9 @@ describe("schermata Job", () => {
     expect(commandsMock.resumeJob).toHaveBeenCalledWith(1);
     act(() => emit("job", job({ id: 1, state: "completed", overallPercent: 100 })));
     expect(
-      within(screen.getByTestId("job-1")).queryByRole("button", { name: "Annulla" }),
+      within(screen.getByTestId("job-1")).queryByRole("button", { name: "Interrompi" }),
     ).toBeNull();
-    expect(screen.getByText("Completato")).toBeInTheDocument();
+    expect(screen.getByText("Completata")).toBeInTheDocument();
   });
 
   it("pannello risorse con budget e modelli residenti", () => {
@@ -178,5 +183,56 @@ describe("schermata Job", () => {
     expect(screen.getByTestId("memory-paused-9")).toHaveTextContent("In pausa per memoria");
     act(() => emit("job", job({ id: 9, memoryPaused: false })));
     expect(screen.queryByTestId("memory-paused-9")).not.toBeInTheDocument();
+  });
+
+  it("titolo in parole, senza identificatori interni", () => {
+    render(<Harness />);
+    act(() => emit("job", job({ id: 12, kind: "similar" })));
+    const card = screen.getByTestId("job-12");
+    expect(within(card).getByRole("heading", { level: 2 })).toHaveTextContent(
+      "Ricerca delle foto simili",
+    );
+    expect(card).not.toHaveTextContent("#12");
+  });
+
+  it("interrompere un'attività che scrive file chiede conferma", async () => {
+    render(<Harness />);
+    act(() => emit("job", job({ id: 5, kind: "export" })));
+    fireEvent.click(
+      within(screen.getByTestId("job-5")).getByRole("button", { name: "Interrompi" }),
+    );
+    expect(commandsMock.cancelJob).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Interrompere «Esportazione»?");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Interrompi" }));
+    await waitFor(() => expect(commandsMock.cancelJob).toHaveBeenCalledWith(5));
+  });
+
+  it("un errore del comando compare nella scheda dell'attività", async () => {
+    commandsMock.pauseJob.mockRejectedValueOnce({ detail: "attività già conclusa" });
+    render(<Harness />);
+    act(() => emit("job", job({ id: 3, kind: "analysis" })));
+    const card = screen.getByTestId("job-3");
+    fireEvent.click(within(card).getByRole("button", { name: "Pausa" }));
+    const alert = await within(card).findByRole("alert");
+    expect(alert).toHaveTextContent("Non è stato possibile completare il comando su «Analisi AI».");
+    expect(alert).toHaveTextContent("attività già conclusa");
+  });
+
+  it("stato vuoto con Importa una cartella", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Importa una cartella" }));
+    expect(useLayout.getState().module).toBe("import");
+  });
+
+  it("l'ultima operazione annullabile si annulla dallo storico", async () => {
+    const run = vi.fn(async () => {});
+    registerUndo({ label: "Tag «mare» aggiunto a 12 foto", run });
+    render(<Harness />);
+    const section = screen.getByRole("region", { name: "Ultima operazione annullabile" });
+    expect(section).toHaveTextContent("Tag «mare» aggiunto a 12 foto");
+    fireEvent.click(within(section).getByRole("button", { name: "Annulla operazione" }));
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+    expect(useUndo.getState().last).toBeNull();
   });
 });

@@ -205,7 +205,7 @@ describe("recupero dell'interfaccia", () => {
     act(() => emit("uiRecovered", undefined));
     const banner = await screen.findByTestId("ui-recovered");
     expect(banner).toHaveTextContent("L'interfaccia si è chiusa ed è stata ricaricata.");
-    expect(banner).toHaveTextContent("I job in corso continuano");
+    expect(banner).toHaveTextContent("Le attività in corso continuano");
     expect(banner).toHaveTextContent("processo render");
     fireEvent.click(within(banner).getByRole("button", { name: "Apri diagnostica" }));
     expect(useLayout.getState()).toMatchObject({

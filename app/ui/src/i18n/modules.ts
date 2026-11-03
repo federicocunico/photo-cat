@@ -267,9 +267,9 @@ export const modules = {
       start_one: "Avvia export ({{count}} foto)",
       start_other: "Avvia export ({{count}} foto)",
       jobNote:
-        "Eseguito come job: puoi continuare a lavorare e annullare senza lasciare file parziali.",
+        "Prosegue in background tra le attività: puoi continuare a lavorare e interromperlo senza lasciare file parziali.",
       started: "Export avviato.",
-      openJobs: "Segui il job",
+      openJobs: "Segui l'esportazione",
     },
   },
   en: {
@@ -535,9 +535,10 @@ export const modules = {
       untagged_other: "{{count}} photos without a tag of the set: they will only be in sequenza/.",
       start_one: "Start export ({{count}} photo)",
       start_other: "Start export ({{count}} photos)",
-      jobNote: "Runs as a job: you can keep working and cancel without leaving partial files.",
+      jobNote:
+        "Runs in the background as an activity: you can keep working and stop it without leaving partial files.",
       started: "Export started.",
-      openJobs: "Follow the job",
+      openJobs: "Follow the export",
     },
   },
 };

@@ -104,7 +104,7 @@ describe("indicatori globali", () => {
         <TopBar />
       </Live>,
     );
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessun job attivo");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
     act(() =>
       emit(
         "job",
@@ -148,7 +148,7 @@ describe("indicatori globali", () => {
     expect(useLayout.getState().module).toBe("jobs");
 
     act(() => emit("job", job({ id: 3, state: "completed", overallPercent: 100 })));
-    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessun job attivo");
+    expect(screen.getByTestId("job-pill")).toHaveTextContent("Nessuna attività");
   });
 
   it("la barra di stato conta gli errori e apre la diagnostica", () => {

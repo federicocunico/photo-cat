@@ -312,13 +312,11 @@ export function BulkBar() {
           <BusyButton
             className="btn"
             onClick={() =>
-              useLayout
-                .getState()
-                .openModule({
-                  module: "settings",
-                  section: "diagnostics",
-                  target: { jobId: result.id },
-                })
+              useLayout.getState().openModule({
+                module: "settings",
+                section: "diagnostics",
+                target: { jobId: result.id },
+              })
             }
           >
             {t("bulk.details")}

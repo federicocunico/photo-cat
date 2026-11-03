@@ -1,6 +1,7 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
@@ -17,6 +18,10 @@ import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
 import { UpdateSummaryView } from "../import/manage";
 import { useImportUpdates } from "../import/sourceActions";
+import { FILE_WRITING_KINDS, jobObject, jobTitle, paramsOf } from "../../lib/jobs";
+import { Button, ConfirmDialog, EmptyState, InlineAlert, PageHeader } from "../../components/ui";
+import { runUndo, useUndo } from "../../store/undo";
+import { notify } from "../../store/toasts";
 
 const card = {
   background: "var(--pc-panel)",
@@ -107,9 +112,46 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
   );
 }
 
-export function JobCard({ job }: { job: JobSnapshot }) {
+/** Titolo e oggetto di un'attività, dai parametri salvati nello storico. */
+function useJobNames(rows: JobRow[] | undefined) {
+  const { t } = useTranslation();
+  const sources = useQuery({
+    queryKey: ["sources"],
+    queryFn: () => commands.listSources(),
+    enabled: isTauri(),
+  });
+  const path = (id: number) => sources.data?.find((s) => s.source.id === id)?.source.path;
+  return (id: number, kind: string) => {
+    const params = paramsOf(rows, id);
+    return { title: jobTitle(t, kind, params, path), object: jobObject(kind, params, path) };
+  };
+}
+
+export function JobCard({
+  job,
+  title,
+  object,
+}: {
+  job: JobSnapshot;
+  title?: string;
+  object?: string;
+}) {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
+  const name = title ?? jobTitle(t, job.kind, null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [confirmStop, setConfirmStop] = useState(false);
+  // Gli errori di pausa, ripresa e interruzione compaiono nella scheda, dove sono stati avviati.
+  const run = async (command: () => Promise<unknown>) => {
+    setFailure(null);
+    try {
+      await command();
+    } catch (error) {
+      const detail = (error as { detail?: string } | null)?.detail;
+      setFailure(detail ?? String(error));
+    }
+  };
+  const stop = () => run(() => commands.cancelJob(job.id));
   const running = job.state === "running";
   const paused = job.state === "paused";
   const live = running || paused || job.state === "queued";
@@ -122,9 +164,7 @@ export function JobCard({ job }: { job: JobSnapshot }) {
     >
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <strong style={{ fontSize: 17 }}>
-            #{job.id} · {job.kind}
-          </strong>
+          <h2 style={{ margin: 0, fontSize: 17 }}>{name}</h2>
           <span className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={badgeStyle(job.state)}>{t(`jobs.states.${job.state}`)}</span>
             {job.memoryPaused && (
@@ -138,25 +178,38 @@ export function JobCard({ job }: { job: JobSnapshot }) {
         {live && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             {running && (
-              <BusyButton type="button" className="btn" onClick={() => commands.pauseJob(job.id)}>
-                <Icon.Pause size={14} />
+              <Button
+                icon={<Icon.Pause size={14} />}
+                onClick={() => run(() => commands.pauseJob(job.id))}
+              >
                 {t("jobs.pause")}
-              </BusyButton>
+              </Button>
             )}
             {paused && (
-              <BusyButton type="button" className="btn" onClick={() => commands.resumeJob(job.id)}>
-                <Icon.Play size={14} />
+              <Button
+                icon={<Icon.Play size={14} />}
+                onClick={() => run(() => commands.resumeJob(job.id))}
+              >
                 {t("jobs.resume")}
-              </BusyButton>
+              </Button>
             )}
-            <BusyButton
-              type="button"
-              className="btn btn-danger"
-              onClick={() => commands.cancelJob(job.id)}
+            <Button
+              variant="danger"
+              icon={<Icon.Stop size={14} />}
+              onClick={() => (FILE_WRITING_KINDS.has(job.kind) ? setConfirmStop(true) : stop())}
             >
-              <Icon.Stop size={14} />
               {t("jobs.cancel")}
-            </BusyButton>
+            </Button>
+            <ConfirmDialog
+              open={confirmStop}
+              onOpenChange={setConfirmStop}
+              title={t("jobs.stopConfirmTitle", { title: name })}
+              message={
+                object ? t("jobs.stopConfirmBody", { object }) : t("jobs.stopConfirmBodyGeneric")
+              }
+              confirmLabel={t("jobs.cancel")}
+              onConfirm={stop}
+            />
           </div>
         )}
       </div>
@@ -213,7 +266,16 @@ export function JobCard({ job }: { job: JobSnapshot }) {
           {t("jobs.failed", { count: job.failed })} · {t("jobs.showErrors")}
         </BusyButton>
       )}
-      {job.error && <div style={{ color: "var(--pc-danger)" }}>{job.error}</div>}
+      {failure && (
+        <InlineAlert
+          tone="danger"
+          title={t("jobs.commandFailed", { title: name })}
+          onDismiss={() => setFailure(null)}
+        >
+          {failure}
+        </InlineAlert>
+      )}
+      {job.error && <InlineAlert tone="danger">{job.error}</InlineAlert>}
       <JobUpdateSummary jobId={job.id} kind={job.kind} />
     </section>
   );
@@ -227,26 +289,36 @@ function JobUpdateSummary({ jobId, kind }: { jobId: number; kind: string }) {
   return s ? <UpdateSummaryView summary={s} /> : null;
 }
 
-function History({ rows, liveIds }: { rows: JobRow[]; liveIds: Set<number> }) {
+function History({
+  rows,
+  liveIds,
+  names,
+}: {
+  rows: JobRow[];
+  liveIds: Set<number>;
+  names: (id: number, kind: string) => { title: string };
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const visible = rows.filter((r) => !liveIds.has(r.id));
   if (visible.length === 0) return null;
   return (
     <section
+      aria-labelledby="jobs-history"
       style={{ ...card, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}
     >
+      <h2 id="jobs-history" style={{ margin: 0, fontSize: 16 }}>
+        {t("jobs.history")}
+      </h2>
       {visible.map((r) => (
         <div
           key={r.id}
           style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}
         >
           <span style={badgeStyle(r.state)}>{t(`jobs.states.${r.state}`)}</span>
-          <span>
-            #{r.id} · {r.kind}
-          </span>
-          <span className="muted mono" style={{ fontSize: 12 }}>
-            {fmtDateTime(r.createdAt)}
+          <span>{names(r.id, r.kind).title}</span>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {fmtDateTime(r.finishedAt ?? r.startedAt ?? r.createdAt)}
           </span>
           <JobUpdateSummary jobId={r.id} kind={r.kind} />
           {r.state === "interrupted" && (
@@ -340,8 +412,54 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
   );
 }
 
+/**
+ * Ultima operazione annullabile (ui-foundations, "Annullamento delle operazioni"). Il
+ * backend tiene un registro LIFO: se l'app non ha registrato l'operazione (per esempio
+ * dopo un riavvio), si mostra la descrizione del backend e si annulla con `undoBulk`.
+ */
+function UndoableOperation() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const registered = useUndo((s) => s.last);
+  const backend = useQuery({
+    queryKey: ["last-undo"],
+    queryFn: () => commands.lastBulkUndo(),
+    enabled: isTauri() && !registered,
+    refetchInterval: 5000,
+  });
+  const label = registered?.label ?? backend.data;
+  if (!label) return null;
+  const undo = async () => {
+    if (registered) {
+      await runUndo();
+    } else {
+      await commands.undoBulk();
+      notify({ key: "undo", message: t("common.undone", { label }) });
+      await qc.invalidateQueries();
+    }
+    await qc.invalidateQueries({ queryKey: ["last-undo"] });
+  };
+  return (
+    <section
+      aria-labelledby="jobs-undoable"
+      style={{ ...card, padding: "16px 20px", display: "flex", gap: 12, alignItems: "center" }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+        <h2 id="jobs-undoable" className="section-title" style={{ margin: 0 }}>
+          {t("jobs.undoable")}
+        </h2>
+        <span>{label}</span>
+      </div>
+      <Button icon={<Icon.Undo size={14} />} onClick={undo}>
+        {t("common.undo")}
+      </Button>
+    </section>
+  );
+}
+
 export function JobsPage() {
   const { t } = useTranslation();
+  const openModule = useLayout((s) => s.openModule);
   const jobs = useLive((s) => s.jobs);
   const resources = useLive((s) => s.resources);
   const history = useQuery({
@@ -355,6 +473,7 @@ export function JobsPage() {
     .filter((j) => !live.includes(j))
     .sort((a, b) => b.id - a.id);
   const shown = [...live, ...finished.slice(0, 3)];
+  const names = useJobNames(history.data);
   return (
     <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
       {() => (
@@ -378,24 +497,41 @@ export function JobsPage() {
               gap: 16,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("jobs.title")}</h1>
-              {import.meta.env.DEV && isTauri() && (
-                <BusyButton
-                  type="button"
-                  className="btn"
-                  style={{ marginLeft: "auto" }}
-                  onClick={() => commands.startDemoJob(3000, 400)}
-                >
-                  {t("jobs.demo")}
-                </BusyButton>
-              )}
-            </div>
-            {shown.length === 0 && <p className="muted">{t("jobs.empty")}</p>}
+            <PageHeader
+              title={t("jobs.title")}
+              actions={
+                import.meta.env.DEV &&
+                isTauri() && (
+                  <BusyButton
+                    type="button"
+                    className="btn"
+                    onClick={() => commands.startDemoJob(3000, 400)}
+                  >
+                    {t("jobs.demo")}
+                  </BusyButton>
+                )
+              }
+            />
+            {shown.length === 0 && (
+              <EmptyState
+                icon={<Icon.Jobs size={28} />}
+                title={t("jobs.empty")}
+                action={
+                  <Button variant="primary" onClick={() => openModule({ module: "import" })}>
+                    {t("jobs.emptyAction")}
+                  </Button>
+                }
+              />
+            )}
             {shown.map((j) => (
-              <JobCard key={j.id} job={j} />
+              <JobCard key={j.id} job={j} {...names(j.id, j.kind)} />
             ))}
-            <History rows={history.data ?? []} liveIds={new Set(shown.map((j) => j.id))} />
+            <UndoableOperation />
+            <History
+              rows={history.data ?? []}
+              liveIds={new Set(shown.map((j) => j.id))}
+              names={names}
+            />
           </div>
           <aside
             style={{

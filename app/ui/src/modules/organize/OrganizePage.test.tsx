@@ -37,7 +37,7 @@ it("esporta in CSV con separatore, BOM e campi scelti", async () => {
       fields: ["path", "tags"],
     }),
   );
-  expect(await screen.findByRole("status")).toHaveTextContent("Job #1 accodato.");
+  expect(await screen.findByRole("status")).toHaveTextContent("Attività avviata.");
 });
 
 it("mostra anteprima con conteggi e spazio, propone l'alternativa e solo dopo avvia", async () => {

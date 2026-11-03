@@ -78,8 +78,8 @@ export const screens = {
       title: "Esporta e organizza",
       levelUp: "Sposta su il livello {{n}}",
       levelRemove: "Rimuovi il livello {{n}}",
-      queued: "Job #{{id}} accodato.",
-      jobs: "Vai ai job",
+      queued: "Attività avviata.",
+      jobs: "Vai ad Attività",
       scope: "Ambito",
       scopes: {
         library: "Tutta la libreria",
@@ -204,8 +204,8 @@ export const screens = {
       title: "Export & organize",
       levelUp: "Move level {{n}} up",
       levelRemove: "Remove level {{n}}",
-      queued: "Job #{{id}} queued.",
-      jobs: "Go to jobs",
+      queued: "Activity started.",
+      jobs: "Go to Activity",
       scope: "Scope",
       scopes: {
         library: "Whole library",

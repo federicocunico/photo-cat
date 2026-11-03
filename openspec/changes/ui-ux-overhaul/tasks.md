@@ -68,7 +68,7 @@
   - aggiornare tutti i collegamenti (barra di stato, avvisi di crash, Attività › "Vedi errori").
 
   Verifica: test della migrazione da preferenze salvate con i vecchi valori.
-- [ ] 2.3 Modulo **Attività** (ex Job):
+- [x] 2.3 Modulo **Attività** (ex Job):
   - titoli in parole (tipo + oggetto);
   - "Interrompi" con conferma solo se l'attività scrive file;
   - gestione degli errori dei comandi pausa/riprendi/interrompi;

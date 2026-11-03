@@ -484,7 +484,7 @@ describe("gestione delle importazioni", () => {
     expect(await within(dialog).findByText("12 foto verranno tolte dal catalogo.")).toBeTruthy();
     expect(within(dialog).getByText(/Vacanze \(3\)/)).toBeTruthy();
     expect(within(dialog).getByText(/Giulia/)).toBeTruthy();
-    expect(within(dialog).getByText(/1 job in corso/)).toBeTruthy();
+    expect(within(dialog).getByText(/1 attività in corso/)).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Rimuovi dalla libreria" }));
     await waitFor(() => expect(commandsMock.removeSource).toHaveBeenCalledWith(1));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

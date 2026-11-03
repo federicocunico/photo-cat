@@ -110,7 +110,7 @@ describe("schermata Diagnostica", () => {
     renderPage();
     await screen.findByTestId("error-row-1");
     fireEvent.click(screen.getByRole("button", { name: "Riprova file falliti" }));
-    expect(await screen.findByText(/accodati: 2/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nuovi tentativi avviati: 2/)).toBeInTheDocument();
     expect(commandsMock.retryFailed).toHaveBeenCalledWith(7, null);
     fireEvent.click(screen.getByRole("button", { name: "Apri cartella log" }));
     await waitFor(() => expect(commandsMock.openLogs).toHaveBeenCalled());
