@@ -9,6 +9,7 @@ import { FacetPanels } from "./FacetPanel";
 import { LibraryHeader } from "./LibraryHeader";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
 import { FirstSteps } from "./FirstSteps";
+import "./library.css";
 
 export function LibraryPage() {
   // Esiti di esclusioni e reinserimenti, anche mentre la barra delle azioni è visibile.

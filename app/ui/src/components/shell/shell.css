@@ -155,3 +155,144 @@
 .topbar-search-text {
   flex: 1;
 }
+
+/* Shell layout chrome (8.1) */
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.app-shell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.shell-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--pc-selection-bg);
+  border-bottom: 1px solid var(--pc-selection-border);
+}
+.shell-banner-detail {
+  font-size: 12px;
+}
+.shell-banner-action {
+  margin-left: auto;
+}
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--pc-panel);
+  border-bottom: 1px solid var(--pc-border);
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.topbar-brand-icon {
+  color: var(--pc-accent-text);
+}
+.topbar-end {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.job-pill-bar {
+  width: 64px;
+}
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+  padding: 6px 16px;
+  background: var(--pc-panel);
+  border-top: 1px solid var(--pc-border);
+  font-size: 12px;
+  color: var(--pc-text-secondary);
+}
+.status-bar-spacer {
+  margin-left: auto;
+}
+.status-item-danger {
+  color: var(--pc-danger);
+}
+.status-warn-icon {
+  color: var(--pc-warn);
+}
+.panels {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.panels-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-aside {
+  flex: 0 0 auto;
+  overflow-y: auto;
+  position: relative;
+}
+.panel-aside-left {
+  background: var(--pc-panel-alt);
+  border-right: 1px solid var(--pc-border);
+}
+.panel-aside-right {
+  background: var(--pc-panel);
+  border-left: 1px solid var(--pc-border);
+}
+.panel-collapse {
+  position: absolute;
+  top: 8px;
+  border: 0;
+}
+.panel-collapse-left {
+  right: 4px;
+}
+.panel-collapse-right {
+  right: 8px;
+}
+.panel-rail {
+  flex: 0 0 32px;
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  background: var(--pc-panel-alt);
+}
+.panel-rail[data-side="left"] {
+  border-right: 1px solid var(--pc-border);
+}
+.panel-rail[data-side="right"] {
+  border-left: 1px solid var(--pc-border);
+}
+.module-placeholder {
+  flex: 1;
+  padding: 24px 32px;
+}
+.module-placeholder h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}

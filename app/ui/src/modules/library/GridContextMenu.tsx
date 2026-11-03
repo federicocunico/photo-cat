@@ -2,7 +2,7 @@
 // miniatura cliccata). Navigabile con le frecce, Invio ed Esc.
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commands,
@@ -17,18 +17,6 @@ import { PlaceField } from "./PlaceEditor";
 import { useLibrary } from "../../store/library";
 import { useCatalogAction } from "./useCatalogAction";
 import { Icon } from "../../components/icons";
-
-const item: CSSProperties = {
-  display: "block",
-  width: "100%",
-  textAlign: "left",
-  border: 0,
-  background: "transparent",
-  color: "var(--pc-text)",
-  padding: "5px 10px",
-  fontSize: 13,
-  cursor: "pointer",
-};
 
 export function GridContextMenu({
   x,
@@ -117,20 +105,10 @@ export function GridContextMenu({
       aria-label={t("externalApps.menu")}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
-      style={{
-        position: "fixed",
-        left: x,
-        top: y,
-        zIndex: 20,
-        minWidth: 240,
-        padding: "4px 0",
-        background: "var(--pc-raised)",
-        border: "1px solid var(--pc-border)",
-        borderRadius: 6,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
-      }}
+      className="grid-menu"
+      style={{ left: x, top: y }}
     >
-      <div className="muted" style={{ padding: "4px 10px", fontSize: 12 }}>
+      <div className="muted grid-menu-hint">
         {t("externalApps.actsOn", { count: ids.length })}
       </div>
       <BusyButton
@@ -138,7 +116,7 @@ export function GridContextMenu({
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={sub}
-        style={item}
+        className="grid-menu-item"
         onClick={() => setSub(!sub)}
       >
         {t("externalApps.openWith")} <Icon.ChevronRight size={14} />
@@ -148,14 +126,14 @@ export function GridContextMenu({
           role="menu"
           data-sub
           aria-label={t("externalApps.openWith")}
-          style={{ paddingLeft: 12 }}
+          className="grid-menu-sub"
         >
           {apps.map((a) => (
             <BusyButton
               key={a.id}
               type="button"
               role="menuitem"
-              style={item}
+              className="grid-menu-item"
               onClick={act(() => onOpen(ids, { kind: "app", id: a.id ?? "" }))}
             >
               {a.name}
@@ -164,7 +142,7 @@ export function GridContextMenu({
           <BusyButton
             type="button"
             role="menuitem"
-            style={item}
+            className="grid-menu-item"
             onClick={act(() => onOpen(ids, { kind: "system" }))}
           >
             {t("externalApps.system")}
@@ -174,7 +152,7 @@ export function GridContextMenu({
       <BusyButton
         type="button"
         role="menuitem"
-        style={item}
+        className="grid-menu-item"
         onClick={act(() => onOpen(ids, { kind: "system" }))}
       >
         {t("externalApps.openDefault")}
@@ -182,7 +160,7 @@ export function GridContextMenu({
       <BusyButton
         type="button"
         role="menuitem"
-        style={item}
+        className="grid-menu-item"
         onClick={act(() => onOpen(ids, { kind: "reveal" }))}
       >
         {t("externalApps.reveal")}
@@ -191,7 +169,7 @@ export function GridContextMenu({
         <BusyButton
           type="button"
           role="menuitem"
-          style={item}
+          className="grid-menu-item"
           disabled={catalogAction.busy}
           onClick={act(() => {
             const id = filter.excludedFrom ?? filter.catalogId!;
@@ -206,11 +184,11 @@ export function GridContextMenu({
           {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
         </BusyButton>
       )}
-      <hr style={{ border: 0, borderTop: "1px solid var(--pc-border)", margin: "4px 0" }} />
+      <hr className="grid-menu-sep" />
       {placing ? (
-        <div style={{ padding: "4px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>{t("place.dialogCount", { count })}</span>
-          <div style={{ display: "flex", gap: 6 }}>
+        <div className="grid-menu-place">
+          <span className="grid-menu-place-label">{t("place.dialogCount", { count })}</span>
+          <div className="grid-menu-place-row">
             <PlaceField
               value={place}
               autoFocus
@@ -240,14 +218,19 @@ export function GridContextMenu({
           </div>
         </div>
       ) : (
-        <BusyButton type="button" role="menuitem" style={item} onClick={() => setPlacing(true)}>
+        <BusyButton
+          type="button"
+          role="menuitem"
+          className="grid-menu-item"
+          onClick={() => setPlacing(true)}
+        >
           {t("externalApps.setPlace")}
         </BusyButton>
       )}
       <BusyButton
         type="button"
         role="menuitem"
-        style={item}
+        className="grid-menu-item"
         onClick={act(() => onPlace(target, null))}
       >
         {t("externalApps.resetPlace")}
@@ -255,7 +238,7 @@ export function GridContextMenu({
       <BusyButton
         type="button"
         role="menuitem"
-        style={item}
+        className="grid-menu-item"
         onClick={act(() => void commands.reanalyze(target))}
       >
         {t("externalApps.reanalyze")}

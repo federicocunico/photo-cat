@@ -309,10 +309,8 @@ export const FaceGrid = forwardRef<
 
   if (!target) {
     return (
-      <div style={{ padding: 16 }}>
-        <p className="muted" style={{ margin: 0 }}>
-          {t("people.pickGroup")}
-        </p>
+      <div className="people-pad">
+        <p className="muted people-muted-reset">{t("people.pickGroup")}</p>
       </div>
     );
   }
@@ -320,25 +318,8 @@ export const FaceGrid = forwardRef<
   const hint = group?.mergeHint;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 0,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          padding: "12px 16px",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          alignItems: "center",
-          borderBottom: "1px solid var(--pc-border)",
-        }}
-      >
+    <div className="people-grid">
+      <div className="people-grid-head">
         <h2 ref={tipAnchor} className="people-title">
           {title}
         </h2>
@@ -346,28 +327,17 @@ export const FaceGrid = forwardRef<
         {target.kind === "group" && (
           <>
             <span className="chip mono">{t("people.photos", { count: photos })}</span>
-            <span className="chip" style={{ color: "var(--pc-ok, inherit)" }}>
+            <span className="chip people-chip-ok">
               {t("people.goodQuality", { count: goodCount })}
             </span>
-            <span className="chip" style={{ color: "var(--pc-warn, inherit)" }}>
+            <span className="chip people-chip-warn">
               {t("people.discardedQuality", { count: discardedCount })}
             </span>
           </>
         )}
       </div>
 
-      <div
-        role="toolbar"
-        aria-label={t("people.facesToolbar")}
-        style={{
-          padding: "8px 16px",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          alignItems: "center",
-          borderBottom: "1px solid var(--pc-border)",
-        }}
-      >
+      <div role="toolbar" aria-label={t("people.facesToolbar")} className="people-toolbar">
         {selected.length > 0 && (
           <span className="muted">{t("people.selected", { count: selected.length })}</span>
         )}
@@ -375,12 +345,11 @@ export const FaceGrid = forwardRef<
             una select chiusa); i volti si spostano solo con il pulsante "Sposta". */}
         <select
           ref={moveSelectRef}
-          className="field"
+          className="field people-move-select"
           aria-label={t("people.move")}
           value={moveTo}
           disabled={busy || selected.length === 0}
           onChange={(e) => setMoveTo(e.target.value)}
-          style={{ maxWidth: 180 }}
         >
           <option value="">{t("people.move")}</option>
           {moveOptions.map((g) => (
@@ -446,7 +415,7 @@ export const FaceGrid = forwardRef<
             {t("people.recover")}
           </Button>
         )}
-        <span aria-hidden style={{ width: 1, height: 20, background: "var(--pc-border)" }} />
+        <span aria-hidden className="people-toolbar-sep" />
         <span className="muted">{t("people.showLabel")}</span>
         <button
           type="button"
@@ -476,21 +445,8 @@ export const FaceGrid = forwardRef<
       </div>
 
       {hint && groupId != null && !discardedOnly && (
-        <div
-          role="note"
-          style={{
-            margin: "8px 16px 0",
-            padding: 12,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-            background: "var(--pc-raised)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 6,
-          }}
-        >
-          <div style={{ flex: "1 1 220px" }}>
+        <div role="note" className="people-merge-hint">
+          <div className="people-merge-hint-body">
             <b>
               {t("people.mergeSuggestTitle", {
                 name: hint.otherName ?? t("people.groupOfFaces", { count: hint.otherFaces }),
@@ -573,7 +529,7 @@ export const FaceGrid = forwardRef<
         data-testid="face-grid-scroll"
         role="group"
         aria-label={t("people.facesGrid")}
-        style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0 }}
+        className="people-grid-scroll"
         onPointerDown={(e) => {
           if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
           const r = e.currentTarget.getBoundingClientRect();
@@ -629,42 +585,34 @@ export const FaceGrid = forwardRef<
           skeleton={<Skeleton kind="thumbnail" count={8} />}
           error={t("people.failed")}
           empty={
-            <p className="muted" style={{ padding: 16 }}>
+            <p className="muted people-empty-pad">
               {discardedOnly ? t("people.emptyDiscarded") : t("people.emptyFaces")}
             </p>
           }
         >
           {() => (
             <>
-              <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
+              <div
+                className="people-virt-pad"
+                style={{ height: virt.getTotalSize() + PAD * 2 }}
+              >
                 {box && (
                   <div
                     aria-hidden
+                    className="people-marquee"
                     style={{
-                      position: "absolute",
                       left: box.x,
                       top: box.y,
                       width: box.w,
                       height: box.h,
-                      border: "1px solid var(--pc-accent)",
-                      background: "var(--pc-accent-soft-bg)",
-                      opacity: 0.5,
-                      pointerEvents: "none",
-                      zIndex: 2,
                     }}
                   />
                 )}
                 {vitems.map((row) => (
                   <div
                     key={row.key}
-                    style={{
-                      position: "absolute",
-                      top: row.start + PAD,
-                      left: PAD,
-                      right: PAD,
-                      display: "flex",
-                      gap: GAP,
-                    }}
+                    className="people-virt-cells"
+                    style={{ top: row.start + PAD }}
                   >
                     {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
                       const sel = selected.includes(face.id);
@@ -680,34 +628,18 @@ export const FaceGrid = forwardRef<
                           aria-pressed={sel}
                           title={tip}
                           onClick={onFaceClick(face.id)}
+                          className="people-face-tile"
                           style={{
                             width: cell,
-                            padding: 0,
-                            margin: 0,
-                            borderRadius: 6,
-                            overflow: "hidden",
-                            cursor: "pointer",
-                            textAlign: "left",
-                            background: "var(--pc-panel)",
                             border: `2px solid ${
                               lit ? "var(--pc-warn)" : sel ? "var(--pc-accent)" : "var(--pc-raised)"
                             }`,
-                            color: "inherit",
-                            font: "inherit",
                             opacity: face.discardReason ? 0.72 : 1,
                           }}
                         >
                           <FaceCrop face={face} size={cell - 4} />
                           {tip && <span className="visually-hidden">{tip}</span>}
-                          <span
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              padding: "2px 6px",
-                              fontSize: 11,
-                              color: "var(--pc-text-soft)",
-                            }}
-                          >
+                          <span className="people-face-meta">
                             <span className="mono">
                               {face.year != null ? String(face.year) : ""}
                             </span>
@@ -726,17 +658,7 @@ export const FaceGrid = forwardRef<
         </QueryView>
       </div>
 
-      <div
-        className="muted"
-        style={{
-          padding: "6px 16px",
-          borderTop: "1px solid var(--pc-border)",
-          fontSize: 12,
-          display: "flex",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
+      <div className="muted people-grid-foot">
         <span>{t("people.facesSortHint")}</span>
         <span className="mono">
           {fmtInt(items.length)}

@@ -18,6 +18,7 @@ import { MergeDialog } from "./MergeDialog";
 import { Transfer } from "./Transfer";
 import { WhoIs } from "./WhoIs";
 import type { GroupListTarget } from "./GroupList";
+import "./people.css";
 
 export type PersonCardHandle = {
   focusWhoIs: () => void;
@@ -33,31 +34,14 @@ function CoverPreview({ group }: { group: GroupRow }) {
   const placeholder = cover?.thumb ? thumbUrl(cover.thumb) : null;
   const [failed, setFailed] = useState(false);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span
-        className="label"
-        style={{
-          fontSize: 12,
-          letterSpacing: "0.06em",
-          color: "var(--pc-text-2)",
-          fontWeight: 600,
-        }}
-      >
-        {t("people.cover")}
-      </span>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="people-stack people-stack--gap-xs">
+      <span className="label people-label">{t("people.cover")}</span>
+      <div className="people-inline">
         <span
           aria-hidden
+          className="people-cover people-cover--md"
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            overflow: "hidden",
-            backgroundColor: "var(--pc-thumb-bg)",
             backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            flexShrink: 0,
           }}
         >
           {src && !failed && (
@@ -65,13 +49,11 @@ function CoverPreview({ group }: { group: GroupRow }) {
               src={src}
               alt=""
               onError={() => setFailed(true)}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              className="people-cover-img"
             />
           )}
         </span>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {t("people.coverHint")}
-        </span>
+        <span className="muted people-muted-sm">{t("people.coverHint")}</span>
       </div>
     </div>
   );
@@ -173,16 +155,12 @@ export const PersonCard = forwardRef<
   // Sezione Persone (e creazione): editor identità + Transfer.
   if (section === "people" || creating) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
+      <div className="people-stack people-stack--gap-xl people-stack--scroll">
         <QueryView
           query={identities}
           isEmpty={() => !creating && !row}
           error={t("people.failed")}
-          empty={
-            <p className="muted" style={{ margin: 0 }}>
-              {t("people.pickGroup")}
-            </p>
-          }
+          empty={<p className="muted people-muted-reset">{t("people.pickGroup")}</p>}
         >
           {() => null}
         </QueryView>
@@ -204,22 +182,12 @@ export const PersonCard = forwardRef<
             }}
           />
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            className="label"
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.06em",
-              color: "var(--pc-text-2)",
-              fontWeight: 600,
-            }}
-          >
-            {t("people.transfer")}
-          </span>
+        <div className="people-stack people-stack--gap-xs">
+          <span className="label people-label">{t("people.transfer")}</span>
           <Transfer onDone={() => void refresh()} />
         </div>
         {identities.data?.storePath && (
-          <p role="note" className="muted" style={{ margin: 0, fontSize: 12 }}>
+          <p role="note" className="muted people-muted-reset people-muted-sm">
             {t("identities.appNote")} {t("identities.storeAt")} {identities.data.storePath}
           </p>
         )}
@@ -228,45 +196,25 @@ export const PersonCard = forwardRef<
   }
 
   if (target?.kind === "singles") {
-    return (
-      <p className="muted" style={{ margin: 0 }}>
-        {t("people.singlesCard")}
-      </p>
-    );
+    return <p className="muted people-muted-reset">{t("people.singlesCard")}</p>;
   }
 
   if (!group || target?.kind !== "group") {
-    return (
-      <p className="muted" style={{ margin: 0 }}>
-        {t("people.pickGroup")}
-      </p>
-    );
+    return <p className="muted people-muted-reset">{t("people.pickGroup")}</p>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
+    <div className="people-stack people-stack--gap-xl people-stack--scroll">
       {section === "review" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            className="label"
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.06em",
-              color: "var(--pc-text-2)",
-              fontWeight: 600,
-            }}
-          >
-            {t("identities.whoIs")}
-          </span>
+        <div className="people-stack people-stack--gap-xs">
+          <span className="label people-label">{t("identities.whoIs")}</span>
           <WhoIs
             person={group.id}
             linked={group.identityUid ? (group.name ?? null) : null}
             onLinked={onLinked}
             inputRef={whoIsRef}
           />
-          <span className="muted" style={{ fontSize: 12 }}>
-            {t("people.whoIsHint")}
-          </span>
+          <span className="muted people-muted-sm">{t("people.whoIsHint")}</span>
         </div>
       )}
 
@@ -285,18 +233,8 @@ export const PersonCard = forwardRef<
         </Button>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <span
-          className="label"
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.06em",
-            color: "var(--pc-text-2)",
-            fontWeight: 600,
-          }}
-        >
-          {t("people.groupActions")}
-        </span>
+      <div className="people-stack people-stack--gap">
+        <span className="label people-label">{t("people.groupActions")}</span>
         <select
           ref={mergeSelectRef}
           className="field"
@@ -326,9 +264,7 @@ export const PersonCard = forwardRef<
             >
               {t("people.ignore")}
             </Button>
-            <span className="muted" style={{ fontSize: 12 }}>
-              {t("people.ignoreHint")}
-            </span>
+            <span className="muted people-muted-sm">{t("people.ignoreHint")}</span>
           </>
         )}
         {section === "ignored" && (

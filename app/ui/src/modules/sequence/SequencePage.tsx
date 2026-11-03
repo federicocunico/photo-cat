@@ -53,31 +53,16 @@ function FocusedFaces() {
   const faces = detail.data && "faces" in detail.data ? detail.data.faces : [];
   if (!faces.length) return null;
   return (
-    <div
-      role="group"
-      aria-label={t("library.inspector.peopleTags")}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
-        padding: "8px 16px",
-        borderBottom: "1px solid var(--pc-border)",
-        background: "var(--pc-panel-alt)",
-      }}
-    >
+    <div role="group" aria-label={t("library.inspector.peopleTags")} className="seq-faces">
       {faces.map((face) => (
-        <span
-          key={face.id}
-          className="chip"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
+        <span key={face.id} className="chip seq-face-chip">
           {face.personName ??
             (face.discarded
               ? t("library.inspector.discardedFace")
               : face.ignored
                 ? t("library.inspector.ignoredFace")
                 : t("library.inspector.unrecognizedFace"))}
-          <OpenInPeople target={{ face: face.id }} style={{ padding: "0 4px", fontSize: 12 }} />
+          <OpenInPeople target={{ face: face.id }} className="btn btn-ghost seq-open-people" />
         </span>
       ))}
     </div>
@@ -177,18 +162,8 @@ function Toolbar({ gap }: { gap: number }) {
   const value =
     scope.scope === "catalog" ? `c${scope.id}` : scope.scope === "selection" ? "sel" : "lib";
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 14,
-        padding: "10px 16px",
-        borderBottom: "1px solid var(--pc-border)",
-        background: "var(--pc-toolbar)",
-      }}
-    >
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div className="seq-toolbar">
+      <label className="muted seq-inline-label">
         {t("sequence.scope")}
         <select
           className="field"
@@ -219,9 +194,9 @@ function Toolbar({ gap }: { gap: number }) {
       </label>
       <span className="muted">
         {t("sequence.order")}{" "}
-        <strong style={{ color: "var(--pc-text)" }}>{t("sequence.realInstant")}</strong>
+        <strong className="seq-order-strong">{t("sequence.realInstant")}</strong>
       </span>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <label className="muted seq-inline-label">
         <input
           type="checkbox"
           checked={groupSimilar}
@@ -229,17 +204,16 @@ function Toolbar({ gap }: { gap: number }) {
         />
         {t("similar.group")}
       </label>
-      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <label className="muted seq-inline-label">
         {t("sequence.gap")}
         <input
-          className="field"
+          className="field seq-gap-input"
           type="number"
           min={1}
           aria-label={t("sequence.gap")}
           aria-invalid={gapState?.kind === "invalid" || undefined}
           defaultValue={gap}
           key={gap}
-          style={{ width: 72 }}
           onChange={() => setGapState(null)}
           onKeyDown={(e) => {
             if (e.key === "Enter") saveGap(e.currentTarget.value);
@@ -263,20 +237,10 @@ function Toolbar({ gap }: { gap: number }) {
         </span>
       )}
       {set && (
-        <div
-          role="group"
-          aria-label={t("sequence.hotkeys")}
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+        <div role="group" aria-label={t("sequence.hotkeys")} className="seq-hotkeys">
           <span className="muted">{t("sequence.activeSet", { name: set.name })}</span>
           {set.tags.map((x) => (
-            <span key={x.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span key={x.key} className="seq-hotkey">
               <kbd className="mono">{x.key}</kbd>
               <TagChip name={x.name} color={colorOf(tags, x.name)} />
             </span>
@@ -331,69 +295,27 @@ function Card({
           const id = Number(e.dataTransfer.getData("application/x-photocat-undated"));
           if (id) onDropUndated(id);
         }}
-        style={{
-          width: CELL,
-          padding: 0,
-          borderRadius: 8,
-          overflow: "hidden",
-          cursor: "pointer",
-          textAlign: "left",
-          color: "inherit",
-          background: "var(--pc-panel)",
-          border: 0,
-          outline: selected
-            ? "2px solid var(--pc-accent)"
-            : over
-              ? "2px dashed var(--pc-accent)"
-              : "1px solid var(--pc-raised)",
-        }}
+        className={`seq-thumb-btn${selected ? " seq-thumb-btn--selected" : ""}${over && !selected ? " seq-thumb-btn--over" : ""}`}
       >
-        <div
-          style={{
-            position: "relative",
-            aspectRatio: "3 / 2",
-            background: "var(--pc-thumb-bg)",
-          }}
-        >
-          {url && (
-            <img
-              src={url}
-              alt=""
-              loading="lazy"
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          )}
+        <div className="seq-thumb-frame">
+          {url && <img src={url} alt="" loading="lazy" className="seq-thumb-img" />}
           {item.tags[0] && (
-            <span style={{ position: "absolute", left: 6, bottom: 6 }}>
+            <span className="seq-thumb-tag">
               <TagChip name={item.tags[0]} color={tagColor(item.tags[0])} compact />
             </span>
           )}
         </div>
-        <div aria-hidden="true" style={{ height: 4, background: color }} />
-        <div
-          className="mono"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 6,
-            padding: "4px 8px",
-            fontSize: 11,
-          }}
-        >
+        <div aria-hidden="true" className="seq-thumb-strip" style={{ background: color }} />
+        <div className="mono seq-thumb-meta">
           <span title={item.presumed ? t("sequence.presumed") : undefined}>
             {timeOf(item.local)}
             {item.presumed ? "*" : ""}
           </span>
-          <span
-            className="muted"
-            style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}
-          >
+          <span className="muted seq-thumb-device">
             <span aria-hidden="true" className="seq-device-mark" style={{ borderColor: color }}>
               {mark}
             </span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {item.device ?? t("sequence.otherSources")}
-            </span>
+            <span className="seq-ellipsis">{item.device ?? t("sequence.otherSources")}</span>
           </span>
         </div>
       </BusyButton>
@@ -507,29 +429,15 @@ function SessionsGrid({
     setSelection(ids, ids[0] ?? null);
   };
   return (
-    <div
-      ref={scrollRef}
-      data-testid="sequence-scroll"
-      style={{ flex: 1, overflow: "auto", position: "relative" }}
-    >
-      <div style={{ height: virt.getTotalSize() + PAD, position: "relative" }}>
+    <div ref={scrollRef} data-testid="sequence-scroll" className="seq-scroll">
+      <div className="seq-virt" style={{ height: virt.getTotalSize() + PAD }}>
         {vitems.map((v) => {
           const row = rows[v.index];
           return (
-            <div
-              key={v.key}
-              style={{
-                position: "absolute",
-                top: v.start + PAD / 2,
-                left: PAD,
-                right: PAD,
-                display: "flex",
-                gap: GAP,
-              }}
-            >
+            <div key={v.key} className="seq-virt-row" style={{ top: v.start + PAD / 2 }}>
               {row.kind === "header" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
-                  <h2 style={{ margin: 0, fontSize: 16 }}>
+                <div className="seq-session-head">
+                  <h2 className="seq-session-title">
                     {fmtDate(localDate(row.session.startLocal))} ·{" "}
                     {timeOf(row.session.startLocal).slice(0, 5)}–
                     {timeOf(row.session.endLocal).slice(0, 5)}
@@ -540,8 +448,7 @@ function SessionsGrid({
                       .join(" · ")}
                   </span>
                   <BusyButton
-                    className="btn"
-                    style={{ marginLeft: "auto" }}
+                    className="btn seq-push"
                     onClick={() => selectSession(row.session.index)}
                   >
                     {t("sequence.selectSession")}
@@ -603,25 +510,17 @@ function Undated({
   return (
     <section
       aria-label={t("sequence.undated", { count: items.length })}
-      style={{
-        borderTop: "1px solid var(--pc-border)",
-        padding: "10px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
+      className="seq-undated"
     >
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "baseline" }}>
+      <div className="seq-undated-head">
         <strong>{t("sequence.undated", { count: items.length })}</strong>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {t("sequence.undatedHelp")}
-        </span>
+        <span className="muted seq-small">{t("sequence.undatedHelp")}</span>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div className="seq-undated-list">
         {items.map((u) => {
           const url = thumbUrl(u.thumb);
           return (
-            <div key={u.id} style={{ display: "flex", flexDirection: "column", gap: 4, width: 96 }}>
+            <div key={u.id} className="seq-undated-item">
               <span
                 draggable
                 data-testid={`undated-${u.id}`}
@@ -629,18 +528,13 @@ function Undated({
                 onDragStart={(e) =>
                   e.dataTransfer.setData("application/x-photocat-undated", String(u.id))
                 }
-                style={{
-                  display: "block",
-                  width: 96,
-                  height: 64,
-                  borderRadius: 6,
-                  cursor: "grab",
-                  background: url ? `center / cover url("${url}")` : "var(--pc-thumb-bg)",
-                }}
+                className="seq-undated-thumb"
+                style={
+                  url ? { background: `center / cover url("${url}")` } : undefined
+                }
               />
               <BusyButton
-                className="btn"
-                style={{ minHeight: 26, fontSize: 12, padding: "0 6px" }}
+                className="btn seq-undated-place"
                 onClick={() => {
                   setMenu(u.id);
                   setAfter(String(focused ?? candidates[0]?.id ?? ""));
@@ -656,8 +550,7 @@ function Undated({
         <div
           role="dialog"
           aria-label={t("sequence.placeAfter")}
-          className="feature-actions"
-          style={{ margin: 0 }}
+          className="feature-actions seq-actions-flush"
         >
           <select
             className="field"
@@ -763,26 +656,12 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
     }
   };
   return (
-    <aside
-      aria-label={t("sequence.sources")}
-      style={{
-        flex: "0 0 320px",
-        padding: 16,
-        background: "var(--pc-panel)",
-        borderLeft: "1px solid var(--pc-border)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        overflow: "auto",
-      }}
-    >
-      <h2 ref={tipAnchor} style={{ margin: 0, fontSize: 18 }}>
+    <aside aria-label={t("sequence.sources")} className="seq-sources">
+      <h2 ref={tipAnchor} className="seq-sources-title">
         {t("sequence.sources")}
       </h2>
       <Coachmark tip="sequence" anchor={tipAnchor} side="right" learnMore="sequence" />
-      <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
-        {t("sequence.sourcesHelp")}
-      </span>
+      <span className="muted seq-small-lh">{t("sequence.sourcesHelp")}</span>
       {groups.map((g, i) => {
         const c = current(g);
         const name = groupName(g, t);
@@ -793,14 +672,9 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
             key={g.id}
             role="group"
             aria-label={name}
-            className="feature-card"
-            style={{
-              alignItems: "stretch",
-              gap: 6,
-              borderColor: changed(g) ? "var(--pc-accent)" : undefined,
-            }}
+            className={`feature-card seq-group-card${changed(g) ? " seq-group-card--dirty" : ""}`}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="seq-group-head">
               <span
                 aria-hidden="true"
                 className="seq-device-mark"
@@ -808,10 +682,10 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
               >
                 {marks.get(g.id)}
               </span>
-              <strong style={{ flex: 1 }}>
+              <strong className="seq-group-name">
                 {name}
                 {g.declaredOffsetMin != null && (
-                  <span className="muted mono" style={{ fontWeight: 400 }}>
+                  <span className="muted mono seq-declared">
                     {" "}
                     {offsetText(g.declaredOffsetMin)}
                   </span>
@@ -819,7 +693,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
               </strong>
               <span className="muted">{t("sequence.photos", { count: g.count })}</span>
             </div>
-            <label style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12 }}>
+            <label className="seq-field-col">
               {t("sequence.localTime")}
               <select
                 className="field"
@@ -846,7 +720,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
                 ))}
               </select>
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12 }}>
+            <label className="seq-field-col">
               {t("sequence.shift")}
               <input
                 className="field mono"
@@ -861,7 +735,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
               />
             </label>
             {changed(g) && previews[g.id] && (
-              <span className="mono" style={{ fontSize: 12 }} data-testid={`preview-${g.id}`}>
+              <span className="mono seq-preview" data-testid={`preview-${g.id}`}>
                 {previews[g.id]}
               </span>
             )}
@@ -872,17 +746,15 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
         {t("sequence.align")}
       </BusyButton>
       {selected.length !== 2 && (
-        <span className="muted" style={{ fontSize: 12 }}>
-          {t("sequence.alignHelp")}
-        </span>
+        <span className="muted seq-small">{t("sequence.alignHelp")}</span>
       )}
       {note && (
-        <p role="status" style={{ margin: 0 }}>
+        <p role="status" className="seq-status">
           {note}
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      <div className="feature-actions" style={{ margin: 0 }}>
+      <div className="feature-actions seq-actions-flush">
         <BusyButton
           className="btn"
           disabled={!dirty.length}
@@ -986,28 +858,15 @@ export function SequencePage() {
   if (view === "export") return <SequenceExport />;
   return (
     <ModulePage title={t("modules.sequence")}>
-      <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
-        <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div className="seq-layout">
+        <section className="seq-main">
           <Toolbar gap={o?.gapMin ?? 120} />
           <FocusedFaces />
           {o?.suggestions.map((s) => {
             const g = o.groups.find((x) => x.id === s.group);
             return (
-              <div
-                key={s.group}
-                role="alert"
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 16px",
-                  background: "var(--pc-warn-bg)",
-                  color: "var(--pc-warn)",
-                  borderBottom: "1px solid var(--pc-border)",
-                }}
-              >
-                <span style={{ flex: 1, color: "var(--pc-text)" }}>
+              <div key={s.group} role="alert" className="seq-suggestion">
+                <span className="seq-suggestion-text">
                   {t("sequence.suggestion", {
                     device: groupName(g, t),
                     count: s.count,
@@ -1040,7 +899,7 @@ export function SequencePage() {
             );
           })}
           {error && (
-            <div style={{ margin: "8px 16px" }}>
+            <div className="seq-error-wrap">
               <InlineAlert tone="danger" onDismiss={() => setError("")}>
                 {error}
               </InlineAlert>
@@ -1053,9 +912,7 @@ export function SequencePage() {
             skeleton={<Skeleton kind="thumbnail" count={8} />}
             isEmpty={(ov) => !ov.total && !ov.undated.length}
             empty={
-              <p className="muted" style={{ padding: 32 }}>
-                {t("sequence.empty")}
-              </p>
+              <p className="muted seq-empty">{t("sequence.empty")}</p>
             }
           >
             {(ov) => (

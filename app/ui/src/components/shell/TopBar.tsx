@@ -92,7 +92,7 @@ export function JobPill() {
       {job ? <Spinner size={14} /> : <Icon.Jobs size={14} />}
       <span>{label}</span>
       {job && (
-        <span className="bar" style={{ width: 64 }} aria-hidden="true">
+        <span className="bar job-pill-bar" aria-hidden="true">
           <span style={{ width: `${job.overallPercent ?? 0}%` }} />
         </span>
       )}
@@ -192,31 +192,13 @@ export function HelpMenu() {
 export function TopBar() {
   const { t } = useTranslation();
   return (
-    <header
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 16,
-        padding: "8px 16px",
-        background: "var(--pc-panel)",
-        borderBottom: "1px solid var(--pc-border)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16 }}>
-        <Icon.Logo size={22} style={{ color: "var(--pc-accent-text)" }} />
+    <header className="topbar">
+      <div className="topbar-brand">
+        <Icon.Logo size={22} className="topbar-brand-icon" />
         <span>{t("app.name")}</span>
       </div>
       <GlobalSearch />
-      <div
-        style={{
-          marginLeft: "auto",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
+      <div className="topbar-end">
         <PendingIndicator />
         <JobPill />
         <HelpMenu />

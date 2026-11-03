@@ -23,23 +23,13 @@ export function FacetRow({
 }) {
   const name = render(value.value);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 24 }}>
-      <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+    <div className="facet-row">
+      <label className="facet-row-label">
         <input type="checkbox" checked={checked} onChange={() => onToggle(value.value)} />
-        <span
-          title={name}
-          style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontWeight: checked ? 600 : undefined,
-          }}
-        >
+        <span title={name} className="facet-row-name" data-checked={checked || undefined}>
           {name}
         </span>
-        <span className="muted" style={{ marginLeft: "auto" }}>
-          {fmtInt(value.count)}
-        </span>
+        <span className="muted facet-row-count">{fmtInt(value.count)}</span>
       </label>
       {action?.(value)}
     </div>
@@ -95,24 +85,16 @@ export function FacetValuesList({
     <div
       ref={scrollRef}
       role="group"
-      style={{
-        overflow: "auto",
-        maxHeight: fill ? undefined : (height ?? 360),
-        flex: fill ? 1 : undefined,
-        minHeight: 0,
-      }}
+      className="facet-values"
+      data-fill={fill || undefined}
+      style={{ maxHeight: fill ? undefined : (height ?? 360) }}
     >
-      <div style={{ height: virt.getTotalSize(), position: "relative" }}>
+      <div className="facet-values-inner" style={{ height: virt.getTotalSize() }}>
         {items.map((it) => (
           <div
             key={it.key}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              transform: `translateY(${it.start}px)`,
-            }}
+            className="facet-values-item"
+            style={{ transform: `translateY(${it.start}px)` }}
           >
             {it.index < values.length ? (
               <FacetRow

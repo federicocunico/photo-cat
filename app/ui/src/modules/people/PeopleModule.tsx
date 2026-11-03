@@ -372,18 +372,7 @@ export function PeopleModule() {
 
   return (
     <ModulePage title={t("modules.people")}>
-      <section
-        aria-label={t("people.title")}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-          display: "flex",
-          flexWrap: "wrap",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
+      <section aria-label={t("people.title")} className="people-workspace">
         {arrival && (
           <div role="status" data-testid="people-arrival" className="people-arrival">
             <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
@@ -429,23 +418,10 @@ export function PeopleModule() {
           }}
         />
 
-        <section
-          aria-label={t("people.facesLabel")}
-          style={{
-            flex: "999 1 420px",
-            minWidth: 0,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            borderRight: "1px solid var(--pc-border)",
-            background: "var(--pc-bg)",
-          }}
-        >
+        <section aria-label={t("people.facesLabel")} className="people-faces-pane">
           {target?.kind === "identity" ? (
-            <div style={{ padding: 16 }}>
-              <p className="muted" style={{ margin: 0 }}>
-                {t("people.noPhotosInLibrary")}
-              </p>
+            <div className="people-pad">
+              <p className="muted people-muted-reset">{t("people.noPhotosInLibrary")}</p>
             </div>
           ) : (
             <FaceGrid
@@ -458,21 +434,7 @@ export function PeopleModule() {
           )}
         </section>
 
-        <aside
-          aria-label={t("people.cardLabel")}
-          style={{
-            flex: "1 1 260px",
-            maxWidth: 340,
-            minWidth: 0,
-            minHeight: 0,
-            background: "var(--pc-panel)",
-            padding: 16,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "auto",
-            borderLeft: "1px solid var(--pc-border)",
-          }}
-        >
+        <aside aria-label={t("people.cardLabel")} className="people-card-pane">
           <PersonCard
             ref={personCardRef}
             section={section}

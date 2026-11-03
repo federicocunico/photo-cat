@@ -267,6 +267,25 @@
   flex-basis: 100%;
   color: var(--pc-warn);
 }
+.settings-taxonomy-group {
+  margin: 16px 0;
+  border: 1px solid var(--pc-border);
+}
+.settings-taxonomy-manual {
+  font-size: 12px;
+  border: 1px solid var(--pc-border);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+.settings-taxonomy-confirm {
+  margin: 8px 0;
+}
+.settings-taxonomy-warn {
+  color: var(--pc-warn);
+}
+.feature-actions-tight {
+  margin: 0;
+}
 @media (max-width: 720px) {
   .settings-body {
     flex-direction: column;

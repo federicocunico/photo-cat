@@ -19,6 +19,7 @@ import { useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
 import { notify } from "../../store/toasts";
 import { pickFolder, TERMINAL, useShowInLibrary } from "./sourceActions";
+import "./import.css";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 
@@ -118,16 +119,10 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
   return (
     <div
       data-testid={`update-summary-${summary.sourceId}`}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "4px 12px",
-        alignItems: "center",
-        fontSize: 13,
-      }}
+      className="import-update-summary"
     >
       {summary.folder && (
-        <span className="mono muted" style={{ wordBreak: "break-all" }}>
+        <span className="mono muted import-update-folder">
           {t("sources.summary.folder", { path: summary.folder })}
         </span>
       )}
@@ -139,12 +134,8 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
           <BusyButton
             key={g}
             type="button"
-            className="btn btn-ghost"
-            style={{
-              padding: "0 4px",
-              color: g === "missing" ? "var(--pc-warn)" : undefined,
-              textDecoration: "underline",
-            }}
+            className="btn btn-ghost import-update-link"
+            data-warn={g === "missing" || undefined}
             aria-label={t("sources.summary.show", { label })}
             onClick={() => show(grp.ids)}
           >
@@ -160,7 +151,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
         </span>
       )}
       {summary.failed > 0 && (
-        <span style={{ color: "var(--pc-danger)" }}>
+        <span className="import-update-failed">
           {t("sources.summary.failed", { n: fmtInt(summary.failed) })}
         </span>
       )}

@@ -189,7 +189,7 @@ function SortMenu() {
           k === sort ? (
             <Icon.Check size={14} aria-label={t("library.header.current")} />
           ) : (
-            <span style={{ width: 14 }} />
+            <span className="lib-sort-spacer" />
           ),
         onSelect: () => setSort(k),
       }))}

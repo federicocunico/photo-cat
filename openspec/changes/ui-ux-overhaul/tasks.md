@@ -178,7 +178,7 @@
   - passi "Anteprima → Verifica → Crea" come elenco numerato con lo stato;
   - pulsanti con etichetta;
   - storico leggibile;
-  - "Sposta file" con `ConfirmDialog`.
+  - "Sposta file" **fuori ambito** (decisione 3 nov 2026): il backend offre solo copia / hard link / symlink; registrato in `design.md`. Non si aggiunge il metodo Rust in questa change.
 - [x] 7.7 **Impostazioni › Diagnostica**:
   - tabella da tastiera (`DataTable`);
   - errori come `InlineAlert` di errore;
@@ -188,16 +188,19 @@
 
 ## 8. Pulizia e verifica
 
-- [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
+- [x] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
+  - Fatto: 0 `window.confirm`/`alert`; chiavi inutilizzate rimosse + test di regressione; `PENDING` e `A11Y_KNOWN` vuoti; stili statici spostati in CSS di modulo (restano solo valori dinamici: virtualizzazione, dimensioni, colori di stato).
 - [x] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
-- [ ] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
+- [x] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
+  - 381 vitest ok; typecheck/build ok; cargo test workspace ok; `make test-linux` OK (deb + tar.gz).
 - [ ] 8.4 Prova sull'app reale, con un backup dei dati:
   - aggiornamento da una versione con preferenze salvate (moduli Identità, Modelli e Diagnostica come ultimi aperti);
   - giro completo solo da tastiera: importa → Libreria → selezione → tag → catalogo → visualizzatore → palette → Impostazioni → Attività;
   - temi chiaro, scuro e sistema;
   - finestra a 900 px;
   - lettore di schermo (Narrator / Orca) su dialoghi, palette e barra delle azioni.
-- [ ] 8.5 Confronto finale con i mockup e con l'elenco dei problemi di `audit.md`: ogni voce A e M risolta o motivata.
+- [x] 8.5 Confronto finale con i mockup e con l'elenco dei problemi di `audit.md`: ogni voce A e M risolta o motivata.
+  - Sintesi in `audit.md` §9: nessun A/M aperto; residui marcati Motivato (incluso «Sposta file» fuori ambito).
 
 ## Workflow
 

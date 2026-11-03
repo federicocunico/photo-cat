@@ -121,3 +121,14 @@
 [data-refreshing="true"] {
   opacity: 0.55;
 }
+.boot-screen {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  padding: 32px;
+}
+.boot-status {
+  display: flex;
+  gap: 12px;
+}

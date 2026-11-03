@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { useLayout } from "../../store/layout";
 import { useCommands } from "../../commands/registry";
+import "./shell.css";
 
 /**
  * Ctrl+I mostra o nasconde l'ispettore; Ctrl+Maiusc+B nasconde entrambi i pannelli
@@ -73,17 +74,7 @@ function CollapsedRail({
   onClick: () => void;
 }) {
   return (
-    <div
-      style={{
-        flex: "0 0 32px",
-        display: "flex",
-        justifyContent: "center",
-        paddingTop: 8,
-        background: "var(--pc-panel-alt)",
-        borderLeft: side === "right" ? "1px solid var(--pc-border)" : undefined,
-        borderRight: side === "left" ? "1px solid var(--pc-border)" : undefined,
-      }}
-    >
+    <div className="panel-rail" data-side={side}>
       <button type="button" className="btn btn-ghost icon-btn" aria-label={label} onClick={onClick}>
         {side === "left" ? <Icon.ChevronRight size={16} /> : <Icon.ChevronLeft size={16} />}
       </button>
@@ -104,27 +95,20 @@ export function Panels({
   const s = useLayout();
   usePanelCommands(Boolean(right));
   return (
-    <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
+    <div className="panels">
       {left &&
         (s.leftOpen ? (
           <>
             <aside
               data-testid="left-panel"
-              style={{
-                width: s.leftWidth,
-                flex: "0 0 auto",
-                background: "var(--pc-panel-alt)",
-                borderRight: "1px solid var(--pc-border)",
-                overflowY: "auto",
-                position: "relative",
-              }}
+              className="panel-aside panel-aside-left"
+              style={{ width: s.leftWidth }}
             >
               <button
                 type="button"
-                className="btn btn-ghost icon-btn"
+                className="btn btn-ghost icon-btn panel-collapse panel-collapse-left"
                 aria-label={t("shell.collapseLeft")}
                 onClick={s.toggleLeft}
-                style={{ position: "absolute", top: 8, right: 4, border: 0 }}
               >
                 <Icon.ChevronLeft size={16} />
               </button>
@@ -138,17 +122,7 @@ export function Panels({
         ) : (
           <CollapsedRail side="left" label={t("shell.expandLeft")} onClick={s.toggleLeft} />
         ))}
-      <section
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        {center}
-      </section>
+      <section className="panels-center">{center}</section>
       {right &&
         (s.rightOpen ? (
           <>
@@ -158,22 +132,15 @@ export function Panels({
             />
             <aside
               data-testid="right-panel"
-              style={{
-                width: s.rightWidth,
-                flex: "0 0 auto",
-                background: "var(--pc-panel)",
-                borderLeft: "1px solid var(--pc-border)",
-                overflowY: "auto",
-                position: "relative",
-              }}
+              className="panel-aside panel-aside-right"
+              style={{ width: s.rightWidth }}
             >
               <button
                 type="button"
-                className="btn btn-ghost icon-btn"
+                className="btn btn-ghost icon-btn panel-collapse panel-collapse-right"
                 aria-label={t("shell.collapseRight")}
                 aria-keyshortcuts="Control+I"
                 onClick={s.toggleRight}
-                style={{ position: "absolute", top: 8, right: 8, border: 0 }}
               >
                 <Icon.ChevronRight size={16} />
               </button>

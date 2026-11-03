@@ -43,38 +43,14 @@ function Row({
       aria-pressed={active}
       title={title ?? label}
       onClick={onClick}
-      className={mono ? "mono" : undefined}
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 8,
-        width: "100%",
-        border: 0,
-        cursor: "pointer",
-        textAlign: "left",
-        padding: `3px 6px 3px ${6 + indent}px`,
-        borderRadius: 4,
-        fontSize: mono ? 12 : 14,
-        background: active ? "var(--pc-tree-selected)" : "transparent",
-        color: "var(--pc-text)",
-      }}
+      className={mono ? "sidebar-row mono" : "sidebar-row"}
+      style={indent ? { paddingLeft: 6 + indent } : undefined}
     >
-      <span
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <span className="sidebar-row-label">
         {icon}
         {label}
       </span>
-      <span style={{ color: active ? "var(--pc-accent-soft-text)" : "var(--pc-text-secondary)" }}>
-        {fmtInt(count)}
-      </span>
+      <span className="sidebar-row-count">{fmtInt(count)}</span>
     </BusyButton>
   );
 }
@@ -110,8 +86,8 @@ function FolderTree({
             const expanded = open.includes(f.path);
             return (
               <div key={f.path}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <span style={{ width: 8 + depth * 12, flexShrink: 0 }} />
+                <div className="sidebar-tree-row">
+                  <span className="sidebar-indent" style={{ width: 8 + depth * 12 }} />
                   {f.hasChildren ? (
                     <BusyButton
                       type="button"
@@ -125,7 +101,7 @@ function FolderTree({
                       {expanded ? <Icon.ChevronDown size={14} /> : <Icon.ChevronRight size={14} />}
                     </BusyButton>
                   ) : (
-                    <span style={{ width: 24, flexShrink: 0 }} />
+                    <span className="sidebar-indent-spacer" />
                   )}
                   <Row
                     mono
@@ -203,7 +179,9 @@ function SidebarSection({
   return (
     <section aria-label={title}>
       <Disclosure title={title} level={2} open={!collapsed} onOpenChange={() => toggle(id)}>
-        <div style={{ display: "flex", flexDirection: "column", gap }}>{children}</div>
+        <div className="sidebar-section-body" style={{ gap }}>
+          {children}
+        </div>
       </Disclosure>
     </section>
   );
@@ -248,7 +226,7 @@ export function LibrarySidebar() {
   // Ogni sezione ha il proprio stato di caricamento: una query lenta dei filtri non
   // nasconde cartelle e cataloghi.
   return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="sidebar">
       <SidebarSection id="library.sources" title={t("library.sources")}>
         <QueryView query={sources} enabled={isTauri()} isEmpty={() => false}>
           {(list = []) => (
@@ -262,7 +240,7 @@ export function LibrarySidebar() {
                 const expanded = openSources.includes(source.id);
                 return (
                   <div key={source.id}>
-                    <div style={{ display: "flex", alignItems: "center" }}>
+                    <div className="sidebar-tree-row">
                       <button
                         type="button"
                         className="btn btn-ghost sidebar-toggle"
@@ -304,7 +282,7 @@ export function LibrarySidebar() {
                 );
               })}
               {openSources.length > 0 && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <label className="sidebar-check">
                   <input
                     type="checkbox"
                     checked={folderRecursive}
@@ -327,7 +305,7 @@ export function LibrarySidebar() {
                   label={catalog.name}
                   icon={
                     catalog.kind === "smart" ? (
-                      <Icon.Smart size={12} style={{ color: "var(--pc-warn)" }} />
+                      <Icon.Smart size={12} className="sidebar-smart" />
                     ) : undefined
                   }
                   count={items}
@@ -350,7 +328,7 @@ export function LibrarySidebar() {
           value={facetQuery}
           onChange={(e) => setFacetQuery(e.target.value)}
         />
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+        <label className="sidebar-check">
           <input
             type="checkbox"
             checked={filter.similarOnly ?? false}
@@ -379,8 +357,7 @@ export function LibrarySidebar() {
                       action={(f) => (
                         <button
                           type="button"
-                          className="btn btn-ghost"
-                          style={{ padding: "0 4px", fontSize: 12 }}
+                          className="btn btn-ghost facet-icon-btn"
                           title={t("place.rename")}
                           aria-label={t("place.renameOf", { name: f.value })}
                           onClick={() => setRenaming(f)}
@@ -414,26 +391,17 @@ export function LibrarySidebar() {
                   <FacetList query={facetQuery} facetKey={{ kind: "tag" }} list={data.tags} />
                 )}
                 {data.people.total > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div style={{ fontWeight: 600 }}>{t("library.facets.people")}</div>
+                  <div className="sidebar-people">
+                    <div className="facet-title">{t("library.facets.people")}</div>
                     {data.people.values.slice(0, 8).map((v) => {
                       const id = personIdByName.get(v.value);
+                      const active = (filter.personIds ?? []).includes(id ?? -1);
                       return (
-                        <div
-                          key={v.value}
-                          style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 24 }}
-                        >
+                        <div key={v.value} className="sidebar-people-row">
                           <button
                             type="button"
-                            className="btn btn-ghost"
-                            style={{
-                              flex: 1,
-                              justifyContent: "space-between",
-                              padding: "0 4px",
-                              fontWeight: (filter.personIds ?? []).includes(id ?? -1)
-                                ? 600
-                                : undefined,
-                            }}
+                            className="btn btn-ghost sidebar-people-btn"
+                            data-active={active || undefined}
                             onClick={() => {
                               if (id == null) return;
                               const cur = filter.personIds ?? [];
@@ -450,7 +418,7 @@ export function LibrarySidebar() {
                           {id != null && (
                             <OpenInPeople
                               target={{ person: id }}
-                              style={{ padding: "0 4px", fontSize: 12 }}
+                              className="btn btn-ghost facet-icon-btn"
                             />
                           )}
                         </div>

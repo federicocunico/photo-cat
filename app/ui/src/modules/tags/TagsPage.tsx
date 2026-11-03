@@ -539,7 +539,7 @@ function TagPanel({
                   await refreshTags(qc);
                 })
               }
-              style={{ width: 32, height: 32, background: tagColorVar(c) }}
+              style={{ background: tagColorVar(c) }}
             />
           ))}
         </div>

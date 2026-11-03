@@ -1585,7 +1585,7 @@ export type TzSuggestion = {
 export type UiConfig = {
 	theme?: Theme,
 	language?: Language,
-	/**  `system`, `none` o l'id di un'applicazione esterna. */
+	/**  `system`, `viewer`, `none` o l'id di un'applicazione esterna. */
 	double_click?: string,
 };
 

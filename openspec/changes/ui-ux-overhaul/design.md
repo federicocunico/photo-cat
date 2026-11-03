@@ -230,3 +230,7 @@ Confermate dall'utente prima dell'implementazione:
 2. **Dipendenze**: si aggiungono le primitive Radix, `cmdk` e `lucide-react`.
 3. **Esporta**: un solo modulo "Esporta" con le sezioni "Esporta dati", "Organizza in cartelle" e "Sequenza".
 4. **Termine**: resta "Smart".
+
+### Decisioni (3 novembre 2026, fase 7–8)
+
+5. **"Sposta file" in Esporta › Organizza in cartelle**: fuori ambito, confermato dall'utente. Il backend (`pc-organize`) espone solo `copy`, `hardlink` e `symlink`; aggiungere lo spostamento richiederebbe un metodo Rust nuovo con test propri. Resta documentato come possibile change successiva.

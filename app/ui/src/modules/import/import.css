@@ -126,3 +126,23 @@
   flex-direction: column;
   gap: var(--pc-space-1);
 }
+.import-update-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.import-update-folder {
+  word-break: break-all;
+}
+.import-update-link {
+  padding: 0 4px;
+  text-decoration: underline;
+}
+.import-update-link[data-warn] {
+  color: var(--pc-warn);
+}
+.import-update-failed {
+  color: var(--pc-danger);
+}

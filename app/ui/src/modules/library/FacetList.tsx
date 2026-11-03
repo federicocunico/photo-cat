@@ -55,8 +55,8 @@ export function FacetList({
     // Con la ricerca comune: solo i gruppi con risultati, senza elenco compatto.
     if (full.query.data !== undefined && full.values.length === 0) return null;
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ fontWeight: 600 }}>{title}</div>
+      <div className="facet-block">
+        <div className="facet-title">{title}</div>
         <FacetValuesList
           values={full.values}
           hasMore={full.hasMore}
@@ -72,13 +72,12 @@ export function FacetList({
     );
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <div style={{ fontWeight: 600, flex: 1 }}>{title}</div>
+    <div className="facet-block">
+      <div className="facet-title-row">
+        <div className="facet-title">{title}</div>
         <BusyButton
           type="button"
-          className="btn btn-ghost"
-          style={{ padding: "0 4px", fontSize: 12 }}
+          className="btn btn-ghost facet-icon-btn"
           title={t("library.facets.openWindowOf", { name: title })}
           aria-label={t("library.facets.openWindowOf", { name: title })}
           onClick={(e) => openFacetPanel(facetKey, e.currentTarget)}
@@ -117,8 +116,7 @@ export function FacetList({
           </QueryView>
           <BusyButton
             type="button"
-            className="btn btn-ghost"
-            style={{ alignSelf: "flex-start", padding: "0 4px" }}
+            className="btn btn-ghost facet-toggle"
             onClick={() => {
               setExpanded(false);
               return setSearch("");
@@ -144,8 +142,7 @@ export function FacetList({
           {hidden && (
             <BusyButton
               type="button"
-              className="btn btn-ghost"
-              style={{ alignSelf: "flex-start", padding: "0 4px" }}
+              className="btn btn-ghost facet-toggle"
               onClick={() => setExpanded(true)}
             >
               {t("library.facets.showAll", { n: list.total })}

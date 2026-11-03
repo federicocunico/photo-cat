@@ -25,7 +25,7 @@ function NameField({
   const [error, setError] = useState(false);
   const confirm = () => (name.trim() ? onConfirm(name.trim()) : setError(true));
   return (
-    <span className="feature-actions" style={{ margin: 0 }}>
+    <span className="feature-actions feature-actions-tight">
       <input
         className="field"
         autoFocus
@@ -48,7 +48,7 @@ function NameField({
         {t("entries.cancel")}
       </BusyButton>
       {error && (
-        <span role="alert" style={{ color: "var(--pc-danger)" }}>
+        <span role="alert" className="settings-save-error">
           {t("entries.required")}
         </span>
       )}
@@ -133,11 +133,7 @@ export function TaxonomySection({
   return (
     <>
       {tax.groups.map((g, gi) => (
-        <fieldset
-          key={g.id}
-          data-testid={`group-${g.id}`}
-          style={{ margin: "16px 0", border: "1px solid var(--pc-border)" }}
-        >
+        <fieldset key={g.id} data-testid={`group-${g.id}`} className="settings-taxonomy-group">
           <legend>{groupNameOf(tax, t, g.id)}</legend>
           {g.categories.map((c, ci) => (
             <div className="feature-actions" key={c.id}>
@@ -165,16 +161,7 @@ export function TaxonomySection({
                 }
               />
               {isManual(c) && (
-                <span
-                  className="muted"
-                  title={t("entries.manualHint")}
-                  style={{
-                    fontSize: 12,
-                    border: "1px solid var(--pc-border)",
-                    borderRadius: 4,
-                    padding: "0 6px",
-                  }}
-                >
+                <span className="muted settings-taxonomy-manual" title={t("entries.manualHint")}>
                   {t("entries.manual")}
                 </span>
               )}
@@ -190,7 +177,7 @@ export function TaxonomySection({
             </div>
           ))}
           {deleting?.group === g.id && (
-            <div role="alertdialog" className="feature-actions" style={{ margin: "8px 0" }}>
+            <div role="alertdialog" className="feature-actions settings-taxonomy-confirm">
               <span>
                 {deleting.count > 0
                   ? t("entries.deleteConfirm", {
@@ -270,7 +257,7 @@ export function TaxonomySection({
         </BusyButton>
       )}
       {reanalysis && (
-        <p role="note" style={{ color: "var(--pc-warn)" }}>
+        <p role="note" className="settings-taxonomy-warn">
           {t("entries.reanalysis")}
         </p>
       )}

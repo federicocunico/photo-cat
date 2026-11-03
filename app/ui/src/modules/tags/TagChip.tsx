@@ -18,7 +18,7 @@ export function TagChip({
       data-tag-color={color}
       aria-label={t("tags.chip", { name })}
       className={compact ? "tag-chip tag-chip-compact" : "tag-chip"}
-      style={{ borderLeft: `3px solid ${tagColorVar(color)}` }}
+      style={{ borderLeftColor: tagColorVar(color) }}
     >
       {name}
     </span>

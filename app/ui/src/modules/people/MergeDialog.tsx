@@ -5,6 +5,7 @@ import { Button, Dialog, InlineAlert } from "../../components/ui";
 import { commands, type Correction, type FaceView, type GroupRow } from "../../lib/ipc";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { notifyPeopleUndo } from "./peopleUndo";
+import "./people.css";
 
 function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -13,17 +14,11 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
   return (
     <span
       aria-hidden
+      className="people-cover"
       style={{
-        display: "block",
         width: size,
         height: size,
-        borderRadius: "50%",
-        overflow: "hidden",
-        backgroundColor: "var(--pc-thumb-bg)",
         backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        flexShrink: 0,
       }}
     >
       {src && !failed && (
@@ -31,7 +26,7 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
           src={src}
           alt=""
           onError={() => setFailed(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="people-cover-img"
         />
       )}
     </span>
@@ -114,51 +109,28 @@ export function MergeDialog({
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto 1fr",
-            gap: 8,
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              alignItems: "center",
-              textAlign: "center",
-            }}
-          >
+      <div className="people-merge">
+        <div className="people-merge-preview">
+          <div className="people-merge-party">
             <Avatar cover={primarySource.cover} />
             <b>{labelOf(primarySource, t)}</b>
-            <span className="muted" style={{ fontSize: 12 }}>
+            <span className="muted people-muted-sm">
               {t("people.photos", { count: primarySource.photos })}
             </span>
           </div>
-          <span aria-hidden style={{ fontSize: 20, color: "var(--pc-text-2)" }}>
+          <span aria-hidden className="people-merge-arrow">
             →
           </span>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              alignItems: "center",
-              textAlign: "center",
-            }}
-          >
+          <div className="people-merge-party">
             <Avatar cover={survivor.cover} />
             <b>{labelOf(survivor, t)}</b>
-            <span className="muted" style={{ fontSize: 12 }}>
+            <span className="muted people-muted-sm">
               {t("people.photos", { count: survivor.photos })}
             </span>
           </div>
         </div>
 
-        <p style={{ margin: 0 }}>
+        <p className="people-merge-body">
           {t("people.mergeDialogBody", {
             count: absorbedFaces,
             name: labelOf(survivor, t),
@@ -166,18 +138,11 @@ export function MergeDialog({
         </p>
 
         {needNameChoice && (
-          <fieldset
-            style={{
-              border: "1px solid var(--pc-border)",
-              borderRadius: 6,
-              padding: 10,
-              margin: 0,
-            }}
-          >
-            <legend style={{ padding: "0 6px" }}>{t("people.mergeKeepName")}</legend>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <fieldset className="people-merge-fieldset">
+            <legend className="people-merge-legend">{t("people.mergeKeepName")}</legend>
+            <div className="people-merge-options">
               {named.map((g) => (
-                <label key={g.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <label key={g.id} className="people-check people-check--gap">
                   <input
                     type="radio"
                     name="merge-keep-name"

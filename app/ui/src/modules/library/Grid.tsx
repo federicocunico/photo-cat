@@ -51,19 +51,7 @@ export function ThumbTags({ tags, color }: { tags: string[]; color: (name: strin
   if (!tags.length) return null;
   const shown = tags.slice(0, 3);
   return (
-    <span
-      style={{
-        position: "absolute",
-        left: 6,
-        right: 34,
-        bottom: 6,
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 4,
-        overflow: "hidden",
-        maxHeight: 40,
-      }}
-    >
+    <span className="thumb-tags">
       {shown.map((t) => (
         <TagChip key={t} name={t} color={color(t)} compact />
       ))}
@@ -129,67 +117,24 @@ function Thumb({
             ? `${item.name} · ${t("exclusions.date", { date: fmtDateTime(item.excludedAt) })}`
             : item.name
         }
+        className="thumb-frame"
         style={{
           width: size,
-          padding: 0,
-          margin: 0,
-          borderRadius: 6,
-          overflow: "hidden",
-          cursor: "pointer",
-          textAlign: "left",
-          background: "var(--pc-panel)",
           border: `2px solid ${selected ? "var(--pc-accent)" : cover ? "var(--pc-warn)" : "var(--pc-raised)"}`,
-          color: "inherit",
         }}
       >
-        <div
-          style={{
-            position: "relative",
-            height: Math.round(size * 0.75),
-            background: "var(--pc-thumb-bg)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--pc-text-placeholder)",
-            fontSize: 12,
-          }}
-        >
+        <div className="thumb-media" style={{ height: Math.round(size * 0.75) }}>
           {url && !failed ? (
-            <img
-              src={url}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              onError={() => setFailed(true)}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
+            <img src={url} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
           ) : (
             <span>{item.name.split(".").pop()?.toUpperCase()}</span>
           )}
-          <span style={{ position: "absolute", top: 6, left: 6, display: "flex", gap: 4 }}>
-            {item.faces > 0 && (
-              <span
-                style={{
-                  padding: "1px 6px",
-                  borderRadius: 4,
-                  background: "rgba(20,20,22,0.85)",
-                  color: "#E8E8EA",
-                  fontSize: 11,
-                }}
-              >
-                {item.faces}
-              </span>
-            )}
+          <span className="thumb-face">
+            {item.faces > 0 && <span className="thumb-badge thumb-badge-face">{item.faces}</span>}
           </span>
           <span
+            className="thumb-badge thumb-badge-status"
             style={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              padding: "1px 6px",
-              borderRadius: 4,
-              background: "rgba(20,20,22,0.85)",
-              fontSize: 11,
               color: item.status === "missing" ? "#F2A38F" : item.analyzed ? "#4FC3B0" : "#E0B252",
             }}
           >
@@ -201,64 +146,18 @@ function Thumb({
           </span>
           <ThumbTags tags={item.tags} color={tagColor} />
           {cover && (
-            <span
-              data-testid={`cover-${item.id}`}
-              style={{
-                position: "absolute",
-                left: 6,
-                top: 30,
-                padding: "1px 6px",
-                borderRadius: 4,
-                background: "rgba(20,20,22,0.85)",
-                color: "var(--pc-warn)",
-                fontSize: 11,
-              }}
-            >
+            <span data-testid={`cover-${item.id}`} className="thumb-badge thumb-badge-cover">
               {t("similar.cover")}
             </span>
           )}
           {item.excludedAt != null && (
-            <span
-              style={{
-                position: "absolute",
-                top: 4,
-                left: 4,
-                background: "var(--pc-panel)",
-                padding: 3,
-                fontSize: 11,
-              }}
-            >
+            <span className="thumb-excluded">
               {t("exclusions.date", { date: fmtDate(item.excludedAt) })}
             </span>
           )}
-          {selected && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                bottom: 6,
-                right: 6,
-                width: 20,
-                height: 20,
-                borderRadius: "50%",
-                background: "var(--pc-accent)",
-              }}
-            />
-          )}
+          {selected && <span aria-hidden="true" className="thumb-check" />}
         </div>
-        <div
-          className="mono"
-          title={item.name}
-          style={{
-            height: CAPTION,
-            padding: "6px 8px",
-            fontSize: 11,
-            color: "var(--pc-text-soft)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <div className="mono thumb-caption" title={item.name}>
           {item.name}
         </div>
       </div>
@@ -289,12 +188,10 @@ function Placeholder({ size }: { size: number }) {
   return (
     <div
       aria-hidden="true"
+      className="thumb-placeholder"
       style={{
         width: size,
         height: Math.round(size * 0.75) + CAPTION + 4,
-        borderRadius: 6,
-        background: "var(--pc-panel)",
-        border: "2px solid var(--pc-raised)",
       }}
     />
   );
@@ -568,7 +465,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   if (pages.isSuccess && items.length === 0 && start === 0 && (count.data ?? 0) === 0) {
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
-      <div className="muted" style={{ padding: 32 }}>
+      <div className="muted grid-empty">
         {filtered ? t("library.noResults") : t("library.empty")}
       </div>
     );
@@ -606,7 +503,6 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       }}
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-      style={{ flex: 1, overflow: "auto", position: "relative" }}
       aria-label={
         count.isPending
           ? t("feedback.calculating")
@@ -664,22 +560,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     >
       <RefreshBar active={pages.isFetching && !pages.isPending} />
       {pages.isError && <QueryView query={pages}>{() => null}</QueryView>}
-      <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
+      <div className="grid-virt" style={{ height: virt.getTotalSize() + PAD * 2 }}>
         {box && (
           <div
             aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: box.x,
-              top: box.y,
-              width: box.w,
-              height: box.h,
-              border: "1px solid var(--pc-accent)",
-              background: "var(--pc-accent-soft-bg)",
-              opacity: 0.5,
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
+            className="grid-marquee"
+            style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
           />
         )}
         {vitems.map((row) => {
@@ -733,12 +619,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           return (
             <div
               key={row.key}
+              className="grid-row"
               style={{
-                position: "absolute",
                 top: row.start + PAD,
                 left: PAD,
                 right: PAD,
-                display: "flex",
                 gap: GAP,
               }}
             >
@@ -748,24 +633,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         })}
       </div>
       {(pages.isFetchingNextPage || pages.isFetchingPreviousPage) && (
-        <div className="muted" style={{ position: "sticky", bottom: 8, textAlign: "center" }}>
+        <div className="muted grid-loading">
           <Icon.Spinner size={14} />
         </div>
       )}
       {actionError && (
-        <div
-          role="alert"
-          style={{
-            position: "sticky",
-            bottom: 8,
-            margin: "0 16px",
-            padding: "6px 10px",
-            borderRadius: 4,
-            background: "var(--pc-raised)",
-            border: "1px solid var(--pc-border)",
-          }}
-          onClick={openWith.clearError}
-        >
+        <div role="alert" className="grid-action-error" onClick={openWith.clearError}>
           {actionError}
         </div>
       )}

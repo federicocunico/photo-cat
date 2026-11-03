@@ -23,13 +23,9 @@ import { Button, ConfirmDialog, EmptyState, InlineAlert, PageHeader } from "../.
 import { runUndo, useUndo } from "../../store/undo";
 import { notify } from "../../store/toasts";
 
-const card = {
-  background: "var(--pc-panel)",
-  border: "1px solid var(--pc-border)",
-  borderRadius: 8,
-  padding: 20,
-} as const;
+import "./jobs.css";
 
+/** Colori del badge di stato (dipendono dallo stato; il resto è nella classe `jobs-badge`). */
 function badgeStyle(state: string) {
   const map: Record<string, [string, string]> = {
     completed: ["var(--pc-ok-bg)", "var(--pc-ok)"],
@@ -39,7 +35,7 @@ function badgeStyle(state: string) {
     running: ["var(--pc-accent-soft-bg)", "var(--pc-accent-soft-text)"],
   };
   const [bg, fg] = map[state] ?? ["var(--pc-danger-bg)", "var(--pc-danger)"];
-  return { padding: "2px 8px", borderRadius: 4, background: bg, color: fg, fontSize: 12 } as const;
+  return { background: bg, color: fg } as const;
 }
 
 /** Conteggio della fase: la sorgente mostra i "trovati", le fasi a valle "elaborati / finora". */
@@ -56,56 +52,45 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
   const pct = phase.percent;
   const done = phase.state === "done";
   return (
-    <tr style={{ borderTop: "1px solid var(--pc-border)" }} data-testid={`phase-${phase.name}`}>
-      <td style={{ padding: "10px 8px 10px 0" }}>
-        {t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}
-      </td>
-      <td style={{ padding: "10px 8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <tr className="jobs-phase-row" data-testid={`phase-${phase.name}`}>
+      <td>{t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}</td>
+      <td>
+        <div className="jobs-phase-progress">
           <div
-            className={`bar${pct == null && phase.state === "running" ? " indeterminate" : ""}`}
-            style={{ flex: 1, height: 6 }}
+            className={`bar jobs-phase-bar${done ? " done" : ""}${pct == null && phase.state === "running" ? " indeterminate" : ""}`}
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={pct ?? undefined}
             aria-label={t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}
           >
-            <span
-              style={{ width: `${pct ?? 0}%`, background: done ? "var(--pc-ok)" : undefined }}
-            />
+            <span style={{ width: `${pct ?? 0}%` }} />
           </div>
-          <span className="mono" style={{ width: 52, textAlign: "right" }}>
+          <span className="mono jobs-phase-pct">
             {pct == null ? "—" : `${Math.floor(pct)}%`}
           </span>
         </div>
       </td>
-      <td className="mono" style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+      <td className="mono jobs-nowrap">
         {phaseCount(phase, isSource, t)}
         {!phase.totalKnown && !isSource && (
           <Icon.Spinner
             size={12}
-            className="spin"
             data-testid="provisional-total"
             role="img"
             aria-hidden={false}
             aria-label={t("jobs.provisionalTotal")}
-            style={{ marginLeft: 6, verticalAlign: -1, color: "var(--pc-text-soft)" }}
+            className="spin jobs-provisional"
           />
         )}
       </td>
-      <td className="mono" style={{ padding: "10px 8px", color: "var(--pc-text-soft)" }}>
+      <td className="mono jobs-soft">
         {phase.rate != null ? t("jobs.rate", { rate: fmtDec(phase.rate, 1) }) : "—"}
       </td>
-      <td style={{ padding: "10px 8px", color: "var(--pc-text-soft)" }}>
+      <td className="jobs-soft">
         {phase.etaSecs != null ? fmtEta(phase.etaSecs) : t(`jobs.phaseState.${phase.state}`)}
       </td>
-      <td
-        style={{
-          padding: "10px 8px",
-          color: phase.failed > 0 ? "var(--pc-danger)" : "var(--pc-text-secondary)",
-        }}
-      >
+      <td className={phase.failed > 0 ? "jobs-errors jobs-errors--failed" : "jobs-errors"}>
         {phase.failed > 0 ? fmtInt(phase.failed) : "—"}
       </td>
     </tr>
@@ -158,19 +143,18 @@ export function JobCard({
   // Finché la scansione non ha contato tutti i file la percentuale complessiva non è significativa.
   const counting = running && job.phases.some((p) => !p.totalKnown);
   return (
-    <section
-      style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}
-      data-testid={`job-${job.id}`}
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <h2 tabIndex={-1} style={{ margin: 0, fontSize: 17 }}>
+    <section className="jobs-card" data-testid={`job-${job.id}`}>
+      <div className="jobs-head">
+        <div className="jobs-title-col">
+          <h2 tabIndex={-1} className="jobs-title">
             {name}
           </h2>
-          <span className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={badgeStyle(job.state)}>{t(`jobs.states.${job.state}`)}</span>
+          <span className="muted jobs-status">
+            <span className="jobs-badge" style={badgeStyle(job.state)}>
+              {t(`jobs.states.${job.state}`)}
+            </span>
             {job.memoryPaused && (
-              <span style={{ color: "var(--pc-warn)" }} data-testid={`memory-paused-${job.id}`}>
+              <span className="jobs-warn" data-testid={`memory-paused-${job.id}`}>
                 {t("jobs.memoryPaused")}
               </span>
             )}
@@ -178,7 +162,7 @@ export function JobCard({
           </span>
         </div>
         {live && (
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <div className="jobs-actions">
             {running && (
               <Button
                 icon={<Icon.Pause size={14} />}
@@ -216,37 +200,26 @@ export function JobCard({
         )}
       </div>
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
+        <div className="jobs-overall">
           <span>{t("jobs.overall")}</span>
           <span className="mono" data-testid={`overall-${job.id}`}>
             {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
           </span>
         </div>
-        <div
-          className={`bar${counting ? " indeterminate" : ""}`}
-          style={{ height: 8, marginTop: 6, borderRadius: 4 }}
-        >
+        <div className={`bar jobs-overall-bar${counting ? " indeterminate" : ""}`}>
           <span style={{ width: `${job.overallPercent ?? 0}%` }} />
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+      <div className="jobs-table-wrap">
+        <table className="jobs-table">
           <thead>
-            <tr
-              style={{
-                color: "var(--pc-text-secondary)",
-                textAlign: "left",
-                fontSize: 12,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-              }}
-            >
-              <th style={{ padding: "8px 8px 8px 0" }}>{t("jobs.col.phase")}</th>
-              <th style={{ padding: 8, width: "34%" }}>{t("jobs.col.progress")}</th>
-              <th style={{ padding: 8 }}>{t("jobs.col.items")}</th>
-              <th style={{ padding: 8 }}>{t("jobs.col.rate")}</th>
-              <th style={{ padding: 8 }}>{t("jobs.col.eta")}</th>
-              <th style={{ padding: 8 }}>{t("jobs.col.errors")}</th>
+            <tr className="jobs-table-head">
+              <th>{t("jobs.col.phase")}</th>
+              <th className="jobs-col-progress">{t("jobs.col.progress")}</th>
+              <th>{t("jobs.col.items")}</th>
+              <th>{t("jobs.col.rate")}</th>
+              <th>{t("jobs.col.eta")}</th>
+              <th>{t("jobs.col.errors")}</th>
             </tr>
           </thead>
           <tbody>
@@ -259,8 +232,7 @@ export function JobCard({
       {job.failed > 0 && (
         <BusyButton
           type="button"
-          className="btn btn-ghost"
-          style={{ alignSelf: "flex-start", color: "var(--pc-danger)", border: 0, padding: 0 }}
+          className="btn btn-ghost jobs-errors-link"
           onClick={() =>
             openModule({ module: "settings", section: "diagnostics", target: { jobId: job.id } })
           }
@@ -305,29 +277,24 @@ function History({
   const visible = rows.filter((r) => !liveIds.has(r.id));
   if (visible.length === 0) return null;
   return (
-    <section
-      aria-labelledby="jobs-history"
-      style={{ ...card, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}
-    >
-      <h2 id="jobs-history" style={{ margin: 0, fontSize: 16 }}>
+    <section aria-labelledby="jobs-history" className="jobs-card jobs-card--compact">
+      <h2 id="jobs-history" className="jobs-h2">
         {t("jobs.history")}
       </h2>
       {visible.map((r) => (
-        <div
-          key={r.id}
-          style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}
-        >
-          <span style={badgeStyle(r.state)}>{t(`jobs.states.${r.state}`)}</span>
+        <div key={r.id} className="jobs-history-row">
+          <span className="jobs-badge" style={badgeStyle(r.state)}>
+            {t(`jobs.states.${r.state}`)}
+          </span>
           <span>{names(r.id, r.kind).title}</span>
-          <span className="muted" style={{ fontSize: 12 }}>
+          <span className="muted jobs-small">
             {fmtDateTime(r.finishedAt ?? r.startedAt ?? r.createdAt)}
           </span>
           <JobUpdateSummary jobId={r.id} kind={r.kind} />
           {r.state === "interrupted" && (
             <BusyButton
               type="button"
-              className="btn"
-              style={{ marginLeft: "auto" }}
+              className="btn jobs-push-end"
               onClick={async () => {
                 await commands.resumeInterruptedJob(r.id);
                 return await qc.invalidateQueries({ queryKey: ["job-history"] });
@@ -349,38 +316,20 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
   const usedPct = ((system.totalMb - system.availableMb) / Math.max(1, system.totalMb)) * 100;
   const appPct = (system.processMb / Math.max(1, system.totalMb)) * 100;
   return (
-    <section
-      style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}
-      aria-label={t("jobs.resources")}
-    >
-      <h2 style={{ margin: 0, fontSize: 16 }}>{t("jobs.resources")}</h2>
+    <section className="jobs-card jobs-card--resources" aria-label={t("jobs.resources")}>
+      <h2 className="jobs-h2">{t("jobs.resources")}</h2>
       <div
         role="img"
         aria-label={`${t("jobs.systemRam")} ${mbToGb(system.totalMb)} GB`}
-        style={{
-          display: "flex",
-          height: 14,
-          borderRadius: 4,
-          overflow: "hidden",
-          background: "var(--pc-border)",
-        }}
+        className="jobs-ram"
       >
         <div
-          style={{
-            width: `${Math.max(0, usedPct - appPct)}%`,
-            background: "var(--pc-text-placeholder)",
-          }}
+          className="jobs-ram-used"
+          style={{ width: `${Math.max(0, usedPct - appPct)}%` }}
         />
-        <div style={{ width: `${appPct}%`, background: "var(--pc-accent)" }} />
+        <div className="jobs-ram-app" style={{ width: `${appPct}%` }} />
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: "6px 12px",
-          fontSize: 13,
-        }}
-      >
+      <div className="jobs-res-grid">
         <span className="muted">{t("jobs.systemRam")}</span>
         <span>{mbToGb(system.totalMb)} GB</span>
         <span className="muted">{t("jobs.available")}</span>
@@ -399,17 +348,17 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
         <span className="muted">{t("jobs.pressure")}</span>
         <span>{t(`jobs.pressureStates.${res.state}`)}</span>
       </div>
-      <h3 className="section-title" style={{ marginTop: 4 }}>
+      <h3 className="section-title jobs-res-models">
         {t("jobs.residentModels")}
       </h3>
       {governor.residents.length === 0 && <span className="muted">{t("jobs.noModels")}</span>}
       {governor.residents.map(([name, mb]) => (
-        <div key={name} style={{ display: "flex", justifyContent: "space-between" }}>
+        <div key={name} className="jobs-split">
           <span>{name}</span>
           <span className="mono">{fmtInt(mb)} MB</span>
         </div>
       ))}
-      {governor.aiPaused && <span style={{ color: "var(--pc-warn)" }}>{t("jobs.aiPaused")}</span>}
+      {governor.aiPaused && <span className="jobs-warn">{t("jobs.aiPaused")}</span>}
     </section>
   );
 }
@@ -442,12 +391,9 @@ function UndoableOperation() {
     await qc.invalidateQueries({ queryKey: ["last-undo"] });
   };
   return (
-    <section
-      aria-labelledby="jobs-undoable"
-      style={{ ...card, padding: "16px 20px", display: "flex", gap: 12, alignItems: "center" }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
-        <h2 id="jobs-undoable" className="section-title" style={{ margin: 0 }}>
+    <section aria-labelledby="jobs-undoable" className="jobs-card jobs-card--undo">
+      <div className="jobs-undo-text">
+        <h2 id="jobs-undoable" className="section-title jobs-undo-title">
           {t("jobs.undoable")}
         </h2>
         <span>{label}</span>
@@ -488,26 +434,8 @@ export function JobsPage() {
   return (
     <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
       {() => (
-        <div
-          style={{
-            flex: 1,
-            overflow: "auto",
-            padding: "24px 32px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 24,
-            alignContent: "flex-start",
-          }}
-        >
-          <div
-            style={{
-              flex: "999 1 560px",
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
+        <div className="jobs-page">
+          <div className="jobs-main">
             <PageHeader
               title={t("jobs.title")}
               actions={
@@ -544,15 +472,7 @@ export function JobsPage() {
               names={names}
             />
           </div>
-          <aside
-            style={{
-              flex: "1 1 300px",
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
+          <aside className="jobs-aside">
             <ResourcesPanel res={resources} />
           </aside>
         </div>

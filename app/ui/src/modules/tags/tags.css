@@ -248,6 +248,8 @@
   gap: var(--pc-space-2);
 }
 .tags-color {
+  width: 32px;
+  height: 32px;
   border-radius: var(--pc-radius-md, 6px);
   cursor: pointer;
   border: 2px solid transparent;

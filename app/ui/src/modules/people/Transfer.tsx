@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, type ImportPreview } from "../../lib/ipc";
 import { Button, InlineAlert } from "../../components/ui";
+import "./people.css";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
@@ -63,11 +64,11 @@ export function Transfer({ onDone }: { onDone: () => void }) {
       onDone();
     });
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div className="feature-actions" style={{ margin: 0 }}>
+    <div className="people-stack people-stack--gap">
+      <div className="feature-actions people-actions-flush">
         <Button onClick={() => importFile()}>{t("identities.import")}</Button>
         <Button onClick={() => exportFile()}>{t("identities.export")}</Button>
-        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <label className="people-check">
           <input
             type="checkbox"
             checked={includeFaces}
@@ -78,15 +79,14 @@ export function Transfer({ onDone }: { onDone: () => void }) {
       </div>
       {preview && (
         <div
-          className="feature-card"
-          style={{ alignItems: "stretch" }}
+          className="feature-card people-card-stretch"
           role="group"
           aria-label={t("identities.importPreview")}
         >
           <strong>{t("identities.importPreview")}</strong>
           <span>{t("identities.importNew", { count: preview.p.new.length })}</span>
           {preview.p.conflicts.map((c) => (
-            <label key={c.name} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <label key={c.name} className="people-check">
               <input
                 type="checkbox"
                 checked={merge.includes(c.name)}
@@ -99,7 +99,7 @@ export function Transfer({ onDone }: { onDone: () => void }) {
               {t("identities.importMerge", { name: c.name })}
             </label>
           ))}
-          <div className="feature-actions" style={{ margin: 0 }}>
+          <div className="feature-actions people-actions-flush">
             <Button variant="primary" onClick={() => apply()}>
               {t("identities.importApply")}
             </Button>
