@@ -1,33 +1,35 @@
 // Layout a tre colonne del modulo: pannello sinistro e ispettore ridimensionabili
 // (trascinamento o frecce da tastiera) e richiudibili; lo stato è persistito.
 
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 import { useLayout } from "../../store/layout";
-import { isTyping, modalOpen } from "../../lib/keys";
+import { useCommands } from "../../commands/registry";
 
 /**
  * Ctrl+I mostra o nasconde l'ispettore; Ctrl+Maiusc+B nasconde entrambi i pannelli
  * laterali e li ripristina com'erano. Tab resta allo spostamento del focus.
  */
-function usePanelHotkeys(hasRight: boolean) {
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || !(e.ctrlKey || e.metaKey)) return;
-      if (isTyping(e.target) || modalOpen()) return;
-      const key = e.key.toLowerCase();
-      if (e.shiftKey && key === "b") {
-        e.preventDefault();
-        useLayout.getState().toggleSidePanels();
-      } else if (!e.shiftKey && key === "i" && hasRight) {
-        e.preventDefault();
-        useLayout.getState().toggleRight();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [hasRight]);
+function usePanelCommands(hasRight: boolean) {
+  const { t } = useTranslation();
+  useCommands([
+    {
+      id: "panels.inspector",
+      label: t("commands.toggleInspector"),
+      group: "library",
+      shortcut: { key: "i", mod: true },
+      when: () => hasRight,
+      run: () => useLayout.getState().toggleRight(),
+    },
+    {
+      id: "panels.sides",
+      label: t("commands.toggleSidePanels"),
+      group: "library",
+      shortcut: { key: "b", mod: true, shift: true },
+      run: () => useLayout.getState().toggleSidePanels(),
+    },
+  ]);
 }
 
 function Resizer({ label, onDelta }: { label: string; onDelta: (dx: number) => void }) {
@@ -100,7 +102,7 @@ export function Panels({
 }) {
   const { t } = useTranslation();
   const s = useLayout();
-  usePanelHotkeys(Boolean(right));
+  usePanelCommands(Boolean(right));
   return (
     <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
       {left &&

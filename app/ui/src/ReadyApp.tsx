@@ -23,6 +23,7 @@ import { useImportRefresh } from "./modules/import/sourceActions";
 import { ToastHost } from "./components/feedback/ToastHost";
 import { ConfirmHost } from "./components/feedback/ConfirmHost";
 import { applyTheme } from "./theme/tokens";
+import { useGuide } from "./store/guide";
 
 function ModuleView({ module }: { module: ModuleId }) {
   switch (module) {
@@ -58,6 +59,11 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   const [crash, setCrash] = useState<CrashInfo | null>(startup.info.previousCrash);
   const [recovery, setRecovery] = useState<UiRecovery | null>(null);
   const [onboarding, setOnboarding] = useState(startup.onboarding);
+  const intro = useGuide((g) => g.intro);
+  useEffect(() => {
+    // Chi installa ora non ha mai visto Modelli AI e Diagnostica altrove.
+    if (startup.onboarding) useGuide.getState().markSeen("moved");
+  }, [startup.onboarding]);
   useLiveEvents();
   useTrimCaches();
   useImportRefresh();
@@ -94,10 +100,15 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
     setCrash(null);
     void commands.dismissCrashNotice();
   };
-  if (onboarding)
+  if (onboarding || intro)
     return (
       <>
-        <Onboarding onDone={() => setOnboarding(false)} />
+        <Onboarding
+          onDone={() => {
+            setOnboarding(false);
+            useGuide.getState().setIntro(false);
+          }}
+        />
         <ToastHost />
         <ConfirmHost />
       </>

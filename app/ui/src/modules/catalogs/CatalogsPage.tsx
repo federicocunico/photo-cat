@@ -1,6 +1,7 @@
+import { Coachmark } from "../../components/guide/Coachmark";
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Catalog } from "../../lib/ipc";
@@ -10,6 +11,7 @@ import { PageHeader } from "../../components/ui";
 import { RuleEditor, newRule, type RuleNode } from "./RuleEditor";
 export function CatalogsPage() {
   const { t } = useTranslation();
+  const tipAnchor = useRef<HTMLSpanElement>(null);
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [id, setId] = useState<number | null>(null);
@@ -47,7 +49,8 @@ export function CatalogsPage() {
   };
   return (
     <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-      <PageHeader title={t("modules.catalogs")} />
+      <PageHeader title={<span ref={tipAnchor}>{t("modules.catalogs")}</span>} />
+      <Coachmark tip="catalogs" anchor={tipAnchor} learnMore="catalogs" />
       {error && <p role="alert">{error}</p>}
       <BusyButton className="btn" onClick={() => edit()}>
         {t("catalogs.create")}

@@ -120,32 +120,32 @@
 
 ## 4. Palette e scorciatoie
 
-- [ ] 4.1 Registro dei comandi (`commands/registry.ts`) e `useHotkeys` globale, che ignora i campi di testo; migrare i tasti dei tag e quelli di Sequenza. Verifica: test di digitazione in un campo (nessun tag assegnato).
-- [ ] 4.2 Palette Ctrl+K (aperta anche dal campo di ricerca della barra superiore, spostato qui da 2.4):
+- [x] 4.1 Registro dei comandi (`commands/registry.ts`) e `useHotkeys` globale, che ignora i campi di testo; migrare i tasti dei tag e quelli di Sequenza. Verifica: test di digitazione in un campo (nessun tag assegnato).
+- [x] 4.2 Palette Ctrl+K (aperta anche dal campo di ricerca della barra superiore, spostato qui da 2.4):
   - comandi, persone, tag, cataloghi, luoghi, nomi di file;
   - recenti, "Nessun risultato", azioni sulla selezione;
   - apertura della Libreria filtrata.
 
   Verifica: test di ricerca, navigazione da tastiera e azione.
-- [ ] 4.3 Foglio delle scorciatoie (`?`), generato dal registro, e scorciatoie mostrate in menu e suggerimenti.
+- [x] 4.3 Foglio delle scorciatoie (`?`), generato dal registro, e scorciatoie mostrate in menu e suggerimenti.
 
 ## 5. Guida nell'app
 
-- [ ] 5.1 Nuovo onboarding in 3 passi (`Onboarding.tsx`):
+- [x] 5.1 Nuovo onboarding in 3 passi (`Onboarding.tsx`):
   - lingua e tema;
   - cartella con `FolderPicker` e trascinamento;
   - riepilogo del sistema in frasi e download in background.
 
   Ogni passo si può saltare e alla fine si apre la Libreria. Verifica: `Onboarding.test.tsx`.
-- [ ] 5.2 Store `photo-cat.guide`, persistito con `mirroredStorage`, e lista "Primi passi" in Libreria, completata dagli eventi esistenti. Verifica: test di completamento da un'altra strada e di persistenza.
-- [ ] 5.3 `Coachmark` e suggerimenti al primo uso di Persone, Cataloghi, Tag e Sequenza, più quello "Dove sono Modelli AI e Diagnostica?" per gli utenti che aggiornano.
-- [ ] 5.4 Menu Aiuto: scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni.
+- [x] 5.2 Store `photo-cat.guide`, persistito con `mirroredStorage`, e lista "Primi passi" in Libreria, completata dagli eventi esistenti. Verifica: test di completamento da un'altra strada e di persistenza.
+- [x] 5.3 `Coachmark` e suggerimenti al primo uso di Persone, Cataloghi, Tag e Sequenza, più quello "Dove sono Modelli AI e Diagnostica?" per gli utenti che aggiornano.
+- [x] 5.4 Menu Aiuto: scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni.
 
 ## 6. Impostazioni
 
-- [ ] 6.1 Layout a sezioni con sotto-navigazione e ricerca (con evidenziazione del campo); contenuto di `ModelsPage` e `DiagnosticsPage` spostato nelle sezioni; rimozione dei duplicati.
-- [ ] 6.2 Salvataggio immediato con "Salvato" accanto al campo per le preferenze; barra "Ripristina / Applica" con anteprima per soglie, tassonomia e percorso dei dati; nessun "Salva" a metà pagina. Verifica: `SettingsPage.test.tsx` (le soglie dei gruppi restano preservate).
-- [ ] 6.3 Sensibilità:
+- [x] 6.1 Layout a sezioni con sotto-navigazione e ricerca (con evidenziazione del campo); contenuto di `ModelsPage` e `DiagnosticsPage` spostato nelle sezioni; rimozione dei duplicati.
+- [x] 6.2 Salvataggio immediato con "Salvato" accanto al campo per le preferenze; barra "Ripristina / Applica" con anteprima per soglie, tassonomia e percorso dei dati; nessun "Salva" a metà pagina. Verifica: `SettingsPage.test.tsx` (le soglie dei gruppi restano preservate).
+- [x] 6.3 Sensibilità:
   - tabella del verso di ogni soglia in `tuning.ts`;
   - scala "Più risultati ↔ Più precisi" e controlli segmentati dove bastano tre livelli;
   - valori numerici in "Avanzate";
@@ -187,7 +187,7 @@
 ## 8. Pulizia e verifica
 
 - [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
-- [ ] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
+- [x] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
 - [ ] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
 - [ ] 8.4 Prova sull'app reale, con un backup dei dati:
   - aggiornamento da una versione con preferenze salvate (moduli Identità, Modelli e Diagnostica come ultimi aperti);

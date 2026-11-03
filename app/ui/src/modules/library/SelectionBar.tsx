@@ -17,7 +17,7 @@ import {
   type MenuItem,
 } from "../../components/ui";
 import { commands, isTauri, type BulkAction, type Target } from "../../lib/ipc";
-import { isTyping, modalOpen } from "../../lib/keys";
+import { useCommands } from "../../commands/registry";
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { notify, notifyError } from "../../store/toasts";
@@ -27,6 +27,7 @@ import { useLabelName, useTaxonomy } from "./labelName";
 import { useCatalogAction } from "./useCatalogAction";
 import { useOpenWith } from "./useOpenWith";
 import { useSelectItems } from "./useSelectItems";
+import { useSelectionPicker } from "../../store/palette";
 import { useBulkJob } from "./bulkJob";
 
 type DoneKind =
@@ -41,15 +42,18 @@ type DoneKind =
 
 /** Esc svuota la selezione, salvo nei campi di testo e con menu o dialoghi aperti. */
 function useEscapeToClear(clear: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented || isTyping(e.target) || modalOpen()) return;
-      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
-      clear();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [clear]);
+  const { t } = useTranslation();
+  useCommands([
+    {
+      id: "selection.clear",
+      label: t("commands.clearSelection"),
+      group: "selection",
+      shortcut: { key: "Escape" },
+      // Un menu o un selettore aperto si chiude prima con il suo Esc.
+      when: () => !document.querySelector("[data-radix-popper-content-wrapper]"),
+      run: clear,
+    },
+  ]);
 }
 
 export function SelectMenu() {
@@ -74,12 +78,19 @@ function PickerButton({
   label,
   icon,
   children,
+  open: controlled,
+  onOpenChange,
 }: {
   label: string;
   icon: React.ReactNode;
   children: (close: () => void) => React.ReactNode;
+  /** Aperto da fuori (es. "Aggiungi tag…" nella palette). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  const open = controlled ?? inner;
+  const setOpen = (o: boolean) => (onOpenChange ? onOpenChange(o) : setInner(o));
   return (
     <Popover
       label={label}
@@ -130,6 +141,23 @@ export function SelectionBar() {
   const [removeTagOpen, setRemoveTagOpen] = useState(false);
   const clear = () => setSelection([]);
   useEscapeToClear(clear);
+  const picker = useSelectionPicker();
+  useCommands([
+    {
+      id: "selection.addTag",
+      label: t("commands.addTag"),
+      group: "selection",
+      when: () => selCount(useLibrary.getState().selection) > 0,
+      run: () => picker.set("tag"),
+    },
+    {
+      id: "selection.export",
+      label: t("commands.exportSelection"),
+      group: "selection",
+      when: () => selCount(useLibrary.getState().selection) > 0,
+      run: () => useLayout.getState().openModule({ module: "organize" }),
+    },
+  ]);
 
   const start = (operation: BulkAction, kind: DoneKind, name = "") =>
     bulk.start(target, operation, t(`selection.done.${kind}`, { name, count }));
@@ -232,7 +260,12 @@ export function SelectionBar() {
       />
       <strong data-testid="bulk-count">{t("selection.count", { count })}</strong>
 
-      <PickerButton label={t("selection.tag")} icon={<Icon.Tags size={14} />}>
+      <PickerButton
+        label={t("selection.tag")}
+        icon={<Icon.Tags size={14} />}
+        open={picker.open === "tag"}
+        onOpenChange={(o) => picker.set(o ? "tag" : null)}
+      >
         {(close) => (
           <SearchPicker
             label={t("selection.tagSearch")}

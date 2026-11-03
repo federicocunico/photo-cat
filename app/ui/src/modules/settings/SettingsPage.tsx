@@ -1,388 +1,250 @@
+// Impostazioni a sezioni (desktop-shell, design D9): sotto-navigazione, ricerca che porta
+// alla sezione ed evidenzia il campo, salvataggio immediato delle preferenze e barra
+// "Ripristina / Applica" per ciò che ricalcola i dati della libreria. Modelli AI e
+// Diagnostica sono sezioni: si aprono con `openModule({ module: "settings", section })`.
 import { QueryView } from "../../components/feedback/QueryView";
-import { BusyButton } from "../../components/feedback/BusyButton";
-import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  commands,
-  isTauri,
-  type Settings,
-  type Taxonomy,
-  type ExecutionProvider,
-  type ResourceProfile,
-  type LogLevel,
-} from "../../lib/ipc";
-import { useLayout } from "../../store/layout";
-import { cleanSettings } from "./cleanSettings";
-import { ExternalAppsSection } from "./ExternalAppsSection";
-import { ThresholdsSection } from "./ThresholdsSection";
-import { TaxonomySection } from "./TaxonomySection";
+import { commands, isTauri, type Settings } from "../../lib/ipc";
+import { useLayout, type SettingsSection } from "../../store/layout";
+import { PageHeader } from "../../components/ui";
+import { Icon } from "../../components/icons";
 import { ModelsPage } from "../models/ModelsPage";
 import { DiagnosticsPage } from "../diagnostics/DiagnosticsPage";
-import { PageHeader, Tabs } from "../../components/ui";
-import type { SettingsSection } from "../../store/layout";
+import { AdvancedSection } from "./AdvancedSection";
+import { AiSection } from "./AiSection";
+import { ApplyBar } from "./ApplyBar";
+import { ExternalAppsSection } from "./ExternalAppsSection";
+import { GeneralSection, LibrarySection } from "./GeneralSection";
+import { Setting, SettingsProvider } from "./settingsState";
+import { useSettings } from "./settingsContext";
+import "./settings.css";
 
-/**
- * Impostazioni a sezioni (design D2, D9). Modelli AI e Diagnostica sono sezioni, non più
- * moduli: si aprono con `openModule({ module: "settings", section })`.
- */
-export function SettingsPage() {
+const SECTIONS: SettingsSection[] = [
+  "general",
+  "library",
+  "ai",
+  "models",
+  "apps",
+  "diagnostics",
+  "advanced",
+];
+
+/** Voci cercabili: id del campo, sezione e chiave dell'etichetta. */
+const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
+  { id: "theme", section: "general", label: "settings.theme" },
+  { id: "language", section: "general", label: "settings.language" },
+  { id: "doubleClick", section: "general", label: "externalApps.doubleClick" },
+  { id: "dataDir", section: "general", label: "settings.path" },
+  { id: "ignoredFolders", section: "library", label: "externalApps.ignoredFolders" },
+  { id: "importFolders", section: "library", label: "settings.importFolders" },
+  { id: "faces", section: "ai", label: "settings.faces" },
+  { id: "autoModels", section: "ai", label: "settings.autoModels" },
+  { id: "sensitivity", section: "ai", label: "settings.sensitivity.title" },
+  { id: "sensitivity", section: "ai", label: "thresholds.persons" },
+  { id: "sensitivity", section: "ai", label: "thresholds.faces" },
+  { id: "sensitivity", section: "ai", label: "thresholds.faceSharpness" },
+  { id: "sensitivity", section: "ai", label: "thresholds.similarity" },
+  { id: "sensitivity", section: "ai", label: "similar.threshold" },
+  { id: "faceSize", section: "ai", label: "settings.faceSizes.label" },
+  { id: "groups", section: "ai", label: "thresholds.groups" },
+  { id: "taxonomy", section: "ai", label: "settings.taxonomy" },
+  { id: "ramLimit", section: "models", label: "settings.ram" },
+  { id: "section", section: "models", label: "models.profile" },
+  { id: "section", section: "models", label: "models.provider" },
+  { id: "section", section: "models", label: "models.models" },
+  { id: "externalApps", section: "apps", label: "externalApps.title" },
+  { id: "section", section: "diagnostics", label: "settings.log" },
+  { id: "section", section: "diagnostics", label: "diag.exportBundle" },
+  { id: "rawThresholds", section: "advanced", label: "settings.rawThresholds" },
+  { id: "rawThresholds", section: "advanced", label: "settings.threshold" },
+  { id: "purgeFaces", section: "advanced", label: "settings.purge" },
+];
+
+const norm = (s: string) => s.toLocaleLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+function RamLimit() {
+  const { t } = useTranslation();
+  const { saved, autosave } = useSettings();
+  const id = useId();
+  return (
+    <Setting id="ramLimit" label={t("settings.ram")} labelFor={id} hint={t("settings.ramHint")}>
+      <input
+        id={id}
+        className="field"
+        type="number"
+        min={512}
+        step={256}
+        defaultValue={saved.resources.ram_limit_mb ?? ""}
+        onChange={(e) => {
+          const ram_limit_mb = e.target.value ? Number(e.target.value) : null;
+          autosave("ramLimit", (c) => ({ ...c, resources: { ...c.resources, ram_limit_mb } }));
+        }}
+      />
+    </Setting>
+  );
+}
+
+function SectionContent({ section }: { section: SettingsSection }) {
+  switch (section) {
+    case "general":
+      return <GeneralSection />;
+    case "library":
+      return <LibrarySection />;
+    case "ai":
+      return <AiSection />;
+    case "models":
+      return (
+        <>
+          <ModelsPage />
+          <RamLimit />
+        </>
+      );
+    case "apps":
+      return <ExternalAppsSection />;
+    case "diagnostics":
+      return <DiagnosticsPage />;
+    case "advanced":
+      return <AdvancedSection />;
+  }
+}
+
+/** Le sezioni con una schermata propria (Modelli, Diagnostica) hanno già il titolo. */
+const OWN_TITLE: SettingsSection[] = ["models", "diagnostics"];
+
+function SettingsLayout() {
   const { t } = useTranslation();
   const section = useLayout((s) => s.settingsSection);
   const setSection = useLayout((s) => s.setSettingsSection);
+  const { highlight, setHighlight } = useSettings();
+  const [query, setQuery] = useState("");
+  const searchId = useId();
+  const results = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return [];
+    const seen = new Set<string>();
+    return SEARCH.map((e) => ({ ...e, text: t(e.label) }))
+      .filter(
+        (e) => norm(e.text).includes(q) || norm(t(`settings.sections.${e.section}`)).includes(q),
+      )
+      .filter((e) => {
+        const k = `${e.section}/${e.text}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+  }, [query, t]);
+
+  // Dalla ricerca: porta il campo in vista, gli dà il focus e lo evidenzia per un momento.
+  useEffect(() => {
+    if (!highlight) return;
+    const el = document.querySelector<HTMLElement>(`[data-setting="${highlight}"]`);
+    el?.scrollIntoView?.({ block: "center" });
+    el?.querySelector<HTMLElement>("input, select, textarea, button, [tabindex]")?.focus();
+    const timer = setTimeout(() => setHighlight(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlight, section, setHighlight]);
+
+  const go = (e: (typeof SEARCH)[number]) => {
+    setSection(e.section);
+    setQuery("");
+    setHighlight(e.id === "section" ? null : e.id);
+  };
+
   return (
     <div className="settings-page">
       <PageHeader title={t("settings.title")} />
-      <Tabs<SettingsSection>
-        label={t("settings.sections.label")}
-        value={section}
-        onChange={setSection}
-        tabs={[
-          { value: "general", label: t("settings.sections.general"), content: <GeneralSettings /> },
-          { value: "models", label: t("settings.sections.models"), content: <ModelsPage /> },
-          {
-            value: "diagnostics",
-            label: t("settings.sections.diagnostics"),
-            content: <DiagnosticsPage />,
-          },
-        ]}
-      />
+      <div className="settings-body">
+        <aside className="settings-aside">
+          <label htmlFor={searchId} className="visually-hidden">
+            {t("settings.search")}
+          </label>
+          <div className="settings-search">
+            <Icon.Search size={16} aria-hidden="true" />
+            <input
+              id={searchId}
+              type="search"
+              className="field"
+              placeholder={t("settings.search")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && results[0]) go(results[0]);
+                if (e.key === "Escape") setQuery("");
+              }}
+            />
+          </div>
+          {query.trim() ? (
+            <div className="settings-results" aria-live="polite">
+              {results.length === 0 ? (
+                <p className="muted">{t("settings.noResults")}</p>
+              ) : (
+                <ul>
+                  {results.map((r) => (
+                    <li key={`${r.section}/${r.label}`}>
+                      <button type="button" className="settings-result" onClick={() => go(r)}>
+                        <span>{r.text}</span>
+                        <span className="muted">{t(`settings.sections.${r.section}`)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <nav aria-label={t("settings.sections.label")}>
+              <ul className="settings-nav">
+                {SECTIONS.map((s) => (
+                  <li key={s}>
+                    <button
+                      type="button"
+                      className="settings-nav-item"
+                      aria-current={s === section ? "page" : undefined}
+                      onClick={() => setSection(s)}
+                    >
+                      {t(`settings.sections.${s}`)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+        </aside>
+        <div className="settings-main">
+          <section className="settings-section" aria-labelledby="settings-section-title">
+            <h2
+              id="settings-section-title"
+              className={OWN_TITLE.includes(section) ? "visually-hidden" : undefined}
+            >
+              {t(`settings.sections.${section}`)}
+            </h2>
+            <SectionContent section={section} />
+          </section>
+          <ApplyBar />
+        </div>
+      </div>
     </div>
   );
 }
 
-function GeneralSettings() {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
+export function SettingsPage() {
   const config = useQuery({
     queryKey: ["config"],
     queryFn: commands.getConfig,
     enabled: isTauri(),
   });
-  const system = useQuery({
-    queryKey: ["system"],
-    queryFn: commands.systemInfo,
-    enabled: isTauri(),
-  });
-  const info = useQuery({ queryKey: ["app-info"], queryFn: commands.appInfo, enabled: isTauri() });
   const taxonomy = useQuery({
     queryKey: ["taxonomy"],
     queryFn: commands.getTaxonomy,
     enabled: isTauri(),
   });
-  const faces = useQuery({
-    queryKey: ["face-count"],
-    queryFn: commands.faceCount,
-    enabled: isTauri(),
-  });
-  const [cfg, setCfg] = useState<Settings | null>(null);
-  const [tax, setTax] = useState<Taxonomy | null>(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (config.data) setCfg(config.data as Settings);
-  }, [config.data]);
-  useEffect(() => {
-    if (taxonomy.data) setTax(taxonomy.data);
-  }, [taxonomy.data]);
-  const run = async (fn: () => Promise<void>) => {
-    setError("");
-    setNotice("");
-    setBusy(true);
-    try {
-      await fn();
-    } catch (e) {
-      setError((e as { detail?: string }).detail ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!cfg)
-    return (
-      <QueryView query={config} enabled={isTauri()} isEmpty={() => false}>
-        {() => (
-          <QueryView query={system} enabled={isTauri()} isEmpty={() => false}>
-            {() => (
-              <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
-                {() => (
-                  <QueryView query={taxonomy} enabled={isTauri()} isEmpty={() => false}>
-                    {() => (
-                      <QueryView query={faces} enabled={isTauri()} isEmpty={() => false}>
-                        {() => <p style={{ padding: 24 }}>{t("settings.loading")}</p>}
-                      </QueryView>
-                    )}
-                  </QueryView>
-                )}
-              </QueryView>
-            )}
-          </QueryView>
-        )}
-      </QueryView>
-    );
-  const save = async () => {
-    const clean = cleanSettings(cfg);
-    await commands.saveSettings(clean);
-    useLayout.getState().setTheme(cfg.ui.theme);
-    useLayout.getState().setLanguage(cfg.ui.language);
-    const before = (config.data as Settings | undefined)?.ai.ignored_folder_names ?? [];
-    await qc.invalidateQueries({ queryKey: ["config"] });
-    await qc.invalidateQueries({ queryKey: ["system"] });
-    await qc.invalidateQueries({ queryKey: ["taxonomy"] });
-    setNotice(t("settings.saved"));
-    // Cartelle da ignorare cambiate: si propone il ricalcolo dei luoghi da cartella.
-    const after = clean.ai.ignored_folder_names ?? [];
-    if (
-      JSON.stringify(before) !== JSON.stringify(after) &&
-      window.confirm(t("externalApps.recomputeConfirm"))
-    ) {
-      const n = await commands.recomputePlaces();
-      await qc.invalidateQueries({ queryKey: ["facets"] });
-      await qc.invalidateQueries({ queryKey: ["library"] });
-      setNotice(t("externalApps.recomputed", { count: n }));
-    }
-  };
   return (
     <QueryView query={config} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <QueryView query={system} enabled={isTauri()} isEmpty={() => false}>
-          {() => (
-            <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
-              {() => (
-                <QueryView query={taxonomy} enabled={isTauri()} isEmpty={() => false}>
-                  {() => (
-                    <QueryView query={faces} enabled={isTauri()} isEmpty={() => false}>
-                      {() => (
-                        <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-                          {error && <p role="alert">{error}</p>}
-                          {notice && <p role="status">{notice}</p>}
-                          <div className="feature-card" style={{ alignItems: "stretch" }}>
-                            <label>
-                              {t("settings.profile")}{" "}
-                              <select
-                                className="field"
-                                value={cfg.resources.profile}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    resources: {
-                                      ...cfg.resources,
-                                      profile: e.target.value as ResourceProfile,
-                                    },
-                                  })
-                                }
-                              >
-                                {["light", "balanced", "performance"].map((p) => (
-                                  <option key={p} value={p}>
-                                    {t(`models.profiles.${p}`, { defaultValue: p })}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              {t("settings.ram")}{" "}
-                              <input
-                                className="field"
-                                type="number"
-                                min={512}
-                                step={256}
-                                value={cfg.resources.ram_limit_mb ?? ""}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    resources: {
-                                      ...cfg.resources,
-                                      ram_limit_mb: e.target.value ? Number(e.target.value) : null,
-                                    },
-                                  })
-                                }
-                              />
-                            </label>
-                            <label>
-                              {t("settings.provider")}{" "}
-                              <select
-                                className="field"
-                                value={cfg.ai.execution_provider}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ai: {
-                                      ...cfg.ai,
-                                      execution_provider: e.target.value as ExecutionProvider,
-                                    },
-                                  })
-                                }
-                              >
-                                {["auto", ...(system.data?.providers ?? ["cpu"])].map((p) => (
-                                  <option key={p} value={p}>
-                                    {p.toUpperCase()}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              {t("settings.threshold")}{" "}
-                              <input
-                                className="field"
-                                type="number"
-                                min={0}
-                                max={1}
-                                step={0.01}
-                                value={cfg.ai.confidence_threshold ?? 0}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ai: { ...cfg.ai, confidence_threshold: Number(e.target.value) },
-                                  })
-                                }
-                              />
-                            </label>
-                            <label>
-                              <input
-                                type="checkbox"
-                                checked={cfg.ai.auto_download_models}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ai: { ...cfg.ai, auto_download_models: e.target.checked },
-                                  })
-                                }
-                              />
-                              {t("settings.autoModels")}
-                            </label>
-                            <label>
-                              <input
-                                type="checkbox"
-                                checked={cfg.ai.faces_enabled}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ai: { ...cfg.ai, faces_enabled: e.target.checked },
-                                  })
-                                }
-                              />
-                              {t("settings.faces")}
-                            </label>
-                            <BusyButton
-                              className="btn"
-                              disabled={busy}
-                              onClick={async () => {
-                                if (
-                                  window.confirm(
-                                    t("settings.purgeConfirm", { count: faces.data ?? 0 }),
-                                  )
-                                )
-                                  await run(async () => {
-                                    await commands.purgeFaces();
-                                    await qc.invalidateQueries({ queryKey: ["config"] });
-                                    await qc.invalidateQueries({ queryKey: ["face-count"] });
-                                    setNotice(t("settings.purged"));
-                                  });
-                              }}
-                            >
-                              {t("settings.purge")}
-                            </BusyButton>
-                            <label>
-                              {t("settings.log")}{" "}
-                              <select
-                                className="field"
-                                value={cfg.logging.level}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    logging: { ...cfg.logging, level: e.target.value as LogLevel },
-                                  })
-                                }
-                              >
-                                {["error", "warn", "info", "debug", "trace"].map((l) => (
-                                  <option key={l}>{l}</option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              {t("settings.theme")}{" "}
-                              <select
-                                className="field"
-                                value={cfg.ui.theme}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ui: {
-                                      ...cfg.ui,
-                                      theme: e.target.value as "dark" | "light" | "system",
-                                    },
-                                  })
-                                }
-                              >
-                                <option value="system">{t("settings.system")}</option>
-                                <option value="dark">{t("settings.dark")}</option>
-                                <option value="light">{t("settings.light")}</option>
-                              </select>
-                            </label>
-                            <label>
-                              {t("settings.language")}{" "}
-                              <select
-                                className="field"
-                                value={cfg.ui.language}
-                                onChange={(e) =>
-                                  setCfg({
-                                    ...cfg,
-                                    ui: { ...cfg.ui, language: e.target.value as "it" | "en" },
-                                  })
-                                }
-                              >
-                                <option value="it">Italiano</option>
-                                <option value="en">English</option>
-                              </select>
-                            </label>
-                            <p className="mono">
-                              {t("settings.currentPath")}: {info.data?.dataDir}
-                            </p>
-                            <label>
-                              {t("settings.path")}{" "}
-                              <input
-                                className="field"
-                                value={cfg.data_dir ?? ""}
-                                onChange={(e) =>
-                                  setCfg({ ...cfg, data_dir: e.target.value || null })
-                                }
-                              />
-                            </label>
-                            <p className="muted">{t("settings.pathHint")}</p>
-                          </div>
-                          <ThresholdsSection
-                            cfg={cfg}
-                            setCfg={setCfg}
-                            tax={tax}
-                            setTax={setTax}
-                            saved={config.data as Settings}
-                            savedTax={taxonomy.data}
-                          />
-                          <ExternalAppsSection cfg={cfg} setCfg={setCfg} />
-                          <BusyButton
-                            className="btn"
-                            disabled={busy}
-                            onClick={async () => await run(save)}
-                          >
-                            {t("people.save")}
-                          </BusyButton>
-                          {tax && (
-                            <TaxonomySection
-                              tax={tax}
-                              setTax={setTax}
-                              saved={taxonomy.data}
-                              defaultThreshold={cfg.ai.confidence_threshold ?? 0.25}
-                            />
-                          )}
-                        </section>
-                      )}
-                    </QueryView>
-                  )}
-                </QueryView>
-              )}
-            </QueryView>
-          )}
-        </QueryView>
+      {(cfg) => (
+        <SettingsProvider config={cfg as Settings} taxonomy={taxonomy.data}>
+          <SettingsLayout />
+        </SettingsProvider>
       )}
     </QueryView>
   );

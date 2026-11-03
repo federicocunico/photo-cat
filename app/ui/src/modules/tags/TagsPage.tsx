@@ -1,3 +1,4 @@
+import { Coachmark } from "../../components/guide/Coachmark";
 import { useBusyAction } from "../../components/feedback/useBusyAction";
 import { isTauri } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
@@ -60,6 +61,7 @@ function SetList({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -98,9 +100,10 @@ function SetList({
         overflow: "auto",
       }}
     >
-      <h2 className="section-title" style={{ margin: "0 8px 4px" }}>
+      <h2 ref={tipAnchor} className="section-title" style={{ margin: "0 8px 4px" }}>
         {t("tags.sets")}
       </h2>
+      <Coachmark tip="tags" anchor={tipAnchor} side="right" learnMore="tags" />
       {sets.map((s, i) => {
         const selected = s.id === current;
         const meta = s.isBase

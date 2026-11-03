@@ -19,7 +19,9 @@ it("Primo avvio: does not render Library before startup and onboarding decisions
   expect(screen.queryByText("page:library")).not.toBeInTheDocument();
   expect(commandsMock.onboardingDone).not.toHaveBeenCalled();
   act(() => emit("boot", { phase: "ready", ready: true, error: null, logsPath: "D:/logs" }));
-  expect(await screen.findByText(/1 \/ 4/, {}, { timeout: 10000 })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "Benvenuto in photo-cat" }, { timeout: 10000 }),
+  ).toBeInTheDocument();
   expect(screen.queryByText("page:library")).not.toBeInTheDocument();
 });
 

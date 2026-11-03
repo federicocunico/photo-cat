@@ -1,0 +1,195 @@
+/* Guida nell'app: suggerimenti, "Primi passi", primo avvio, guida (in-app-guidance). */
+
+.ui-coachmark {
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  border-color: var(--pc-accent);
+}
+.ui-coachmark p {
+  margin: 0;
+  line-height: 1.45;
+}
+.ui-coachmark-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--pc-space-2);
+}
+.ui-coachmark-arrow {
+  fill: var(--pc-accent);
+}
+
+/* Elemento indicato da "Segnala un problema". */
+.ui-highlight {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 3px;
+}
+
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--pc-accent-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-button:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+  border-radius: var(--pc-radius-sm);
+}
+
+.first-steps {
+  margin: var(--pc-space-3) var(--pc-space-4) 0;
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  background: var(--pc-panel);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-3);
+}
+.first-steps-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--pc-weight-bold);
+}
+.first-steps-bar {
+  width: 80px;
+}
+.first-steps-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.first-steps-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  color: var(--pc-text-secondary);
+  text-decoration: line-through;
+}
+.first-steps-done svg {
+  color: var(--pc-ok);
+}
+.first-steps-hide {
+  margin-left: auto;
+}
+
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pc-z-dialog);
+  background: var(--pc-bg);
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: var(--pc-space-4);
+}
+.onboarding-card {
+  width: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+  padding: var(--pc-space-7);
+  background: var(--pc-panel);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-lg);
+  box-shadow: var(--pc-elevation-dialog);
+}
+.onboarding-card h1 {
+  margin: 0;
+  font-size: var(--pc-font-xl);
+}
+.onboarding-card h2 {
+  margin: 0;
+  font-size: var(--pc-font-lg);
+}
+.onboarding-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+.onboarding-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--pc-text-secondary);
+}
+.onboarding-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.onboarding-steps li[aria-current="step"] {
+  color: var(--pc-text);
+  font-weight: var(--pc-weight-bold);
+}
+.onboarding-step-n {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--pc-radius-pill);
+  border: 1px solid var(--pc-border-strong);
+  font-size: 12px;
+}
+.onboarding-steps li[aria-current="step"] .onboarding-step-n,
+.onboarding-steps li[data-done] .onboarding-step-n {
+  background: var(--pc-accent);
+  border-color: var(--pc-accent);
+  color: var(--pc-on-accent);
+}
+.onboarding-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  min-height: 180px;
+}
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}
+.onboarding-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.onboarding-spacer {
+  flex: 1;
+}
+
+.guide-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  max-height: 60vh;
+  overflow: auto;
+}
+.guide-sections h3 {
+  margin: 0 0 var(--pc-space-1);
+  font-size: 15px;
+}
+.guide-sections p {
+  margin: 0;
+  line-height: 1.5;
+}
+.guide-sections section[data-current] h3 {
+  color: var(--pc-accent-text);
+}

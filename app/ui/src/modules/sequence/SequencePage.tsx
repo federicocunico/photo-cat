@@ -1,3 +1,4 @@
+import { Coachmark } from "../../components/guide/Coachmark";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,12 +26,13 @@ import { deviceColorVar } from "../../theme/tokens";
 import { thumbUrl } from "../library/thumbUrl";
 import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
-import { hotkeyAction, isTyping, useTagHotkeys } from "../tags/useTagHotkeys";
+import { hotkeyAction, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
 import { Kbd } from "../../components/ui";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Viewer } from "../../components/viewer/Viewer";
 import { useBulkJob } from "../library/bulkJob";
+import { useCommands } from "../../commands/registry";
 import { SequenceExport } from "./SequenceExport";
 
 /** Chip dei volti della foto focalizzata → Apri in Persone. */
@@ -634,6 +636,7 @@ type Staged = { tz: string | null; offset: number | null; shift: number; shiftTe
 
 function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   const { t } = useTranslation();
+  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const qc = useQueryClient();
   const selected = useSequence((s) => s.selected);
   const setView = useSequence((s) => s.setView);
@@ -713,7 +716,10 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
         overflow: "auto",
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 18 }}>{t("sequence.sources")}</h2>
+      <h2 ref={tipAnchor} style={{ margin: 0, fontSize: 18 }}>
+        {t("sequence.sources")}
+      </h2>
+      <Coachmark tip="sequence" anchor={tipAnchor} side="right" learnMore="sequence" />
       <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
         {t("sequence.sourcesHelp")}
       </span>
@@ -872,26 +878,39 @@ export function SequencePage() {
     const ids = useSequence.getState().selected;
     return { target: { kind: "ids", ids }, count: ids.length };
   }, view === "sequence");
-  useEffect(() => {
-    if (view !== "sequence") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      const { focused } = useSequence.getState();
-      const item = items.find((i) => i.id === focused);
-      if (!item) return;
-      if (e.key === "a" || e.key === "A") {
-        e.preventDefault();
-        void commands
-          .sequenceSessionIds(scope, item.session)
-          .then((ids) => useSequence.getState().setSelection(ids, item.id));
-      } else if (e.key === " " || e.key === "Enter") {
-        e.preventDefault();
-        setViewerAt(items.indexOf(item));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [items, scope, view]);
+  // Foto con il focus: A seleziona la sua sessione, Spazio o Invio aprono il visualizzatore.
+  const focusedItem = () => items.find((i) => i.id === useSequence.getState().focused);
+  useCommands(
+    [
+      {
+        id: "sequence.session",
+        label: t("commands.sessionSelect"),
+        group: "sequence",
+        shortcut: { key: "a" },
+        when: () => focusedItem() != null,
+        run: () => {
+          const item = focusedItem();
+          if (!item) return;
+          return commands
+            .sequenceSessionIds(scope, item.session)
+            .then((ids) => useSequence.getState().setSelection(ids, item.id));
+        },
+      },
+      ...[" ", "Enter"].map((key) => ({
+        id: `sequence.viewer.${key === " " ? "space" : "enter"}`,
+        label: t("commands.openViewer"),
+        group: "sequence" as const,
+        shortcut: { key },
+        palette: key === " ",
+        when: () => focusedItem() != null,
+        run: () => {
+          const item = focusedItem();
+          if (item) setViewerAt(items.indexOf(item));
+        },
+      })),
+    ],
+    view === "sequence",
+  );
   const place = async (media: number, after: number) => {
     setError("");
     try {

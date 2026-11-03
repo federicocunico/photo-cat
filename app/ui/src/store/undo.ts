@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { useEffect } from "react";
-import { isTyping, modalOpen } from "../lib/keys";
+import { useCommands } from "../commands/registry";
 import i18n from "../i18n";
 import { notify, notifyError, useToast } from "./toasts";
 
@@ -121,15 +120,14 @@ export async function runUndo(id?: number): Promise<boolean> {
  * passa ai gestori dei moduli (ad esempio Persone).
  */
 export function useUndoHotkey() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
-      if (e.key !== "z" && e.key !== "Z") return;
-      if (isTyping(e.target) || modalOpen() || !useUndo.getState().last) return;
-      e.preventDefault();
-      void runUndo();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useCommands([
+    {
+      id: "undo",
+      label: i18n.t("commands.undo"),
+      group: "general",
+      shortcut: { key: "z", mod: true },
+      when: () => useUndo.getState().last != null,
+      run: () => runUndo(),
+    },
+  ]);
 }

@@ -1,0 +1,279 @@
+/* Impostazioni a sezioni (desktop-shell, design D9). */
+.settings-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.settings-aside {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-3);
+  border-right: 1px solid var(--pc-border);
+  background: var(--pc-panel);
+  overflow: auto;
+}
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  color: var(--pc-icon);
+}
+.settings-search .field {
+  flex: 1;
+  min-width: 0;
+}
+.settings-nav,
+.settings-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav-item,
+.settings-result {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--pc-text);
+  font: inherit;
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border-radius: var(--pc-radius-sm);
+  cursor: pointer;
+}
+.settings-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-result .muted {
+  font-size: 12px;
+}
+.settings-nav-item:hover,
+.settings-result:hover {
+  background: var(--pc-raised);
+}
+.settings-nav-item[aria-current="page"] {
+  background: var(--pc-selection-bg);
+  font-weight: var(--pc-weight-medium);
+}
+.settings-nav-item:focus-visible,
+.settings-result:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: -2px;
+}
+.settings-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-section {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--pc-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}
+.settings-section > h2 {
+  margin: 0;
+  font-size: var(--pc-font-lg);
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  background: var(--pc-panel);
+  max-width: 880px;
+  transition: box-shadow var(--pc-motion-fast);
+}
+.settings-field[data-highlight] {
+  box-shadow: 0 0 0 2px var(--pc-focus);
+}
+.settings-field[data-inline] {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: center;
+}
+.settings-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pc-space-3);
+}
+.settings-field-label {
+  font-weight: var(--pc-weight-medium);
+}
+.settings-field-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.settings-field-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.settings-save-state {
+  font-size: 12px;
+}
+.settings-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--pc-ok);
+}
+.settings-save-error {
+  color: var(--pc-danger);
+  font-size: 12px;
+}
+.settings-wide {
+  width: 100%;
+}
+.settings-inline-note {
+  margin: 0;
+  flex-basis: 100%;
+}
+.settings-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  width: 100%;
+}
+.settings-slider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}
+.settings-slider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  font-size: 12px;
+}
+.settings-slider-row input[type="range"] {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--pc-accent);
+}
+.settings-raw {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--pc-space-3);
+  width: 100%;
+}
+.settings-raw label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}
+.settings-threshold {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-threshold .field {
+  width: 90px;
+}
+.settings-table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.settings-table caption {
+  text-align: left;
+  font-weight: var(--pc-weight-medium);
+  padding: var(--pc-space-2) 0;
+}
+.settings-table th {
+  text-align: left;
+  padding: 4px 8px 4px 0;
+}
+.settings-table-indent {
+  padding: 2px 8px 2px 16px;
+}
+.settings-apps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  width: 100%;
+}
+.settings-app {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--pc-space-2);
+}
+.settings-app label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-app-path {
+  flex: 1;
+  min-width: 260px;
+}
+.settings-app-args {
+  flex-basis: 100%;
+}
+.settings-app-path .field,
+.settings-app-args .field {
+  width: 100%;
+}
+.settings-apply {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-3) var(--pc-space-5);
+  border-top: 1px solid var(--pc-border-strong);
+  background: var(--pc-raised);
+  box-shadow: var(--pc-elevation-floating);
+}
+.settings-apply-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 240px;
+}
+.settings-apply-actions {
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.settings-impact {
+  flex-basis: 100%;
+  margin: 0;
+}
+.settings-apply-warn {
+  flex-basis: 100%;
+  color: var(--pc-warn);
+}
+@media (max-width: 720px) {
+  .settings-body {
+    flex-direction: column;
+  }
+  .settings-aside {
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--pc-border);
+  }
+}

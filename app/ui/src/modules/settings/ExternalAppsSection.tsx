@@ -1,10 +1,13 @@
-import { BusyButton } from "../../components/feedback/BusyButton";
-// Sezione "Applicazioni esterne": app per "Apri con", azione del doppio clic e
-// cartelle da ignorare nella deduzione del luogo. Si salva con il pulsante
-// generale delle impostazioni (il backend verifica che gli eseguibili esistano).
-// Le righe vuote di argomenti e cartelle si tolgono al salvataggio (`cleanApps`).
+// Impostazioni › Applicazioni esterne: app per "Apri con" e per il doppio clic. Ogni
+// modifica si salva dopo una breve pausa; il motore verifica che gli eseguibili
+// esistano e l'eventuale errore compare accanto all'elenco. Le righe incomplete (senza
+// nome o eseguibile) restano solo qui finché non sono complete.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ExternalApp, Settings } from "../../lib/ipc";
+import { Button } from "../../components/ui";
+import type { ExternalApp } from "../../lib/ipc";
+import { Setting } from "./settingsState";
+import { useSettings } from "./settingsContext";
 
 const newId = (name: string, taken: string[]) => {
   const base =
@@ -18,26 +21,28 @@ const newId = (name: string, taken: string[]) => {
   return id;
 };
 
-export function ExternalAppsSection({
-  cfg,
-  setCfg,
-}: {
-  cfg: Settings;
-  setCfg: (c: Settings) => void;
-}) {
+const complete = (a: ExternalApp) => Boolean(a.name?.trim() && a.path?.trim());
+
+export function ExternalAppsSection() {
   const { t } = useTranslation();
-  const apps: ExternalApp[] = cfg.external_apps ?? [];
+  const { saved, autosave } = useSettings();
+  const [apps, setLocal] = useState<ExternalApp[]>(() => saved.external_apps ?? []);
   const setApps = (next: ExternalApp[]) => {
-    const ids = next.map((a) => a.id);
-    // Un doppio clic verso un'app rimossa torna all'app predefinita.
-    const dc = cfg.ui.double_click ?? "system";
-    setCfg({
-      ...cfg,
-      external_apps: next,
-      ui: {
-        ...cfg.ui,
-        double_click: ["system", "viewer", "none"].includes(dc) || ids.includes(dc) ? dc : "system",
-      },
+    setLocal(next);
+    const ready = next.filter(complete);
+    const ids = ready.map((a) => a.id);
+    autosave("externalApps", (c) => {
+      // Un doppio clic verso un'app rimossa torna all'app predefinita.
+      const dc = c.ui.double_click ?? "system";
+      return {
+        ...c,
+        external_apps: ready,
+        ui: {
+          ...c.ui,
+          double_click:
+            ["system", "viewer", "none"].includes(dc) || ids.includes(dc) ? dc : "system",
+        },
+      };
     });
   };
   const edit = (i: number, patch: Partial<ExternalApp>) =>
@@ -57,65 +62,49 @@ export function ExternalAppsSection({
     }
   };
   return (
-    <section aria-labelledby="external-apps-title" style={{ margin: "24px 0" }}>
-      <h2 id="external-apps-title">{t("externalApps.title")}</h2>
-      <p className="muted">{t("externalApps.hint")}</p>
-      <div className="feature-card" style={{ alignItems: "stretch", gap: 10 }}>
+    <Setting id="externalApps" label={t("externalApps.title")} hint={t("externalApps.hint")}>
+      <div className="settings-apps">
         {apps.map((a, i) => (
-          <fieldset
-            key={i}
-            style={{
-              border: "1px solid var(--pc-border)",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
+          <fieldset key={i} className="settings-app">
             <legend>{a.name || t("externalApps.name")}</legend>
             <label>
-              {t("externalApps.name")}{" "}
+              <span>{t("externalApps.name")}</span>
               <input
                 className="field"
                 value={a.name ?? ""}
                 onChange={(e) => edit(i, { name: e.target.value })}
               />
             </label>
-            <label style={{ flex: 1, minWidth: 260 }}>
-              {t("externalApps.path")}{" "}
+            <label className="settings-app-path">
+              <span>{t("externalApps.path")}</span>
               <input
                 className="field mono"
-                style={{ width: "100%" }}
                 value={a.path ?? ""}
+                spellCheck={false}
                 onChange={(e) => edit(i, { path: e.target.value })}
               />
             </label>
-            <BusyButton className="btn" type="button" onClick={async () => await browse(i)}>
-              {t("externalApps.browse")}
-            </BusyButton>
-            <label style={{ flexBasis: "100%" }}>
-              {t("externalApps.args")}
+            <Button onClick={async () => await browse(i)}>{t("externalApps.browse")}</Button>
+            <label className="settings-app-args">
+              <span>{t("externalApps.args")}</span>
               <textarea
                 className="field mono"
                 rows={2}
-                style={{ width: "100%" }}
                 placeholder="{file}"
                 value={(a.args ?? []).join("\n")}
                 onChange={(e) => edit(i, { args: e.target.value.split("\n") })}
               />
             </label>
-            <BusyButton
-              className="btn btn-ghost"
-              type="button"
+            <Button
+              variant="ghost"
               aria-label={`${t("externalApps.remove")} ${a.name ?? ""}`}
               onClick={() => setApps(apps.filter((_, j) => j !== i))}
             >
               {t("externalApps.remove")}
-            </BusyButton>
+            </Button>
           </fieldset>
         ))}
-        <BusyButton
-          className="btn"
-          type="button"
+        <Button
           onClick={() =>
             setApps([
               ...apps,
@@ -132,43 +121,8 @@ export function ExternalAppsSection({
           }
         >
           {t("externalApps.add")}
-        </BusyButton>
-        <label>
-          {t("externalApps.doubleClick")}{" "}
-          <select
-            className="field"
-            value={cfg.ui.double_click ?? "system"}
-            onChange={(e) => setCfg({ ...cfg, ui: { ...cfg.ui, double_click: e.target.value } })}
-          >
-            <option value="system">{t("externalApps.system")}</option>
-            <option value="viewer">{t("externalApps.viewer")}</option>
-            {apps.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name || a.id}
-              </option>
-            ))}
-            <option value="none">{t("externalApps.none")}</option>
-          </select>
-        </label>
-        <label>
-          {t("externalApps.ignoredFolders")}
-          <textarea
-            className="field"
-            rows={3}
-            style={{ width: "100%" }}
-            value={(cfg.ai.ignored_folder_names ?? []).join("\n")}
-            onChange={(e) =>
-              setCfg({
-                ...cfg,
-                ai: { ...cfg.ai, ignored_folder_names: e.target.value.split("\n") },
-              })
-            }
-          />
-        </label>
-        <p className="muted" style={{ margin: 0 }}>
-          {t("externalApps.ignoredHint")}
-        </p>
+        </Button>
       </div>
-    </section>
+    </Setting>
   );
 }

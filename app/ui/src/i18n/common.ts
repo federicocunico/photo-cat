@@ -45,6 +45,11 @@ export const common = {
       tagline: "Catalogo delle foto sul tuo computer, senza cloud.",
       version: "Versione",
       dataDir: "Dati dell'app",
+      intro: "Rivedi l'introduzione",
+      firstSteps: "Primi passi",
+      tips: "Mostra di nuovo i suggerimenti",
+      guide: "Guida",
+      report: "Segnala un problema",
     },
     nav: {
       groups: { browse: "Sfoglia", organize: "Organizza", transfer: "Importa ed esporta" },
@@ -100,6 +105,11 @@ export const common = {
       tagline: "A photo catalog on your computer, with no cloud.",
       version: "Version",
       dataDir: "App data",
+      intro: "Replay the introduction",
+      firstSteps: "First steps",
+      tips: "Show tips again",
+      guide: "Guide",
+      report: "Report a problem",
     },
     nav: {
       groups: { browse: "Browse", organize: "Organize", transfer: "Import & export" },

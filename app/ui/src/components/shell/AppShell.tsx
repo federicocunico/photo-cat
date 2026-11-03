@@ -5,6 +5,12 @@ import { TopBar } from "./TopBar";
 import { useLayout } from "../../store/layout";
 import { useUndoHotkey } from "../../store/undo";
 import { fmtDateTime } from "../../lib/format";
+import { CommandPalette } from "../command/CommandPalette";
+import { usePaletteCommand } from "../../commands/paletteCommand";
+import { ShortcutSheet } from "../command/ShortcutSheet";
+import { GuideDialog } from "../guide/GuideDialog";
+import { useShortcutCatalog } from "../../commands/catalog";
+import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 
 const bannerStyle = {
@@ -94,6 +100,9 @@ export function UiRecoveredBanner({
 /** Struttura comune: barra superiore, navigazione moduli, contenuto del modulo. */
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   useUndoHotkey();
+  usePaletteCommand();
+  useShortcutCatalog();
+  useSheetCommand();
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <TopBar />
@@ -103,6 +112,9 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
         <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           {children}
         </main>
+        <CommandPalette />
+        <ShortcutSheet />
+        <GuideDialog />
       </div>
     </div>
   );
