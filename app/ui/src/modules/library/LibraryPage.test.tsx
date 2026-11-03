@@ -1022,3 +1022,73 @@ describe("visualizzatore", () => {
     expect(commandsMock.openWith).not.toHaveBeenCalledWith([3], { kind: "double_click" }, false);
   });
 });
+
+describe("stati vuoti", () => {
+  it("Libreria vuota: «Non ci sono ancora foto» con «Importa una cartella»", async () => {
+    commandsMock.libraryPage.mockResolvedValue({ items: [], next: null } as never);
+    commandsMock.libraryCount.mockResolvedValue(0 as never);
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    expect(await screen.findByText("Non ci sono ancora foto")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Importa una cartella" }));
+    expect(useLayout.getState().module).toBe("import");
+  });
+
+  it("Nessun risultato per i filtri: «Azzera i filtri»", async () => {
+    commandsMock.libraryPage.mockResolvedValue({ items: [], next: null } as never);
+    commandsMock.libraryCount.mockResolvedValue(0 as never);
+    useLibrary.setState({ filter: { ...emptyFilter(), text: "zzz" }, selection: idsSelection() });
+    renderPage();
+    expect(await screen.findByText("Nessuna foto corrisponde ai filtri")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Azzera filtri" }).slice(-1)[0]);
+    expect(useLibrary.getState().filter.text ?? null).toBeNull();
+  });
+});
+
+it("issue #24: Canc fuori da un catalogo sposta la selezione nel cestino", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 3, name: "Vacanze", kind: "manual", rules: null, createdAt: 0, system: null },
+      items: 10,
+      excluded: 0,
+    },
+    {
+      catalog: {
+        id: 90,
+        name: "Cestino",
+        kind: "manual",
+        rules: null,
+        createdAt: 0,
+        system: "trash",
+      },
+      items: 2,
+      excluded: 0,
+    },
+    {
+      catalog: {
+        id: 91,
+        name: "Duplicati",
+        kind: "manual",
+        rules: null,
+        createdAt: 0,
+        system: "duplicates",
+      },
+      items: 0,
+      excluded: 0,
+    },
+  ] as never);
+  commandsMock.startBulk.mockResolvedValue(130 as never);
+  useLibrary.setState({ selection: idsSelection([1]), filter: emptyFilter() });
+  renderPage();
+  await screen.findByTestId("thumb-1");
+  await waitFor(() => expect(commandsMock.listCatalogs).toHaveBeenCalled());
+  await act(async () => {});
+  fireEvent.keyDown(screen.getByTestId("grid-scroll"), { key: "Delete" });
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [1] },
+      { action: "add_catalog", catalog: 90 },
+      false,
+    ),
+  );
+});

@@ -384,3 +384,23 @@ le regole: l'interruttore permette di vederle tutte. Le esclusioni persistono
 anche se cambiano i metadati o viene ripetuta l'analisi. Riaggiungere una foto a
 un catalogo manuale cancella la sua esclusione. I conteggi e le regole di
 appartenenza ad altri cataloghi rispettano le esclusioni.
+
+### Cestino, Duplicati e Qualità insufficiente
+
+Tre **cataloghi di sistema**, creati automaticamente e non eliminabili né rinominabili.
+Le foto che contengono spariscono da Libreria, cataloghi, filtri e conteggi, e compaiono
+solo aprendo quel catalogo; da lì **Ripristina** le riporta indietro. I file sul disco
+non vengono mai spostati né cancellati.
+
+- **Cestino**: "Sposta nel cestino" dalla barra delle azioni (Altro) o Canc sulla
+  selezione fuori da un catalogo. L'avviso permette di annullare.
+- **Duplicati**: "Metti da parte i duplicati" (scheda del catalogo o palette): per ogni
+  file presente più volte con lo stesso contenuto resta in Libreria la copia importata
+  per prima, le altre vanno in "Duplicati".
+- **Qualità insufficiente**: "Controlla la qualità" avvia un'attività che misura la
+  nitidezza sulle miniature e la risoluzione, e sposta qui le foto molto sfocate o sotto
+  0,3 megapixel. Ogni foto viene misurata una volta sola, quindi una foto ripristinata
+  non ci torna al controllo successivo.
+
+La 0.3.0 aggiorna il catalogo allo schema 10 (cataloghi di sistema e misure di qualità);
+la copia di sicurezza in `backups/` permette di tornare alla versione precedente.

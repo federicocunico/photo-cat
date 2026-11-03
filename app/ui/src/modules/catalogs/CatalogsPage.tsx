@@ -23,6 +23,7 @@ import { Icon } from "../../components/icons";
 import { useLabelName } from "../library/labelName";
 import { RuleEditor } from "./RuleEditor";
 import { newRule, summarize, type RuleNode } from "./rules";
+import { catalogLabel, collectDuplicates, startQualityCheck } from "./systemCatalogs";
 import "./catalogs.css";
 
 const CATALOGS_KEY = ["catalogs"];
@@ -131,15 +132,22 @@ function CatalogCard({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const smart = c.kind === "smart";
+  const label = catalogLabel(c, t);
   return (
-    <Card className="cat-card" aria-label={c.name}>
+    <Card className="cat-card" aria-label={label}>
       <div className="cat-card-head">
-        <h2>{c.name}</h2>
+        <h2>{label}</h2>
         <Badge tone={smart ? "info" : "neutral"}>
-          {smart ? t("catalogs.smart") : t("catalogs.manual")}
+          {c.system
+            ? t("catalogs.system.badge")
+            : smart
+              ? t("catalogs.smart")
+              : t("catalogs.manual")}
         </Badge>
       </div>
+      {c.system && <p className="muted">{t(`catalogs.system.help.${c.system}`)}</p>}
       <p className="cat-card-meta">
         <span>{t("catalogs.photos", { count: items, n: fmtInt(items) })}</span>
         {excluded > 0 && (
@@ -153,12 +161,27 @@ function CatalogCard({
       </p>
       <div className="cat-card-actions">
         <Button onClick={() => openCatalog(c.id)}>{t("catalogs.open")}</Button>
-        <Button variant="ghost" icon={<Icon.Edit size={16} />} onClick={onEdit}>
-          {t("catalogs.edit")}
-        </Button>
-        <Button variant="ghost" icon={<Icon.Delete size={16} />} onClick={onDelete}>
-          {t("catalogs.delete")}
-        </Button>
+        {c.system === "duplicates" && (
+          <Button variant="ghost" onClick={() => collectDuplicates(qc, t)}>
+            {t("catalogs.system.collectDuplicates")}
+          </Button>
+        )}
+        {c.system === "low_quality" && (
+          <Button variant="ghost" onClick={() => startQualityCheck(t)}>
+            {t("catalogs.system.checkQuality")}
+          </Button>
+        )}
+        {/* I cataloghi di sistema non si modificano né si eliminano. */}
+        {!c.system && (
+          <>
+            <Button variant="ghost" icon={<Icon.Edit size={16} />} onClick={onEdit}>
+              {t("catalogs.edit")}
+            </Button>
+            <Button variant="ghost" icon={<Icon.Delete size={16} />} onClick={onDelete}>
+              {t("catalogs.delete")}
+            </Button>
+          </>
+        )}
       </div>
     </Card>
   );

@@ -13,6 +13,7 @@ pub mod faces;
 pub mod geo;
 pub mod models_job;
 pub mod persons;
+pub mod photo_quality;
 pub mod quality;
 pub mod retune;
 pub mod schedule;

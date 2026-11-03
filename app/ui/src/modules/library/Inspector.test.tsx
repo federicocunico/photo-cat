@@ -391,3 +391,21 @@ it("Sezione richiusa: resta richiusa anche su un'altra foto", async () => {
     "false",
   );
 });
+
+it("issue #26: con più foto selezionate l'Ispettore aggiunge al catalogo tutte, non l'ultima", async () => {
+  useLibrary.setState({ focused: 2, selection: idsSelection([1, 2]) });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: /^Aggiungi a un catalogo/ }));
+  fireEvent.click(await screen.findByRole("option", { name: "Vacanze" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [1, 2] },
+      { action: "add_catalog", catalog: 3 },
+      false,
+    ),
+  );
+});

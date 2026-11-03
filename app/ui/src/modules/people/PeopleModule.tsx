@@ -22,7 +22,7 @@ import { usePeopleHotkeys } from "./usePeopleHotkeys";
 import { Button } from "../../components/ui";
 import { notify, notifyError } from "../../store/toasts";
 import { runUndo, useUndo } from "../../store/undo";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { notifyPeopleUndo, refreshPeopleFast } from "./peopleUndo";
 import "./people.css";
 
 type Arrival = {
@@ -258,7 +258,7 @@ export function PeopleModule() {
       void commands
         .correctPerson({ action: "ignore", group: g.id })
         .then(async () => {
-          await refreshPeople(qc);
+          await refreshPeopleFast(qc);
           notifyPeopleUndo(qc, t("people.ignoredDone"));
         })
         .catch(notifyError);
@@ -273,7 +273,7 @@ export function PeopleModule() {
       void commands
         .undoPeople()
         .then(async (done) => {
-          await refreshPeople(qc);
+          await refreshPeopleFast(qc);
           notify({
             key: "undo",
             message: done ? t("people.undoneLast") : t("people.nothingToUndo"),

@@ -66,9 +66,7 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           >
             <span style={{ width: `${pct ?? 0}%` }} />
           </div>
-          <span className="mono jobs-phase-pct">
-            {pct == null ? "—" : `${Math.floor(pct)}%`}
-          </span>
+          <span className="mono jobs-phase-pct">{pct == null ? "—" : `${Math.floor(pct)}%`}</span>
         </div>
       </td>
       <td className="mono jobs-nowrap">
@@ -323,10 +321,7 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
         aria-label={`${t("jobs.systemRam")} ${mbToGb(system.totalMb)} GB`}
         className="jobs-ram"
       >
-        <div
-          className="jobs-ram-used"
-          style={{ width: `${Math.max(0, usedPct - appPct)}%` }}
-        />
+        <div className="jobs-ram-used" style={{ width: `${Math.max(0, usedPct - appPct)}%` }} />
         <div className="jobs-ram-app" style={{ width: `${appPct}%` }} />
       </div>
       <div className="jobs-res-grid">
@@ -348,9 +343,7 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
         <span className="muted">{t("jobs.pressure")}</span>
         <span>{t(`jobs.pressureStates.${res.state}`)}</span>
       </div>
-      <h3 className="section-title jobs-res-models">
-        {t("jobs.residentModels")}
-      </h3>
+      <h3 className="section-title jobs-res-models">{t("jobs.residentModels")}</h3>
       {governor.residents.length === 0 && <span className="muted">{t("jobs.noModels")}</span>}
       {governor.residents.map(([name, mb]) => (
         <div key={name} className="jobs-split">

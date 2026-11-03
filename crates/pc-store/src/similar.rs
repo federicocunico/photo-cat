@@ -606,13 +606,13 @@ mod tests {
             .unwrap();
         }
         c.execute(
-            "INSERT INTO catalog(id, name, kind, created_at) VALUES (1, 'Vacanze', 'manual', 0)",
+            "INSERT INTO catalog(id, name, kind, created_at) VALUES (50, 'Vacanze', 'manual', 0)",
             [],
         )
         .unwrap();
         for i in 1..=6 {
             c.execute(
-                "INSERT INTO catalog_item(catalog_id, media_id) VALUES (1, ?1)",
+                "INSERT INTO catalog_item(catalog_id, media_id) VALUES (50, ?1)",
                 [i],
             )
             .unwrap();
@@ -621,7 +621,7 @@ mod tests {
         mark_done(&c, 5, "p", 90.0, 1.0).unwrap();
         apply_groups(&c, &[vec![1, 2, 3], vec![4, 5]], "p").unwrap();
         let filter = crate::query::LibraryFilter {
-            catalog_id: Some(1),
+            catalog_id: Some(50),
             similar_only: true,
             ..Default::default()
         };
@@ -630,7 +630,7 @@ mod tests {
         // "Escludi dal catalogo" su quelle foto: resta solo la principale di ogni gruppo.
         for id in &ids {
             c.execute(
-                "INSERT INTO catalog_exclusion(catalog_id, media_id, excluded_at) VALUES (1, ?1, 0)",
+                "INSERT INTO catalog_exclusion(catalog_id, media_id, excluded_at) VALUES (50, ?1, 0)",
                 [id],
             )
             .unwrap();

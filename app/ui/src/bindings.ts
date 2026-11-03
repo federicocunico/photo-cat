@@ -110,6 +110,13 @@ export const commands = {
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
 	deleteCatalog: (id: number, confirmed: boolean) => __TAURI_INVOKE<null>("delete_catalog", { id, confirmed }),
+	/**
+	 *  Mette da parte i duplicati nel catalogo di sistema "Duplicati" (issue #29);
+	 *  restituisce quante copie ha spostato. Annullabile con `undo_bulk`.
+	 */
+	collectDuplicates: () => __TAURI_INVOKE<number>("collect_duplicates"),
+	/**  Avvia il controllo della qualità delle foto (issue #20): attività con avanzamento. */
+	startPhotoQuality: () => __TAURI_INVOKE<number>("start_photo_quality"),
 	startBulk: (target: Target, operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { target, operation, confirmed }),
 	undoBulk: () => __TAURI_INVOKE<string | null>("undo_bulk"),
 	lastBulkUndo: () => __TAURI_INVOKE<string | null>("last_bulk_undo"),
@@ -336,7 +343,9 @@ export type BulkAction = { action: "add_tag"; name: string;
 /**  Altri tag del set esclusivo di `name`: vengono tolti dagli stessi file. */
 exclusive?: string[] } | { action: "remove_tag"; name: string } | 
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
-{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "exclude_from_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "restore_to_catalog"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+{ action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "exclude_from_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "restore_to_catalog"; catalog: number } | 
+/**  "Ripristina" da un catalogo di sistema (Cestino, Duplicati, Qualità insufficiente). */
+{ action: "restore_from_system"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
 { action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
@@ -353,6 +362,11 @@ export type Catalog = {
 	kind: CatalogKind,
 	rules: Value | null,
 	createdAt: number,
+	/**
+	 *  Ruolo dei cataloghi di sistema (`trash`, `duplicates`, `low_quality`): non
+	 *  eliminabili né rinominabili; le loro foto sono nascoste dalle altre viste.
+	 */
+	system?: string | null,
 };
 
 export type CatalogKind = "manual" | "smart";

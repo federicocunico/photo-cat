@@ -11,13 +11,16 @@ import {
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Button, InlineAlert } from "../../components/ui";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { IdentityEditor } from "./IdentityEditor";
 import { MergeDialog } from "./MergeDialog";
 import { Transfer } from "./Transfer";
 import { WhoIs } from "./WhoIs";
 import type { GroupListTarget } from "./GroupList";
+import { openPersonPhotos } from "./openPersonPhotos";
+import { notifyError } from "../../store/toasts";
+import { Icon } from "../../components/icons";
 import "./people.css";
 
 export type PersonCardHandle = {
@@ -45,12 +48,7 @@ function CoverPreview({ group }: { group: GroupRow }) {
           }}
         >
           {src && !failed && (
-            <img
-              src={src}
-              alt=""
-              onError={() => setFailed(true)}
-              className="people-cover-img"
-            />
+            <img src={src} alt="" onError={() => setFailed(true)} className="people-cover-img" />
           )}
         </span>
         <span className="muted people-muted-sm">{t("people.coverHint")}</span>
@@ -121,7 +119,7 @@ export const PersonCard = forwardRef<
     setError("");
     try {
       await commands.correctPerson(c);
-      await refresh();
+      await refreshPeopleFast(qc);
       notifyPeopleUndo(qc, done);
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
@@ -219,6 +217,12 @@ export const PersonCard = forwardRef<
       )}
 
       <CoverPreview group={group} />
+      <Button
+        icon={<Icon.Library size={14} />}
+        onClick={() => openPersonPhotos(group.id).catch((e) => notifyError(e))}
+      >
+        {t("people.showPhotos", { count: group.photos })}
+      </Button>
       {selectedFaceIds.length === 1 && (
         <Button
           disabled={busy}
@@ -247,7 +251,7 @@ export const PersonCard = forwardRef<
             .filter((g) => g.id !== group.id)
             .map((g) => (
               <option key={g.id} value={g.id}>
-                {g.name ?? t("people.groupOfFaces", { count: g.faces })}
+                {g.name ?? t("people.unnamed", { count: g.photos })}
               </option>
             ))}
         </select>

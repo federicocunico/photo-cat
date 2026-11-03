@@ -508,10 +508,7 @@ function Undated({
   const [after, setAfter] = useState<string>("");
   if (!items.length) return null;
   return (
-    <section
-      aria-label={t("sequence.undated", { count: items.length })}
-      className="seq-undated"
-    >
+    <section aria-label={t("sequence.undated", { count: items.length })} className="seq-undated">
       <div className="seq-undated-head">
         <strong>{t("sequence.undated", { count: items.length })}</strong>
         <span className="muted seq-small">{t("sequence.undatedHelp")}</span>
@@ -529,9 +526,7 @@ function Undated({
                   e.dataTransfer.setData("application/x-photocat-undated", String(u.id))
                 }
                 className="seq-undated-thumb"
-                style={
-                  url ? { background: `center / cover url("${url}")` } : undefined
-                }
+                style={url ? { background: `center / cover url("${url}")` } : undefined}
               />
               <BusyButton
                 className="btn seq-undated-place"
@@ -745,9 +740,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
       <BusyButton className="btn" disabled={selected.length !== 2} onClick={() => align()}>
         {t("sequence.align")}
       </BusyButton>
-      {selected.length !== 2 && (
-        <span className="muted seq-small">{t("sequence.alignHelp")}</span>
-      )}
+      {selected.length !== 2 && <span className="muted seq-small">{t("sequence.alignHelp")}</span>}
       {note && (
         <p role="status" className="seq-status">
           {note}
@@ -911,9 +904,7 @@ export function SequencePage() {
             enabled={isTauri()}
             skeleton={<Skeleton kind="thumbnail" count={8} />}
             isEmpty={(ov) => !ov.total && !ov.undated.length}
-            empty={
-              <p className="muted seq-empty">{t("sequence.empty")}</p>
-            }
+            empty={<p className="muted seq-empty">{t("sequence.empty")}</p>}
           >
             {(ov) => (
               <SessionsGrid

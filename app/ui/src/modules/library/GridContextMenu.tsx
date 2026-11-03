@@ -108,9 +108,7 @@ export function GridContextMenu({
       className="grid-menu"
       style={{ left: x, top: y }}
     >
-      <div className="muted grid-menu-hint">
-        {t("externalApps.actsOn", { count: ids.length })}
-      </div>
+      <div className="muted grid-menu-hint">{t("externalApps.actsOn", { count: ids.length })}</div>
       <BusyButton
         type="button"
         role="menuitem"
@@ -122,12 +120,7 @@ export function GridContextMenu({
         {t("externalApps.openWith")} <Icon.ChevronRight size={14} />
       </BusyButton>
       {sub && (
-        <div
-          role="menu"
-          data-sub
-          aria-label={t("externalApps.openWith")}
-          className="grid-menu-sub"
-        >
+        <div role="menu" data-sub aria-label={t("externalApps.openWith")} className="grid-menu-sub">
           {apps.map((a) => (
             <BusyButton
               key={a.id}

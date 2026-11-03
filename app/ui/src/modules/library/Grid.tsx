@@ -44,6 +44,9 @@ import { useBulkJob } from "./bulkJob";
 import { activeSet } from "../tags/data";
 import { hotkeyAction } from "../tags/useTagHotkeys";
 import { colorOf, useTagOverview } from "../tags/data";
+import { Button, EmptyState } from "../../components/ui";
+import { useLayout } from "../../store/layout";
+import { systemCatalogId } from "../catalogs/systemCatalogs";
 import { TagChip } from "../tags/TagChip";
 
 /** Chip dei tag in basso sulla miniatura (al massimo 3, poi "+N"). */
@@ -463,10 +466,27 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   }
 
   if (pages.isSuccess && items.length === 0 && start === 0 && (count.data ?? 0) === 0) {
+    // Stati vuoti utili: perché è vuota e il comando per il passo successivo.
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
-      <div className="muted grid-empty">
-        {filtered ? t("library.noResults") : t("library.empty")}
+      <div className="grid-empty">
+        <EmptyState
+          title={filtered ? t("library.noResults") : t("library.empty")}
+          action={
+            filtered ? (
+              <Button onClick={() => useLibrary.getState().resetFilter()}>
+                {t("library.clearFilters")}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={() => useLayout.getState().openModule({ module: "import" })}
+              >
+                {t("library.importFolder")}
+              </Button>
+            )
+          }
+        />
       </div>
     );
   }
@@ -487,6 +507,24 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           return;
         if (onGridKey(e)) return;
         const restore = filter.excludedFrom != null;
+        const trashId = systemCatalogId(catalogs.data, "trash");
+        if (
+          e.key === "Delete" &&
+          filter.catalogId == null &&
+          !restore &&
+          trashId != null &&
+          selCount(selection) > 0
+        ) {
+          // Canc fuori da un catalogo: nel cestino, con "Annulla operazione" (issue #24).
+          e.preventDefault();
+          const count = selCount(selection);
+          void bulk.start(
+            selTarget(selection),
+            { action: "add_catalog", catalog: trashId },
+            t("selection.done.trash", { count }),
+          );
+          return;
+        }
         if (
           (e.key === "Delete" && filter.catalogId != null && !restore) ||
           (e.key === "Enter" && restore)

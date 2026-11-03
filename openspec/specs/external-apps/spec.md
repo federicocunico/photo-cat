@@ -21,7 +21,13 @@ L'utente SHALL poter configurare nelle impostazioni un elenco di applicazioni es
 - **THEN** l'applicazione viene avviata con gli argomenti `--edit` e `D:\Foto\a.jpg`
 
 ### Requirement: Azione del doppio clic
-L'utente SHALL poter scegliere nelle impostazioni cosa fa il doppio clic su una miniatura: aprire la foto con una delle applicazioni esterne configurate, aprirla con l'applicazione predefinita del sistema oppure nessuna azione. Il valore predefinito SHALL essere l'applicazione predefinita del sistema.
+L'utente SHALL poter scegliere nelle impostazioni cosa fa il doppio clic su una miniatura:
+- aprire la foto nel visualizzatore interno di photo-cat;
+- aprirla con una delle applicazioni esterne configurate;
+- aprirla con l'applicazione predefinita del sistema;
+- nessuna azione.
+
+Il valore predefinito SHALL essere l'applicazione predefinita del sistema. Il visualizzatore interno SHALL restare comunque raggiungibile con Spazio o Invio.
 
 #### Scenario: Doppio clic con applicazione configurata
 - **WHEN** l'azione del doppio clic è "Lightroom" e l'utente fa doppio clic su una miniatura
@@ -30,6 +36,10 @@ L'utente SHALL poter scegliere nelle impostazioni cosa fa il doppio clic su una 
 #### Scenario: Doppio clic predefinito
 - **WHEN** l'utente non ha configurato applicazioni e fa doppio clic su una miniatura
 - **THEN** la foto viene aperta con l'applicazione predefinita del sistema per quel formato
+
+#### Scenario: Doppio clic sul visualizzatore interno
+- **WHEN** l'azione del doppio clic è "Visualizzatore di photo-cat" e l'utente fa doppio clic su una miniatura
+- **THEN** la foto si apre nel visualizzatore interno
 
 ### Requirement: Apri con
 Dal menu contestuale di una miniatura l'utente SHALL poter aprire la foto, o tutte le foto selezionate, con una qualsiasi applicazione esterna configurata, con l'applicazione predefinita del sistema, oppure mostrarla nella cartella del file manager.

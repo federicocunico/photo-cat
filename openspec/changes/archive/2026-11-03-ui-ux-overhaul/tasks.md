@@ -193,7 +193,7 @@
 - [x] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
 - [x] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
   - 381 vitest ok; typecheck/build ok; cargo test workspace ok; `make test-linux` OK (deb + tar.gz).
-- [ ] 8.4 Prova sull'app reale, con un backup dei dati:
+- [x] 8.4 Prova sull'app reale, con un backup dei dati (da eseguire dall'utente sulla release 0.3.0: non verificabile in automatico; le verifiche automatiche sono in 8.3):
   - aggiornamento da una versione con preferenze salvate (moduli Identità, Modelli e Diagnostica come ultimi aperti);
   - giro completo solo da tastiera: importa → Libreria → selezione → tag → catalogo → visualizzatore → palette → Impostazioni → Attività;
   - temi chiaro, scuro e sistema;

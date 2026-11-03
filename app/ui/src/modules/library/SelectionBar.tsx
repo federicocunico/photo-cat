@@ -28,9 +28,12 @@ import { useCatalogAction } from "./useCatalogAction";
 import { useOpenWith } from "./useOpenWith";
 import { useSelectItems } from "./useSelectItems";
 import { useSelectionPicker } from "../../store/palette";
+import { catalogLabel, systemCatalogId } from "../catalogs/systemCatalogs";
 import { useBulkJob } from "./bulkJob";
 
 type DoneKind =
+  | "trash"
+  | "restore_from_system"
   | "add_tag"
   | "remove_tag"
   | "add_catalog"
@@ -170,12 +173,15 @@ export function SelectionBar() {
   // Catalogo: aggiungere ai manuali, escludere da tutti; nel catalogo aperto il comando diretto.
   const openId = filter.excludedFrom ?? filter.catalogId;
   const openCatalog = catalogs.data?.find((c) => c.catalog.id === openId)?.catalog;
-  const catalogOptions = (catalogs.data ?? []).flatMap(({ catalog: c }) => [
-    ...(c.kind === "manual"
-      ? [{ value: `add:${c.id}`, label: t("selection.addTo", { name: c.name }) }]
-      : []),
-    { value: `exclude:${c.id}`, label: t("selection.excludeFrom", { name: c.name }) },
-  ]);
+  const trashId = systemCatalogId(catalogs.data, "trash");
+  const catalogOptions = (catalogs.data ?? [])
+    .filter(({ catalog: c }) => !c.system)
+    .flatMap(({ catalog: c }) => [
+      ...(c.kind === "manual"
+        ? [{ value: `add:${c.id}`, label: t("selection.addTo", { name: c.name }) }]
+        : []),
+      { value: `exclude:${c.id}`, label: t("selection.excludeFrom", { name: c.name }) },
+    ]);
   const pickCatalog = (value: string) => {
     const [op, raw] = value.split(":");
     const id = Number(raw);
@@ -247,6 +253,16 @@ export function SelectionBar() {
     { kind: "separator" },
     ...selectItems,
     { kind: "separator" },
+    ...(trashId != null && openCatalog?.id !== trashId
+      ? [
+          {
+            label: t("selection.trash"),
+            icon: <Icon.Delete size={14} />,
+            shortcut: openCatalog ? undefined : "Canc",
+            onSelect: () => start({ action: "add_catalog", catalog: trashId }, "trash"),
+          },
+        ]
+      : []),
     { label: t("selection.removeLibrary"), danger: true, onSelect: () => setRemoving(true) },
   ];
 
@@ -280,7 +296,22 @@ export function SelectionBar() {
         )}
       </PickerButton>
 
-      {openCatalog && (
+      {openCatalog?.system && (
+        <Button
+          variant="primary"
+          icon={<Icon.Undo size={14} />}
+          onClick={() =>
+            start(
+              { action: "restore_from_system", catalog: openCatalog.id },
+              "restore_from_system",
+              catalogLabel(openCatalog, t),
+            )
+          }
+        >
+          {t("selection.restore")}
+        </Button>
+      )}
+      {openCatalog && !openCatalog.system && (
         <Button
           variant="ghost"
           disabled={catalogAction.busy}

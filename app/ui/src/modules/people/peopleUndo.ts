@@ -15,6 +15,18 @@ export function refreshPeople(qc: QueryClient) {
 }
 
 /**
+ * Dopo una correzione (issue #31): aspetta solo i volti mostrati, che è ciò che l'utente
+ * vede cambiare; elenco, conteggi e identità si aggiornano in background. Su librerie
+ * grandi quelle query durano secondi e bloccavano i comandi fino alla fine.
+ */
+export function refreshPeopleFast(qc: QueryClient) {
+  const faces = qc.invalidateQueries({ queryKey: ["group-faces"] });
+  for (const key of ["people-sections", "people-groups", "people", "identities", "faces"])
+    void qc.invalidateQueries({ queryKey: [key] });
+  return faces;
+}
+
+/**
  * Registra una correzione delle persone nello store `undo`: avviso con "Annulla operazione"
  * e Ctrl+Z. `steps` è il numero di voci scritte nel registro del backend (ad esempio una
  * per volto in "Non è questa persona"): l'annullamento le toglie tutte, dall'ultima.
@@ -27,7 +39,7 @@ export function notifyPeopleUndo(qc: QueryClient, message: string, steps = 1) {
       try {
         for (let i = 0; i < steps; i++) await commands.undoPeople();
       } finally {
-        await refreshPeople(qc);
+        await refreshPeopleFast(qc);
       }
     },
   });

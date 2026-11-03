@@ -117,10 +117,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
   );
   const none = groups.length === 0;
   return (
-    <div
-      data-testid={`update-summary-${summary.sourceId}`}
-      className="import-update-summary"
-    >
+    <div data-testid={`update-summary-${summary.sourceId}`} className="import-update-summary">
       {summary.folder && (
         <span className="mono muted import-update-folder">
           {t("sources.summary.folder", { path: summary.folder })}

@@ -22,19 +22,14 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
       }}
     >
       {src && !failed && (
-        <img
-          src={src}
-          alt=""
-          onError={() => setFailed(true)}
-          className="people-cover-img"
-        />
+        <img src={src} alt="" onError={() => setFailed(true)} className="people-cover-img" />
       )}
     </span>
   );
 }
 
 function labelOf(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
-  return g.name ?? t("people.groupOfFaces", { count: g.faces });
+  return g.name ?? t("people.unnamed", { count: g.photos });
 }
 
 /**

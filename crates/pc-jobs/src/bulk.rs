@@ -35,6 +35,10 @@ pub enum BulkAction {
     RestoreToCatalog {
         catalog: i64,
     },
+    /// "Ripristina" da un catalogo di sistema (Cestino, Duplicati, Qualità insufficiente).
+    RestoreFromSystem {
+        catalog: i64,
+    },
     SetLabel {
         group: String,
         value: Option<String>,
@@ -93,6 +97,9 @@ impl BulkAction {
             }
             Self::RestoreToCatalog { catalog } => {
                 bulk::restore_to_catalog(c, *catalog, ids)?.changed
+            }
+            Self::RestoreFromSystem { catalog } => {
+                bulk::restore_from_system(c, *catalog, ids)?.changed
             }
             Self::SetLabel { group, value } => {
                 bulk::set_label(c, group, value.as_deref(), ids)?.changed

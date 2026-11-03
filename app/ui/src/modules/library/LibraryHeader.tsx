@@ -12,6 +12,7 @@ import { useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
+import { catalogLabel } from "../catalogs/systemCatalogs";
 import { SelectMenu } from "./SelectionBar";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
@@ -57,10 +58,10 @@ function Breadcrumb() {
           </span>
           {excluded ? (
             <button type="button" className="lib-path-link" onClick={toCatalog}>
-              {summary.catalog.name}
+              {catalogLabel(summary.catalog, t)}
             </button>
           ) : (
-            <strong aria-current="page">{summary.catalog.name}</strong>
+            <strong aria-current="page">{catalogLabel(summary.catalog, t)}</strong>
           )}
         </>
       )}
@@ -87,7 +88,7 @@ function ExclusionsControl() {
   });
   const id = filter.excludedFrom ?? filter.catalogId;
   const summary = id == null ? undefined : catalogs.data?.find((c) => c.catalog.id === id);
-  if (!summary) return null;
+  if (!summary || summary.catalog.system) return null;
   if (filter.excludedFrom == null)
     return (
       <Button
