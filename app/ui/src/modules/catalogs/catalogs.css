@@ -1,0 +1,108 @@
+/* Cataloghi: elenco a schede ed editor delle regole (ui-ux-overhaul 7.2). */
+.cat-page {
+  flex: 1;
+  overflow: auto;
+  padding: var(--pc-space-5, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--pc-space-3);
+}
+.cat-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-2);
+}
+.cat-card-head h2 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+.cat-card-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+  color: var(--pc-text-secondary);
+}
+.cat-card-actions,
+.cat-editor-actions,
+.cat-rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+}
+.cat-editor-actions {
+  justify-content: flex-end;
+}
+.cat-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-3);
+}
+.cat-rule-group {
+  margin: 0;
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  min-width: 0;
+}
+.cat-rule-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  padding: 0 var(--pc-space-1);
+}
+.cat-rule-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-2);
+}
+.cat-rule-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.cat-rule-cond {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-2);
+  border-radius: var(--pc-radius-md, 8px);
+  border: 1px solid var(--pc-border);
+  background: var(--pc-panel-alt);
+}
+.cat-rule-cond .field {
+  min-width: 150px;
+}
+.cat-rule-number {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.cat-rule-number .field {
+  min-width: 0;
+  width: 110px;
+}
+.cat-rule-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border-radius: var(--pc-radius-md, 8px);
+  background: var(--pc-accent-soft-bg);
+  color: var(--pc-accent-soft-text);
+}

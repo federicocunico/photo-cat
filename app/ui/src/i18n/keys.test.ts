@@ -71,6 +71,27 @@ const dynamic: Record<string, string[]> = {
     ...["models", "similar", "face_quality", "retune", "time_backfill"],
   ],
   "tags.colors": ["blue", "teal", "yellow", "coral", "purple", "gray"],
+  // Cataloghi (modules/catalogs/rules.ts e RuleEditor.tsx).
+  "catalogs.fields": [
+    "tag",
+    "person",
+    "place",
+    "format",
+    "year",
+    "people_count",
+    "width",
+    "height",
+    "size",
+    "name",
+    "status",
+    "catalog",
+  ],
+  "catalogs.cmp": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "in"],
+  "catalogs.status": ["ok", "missing"],
+  "catalogs.summary": [
+    ...["eq", "neq", "gt", "gte", "lt", "lte", "contains", "in"],
+    ...["yearEq", "yearNeq", "yearGt", "yearGte", "yearLt", "yearLte"],
+  ],
   "seqExport.tokens": [
     "seq",
     "seq4",
