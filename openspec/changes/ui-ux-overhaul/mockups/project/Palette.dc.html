@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Palette dei comandi e scorciatoie</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.pc{--bg:#1B1B1C;--panel:#232325;--panel-alt:#1F1F21;--raised:#2C2C2F;--border:#3A3A3E;--text:#E8E8EA;--text-2:#A9A9AE;--text-soft:#C9C9CE;--accent:#3B8EEA;--accent-text:#6AAEF5;--accent-soft-bg:#233449;--accent-soft-text:#C9DCF2;--shadow:0 16px 48px rgba(0,0,0,.55);--scrim:rgba(10,10,12,.55);
+font-family:'Source Sans 3',system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:1.4;color:var(--text);background:var(--bg)}
+.pc.light{--bg:#F4F4F5;--panel:#FFFFFF;--panel-alt:#FAFAFA;--raised:#ECECEE;--border:#D4D4D8;--text:#1B1B1C;--text-2:#5A5A60;--text-soft:#3F3F45;--accent:#1F6FD1;--accent-text:#1A5FB4;--accent-soft-bg:#DCE9F9;--accent-soft-text:#163E6E;--shadow:0 16px 48px rgba(0,0,0,.18);--scrim:rgba(30,30,35,.25)}
+.pc *{box-sizing:border-box}
+.pc button{font:inherit;color:inherit;cursor:pointer}
+.muted{color:var(--text-2)}
+.kbd{font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--text-soft);background:var(--panel-alt);white-space:nowrap}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2)}
+.item{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 10px;border-radius:6px;border:0;background:transparent;width:100%;text-align:left}
+.item.hl{background:var(--accent-soft-bg);color:var(--accent-soft-text)}
+.sc{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--raised)}
+</style>
+</helmet>
+<div class="pc {{themeClass}}" style="min-height: 900px; position: relative; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; justify-content: center; padding: 64px 24px; background: var(--scrim); border: 1px solid var(--border)">
+  <div role="dialog" aria-label="Palette dei comandi" style="flex: 0 1 620px; min-width: 0; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden">
+    <label style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <input aria-label="Cerca o esegui un comando" value="giu" style="flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; outline: none">
+      <span class="kbd">Esc</span>
+    </label>
+    <div style="padding: 8px; display: flex; flex-direction: column; gap: 2px">
+      <div class="label" style="padding: 6px 10px">Persone</div>
+      <button type="button" class="item hl">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+        <span style="flex: 1">Giulia Rossi</span><span style="font-size: 12px">1.204 foto · mostra in Libreria</span><span class="kbd">Invio</span></button>
+      <button type="button" class="item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+        <span style="flex: 1">Giulio Bianchi</span><span class="muted" style="font-size: 12px">86 foto</span></button>
+      <div class="label" style="padding: 10px 10px 6px">Luoghi</div>
+      <button type="button" class="item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"></path></svg>
+        <span style="flex: 1">Giudecca, Venezia</span><span class="muted" style="font-size: 12px">42 foto</span></button>
+      <div class="label" style="padding: 10px 10px 6px">Comandi</div>
+      <button type="button" class="item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="flex: 1">Assegna persona alla selezione…</span><span class="kbd">P</span></button>
+      <button type="button" class="item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="flex: 1">Vai a Persone › Da rivedere</span><span class="kbd">Ctrl 4</span></button>
+      <button type="button" class="item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="flex: 1">Cerca «giu» nei nomi dei file</span></button>
+    </div>
+    <div class="muted" style="display: flex; gap: 14px; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 12px">
+      <span><span class="kbd">↑</span> <span class="kbd">↓</span> scegli</span><span><span class="kbd">Invio</span> apri</span><span><span class="kbd">Tab</span> azioni sull'elemento</span>
+    </div>
+  </div>
+
+  <div role="dialog" aria-label="Scorciatoie da tastiera" style="flex: 0 1 560px; min-width: 0; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 20px">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+      <h2 style="margin: 0; font-size: 20px">Scorciatoie da tastiera</h2>
+      <span class="kbd">?</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px">
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+        <div>
+          <div class="label" style="margin-bottom: 4px">{{g.name}}</div>
+          <sc-for list="{{g.items}}" as="it" hint-placeholder-count="4">
+            <div class="sc"><span>{{it.what}}</span><span class="kbd">{{it.keys}}</span></div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["scuro","chiaro"],"default":"scuro"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themeClass: this.props.theme === 'chiaro' ? 'light' : '',
+      groups: [
+        { name: 'Generale', items: [
+          { what: 'Cerca o esegui un comando', keys: 'Ctrl K' },
+          { what: 'Vai a un modulo', keys: 'Ctrl 1…7' },
+          { what: 'Impostazioni', keys: 'Ctrl ,' },
+          { what: 'Annulla operazione', keys: 'Ctrl Z' },
+          { what: 'Navigazione / ispettore', keys: 'Ctrl B / Ctrl I' }
+        ] },
+        { name: 'Libreria', items: [
+          { what: 'Sposta il focus', keys: '← → ↑ ↓' },
+          { what: 'Estendi la selezione', keys: 'Maiusc + freccia' },
+          { what: 'Seleziona tutte (filtro)', keys: 'Ctrl A' },
+          { what: 'Nascondi i pannelli', keys: 'Tab' },
+          { what: 'Apri nel visualizzatore', keys: 'Spazio' }
+        ] },
+        { name: 'Visualizzatore', items: [
+          { what: 'Foto precedente / successiva', keys: '← →' },
+          { what: 'Tag del set attivo', keys: '1…9' },
+          { what: 'Togli i tag del set', keys: '0' },
+          { what: 'Informazioni', keys: 'I' },
+          { what: 'Torna alla griglia', keys: 'Esc' }
+        ] },
+        { name: 'Persone', items: [
+          { what: 'Dai un nome', keys: 'N' },
+          { what: 'Unisci', keys: 'M' },
+          { what: 'Ignora', keys: 'I' },
+          { what: 'Non è questa persona', keys: 'X' }
+        ] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
