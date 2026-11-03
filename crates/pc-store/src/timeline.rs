@@ -340,7 +340,7 @@ pub fn change_clock(
 ) -> StoreResult<usize> {
     let previous = group_clock(c, group)?;
     let n = set_clock(c, group, clock, system)?;
-    crate::bulk::record(
+    crate::bulk::record_undo(
         c,
         description,
         &crate::bulk::UndoAction::GroupClock { group, previous },
@@ -570,7 +570,7 @@ pub fn place_after(
         )
         .optional()?;
     set_placement(c, id, Some((utc, local)), system)?;
-    crate::bulk::record(
+    crate::bulk::record_undo(
         c,
         "Colloca foto senza data",
         &crate::bulk::UndoAction::Placement {

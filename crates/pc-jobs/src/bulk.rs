@@ -299,6 +299,7 @@ mod tests {
                             bbox: [0.1, 0.1, 0.3, 0.3],
                             quality: 0.99,
                             embedding,
+                            ..Default::default()
                         }],
                         "sface",
                         "yunet+sface",

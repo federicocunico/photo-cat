@@ -138,10 +138,13 @@ cargo run -p pc-ai --example benchmark_detector -- yolox
 cargo run -p pc-ai --example benchmark_detector -- rtdetr target/model-bench/rtdetr_r18vd.onnx
 ```
 
-## Tag, identità e sequenza
+## Tag, Persone e sequenza
 
 - **Tag**: elenco dei tag della libreria con conteggi, rinomina, unione, eliminazione (annullabili) e colore; **set di tag** con tasti rapidi 1–9, eventualmente esclusivi. Il set attivo assegna i tag da tastiera in Libreria e Sequenza (0 rimuove i tag del set).
-- **Identità**: persone note all'app (nome, nome breve per i file, alias, gruppo, soglia di somiglianza, volti di riferimento). In ogni libreria i gruppi di volti si collegano alle identità dal campo "Chi è?" di Persone; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova. Esportazione e importazione in un file JSON, con o senza volti.
+- **Persone**: un solo modulo (Identità non è più una voce separata nella navigazione), a tre colonne (elenco, volti, scheda), con le sezioni **Da rivedere** (gruppi automatici, con suggerimenti di unione), **Persone** (identità decise dall'utente: nome, nome breve per i file, alias, gruppo, soglia di somiglianza, volti di riferimento) e **Ignorati**. Un gruppo diventa persona solo quando gli si dà un nome con "Chi è?"; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova. Esportazione e importazione delle identità in un file JSON, con o senza volti.
+  - **Ignorare**: non toglie foto dalla libreria né file dal disco. La persona sparisce da Da rivedere, dai filtri, dall'Inspector e dai suggerimenti; i nuovi volti simili vi confluiscono. Si ripristina dalla sezione Ignorati.
+  - **Qualità dei volti**: ogni volto ha nitidezza del ritaglio, frontalità e dimensione (oltre alla confidenza del rilevatore). I volti sotto soglia sono scartati dal raggruppamento e dai suggerimenti, ma restano consultabili e recuperabili ("Volti scartati per qualità"). La nitidezza minima si regola con `ai.thresholds.face_min_sharpness` in Impostazioni › Soglie AI.
+  - **Apri in Persone**: dall'Inspector (persona, volto non riconosciuto o scartato), dai filtri e dalla Sequenza apre direttamente il gruppo o la persona di quel volto, con il volto evidenziato e un avviso per tornare alla foto.
 - **Sequenza**: le foto di un ambito (libreria, catalogo, selezione) in ordine di istante reale, divise in sessioni. Per ogni gruppo di sorgente (dispositivo + fuso dichiarato) si possono impostare l'ora locale mostrata e uno scostamento dell'orologio, allineare due foto dello stesso momento e accettare i suggerimenti di fuso ricavati dal GPS; le foto senza data si collocano trascinandole. Le correzioni stanno nel catalogo: gli originali non vengono mai modificati.
 - **Export della sequenza**: copie rinominate con un modello di nome (`{seq:04d}_{date}_{time}_{tag}` e altri token), cartelle `sequenza/` e `per-tag/<Tag>/` (hard link quando possibile), `manifest.csv` e due zip non compressi. Il JPEG è ricodificato a qualità 97 con crominanza 4:4:4, verificato con SSIM/PSNR e ricodificato fino a 100 se serve; profilo ICC, risoluzione e orientamento vengono preservati e i metadati corretti scritti nelle copie.
 
@@ -155,7 +158,7 @@ Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che
 | Linux | `~/.config/photo-cat/app.db` |
 | `PHOTO_CAT_DATA_DIR` impostata | `<radice>/app/app.db` (installazioni portabili e prove) |
 
-`app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; la schermata Identità mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
+`app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; il modulo Persone mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
 
 ## Voci di catalogazione
 
@@ -207,10 +210,11 @@ Nella deduzione dal percorso le cartelle dei dispositivi vengono saltate: marca 
 | `ai.thresholds.person_detection` | 0,4 | confidenza minima di una persona rilevata (conteggio persone) |
 | `ai.thresholds.face_detection` | 0,8 | confidenza minima di un volto usato per riconoscere le persone |
 | `ai.thresholds.face_similarity` | 0,363 | somiglianza minima tra due volti della stessa persona (raggruppamento e associazione ai nomi; una soglia propria dell'identità ha la precedenza) |
+| `ai.thresholds.face_min_sharpness` | 0,35 | nitidezza minima del ritaglio di un volto (i volti sotto soglia sono scartati dal raggruppamento, recuperabili in Persone) |
 | soglia di gruppo (tassonomia) | 0,25 | punteggio minimo delle catalogazioni CLIP del gruppo |
 | soglia di categoria (tassonomia) | quella del gruppo | punteggio minimo di una singola categoria |
 
-Valori più alti danno meno catalogazioni automatiche, più sicure. La sezione "Soglie AI" mostra prima l'effetto ("N foto cambiano catalogazioni", conteggi delle persone, volti esclusi, stima delle persone che cambiano raggruppamento). Al salvataggio parte il job **retune**, che ricalcola i risultati già salvati senza rieseguire i modelli: le catalogazioni dagli embedding CLIP, i conteggi dai riquadri delle persone, i raggruppamenti dai volti. Le correzioni manuali restano. Le analisi conservano i risultati da 0,25 (persone) e 0,6 (volti) in su: si può scendere fino a questi valori senza rianalizzare. Le foto analizzate con versioni precedenti hanno come minimo 0,4 e 0,8; scendendo sotto, l'app lo segnala e propone la rianalisi dei soli file interessati. La soglia globale `ai.confidence_threshold` è solo il valore proposto ai gruppi nuovi e non modifica le soglie dei gruppi esistenti.
+Valori più alti danno meno catalogazioni automatiche, più sicure. La sezione "Soglie AI" mostra prima l'effetto ("N foto cambiano catalogazioni", conteggi delle persone, volti esclusi, stima delle persone che cambiano raggruppamento; per la nitidezza minima, quanti volti verrebbero scartati). Al salvataggio parte il job **retune**, che ricalcola i risultati già salvati senza rieseguire i modelli: le catalogazioni dagli embedding CLIP, i conteggi dai riquadri delle persone, i raggruppamenti dai volti e la qualità dei volti. Le correzioni manuali restano. Le analisi conservano i risultati da 0,25 (persone) e 0,6 (volti) in su: si può scendere fino a questi valori senza rianalizzare. Le foto analizzate con versioni precedenti hanno come minimo 0,4 e 0,8; scendendo sotto, l'app lo segnala e propone la rianalisi dei soli file interessati. La soglia globale `ai.confidence_threshold` è solo il valore proposto ai gruppi nuovi e non modifica le soglie dei gruppi esistenti.
 
 ```toml
 [ai]
@@ -221,6 +225,7 @@ ignored_folder_names = ["Selezionate", "Da stampare"]
 person_detection = 0.4
 face_detection = 0.8
 face_similarity = 0.363
+face_min_sharpness = 0.35
 ```
 
 ### Applicazioni esterne ("Apri con")

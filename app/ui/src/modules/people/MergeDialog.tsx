@@ -1,0 +1,211 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { commands, type Correction, type FaceView, type GroupRow } from "../../lib/ipc";
+import { faceUrl, thumbUrl } from "../library/thumbUrl";
+
+function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const src = cover ? faceUrl(cover.id) : null;
+  const placeholder = cover?.thumb ? thumbUrl(cover.thumb) : null;
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: "block",
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        overflow: "hidden",
+        backgroundColor: "var(--pc-thumb-bg)",
+        backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        flexShrink: 0,
+      }}
+    >
+      {src && !failed && (
+        <img
+          src={src}
+          alt=""
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      )}
+    </span>
+  );
+}
+
+function labelOf(
+  g: GroupRow,
+  t: (k: string, o?: Record<string, unknown>) => string,
+) {
+  return g.name ?? t("people.groupOfFaces", { count: g.faces });
+}
+
+/** Dialogo di unione: anteprima, scelta del nome se più di uno ne ha uno. */
+export function MergeDialog({
+  sources,
+  target,
+  onClose,
+  onMerged,
+}: {
+  sources: GroupRow[];
+  target: GroupRow;
+  onClose: () => void;
+  onMerged: (to: number) => void;
+}) {
+  const { t } = useTranslation();
+  const parties = [target, ...sources.filter((s) => s.id !== target.id)];
+  const named = parties.filter((g) => g.name);
+  const needNameChoice = named.length >= 2;
+  const [keepId, setKeepId] = useState(target.id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const survivor = parties.find((g) => g.id === keepId) ?? target;
+  const absorbed = parties.filter((g) => g.id !== survivor.id);
+  const absorbedFaces = absorbed.reduce((n, g) => n + g.faces, 0);
+  const primarySource = absorbed[0] ?? sources[0]!;
+
+  const confirm = async () => {
+    if (!absorbed.length) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const correction: Correction =
+        absorbed.length === 1
+          ? { action: "merge", from: absorbed[0]!.id, to: survivor.id }
+          : { action: "merge_many", from: absorbed.map((g) => g.id), to: survivor.id };
+      await commands.correctPerson(correction);
+      onMerged(survivor.id);
+      onClose();
+    } catch (e) {
+      setError((e as { detail?: string }).detail ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        background: "rgba(0,0,0,0.35)",
+        display: "grid",
+        placeItems: "center",
+      }}
+      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("people.mergeDialogTitle")}
+        onKeyDown={(e) => e.key === "Escape" && !busy && onClose()}
+        style={{
+          width: "min(480px, 92vw)",
+          maxHeight: "86vh",
+          overflow: "auto",
+          border: "1px solid var(--pc-border)",
+          borderRadius: 8,
+          padding: 20,
+          background: "var(--pc-raised)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        <strong style={{ fontSize: 16 }}>{t("people.mergeDialogTitle")}</strong>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr auto 1fr",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              alignItems: "center",
+              textAlign: "center",
+            }}
+          >
+            <Avatar cover={primarySource.cover} />
+            <b>{labelOf(primarySource, t)}</b>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {t("people.photos", { count: primarySource.photos })}
+            </span>
+          </div>
+          <span aria-hidden style={{ fontSize: 20, color: "var(--pc-text-2)" }}>
+            →
+          </span>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              alignItems: "center",
+              textAlign: "center",
+            }}
+          >
+            <Avatar cover={survivor.cover} />
+            <b>{labelOf(survivor, t)}</b>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {t("people.photos", { count: survivor.photos })}
+            </span>
+          </div>
+        </div>
+
+        <p style={{ margin: 0 }}>
+          {t("people.mergeDialogBody", {
+            count: absorbedFaces,
+            name: labelOf(survivor, t),
+          })}
+        </p>
+
+        {needNameChoice && (
+          <fieldset style={{ border: "1px solid var(--pc-border)", borderRadius: 6, padding: 10, margin: 0 }}>
+            <legend style={{ padding: "0 6px" }}>{t("people.mergeKeepName")}</legend>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {named.map((g) => (
+                <label key={g.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="radio"
+                    name="merge-keep-name"
+                    checked={keepId === g.id}
+                    onChange={() => setKeepId(g.id)}
+                  />
+                  {g.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        {error && <p role="alert">{error}</p>}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            {t("people.mergeCancel")}
+          </button>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={busy || absorbed.length === 0}
+            onClick={() => void confirm()}
+          >
+            {t("people.mergeInto", { name: labelOf(survivor, t) })}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

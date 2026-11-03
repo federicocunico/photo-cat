@@ -28,7 +28,7 @@ Ogni identità SHALL avere un nome visualizzato obbligatorio e univoco, un nome 
 - **THEN** il nome breve è "Giulia"
 
 ### Requirement: Gestione delle identità
-L'utente SHALL poter creare, modificare, unire ed eliminare identità da una schermata dedicata con filtro per gruppo e ricerca su nome e alias.
+L'utente SHALL poter creare, modificare, unire ed eliminare identità dalla sezione "Persone" del modulo Persone, con filtro per gruppo e ricerca su nome e alias.
 
 #### Scenario: Ricerca per alias
 - **WHEN** l'utente cerca "Nonna Rita"
@@ -37,6 +37,10 @@ L'utente SHALL poter creare, modificare, unire ed eliminare identità da una sch
 #### Scenario: Unione di identità
 - **WHEN** l'utente unisce "G. Bianchi" in "Giulia Bianchi"
 - **THEN** volti di riferimento, alias e collegamenti di "G. Bianchi" passano a "Giulia Bianchi" e "G. Bianchi" non esiste più
+
+#### Scenario: Identità senza foto nella libreria
+- **WHEN** un'identità non ha volti nella libreria aperta
+- **THEN** la sezione "Persone" la mostra con l'indicazione "nessuna foto in questa libreria", e resta modificabile ed esportabile
 
 ### Requirement: Volti di riferimento
 L'utente SHALL poter aggiungere a un'identità volti di riferimento scelti tra i volti della libreria o da un file immagine, e rimuoverli; per ogni volto di riferimento l'archivio conserva il ritaglio e l'embedding, non la foto originale.
@@ -50,11 +54,15 @@ L'utente SHALL poter aggiungere a un'identità volti di riferimento scelti tra i
 - **THEN** il sistema chiede quale dei tre volti usare
 
 ### Requirement: Collegamento con le persone della libreria
-In ogni libreria una persona (gruppo di volti) SHALL poter essere collegata a un'identità; il nome mostrato della persona è quello dell'identità e la schermata Identità indica per ogni identità il numero di foto nella libreria aperta o "non collegata".
+In ogni libreria un gruppo di volti SHALL poter essere collegato a un'identità tramite "Chi è?" nella scheda del gruppo; il collegamento trasforma il gruppo in persona, il nome mostrato è quello dell'identità e la sezione "Persone" indica per ogni identità il numero di foto nella libreria aperta.
 
 #### Scenario: Collegamento
-- **WHEN** l'utente collega il gruppo "Senza nome 12" all'identità "Marco Russo"
-- **THEN** il gruppo appare come "Marco Russo" in Persone e l'identità mostra il numero di foto del gruppo
+- **WHEN** l'utente collega il gruppo "Gruppo di 23 volti" all'identità "Marco Russo"
+- **THEN** il gruppo esce da "Da rivedere", appare come "Marco Russo" nella sezione "Persone" e l'identità mostra il numero di foto del gruppo
+
+#### Scenario: Collegamento a un'identità già collegata
+- **WHEN** l'utente collega un secondo gruppo a "Marco Russo", che ha già un gruppo collegato in questa libreria
+- **THEN** i due gruppi vengono uniti nella persona "Marco Russo"
 
 ### Requirement: Esportazione e importazione delle identità
 L'utente SHALL poter esportare le identità in un file e importarle su un'altra installazione, scegliendo se includere i volti di riferimento; all'importazione le identità con lo stesso nome SHALL essere proposte per l'unione invece di essere duplicate.

@@ -442,6 +442,7 @@ fn enrich(db: &Store, id: i64) {
                 bbox: [0.1, 0.1, 0.2, 0.2],
                 quality: 0.99,
                 embedding,
+                ..Default::default()
             }],
             "sface",
             "yunet+sface",

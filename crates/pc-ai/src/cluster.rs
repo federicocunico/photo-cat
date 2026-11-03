@@ -21,7 +21,21 @@ pub fn chinese_whispers(
     threshold: f32,
     control: &JobControl,
 ) -> AppResult<Vec<Label>> {
+    chinese_whispers_with(nodes, named, &HashSet::new(), threshold, control)
+}
+
+pub fn chinese_whispers_with(
+    nodes: &[FaceRecord],
+    named: &HashSet<i64>,
+    not_same: &HashSet<(i64, i64)>,
+    threshold: f32,
+    control: &JobControl,
+) -> AppResult<Vec<Label>> {
     let mut protected = named.clone();
+    for &(a, b) in not_same {
+        protected.insert(a);
+        protected.insert(b);
+    }
     for f in nodes {
         if f.manual {
             protected.extend(f.person_id);
@@ -76,6 +90,12 @@ pub fn chinese_whispers(
             let mut edges: Vec<_> = neighbours
                 .into_iter()
                 .filter(|j| j != i)
+                .filter(|j| {
+                    !matches!(
+                        (nodes[*i].person_id, nodes[*j].person_id),
+                        (Some(pa), Some(pb)) if not_same.contains(&(pa, pb))
+                    )
+                })
                 .filter_map(|j| {
                     let score = people::cosine(v, nodes[j].embedding.as_ref()?);
                     (score >= threshold).then_some((j, score))
@@ -104,7 +124,11 @@ pub fn chinese_whispers(
             for (j, score) in &graph[i] {
                 let label = labels[*j];
                 if let Label::Person(p) = label {
-                    if nodes[i].rejected.contains(&p) {
+                    if nodes[i].rejected.contains(&p)
+                        || nodes[i]
+                            .person_id
+                            .is_some_and(|pa| not_same.contains(&(pa, p)))
+                    {
                         continue;
                     }
                 }
@@ -141,10 +165,10 @@ pub fn run(
         return Ok(());
     };
     let similarity = thresholds.face_similarity;
-    let min_quality = thresholds.face_detection;
-    // I volti sotto la soglia di rilevamento restano salvati ma non sono
-    // usati per il raggruppamento (né tengono una persona automatica).
-    store.write(move |c| people::unassign_low_quality(c, min_quality, true).map(|_| ()))?;
+    let matching = crate::analyze::face_match(thresholds);
+    // I volti scartati per qualità restano salvati ma non sono usati per il
+    // raggruppamento (né tengono una persona automatica).
+    store.write(move |c| people::unassign_discarded(c, &matching, true).map(|_| ()))?;
     let count: i64 = store.read(|c| {
         Ok(c.query_row(
             "SELECT count(*) FROM face WHERE embedding IS NOT NULL",
@@ -171,19 +195,28 @@ pub fn run(
             "attendere memoria libera per raggruppare i volti",
         )
     })?;
-    let (nodes, named) = store.read(|c| {
+    let (nodes, named, not_same) = store.read(|c| {
+        let not_same = people::not_same_pairs(c)?;
         let mut nodes: Vec<_> = people::records(c, None)?
             .into_iter()
-            .filter(|f| f.embedding.is_some() && (f.manual || f.quality >= min_quality))
+            .filter(|f| f.embedding.is_some() && !f.is_discarded(&matching))
             .collect();
         for f in &mut nodes {
             if !f.manual {
+                let mut rejects = f.rejected.clone();
+                if let Some(pa) = f.person_id {
+                    for &(a, b) in &not_same {
+                        if a == pa && !rejects.contains(&b) {
+                            rejects.push(b);
+                        }
+                    }
+                }
                 // Lettura: un'identità non collegata non crea persone qui (lo fa il salvataggio).
                 if let Some(p) = people::named_match_refs(
                     c,
                     f.embedding.as_ref().expect("embedding"),
                     &f.model,
-                    &f.rejected,
+                    &rejects,
                     similarity,
                     refs,
                     false,
@@ -192,9 +225,9 @@ pub fn run(
                 }
             }
         }
-        Ok((nodes, people::named_ids(c)?))
+        Ok((nodes, people::named_ids(c)?, not_same))
     })?;
-    let labels = chinese_whispers(&nodes, &named, similarity, control)?;
+    let labels = chinese_whispers_with(&nodes, &named, &not_same, similarity, control)?;
     if !control.checkpoint() {
         return Err(AppError::cancelled());
     }
@@ -226,7 +259,12 @@ pub fn run(
                     for i in &members {
                         if let Some(p) = nodes[*i].person_id {
                             if !used.contains(&p)
-                                && members.iter().all(|j| !nodes[*j].rejected.contains(&p))
+                                && members.iter().all(|j| {
+                                    !nodes[*j].rejected.contains(&p)
+                                        && nodes[*j]
+                                            .person_id
+                                            .is_none_or(|pj| !not_same.contains(&(pj, p)))
+                                })
                             {
                                 *candidates.entry(p).or_default() += 1;
                             }
@@ -249,7 +287,8 @@ pub fn run(
                 }
             }
         }
-        people::refresh_centroids(c)?;
+        people::refresh_centroids_with(c, &matching)?;
+        people::refresh_merge_suggestions(c, &matching)?;
         for id in nodes.iter().map(|f| f.media_id).collect::<HashSet<_>>() {
             pc_store::repo::fts::refresh(c, id)?;
         }
@@ -276,11 +315,13 @@ mod tests {
             media_id: id,
             bbox: [0.1, 0.1, 0.2, 0.2],
             quality: 0.99,
+            quality_score: 0.99,
             embedding: Some(v),
             person_id: person,
             manual,
             rejected,
             model: "sface".into(),
+            ..Default::default()
         }
     }
     #[test]
@@ -313,7 +354,7 @@ mod tests {
         db.write(|c|{for id in 1..=4{
             c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (?1,?2,'test','jpg',1,1,1,1)",rusqlite::params![id,format!("test{id}.jpg")])?;
             let mut embedding=vec![0.0;128];embedding[0]=1.0;
-            people::save_faces(c,id,&[people::DetectedFace{bbox:[0.1,0.1,0.2,0.2],quality:1.0,embedding}],"sface","det+sface",SAME_PERSON)?;
+            people::save_faces(c,id,&[people::DetectedFace{bbox:[0.1,0.1,0.2,0.2],quality:1.0,embedding,..Default::default()}],"sface","det+sface",SAME_PERSON)?;
         }Ok(())}).unwrap();
         let policy = std::sync::Arc::new(crate::face_policy::FacePolicy::new(true));
         let gov = MemoryGovernor::new(256);
@@ -386,6 +427,7 @@ mod tests {
                         bbox: [0.1, 0.1, 0.2, 0.2],
                         quality: *q,
                         embedding: e,
+                        ..Default::default()
                     }],
                     "sface",
                     "det+sface",

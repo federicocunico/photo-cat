@@ -17,12 +17,11 @@ import { JobsPage } from "./modules/jobs/JobsPage";
 import { LibraryPage } from "./modules/library/LibraryPage";
 import { LibraryStatus } from "./modules/library/LibraryStatus";
 import { ModelsPage } from "./modules/models/ModelsPage";
-import { PeoplePage } from "./modules/people/PeoplePage";
+import { PeopleModule } from "./modules/people/PeopleModule";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
 import { TagsPage } from "./modules/tags/TagsPage";
-import { IdentitiesPage } from "./modules/identities/IdentitiesPage";
 import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
 import { ActiveSetStatus, TagsStatus } from "./modules/tags/TagStatus";
 import { Onboarding } from "./modules/onboarding/Onboarding";
@@ -43,9 +42,7 @@ function ModuleView({ module }: { module: ModuleId }) {
     case "models":
       return <ModelsPage />;
     case "people":
-      return <PeoplePage />;
-    case "identities":
-      return <IdentitiesPage />;
+      return <PeopleModule />;
     case "catalogs":
       return <CatalogsPage />;
     case "tags":

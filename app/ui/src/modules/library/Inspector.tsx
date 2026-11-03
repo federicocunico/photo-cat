@@ -1,7 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type BulkAction, type LabelView } from "../../lib/ipc";
+import {
+  commands,
+  isTauri,
+  type BulkAction,
+  type LabelView,
+  type MediaFaceView,
+} from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
@@ -12,8 +18,19 @@ import { PlaceEditor } from "./PlaceEditor";
 import { SimilarSection } from "./SimilarSection";
 import { useLabelName } from "./labelName";
 import { CategoryPicker } from "./CategoryPicker";
+import { OpenInPeople } from "../people/OpenInPeople";
 
 import { useCatalogAction } from "./useCatalogAction";
+
+function faceChipLabel(
+  face: MediaFaceView,
+  t: (k: string, o?: Record<string, unknown>) => string,
+) {
+  if (face.personName) return face.personName;
+  if (face.discarded) return t("library.inspector.discardedFace");
+  if (face.ignored) return t("library.inspector.ignoredFace");
+  return t("library.inspector.unrecognizedFace");
+}
 
 function Grid2({ children }: { children: ReactNode }) {
   return (
@@ -314,9 +331,18 @@ export function Inspector() {
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h3 className="section-title">{t("library.inspector.peopleTags")}</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {d.people.map((p) => (
-            <span key={p} className="chip">
-              {p}
+          {d.faces.map((face) => (
+            <span
+              key={face.id}
+              className="chip"
+              data-testid={`inspector-face-${face.id}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              {faceChipLabel(face, t)}
+              <OpenInPeople
+                target={{ face: face.id }}
+                style={{ padding: "0 4px", fontSize: 12 }}
+              />
             </span>
           ))}
         </div>

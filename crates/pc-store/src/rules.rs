@@ -311,7 +311,7 @@ fn compile_cond(
     let expr = match field {
         "person" => {
             f.sql.push_str(&exists(
-                "SELECT 1 FROM face fc JOIN person p ON p.id = fc.person_id WHERE fc.media_id = m.id AND p.name {cond} COLLATE NOCASE",
+                "SELECT 1 FROM face fc JOIN person p ON p.id = fc.person_id WHERE fc.media_id = m.id AND p.ignored_at IS NULL AND p.name {cond} COLLATE NOCASE",
             ));
             f.args.extend(vals);
             return Ok(());

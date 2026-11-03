@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -7,11 +7,10 @@ import {
   type FaceChoice,
   type IdentityInput,
   type IdentityRow,
-  type ImportPreview,
 } from "../../lib/ipc";
-import { fmtDate, fmtInt } from "../../lib/format";
-import { useLayout } from "../../store/layout";
-import { FaceCrop } from "../people/PeoplePage";
+import { fmtDate } from "../../lib/format";
+import { FaceCrop } from "./FaceCrop";
+import { OpenInPeople } from "./OpenInPeople";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
@@ -104,7 +103,8 @@ const toInput = (d: Draft, def: number): IdentityInput => ({
     .filter(Boolean),
 });
 
-function Editor({
+/** Editor di un'identità: nome, alias, gruppo, soglia, riferimenti, unione ed eliminazione. */
+export function IdentityEditor({
   row,
   creating,
   all,
@@ -112,6 +112,7 @@ function Editor({
   defaultThreshold,
   onSaved,
   onDeleted,
+  compact = false,
 }: {
   row: IdentityRow | null;
   creating: boolean;
@@ -120,6 +121,8 @@ function Editor({
   defaultThreshold: number;
   onSaved: (uid: string) => void;
   onDeleted: () => void;
+  /** Layout più stretto per la colonna scheda del modulo Persone. */
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -146,7 +149,7 @@ function Editor({
   });
   const libraryFaces = useQuery({
     queryKey: ["faces", row?.person],
-    queryFn: () => commands.personFaces(row!.person, null, 500).then((p) => p.items),
+    queryFn: () => commands.personFaces(row!.person, 500),
     enabled: isTauri() && fromLibrary && row?.person != null,
   });
   const refresh = () =>
@@ -154,6 +157,8 @@ function Editor({
       qc.invalidateQueries({ queryKey: KEY }),
       qc.invalidateQueries({ queryKey: ["identity-faces"] }),
       qc.invalidateQueries({ queryKey: ["people"] }),
+      qc.invalidateQueries({ queryKey: ["people-groups"] }),
+      qc.invalidateQueries({ queryKey: ["people-sections"] }),
     ]);
   const run = async (fn: () => Promise<unknown>) => {
     setError("");
@@ -211,14 +216,14 @@ function Editor({
   if (!row && !creating) return <p className="muted">{t("identities.none")}</p>;
   const title = creating ? t("identities.new") : row!.name;
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 12 : 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <Avatar name={draft.name || "?"} size={48} />
+        <Avatar name={draft.name || "?"} size={compact ? 40 : 48} />
         <div>
           <div className="muted" style={{ fontSize: 12 }}>
             {row ? t("identities.createdAt", { date: fmtDate(new Date(row.createdAt)) }) : ""}
           </div>
-          <strong style={{ fontSize: 20 }}>{title}</strong>
+          <strong style={{ fontSize: compact ? 16 : 20 }}>{title}</strong>
         </div>
       </div>
       <form
@@ -261,7 +266,7 @@ function Editor({
       {notice && <p role="status">{notice}</p>}
       {row && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 16 }}>
               {t("identities.references", { count: faces.data?.length ?? row.faces })}
             </h2>
@@ -330,21 +335,17 @@ function Editor({
             </div>
           )}
           <div style={{ color: "var(--pc-text-soft)", lineHeight: 1.5 }}>
-            {row.person != null ? (
+            {row.person != null && row.photos > 0 ? (
               <>
                 {t("identities.linked", { count: row.photos })}{" "}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    useLayout.getState().setModule("people");
-                  }}
-                >
-                  {t("identities.openPeople")}
-                </a>
+                <OpenInPeople
+                  target={{ person: row.person }}
+                  className="btn btn-ghost"
+                  style={{ display: "inline", padding: "0 4px", fontSize: "inherit" }}
+                />
               </>
             ) : (
-              t("identities.notLinked")
+              t("people.noPhotosInLibrary")
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -429,328 +430,6 @@ function Editor({
           </div>
         </>
       )}
-    </>
-  );
-}
-
-function Transfer({ onDone }: { onDone: () => void }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [includeFaces, setIncludeFaces] = useState(false);
-  const [preview, setPreview] = useState<{ path: string; p: ImportPreview } | null>(null);
-  const [merge, setMerge] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const run = async (fn: () => Promise<unknown>) => {
-    setError("");
-    try {
-      await fn();
-    } catch (e) {
-      setError(errorText(e));
-    }
-  };
-  const exportFile = () =>
-    run(async () => {
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const path = await save({
-        defaultPath: "photo-cat-identita.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (!path) return;
-      await commands.exportIdentities(path, includeFaces);
-      setMessage(t("identities.exported"));
-    });
-  const importFile = () =>
-    run(async () => {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const path = await open({
-        multiple: false,
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (typeof path !== "string") return;
-      const p = await commands.previewIdentityImport(path);
-      setPreview({ path, p });
-      setMerge(p.conflicts.map((c) => c.name));
-    });
-  const apply = () =>
-    run(async () => {
-      if (!preview) return;
-      const out = await commands.importIdentities(preview.path, merge);
-      setPreview(null);
-      setMessage(
-        t("identities.imported", {
-          created: out.created,
-          merged: out.merged,
-          skipped: out.skipped,
-        }),
-      );
-      await qc.invalidateQueries({ queryKey: KEY });
-      onDone();
-    });
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div className="feature-actions" style={{ margin: 0 }}>
-        <button className="btn" onClick={() => void importFile()}>
-          {t("identities.import")}
-        </button>
-        <button className="btn" onClick={() => void exportFile()}>
-          {t("identities.export")}
-        </button>
-        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input
-            type="checkbox"
-            checked={includeFaces}
-            onChange={(e) => setIncludeFaces(e.target.checked)}
-          />
-          {t("identities.includeFaces")}
-        </label>
-      </div>
-      {preview && (
-        <div
-          className="feature-card"
-          style={{ alignItems: "stretch" }}
-          role="group"
-          aria-label={t("identities.importPreview")}
-        >
-          <strong>{t("identities.importPreview")}</strong>
-          <span>{t("identities.importNew", { count: preview.p.new.length })}</span>
-          {preview.p.conflicts.map((c) => (
-            <label key={c.name} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={merge.includes(c.name)}
-                onChange={(e) =>
-                  setMerge((m) =>
-                    e.target.checked ? [...m, c.name] : m.filter((x) => x !== c.name),
-                  )
-                }
-              />
-              {t("identities.importMerge", { name: c.name })}
-            </label>
-          ))}
-          <div className="feature-actions" style={{ margin: 0 }}>
-            <button className="btn btn-primary" onClick={() => void apply()}>
-              {t("identities.importApply")}
-            </button>
-            <button className="btn" onClick={() => setPreview(null)}>
-              {t("identities.cancel")}
-            </button>
-          </div>
-        </div>
-      )}
-      {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
-    </div>
-  );
-}
-
-export function IdentitiesPage() {
-  const { t } = useTranslation();
-  const [search, setSearch] = useState("");
-  const [group, setGroup] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const view = useQuery({
-    queryKey: [...KEY, search.trim()],
-    queryFn: () => commands.listIdentities(search.trim() || null),
-    enabled: isTauri(),
-  });
-  const all = useQuery({
-    queryKey: [...KEY, ""],
-    queryFn: () => commands.listIdentities(null),
-    enabled: isTauri(),
-  });
-  const v = view.data;
-  const everyone = all.data?.identities ?? [];
-  const groups = all.data?.groups ?? [];
-  const rows = useMemo(
-    () => (v?.identities ?? []).filter((r) => group === null || r.group === group),
-    [v, group],
-  );
-  const row = everyone.find((r) => r.uid === selected) ?? null;
-  const def = v?.defaultThreshold ?? 0.363;
-  const grid = "52px minmax(0, 1.4fr) minmax(0, 1.2fr) 110px 120px 140px";
-  return (
-    <div style={{ flex: 1, display: "flex", flexWrap: "wrap", minWidth: 0, overflow: "auto" }}>
-      <section
-        style={{
-          flex: "999 1 560px",
-          minWidth: 0,
-          padding: 24,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("identities.title")}</h1>
-          <span className="muted">
-            {t("identities.summary", { count: everyone.length, groups: groups.length })}
-          </span>
-          <button
-            className="btn btn-primary"
-            style={{ marginLeft: "auto" }}
-            onClick={() => {
-              setSelected(null);
-              setCreating(true);
-            }}
-          >
-            {t("identities.newButton")}
-          </button>
-        </div>
-        <Transfer onDone={() => {}} />
-        <div
-          className="feature-card"
-          role="note"
-          style={{
-            flexDirection: "row",
-            alignItems: "flex-start",
-            borderColor: "var(--pc-selection-border)",
-          }}
-        >
-          <span>
-            {t("identities.appNote")}
-            {all.data?.storePath && (
-              <>
-                {" "}
-                {t("identities.storeAt")} <code className="mono">{all.data.storePath}</code>
-              </>
-            )}
-          </span>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <button
-            className="pill"
-            aria-pressed={group === null}
-            onClick={() => setGroup(null)}
-            style={{ borderColor: group === null ? "var(--pc-accent)" : undefined }}
-          >
-            {t("identities.allGroups", { count: everyone.length })}
-          </button>
-          {groups.map((g) => (
-            <button
-              key={g}
-              className="pill"
-              aria-pressed={group === g}
-              onClick={() => setGroup(g)}
-              style={{ borderColor: group === g ? "var(--pc-accent)" : undefined }}
-            >
-              {g} ({everyone.filter((r) => r.group === g).length})
-            </button>
-          ))}
-          <input
-            type="search"
-            className="field"
-            aria-label={t("identities.search")}
-            placeholder={t("identities.search")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ marginLeft: "auto", width: 220 }}
-          />
-        </div>
-        <div
-          role="table"
-          aria-label={t("identities.title")}
-          style={{ border: "1px solid var(--pc-border)", borderRadius: 8, overflow: "hidden" }}
-        >
-          <div
-            role="row"
-            className="muted"
-            style={{
-              display: "grid",
-              gridTemplateColumns: grid,
-              gap: 12,
-              padding: "8px 14px",
-              background: "var(--pc-panel)",
-              fontSize: 12,
-              textTransform: "uppercase",
-              letterSpacing: 0.6,
-            }}
-          >
-            <span role="columnheader" />
-            <span role="columnheader">{t("identities.colName")}</span>
-            <span role="columnheader">{t("identities.colAliases")}</span>
-            <span role="columnheader">{t("identities.colGroup")}</span>
-            <span role="columnheader">{t("identities.colRefs")}</span>
-            <span role="columnheader">{t("identities.colLibrary")}</span>
-          </div>
-          {rows.map((r) => (
-            <button
-              key={r.uid}
-              type="button"
-              role="row"
-              aria-selected={r.uid === selected}
-              onClick={() => {
-                setCreating(false);
-                setSelected(r.uid);
-              }}
-              style={{
-                display: "grid",
-                gridTemplateColumns: grid,
-                gap: 12,
-                alignItems: "center",
-                width: "100%",
-                padding: "6px 14px",
-                minHeight: 48,
-                border: 0,
-                borderTop: "1px solid var(--pc-raised)",
-                textAlign: "left",
-                cursor: "pointer",
-                color: "var(--pc-text)",
-                background: r.uid === selected ? "var(--pc-selection-bg)" : "transparent",
-              }}
-            >
-              <span role="cell">
-                <Avatar name={r.name} />
-              </span>
-              <span role="cell" style={{ fontWeight: 600 }}>
-                {r.name}
-              </span>
-              <span role="cell" className="muted">
-                {r.aliases.join(", ") || "—"}
-              </span>
-              <span role="cell">{r.group ?? "—"}</span>
-              <span role="cell" style={{ color: r.faces ? undefined : "var(--pc-warn)" }}>
-                {r.faces ? t("identities.refCount", { count: r.faces }) : t("identities.noRefs")}
-              </span>
-              <span role="cell" className="mono" style={{ fontSize: 13 }}>
-                {r.person != null ? fmtInt(r.photos) : t("identities.notLinkedShort")}
-              </span>
-            </button>
-          ))}
-          {!rows.length && (
-            <p className="muted" style={{ padding: 14, margin: 0 }}>
-              {t("identities.empty")}
-            </p>
-          )}
-        </div>
-      </section>
-      <aside
-        aria-label={t("identities.edit")}
-        style={{
-          flex: "1 1 320px",
-          maxWidth: 380,
-          padding: 20,
-          background: "var(--pc-panel)",
-          borderLeft: "1px solid var(--pc-border)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
-        <Editor
-          row={creating ? null : row}
-          creating={creating}
-          all={everyone}
-          groups={groups}
-          defaultThreshold={def}
-          onSaved={(uid) => {
-            setCreating(false);
-            setSelected(uid);
-          }}
-          onDeleted={() => setSelected(null)}
-        />
-      </aside>
     </div>
   );
 }

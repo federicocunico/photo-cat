@@ -128,6 +128,10 @@ pub fn bindings() -> Builder<tauri::Wry> {
             models::reanalyze,
             models::set_resource_profile,
             people::list_people,
+            people::people_sections,
+            people::list_groups,
+            people::group_faces,
+            people::locate_face,
             people::face_count,
             people::person_faces,
             people::correct_person,
@@ -428,6 +432,20 @@ pub fn run() {
                 pc_ingest::backfill::JOB_KIND,
                 Arc::new(move |p| pc_ingest::backfill::plan(backfill_store.clone(), p)),
             );
+            let fq_store = store.clone();
+            let fq_gov = governor.clone();
+            let fq_crops = paths.face_crops();
+            jobs.register(
+                pc_ai::face_quality::JOB_KIND,
+                Arc::new(move |p| {
+                    pc_ai::face_quality::plan(
+                        fq_store.clone(),
+                        fq_gov.clone(),
+                        Some(fq_crops.clone()),
+                        p,
+                    )
+                }),
+            );
             let seq_store = store.clone();
             let seq_governor = governor.clone();
             jobs.register(
@@ -532,6 +550,14 @@ pub fn run() {
                     code = e.code.as_str(),
                     detail = e.detail.as_str(),
                     "accodamento time_backfill"
+                );
+            }
+            // Librerie importate prima dello schema v7: nitidezza e dimensione dei volti.
+            if let Err(e) = pc_ai::face_quality::queue_once(&store, &jobs) {
+                tracing::error!(
+                    code = e.code.as_str(),
+                    detail = e.detail.as_str(),
+                    "accodamento face_quality"
                 );
             }
             // Verifica dei modelli in background: la libreria resta utilizzabile.

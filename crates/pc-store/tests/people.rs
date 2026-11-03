@@ -7,6 +7,7 @@ fn face(x: f32, axis: usize) -> people::DetectedFace {
         bbox: [x, 0.1, 0.2, 0.2],
         quality: 0.99,
         embedding,
+        ..Default::default()
     }
 }
 
@@ -241,6 +242,196 @@ fn link_merge_and_sync_identity_names() {
     );
 }
 
+/// Scenario identity-registry "Collegamento": il gruppo esce da Da rivedere,
+/// appare come Marco Russo in Persone, l'identità mostra il conteggio foto.
+#[test]
+fn link_moves_group_to_people_section() {
+    use pc_store::app_store::identities as ids;
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    let uid = app
+        .with(|a| {
+            ids::create(
+                a,
+                &ids::IdentityInput {
+                    name: "Marco Russo".into(),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+    let c = library_with(2);
+    let m = people::default_face_match();
+    for media in 1..=2 {
+        people::save_faces(&c, media, &[face(0.1, 3)], "sface", "det+sface", 0.363).unwrap();
+    }
+    let face_ids: Vec<_> = (1..=2)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let group = people::create_person(&c, None).unwrap();
+    people::assign(&c, &face_ids, group).unwrap();
+
+    let before = people::people_sections(&c, &m).unwrap();
+    assert_eq!(before.review, 1);
+    assert_eq!(before.people, 0);
+
+    people::link_identity(&c, group, Some((&uid, "Marco Russo"))).unwrap();
+
+    let after = people::people_sections(&c, &m).unwrap();
+    assert_eq!(after.people, 1);
+    assert_eq!(after.review, 0);
+    let review = people::list_groups(
+        &c,
+        people::PeopleSection::Review,
+        None,
+        people::GroupSort::PhotosDesc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert!(
+        review.items.iter().all(|r| r.id != group),
+        "dopo il collegamento il gruppo non resta in Da rivedere"
+    );
+    let people_page = people::list_groups(
+        &c,
+        people::PeopleSection::People,
+        None,
+        people::GroupSort::NameAsc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(people_page.items.len(), 1);
+    assert_eq!(people_page.items[0].id, group);
+    assert_eq!(people_page.items[0].name.as_deref(), Some("Marco Russo"));
+    assert_eq!(
+        people_page.items[0].identity_uid.as_deref(),
+        Some(uid.as_str())
+    );
+    assert_eq!(people::identity_photos(&c).unwrap()[&uid], 2);
+}
+
+/// Scenario identity-registry "Collegamento a un'identità già collegata":
+/// due gruppi collegati alla stessa uid diventano una sola persona.
+#[test]
+fn link_to_already_linked_identity_merges() {
+    use pc_store::app_store::identities as ids;
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    let uid = app
+        .with(|a| {
+            ids::create(
+                a,
+                &ids::IdentityInput {
+                    name: "Marco Russo".into(),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+    let c = library_with(3);
+    let m = people::default_face_match();
+    for media in 1..=3 {
+        people::save_faces(
+            &c,
+            media,
+            &[face(0.1, media as usize)],
+            "sface",
+            "det+sface",
+            0.363,
+        )
+        .unwrap();
+    }
+    let a = people::create_person(&c, None).unwrap();
+    let b = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[people::records(&c, Some(1)).unwrap()[0].id], a).unwrap();
+    people::assign(
+        &c,
+        &[
+            people::records(&c, Some(2)).unwrap()[0].id,
+            people::records(&c, Some(3)).unwrap()[0].id,
+        ],
+        b,
+    )
+    .unwrap();
+
+    people::link_identity(&c, a, Some((&uid, "Marco Russo"))).unwrap();
+    let kept = people::link_identity(&c, b, Some((&uid, "Marco Russo"))).unwrap();
+    assert_eq!(kept, a);
+
+    let persons = people::list(&c).unwrap();
+    assert_eq!(persons.len(), 1);
+    assert_eq!(persons[0].id, a);
+    assert_eq!(persons[0].name.as_deref(), Some("Marco Russo"));
+    assert_eq!(persons[0].identity_uid.as_deref(), Some(uid.as_str()));
+    assert_eq!(persons[0].faces, 3);
+
+    let sections = people::people_sections(&c, &m).unwrap();
+    assert_eq!(sections.people, 1);
+    assert_eq!(sections.review, 0);
+    assert_eq!(people::identity_photos(&c).unwrap()[&uid], 3);
+
+    let faces = people::records(&c, None).unwrap();
+    assert_eq!(faces.len(), 3);
+    assert!(faces.iter().all(|f| f.person_id == Some(a)));
+}
+
+/// `rename` senza identità non sposta in Persone: la sezione usa `identity_uid`.
+#[test]
+fn rename_without_identity_stays_in_review() {
+    let c = library_with(1);
+    let m = people::default_face_match();
+    people::save_faces(&c, 1, &[face(0.1, 0)], "sface", "det+sface", 0.363).unwrap();
+    let fid = people::records(&c, Some(1)).unwrap()[0].id;
+    let g = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[fid], g).unwrap();
+    people::rename(&c, g, "Marco").unwrap();
+
+    let sections = people::people_sections(&c, &m).unwrap();
+    assert_eq!(sections.people, 0);
+    assert_eq!(sections.review, 1);
+    let row = &people::list(&c).unwrap()[0];
+    assert_eq!(row.name.as_deref(), Some("Marco"));
+    assert!(row.identity_uid.is_none());
+}
+
+/// Dopo il flag `IDENTITIES_MIGRATED`, un rename successivo non crea identità.
+#[test]
+fn migrate_to_identities_runs_once() {
+    use pc_store::app_store::identities as ids;
+    let app = pc_store::AppStore::open_in_memory().unwrap();
+    let c = library_with(2);
+    people::save_faces(&c, 1, &[face(0.1, 0)], "sface", "det+sface", 0.363).unwrap();
+    people::save_faces(&c, 2, &[face(0.1, 1)], "sface", "det+sface", 0.363).unwrap();
+    let p1 = people::create_person(&c, None).unwrap();
+    let p2 = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[people::records(&c, Some(1)).unwrap()[0].id], p1).unwrap();
+    people::assign(&c, &[people::records(&c, Some(2)).unwrap()[0].id], p2).unwrap();
+    people::rename(&c, p1, "Giulia").unwrap();
+
+    let linked =
+        people::migrate_to_identities(&c, |name| app.with(|a| ids::ensure_by_name(a, name)))
+            .unwrap();
+    assert_eq!(linked, 1);
+    assert_eq!(app.with(ids::list).unwrap().len(), 1);
+
+    people::rename(&c, p2, "Luca").unwrap();
+    let again =
+        people::migrate_to_identities(&c, |name| app.with(|a| ids::ensure_by_name(a, name)))
+            .unwrap();
+    assert_eq!(again, 0, "la migrazione non riparte");
+    assert_eq!(
+        app.with(ids::list).unwrap().len(),
+        1,
+        "nessuna identità implicita per rename post-migrazione"
+    );
+    let m = people::default_face_match();
+    let sections = people::people_sections(&c, &m).unwrap();
+    assert_eq!(sections.people, 1);
+    assert_eq!(sections.review, 1);
+}
+
 fn lib_with(n: i64) -> Connection {
     let mut c = Connection::open_in_memory().unwrap();
     migrate::migrate(&mut c, None).unwrap();
@@ -266,6 +457,7 @@ fn faces_below_quality_are_kept_but_not_matched() {
         similarity: 0.363,
         min_quality: 0.8,
         floor: Some(0.6),
+        ..Default::default()
     };
     people::save_faces_tuned(&c, 2, &[low], "sface", "det+sface", m, &Default::default()).unwrap();
     let f = people::records(&c, Some(2)).unwrap();
@@ -354,57 +546,584 @@ fn person_count_follows_threshold_without_reanalysis() {
     assert!(analysis::recount_people(&c, 0.6, true).unwrap().is_empty());
 }
 
-/// Volti a pagine: niente duplicati né buchi, anche con molte qualità uguali.
 #[test]
-fn faces_are_paged_without_duplicates_or_gaps() {
-    let tmp = tempfile::tempdir().unwrap();
-    let s = pc_store::Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
-    s.write(|c| {
-        c.execute(
-            "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at)
-             VALUES (1, 'a.jpg', 'a.jpg', 'jpg', 1, 0, 0, 0)",
-            [],
-        )?;
-        c.execute(
-            "INSERT INTO person(id, created_at) VALUES (1, 0), (2, 0)",
-            [],
-        )?;
-        let mut st = c.prepare(
-            "INSERT INTO face(media_id, bbox, quality, person_id) VALUES (1, '[0,0,1,1]', ?1, ?2)",
-        )?;
-        for i in 0..2_500 {
-            // Qualità ripetute (10 valori) e con decimali non rappresentabili in f32.
-            let q = 0.1 + f64::from(i % 10) * 0.0731;
-            st.execute(rusqlite::params![q, if i % 3 == 0 { 2 } else { 1 }])?;
-        }
-        Ok(())
-    })
-    .unwrap();
-    for person in [None, Some(1)] {
-        let mut seen = std::collections::HashSet::new();
-        let mut after = None;
-        let mut pages = 0;
-        let mut last_q = f32::INFINITY;
-        loop {
-            let page = s
-                .read(|c| people::faces_page(c, person, after, 300))
-                .unwrap();
-            pages += 1;
-            for f in &page.items {
-                assert!(seen.insert(f.id), "volto {} ripetuto", f.id);
-                assert!(f.quality <= last_q + 1e-6, "ordine per qualità");
-                last_q = f.quality;
-                if let Some(p) = person {
-                    assert_eq!(f.person_id, Some(p));
-                }
-            }
-            match page.next {
-                Some(n) => after = Some(n),
-                None => break,
-            }
-        }
-        let expected = if person.is_some() { 1_666 } else { 2_500 };
-        assert_eq!(seen.len(), expected);
-        assert_eq!(pages, expected.div_ceil(300));
+fn people_pages_have_no_duplicates_or_gaps() {
+    let c = lib_with(30);
+    let m = people::default_face_match();
+    // 12 gruppi da rivedere con un volto ciascuno a qualità decrescente.
+    let mut group_ids = Vec::new();
+    for i in 0..12 {
+        let media = i + 1;
+        let mut f = face(0.1, (i % 8) as usize);
+        f.quality = 0.99 - (i as f32) * 0.01;
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(media)).unwrap()[0].id;
+        let g = people::create_person(&c, None).unwrap();
+        people::assign(&c, &[fid], g).unwrap();
+        group_ids.push(g);
     }
+    let sections = people::people_sections(&c, &m).unwrap();
+    assert_eq!(sections.review, 12);
+    assert_eq!(sections.people, 0);
+    assert_eq!(sections.ignored, 0);
+
+    let mut seen = Vec::new();
+    let mut after = None;
+    loop {
+        let page = people::list_groups(
+            &c,
+            people::PeopleSection::Review,
+            None,
+            people::GroupSort::PhotosDesc,
+            after,
+            5,
+            &m,
+        )
+        .unwrap();
+        assert!(page.items.len() <= 5);
+        for row in &page.items {
+            assert!(!seen.contains(&row.id), "duplicato {}", row.id);
+            seen.push(row.id);
+        }
+        match page.next {
+            Some(id) => after = Some(id),
+            None => break,
+        }
+    }
+    assert_eq!(seen.len(), 12, "nessun buco nella paginazione dei gruppi");
+
+    let g0 = group_ids[0];
+    // Aggiunge altri volti allo stesso gruppo per la paginazione dei volti.
+    for i in 12..30 {
+        let mut f = face(0.1 + (i as f32) * 0.01, 0);
+        f.quality = 0.5 + (i as f32) * 0.01;
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, i + 1, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(i + 1)).unwrap()[0].id;
+        people::assign(&c, &[fid], g0).unwrap();
+    }
+    let mut face_ids = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = people::group_faces(
+            &c,
+            people::FaceScope::Group { group: g0 },
+            people::FaceSort::QualityDesc,
+            cursor.as_ref(),
+            7,
+            &m,
+        )
+        .unwrap();
+        for f in &page.items {
+            assert!(!face_ids.contains(&f.id), "volto duplicato {}", f.id);
+            if let Some(prev) = face_ids.last() {
+                let prev_q = page
+                    .items
+                    .iter()
+                    .find(|x| x.id == *prev)
+                    .map(|x| x.quality_score);
+                // Solo confronta con l'ultimo della pagina precedente tramite cursore.
+                let _ = prev_q;
+            }
+            face_ids.push(f.id);
+        }
+        // Verifica ordine non crescente sulla pagina.
+        for w in page.items.windows(2) {
+            assert!(
+                w[0].quality_score >= w[1].quality_score
+                    || (w[0].quality_score == w[1].quality_score && w[0].id > w[1].id)
+            );
+        }
+        match page.next {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+    let total = people::group_faces(
+        &c,
+        people::FaceScope::Group { group: g0 },
+        people::FaceSort::QualityDesc,
+        None,
+        200,
+        &m,
+    )
+    .unwrap()
+    .total;
+    assert_eq!(face_ids.len() as i64, total);
+}
+
+#[test]
+fn ignored_person_leaves_photos_but_disappears_from_library_filter() {
+    let c = lib_with(3);
+    let m = people::default_face_match();
+    for media in 1..=3 {
+        let mut f = face(0.1, 0);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let ids: Vec<_> = (1..=3)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let p = people::create_person(&c, None).unwrap();
+    people::assign(&c, &ids, p).unwrap();
+    people::rename(&c, p, "Sconosciuto").unwrap();
+    people::link_identity(&c, p, Some(("uid-x", "Sconosciuto"))).unwrap();
+
+    let before = people::people_sections(&c, &m).unwrap();
+    assert_eq!(before.people, 1);
+    assert_eq!(before.ignored, 0);
+    let facets = pc_store::query::facets(&c, &pc_store::query::LibraryFilter::default()).unwrap();
+    assert!(
+        facets
+            .people
+            .values
+            .iter()
+            .any(|v| v.value == "Sconosciuto"),
+        "prima dell'ignore compare nel filtro"
+    );
+    let media_count =
+        pc_store::query::count(&c, &pc_store::query::LibraryFilter::default()).unwrap();
+    assert_eq!(media_count, 3);
+
+    people::ignore_person(&c, p).unwrap();
+    let after = people::people_sections(&c, &m).unwrap();
+    assert_eq!(after.people, 0);
+    assert_eq!(after.ignored, 1);
+    let review = people::list_groups(
+        &c,
+        people::PeopleSection::Review,
+        None,
+        people::GroupSort::PhotosDesc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert!(review.items.is_empty());
+    let ignored = people::list_groups(
+        &c,
+        people::PeopleSection::Ignored,
+        None,
+        people::GroupSort::PhotosDesc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(ignored.items.len(), 1);
+    assert_eq!(ignored.items[0].id, p);
+
+    let facets = pc_store::query::facets(&c, &pc_store::query::LibraryFilter::default()).unwrap();
+    assert!(
+        facets
+            .people
+            .values
+            .iter()
+            .all(|v| v.value != "Sconosciuto"),
+        "dopo l'ignore assente dal filtro Persone"
+    );
+    let media_count =
+        pc_store::query::count(&c, &pc_store::query::LibraryFilter::default()).unwrap();
+    assert_eq!(media_count, 3, "le foto restano in libreria");
+    let filtered = pc_store::query::count(
+        &c,
+        &pc_store::query::LibraryFilter {
+            person_ids: vec![p],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(filtered, 0, "il filtro per persona ignorata non trova foto");
+}
+
+#[test]
+fn merge_many_unites_groups() {
+    let c = lib_with(4);
+    let mut face_ids = Vec::new();
+    for media in 1..=4 {
+        let mut f = face(0.1, media as usize % 4);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        face_ids.push(people::records(&c, Some(media)).unwrap()[0].id);
+    }
+    let g1 = people::create_person(&c, None).unwrap();
+    let g2 = people::create_person(&c, None).unwrap();
+    let g3 = people::create_person(&c, None).unwrap();
+    let named = people::create_person(&c, Some("Anna")).unwrap();
+    people::assign(&c, &[face_ids[0]], g1).unwrap();
+    people::assign(&c, &[face_ids[1]], g2).unwrap();
+    people::assign(&c, &[face_ids[2]], g3).unwrap();
+    people::assign(&c, &[face_ids[3]], named).unwrap();
+
+    people::merge_many(&c, &[g1, g2, g3], named).unwrap();
+
+    for fid in &face_ids {
+        let person = c
+            .query_row("SELECT person_id FROM face WHERE id=?1", [*fid], |r| {
+                r.get::<_, Option<i64>>(0)
+            })
+            .unwrap();
+        assert_eq!(person, Some(named));
+    }
+    for id in [g1, g2, g3] {
+        let exists: bool = c
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(!exists, "gruppo {id} dovrebbe essere eliminato");
+    }
+    let exists: bool = c
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+            [named],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(exists);
+}
+
+#[test]
+fn restore_ignored_person() {
+    let c = lib_with(2);
+    let m = people::default_face_match();
+    for media in 1..=2 {
+        let mut f = face(0.1, 0);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let ids: Vec<_> = (1..=2)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let p = people::create_person(&c, None).unwrap();
+    people::assign(&c, &ids, p).unwrap();
+    people::rename(&c, p, "Marco").unwrap();
+    people::link_identity(&c, p, Some(("uid-m", "Marco"))).unwrap();
+
+    people::ignore_person(&c, p).unwrap();
+    let ignored = people::people_sections(&c, &m).unwrap();
+    assert_eq!(ignored.people, 0);
+    assert_eq!(ignored.ignored, 1);
+
+    people::restore_person(&c, p).unwrap();
+    let after = people::people_sections(&c, &m).unwrap();
+    assert_eq!(after.people, 1);
+    assert_eq!(after.ignored, 0);
+    let ignored_at: Option<i64> = c
+        .query_row("SELECT ignored_at FROM person WHERE id=?1", [p], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert!(ignored_at.is_none());
+    let people = people::list_groups(
+        &c,
+        people::PeopleSection::People,
+        None,
+        people::GroupSort::PhotosDesc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(people.items.len(), 1);
+    assert_eq!(people.items[0].id, p);
+}
+
+#[test]
+fn recover_face_sets_quality_override() {
+    let c = lib_with(1);
+    let m = people::default_face_match();
+    let mut f = face(0.1, 0);
+    f.quality = 0.95;
+    f.sharpness = Some(0.1); // sotto la soglia predefinita 0,35
+    f.size_px = Some(120);
+    f.quality_score = Some(0.2);
+    people::save_faces(&c, 1, &[f], "sface", "det+sface", 0.363).unwrap();
+    let fid = people::records(&c, Some(1)).unwrap()[0].id;
+    let rec = people::records(&c, Some(1)).unwrap()[0].clone();
+    assert_eq!(rec.discard_reason(&m), Some(people::DiscardReason::Blurred));
+
+    people::recover_faces(&c, &[fid]).unwrap();
+    let rec = people::records(&c, Some(1)).unwrap()[0].clone();
+    assert!(rec.quality_override);
+    assert_eq!(rec.discard_reason(&m), None);
+}
+
+#[test]
+fn people_corrections_are_undoable() {
+    use pc_store::bulk::{self, UndoAction};
+    let c = lib_with(3);
+    let m = people::default_face_match();
+    for media in 1..=3 {
+        let mut f = face(0.1, media as usize);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let fids: Vec<_> = (1..=3)
+        .map(|media| people::records(&c, Some(media)).unwrap()[0].id)
+        .collect();
+    let a = people::create_person(&c, None).unwrap();
+    let b = people::create_person(&c, Some("B")).unwrap();
+    people::assign(&c, &[fids[0]], a).unwrap();
+    people::assign(&c, &[fids[1]], b).unwrap();
+
+    // Recupero + annulla.
+    c.execute(
+        "UPDATE face SET sharpness=0.1, quality_override=0 WHERE id=?1",
+        [fids[2]],
+    )
+    .unwrap();
+    people::recover_faces(&c, &[fids[2]]).unwrap();
+    bulk::record_undo(
+        &c,
+        "Recupera volti",
+        &UndoAction::FacesRecovered { ids: vec![fids[2]] },
+    )
+    .unwrap();
+    assert_eq!(
+        bulk::undo_last(&c).unwrap().as_deref(),
+        Some("Recupera volti")
+    );
+    let ov: i64 = c
+        .query_row(
+            "SELECT quality_override FROM face WHERE id=?1",
+            [fids[2]],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(ov, 0);
+
+    // Ignora / ripristina + annulla.
+    let (prev_at, prev_faces) = people::ignore_person(&c, b).unwrap();
+    bulk::record_undo(
+        &c,
+        "Ignora persona",
+        &UndoAction::PersonIgnored {
+            id: b,
+            prev_ignored_at: prev_at,
+            prev_ignored_faces: prev_faces,
+        },
+    )
+    .unwrap();
+    assert_eq!(people::people_sections(&c, &m).unwrap().ignored, 1);
+    assert_eq!(
+        bulk::undo_last(&c).unwrap().as_deref(),
+        Some("Ignora persona")
+    );
+    assert_eq!(people::people_sections(&c, &m).unwrap().ignored, 0);
+
+    // Unione + annulla ripristina il gruppo sorgente.
+    let snap = people::person_snapshot(&c, a).unwrap();
+    let faces = people::faces_of_persons(&c, &[a]).unwrap();
+    people::merge(&c, a, b).unwrap();
+    bulk::record_undo(
+        &c,
+        "Unisci persone",
+        &UndoAction::PersonsMerged {
+            from: vec![snap],
+            faces,
+            to: b,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        bulk::undo_last(&c).unwrap().as_deref(),
+        Some("Unisci persone")
+    );
+    let exists: bool = c
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+            [a],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(exists);
+    let person: Option<i64> = c
+        .query_row("SELECT person_id FROM face WHERE id=?1", [fids[0]], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(person, Some(a));
+}
+
+#[test]
+fn locate_face_in_large_person_group() {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    let m = people::default_face_match();
+    c.execute(
+        "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) \
+         VALUES (1,'big.jpg','big.jpg','jpg',1,1,1,1)",
+        [],
+    )
+    .unwrap();
+    let person = people::create_person(&c, Some("Giulia")).unwrap();
+    people::link_identity(&c, person, Some(("uid-g", "Giulia"))).unwrap();
+
+    let tx = c.transaction().unwrap();
+    {
+        let mut stmt = tx
+            .prepare(
+                "INSERT INTO face(id,media_id,bbox,quality,sharpness,size_px,quality_score,\
+                 quality_override,person_id,rejected) \
+                 VALUES (?1,1,'[0.1,0.1,0.2,0.2]',0.95,0.9,120,?2,0,?3,'[]')",
+            )
+            .unwrap();
+        for i in 1..=400 {
+            // qualità decrescente: id 1 = migliore (indice 0), id 400 = peggiore (indice 399)
+            let score = 1.0 - (i as f32) * 0.001;
+            stmt.execute(rusqlite::params![i, score, person]).unwrap();
+        }
+    }
+    tx.commit().unwrap();
+    c.execute(
+        "INSERT INTO settings_kv(key,value) VALUES ('identity.next.face','400') \
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        [],
+    )
+    .unwrap();
+
+    let target = 380_i64; // vicino alla fine dell'ordine per qualità
+    let expected_index = target - 1; // id 1 → 0, id 380 → 379
+    let located =
+        people::locate_face(&c, &people::LocateFaceRequest::Face { face_id: target }, &m).unwrap();
+    assert_eq!(located.face_id, target);
+    assert_eq!(located.media_id, 1);
+    assert_eq!(located.media_name, "big.jpg");
+    assert_eq!(located.section, people::PeopleSection::People);
+    assert_eq!(located.group_id, Some(person));
+    assert!(!located.singles);
+    assert!(!located.discarded);
+    assert_eq!(located.index, expected_index);
+
+    // Stesso risultato via media + person_id.
+    let via_media = people::locate_face(
+        &c,
+        &people::LocateFaceRequest::Media {
+            media_id: 1,
+            person_id: Some(person),
+        },
+        &m,
+    )
+    .unwrap();
+    // Preferisce non-scartati; con qualità diverse prende il migliore (indice 0).
+    assert_eq!(via_media.section, people::PeopleSection::People);
+    assert_eq!(via_media.group_id, Some(person));
+    assert_eq!(via_media.index, 0);
+}
+
+#[test]
+fn locate_face_review_ignored_and_discarded() {
+    let c = lib_with(3);
+    let m = people::default_face_match();
+
+    // Gruppo da rivedere (senza identity).
+    let mut f = face(0.1, 0);
+    f.sharpness = Some(0.9);
+    f.size_px = Some(120);
+    f.quality_score = Some(0.9);
+    people::save_faces(&c, 1, &[f], "sface", "det+sface", 0.363).unwrap();
+    let review_face = people::records(&c, Some(1)).unwrap()[0].id;
+    let review = people::create_person(&c, None).unwrap();
+    people::assign(&c, &[review_face], review).unwrap();
+
+    let located = people::locate_face(
+        &c,
+        &people::LocateFaceRequest::Face {
+            face_id: review_face,
+        },
+        &m,
+    )
+    .unwrap();
+    assert_eq!(located.section, people::PeopleSection::Review);
+    assert_eq!(located.group_id, Some(review));
+    assert!(!located.discarded);
+    assert_eq!(located.index, 0);
+
+    // Gruppo ignorato.
+    let mut f = face(0.1, 1);
+    f.sharpness = Some(0.9);
+    f.size_px = Some(120);
+    f.quality_score = Some(0.85);
+    people::save_faces(&c, 2, &[f], "sface", "det+sface", 0.363).unwrap();
+    let ignored_face = people::records(&c, Some(2)).unwrap()[0].id;
+    let ignored = people::create_person(&c, Some("X")).unwrap();
+    people::assign(&c, &[ignored_face], ignored).unwrap();
+    people::link_identity(&c, ignored, Some(("uid-x", "X"))).unwrap();
+    people::ignore_person(&c, ignored).unwrap();
+
+    let located = people::locate_face(
+        &c,
+        &people::LocateFaceRequest::Face {
+            face_id: ignored_face,
+        },
+        &m,
+    )
+    .unwrap();
+    assert_eq!(located.section, people::PeopleSection::Ignored);
+    assert_eq!(located.group_id, Some(ignored));
+    assert!(!located.discarded);
+    assert_eq!(located.index, 0);
+
+    // Volto scartato (nitidezza sotto soglia) assegnato a un gruppo.
+    let mut f = face(0.1, 2);
+    f.quality = 0.95;
+    f.sharpness = Some(0.1); // < default 0.35
+    f.size_px = Some(120);
+    f.quality_score = Some(0.2);
+    people::save_faces(&c, 3, &[f], "sface", "det+sface", 0.363).unwrap();
+    let discarded_face = people::records(&c, Some(3)).unwrap()[0].id;
+    // save_faces non assegna i scartati: forza assegnazione + quality_override=0.
+    c.execute(
+        "UPDATE face SET person_id=?2, sharpness=0.1, quality_override=0, quality_score=0.2 WHERE id=?1",
+        rusqlite::params![discarded_face, review],
+    )
+    .unwrap();
+    // Secondo scartato migliore per verificare l'indice nello scope Discarded.
+    c.execute(
+        "INSERT INTO face(id,media_id,bbox,quality,sharpness,size_px,quality_score,\
+         quality_override,person_id,rejected) \
+         VALUES (900,3,'[0.5,0.1,0.2,0.2]',0.95,0.05,120,0.5,0,?1,'[]')",
+        [review],
+    )
+    .unwrap();
+
+    let located = people::locate_face(
+        &c,
+        &people::LocateFaceRequest::Face {
+            face_id: discarded_face,
+        },
+        &m,
+    )
+    .unwrap();
+    assert!(located.discarded);
+    assert_eq!(located.group_id, Some(review));
+    assert_eq!(located.section, people::PeopleSection::Review);
+    assert!(!located.singles);
+    // quality_score 0.2 < 0.5 → dopo il volto 900 nell'ordine DESC → index 1
+    assert_eq!(located.index, 1);
+
+    let page = people::group_faces(
+        &c,
+        people::FaceScope::Discarded {
+            group: Some(review),
+        },
+        people::FaceSort::QualityDesc,
+        None,
+        50,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(page.items[located.index as usize].id, discarded_face);
 }

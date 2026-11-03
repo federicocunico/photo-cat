@@ -64,6 +64,7 @@ export const tuning = {
       persons: "Rilevamento persone",
       faces: "Rilevamento volti",
       faceSize: "Dimensione minima dei volti (px)",
+      faceSharpness: "Nitidezza minima dei volti",
       similarity: "Somiglianza tra volti",
       invalid: "Valore non valido: usare un numero tra 0 e 1. Resta in vigore {{value}}.",
       groups: "Catalogazione per gruppo e categoria",
@@ -78,6 +79,8 @@ export const tuning = {
       peopleChanged_other: "{{count}} foto cambiano il conteggio persone",
       facesExcluded_one: "{{count}} volti esclusi dal riconoscimento",
       facesExcluded_other: "{{count}} volti esclusi dal riconoscimento",
+      facesDiscardedSharpness_one: "{{count}} volto scartato per nitidezza",
+      facesDiscardedSharpness_other: "{{count}} volti scartati per nitidezza",
       personsEstimate_one: "circa {{count}} persona potrebbe cambiare raggruppamento (stima)",
       personsEstimate_other: "circa {{count}} persone potrebbero cambiare raggruppamento (stima)",
       belowFloor_one:
@@ -155,6 +158,7 @@ export const tuning = {
       persons: "Person detection",
       faces: "Face detection",
       faceSize: "Minimum face size (px)",
+      faceSharpness: "Minimum face sharpness",
       similarity: "Face similarity",
       invalid: "Invalid value: use a number between 0 and 1. {{value}} stays in effect.",
       groups: "Labels by group and category",
@@ -169,6 +173,8 @@ export const tuning = {
       peopleChanged_other: "{{count}} photos change the people count",
       facesExcluded_one: "{{count}} face excluded from recognition",
       facesExcluded_other: "{{count}} faces excluded from recognition",
+      facesDiscardedSharpness_one: "{{count}} face discarded for sharpness",
+      facesDiscardedSharpness_other: "{{count}} faces discarded for sharpness",
       personsEstimate_one: "about {{count}} person may change grouping (estimate)",
       personsEstimate_other: "about {{count}} people may change grouping (estimate)",
       belowFloor_one:

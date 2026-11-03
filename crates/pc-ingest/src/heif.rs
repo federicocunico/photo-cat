@@ -187,7 +187,10 @@ mod native {
             let bad = |e: libloading::Error| {
                 AppError::new(
                     ErrorCode::UnsupportedFormat,
-                    with_install_hint(format!("libheif non disponibile: {e}")),
+                    with_install_hint(format!(
+                        "libheif non disponibile ({}): {e}",
+                        path.display()
+                    )),
                 )
             };
             // C API di libheif: su Windows la versione distribuita (1.23.7), altrove quella di
