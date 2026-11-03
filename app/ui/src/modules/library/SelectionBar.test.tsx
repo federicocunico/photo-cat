@@ -356,3 +356,25 @@ it("Esito parziale: quante riuscite e quante no, con i dettagli", async () => {
   expect(await screen.findByText("98 riuscite · 2 non riuscite.")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Dettagli" })).toBeInTheDocument();
 });
+
+it("issue #26: aggiungere più foto a un catalogo le aggiunge tutte", async () => {
+  const user = userEvent.setup();
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: { id: 3, name: "Vacanze", kind: "manual", rules: null, createdAt: 0 },
+      items: 0,
+      excluded: 0,
+    },
+  ] as never);
+  useLibrary.setState({ filter: emptyFilter(), selection: idsSelection([4, 5, 6]), focused: 6 });
+  renderBars();
+  await user.click(screen.getByRole("button", { name: "Catalogo" }));
+  await user.click(await screen.findByRole("option", { name: "Aggiungi a Vacanze" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [4, 5, 6] },
+      { action: "add_catalog", catalog: 3 },
+      false,
+    ),
+  );
+});
