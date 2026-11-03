@@ -273,6 +273,16 @@ export const it = {
       value: "Nuovo valore",
       tag: "Nuovo tag",
       catalog: "Catalogo",
+      addTag: "Aggiungi un tag",
+      addCatalog: "Aggiungi a un catalogo",
+      multiple_one: "{{count}} foto selezionata",
+      multiple_other: "{{count}} foto selezionate",
+      commonTags: "Tag comuni a tutte",
+      sections: {
+        data: "Data, luogo, persone e tag",
+        collections: "Cataloghi e foto simili",
+        tech: "Dati tecnici e percorso",
+      },
     },
   },
   models: {

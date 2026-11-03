@@ -25,6 +25,9 @@ export const common = {
       saved: "Salvato",
       dismiss: "Chiudi l'avviso",
       shortcut: "Scorciatoia: {{keys}}",
+      notSet: "Non impostato",
+      editField: "{{field}}: {{value}}. Modifica",
+      mixed: "Valori diversi",
     },
     help: {
       menu: "Aiuto",
@@ -69,6 +72,9 @@ export const common = {
       saved: "Saved",
       dismiss: "Dismiss notice",
       shortcut: "Shortcut: {{keys}}",
+      notSet: "Not set",
+      editField: "{{field}}: {{value}}. Edit",
+      mixed: "Mixed values",
     },
     help: {
       menu: "Help",

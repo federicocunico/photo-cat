@@ -480,3 +480,41 @@
 .ui-picker-empty {
   margin: 0;
 }
+
+/* Modifica sul campo (InlineEdit) */
+.ui-inline-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border: 1px solid transparent;
+  border-radius: var(--pc-radius-sm);
+  background: transparent;
+  color: var(--pc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-inline-value:hover {
+  border-color: var(--pc-border);
+}
+.ui-inline-value[data-empty] {
+  color: var(--pc-text-secondary);
+}
+.ui-inline-icon {
+  flex: none;
+  color: var(--pc-text-secondary);
+  opacity: 0;
+}
+.ui-inline-value:hover .ui-inline-icon,
+.ui-inline-value:focus-visible .ui-inline-icon {
+  opacity: 1;
+}
+.ui-inline-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}

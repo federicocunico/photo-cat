@@ -6,7 +6,13 @@ import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type PlaceInput, type PlaceSuggestion } from "../../lib/ipc";
+import {
+  commands,
+  isTauri,
+  type PlaceInput,
+  type PlaceSuggestion,
+  type Target,
+} from "../../lib/ipc";
 import { usePlaceAction } from "./usePlaceAction";
 
 /** Campo del luogo con suggerimenti durante la digitazione. */
@@ -91,20 +97,32 @@ export function PlaceField({
   );
 }
 
-/** Luogo nell'ispettore: modifica come correzione manuale o ripristino automatico. */
+/**
+ * Luogo nell'ispettore: correzione manuale o ripristino del luogo automatico, su una
+ * foto o su tutte quelle selezionate (`target`, `count`).
+ */
 export function PlaceEditor({
-  id,
+  target,
+  count = 1,
   name,
   source,
+  onDone,
 }: {
-  id: number;
+  target: Target;
+  count?: number;
   name: string | null;
   source: string | null;
+  /** Chiamata dopo aver avviato la modifica (chiude la modifica sul campo). */
+  onDone?: () => void;
 }) {
   const { t } = useTranslation();
   const [value, setValue] = useState(name ?? "");
   const [picked, setPicked] = useState<PlaceSuggestion | null>(null);
   const { apply, error } = usePlaceAction();
+  const run = async (place: PlaceInput | null) => {
+    await apply(target, place, count);
+    onDone?.();
+  };
   useEffect(() => {
     setValue(name ?? "");
     setPicked(null);
@@ -118,6 +136,7 @@ export function PlaceEditor({
     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
       <div className="feature-actions" style={{ margin: 0 }}>
         <PlaceField
+          autoFocus
           value={value}
           onChange={(v) => setValue(v)}
           onPick={(s) => {
@@ -128,15 +147,12 @@ export function PlaceEditor({
         <BusyButton
           className="btn"
           disabled={!trimmed || (trimmed === (name ?? "") && source === "manual")}
-          onClick={async () => await apply({ kind: "ids", ids: [id] }, input())}
+          onClick={() => run(input())}
         >
           {t("place.set")}
         </BusyButton>
-        {source === "manual" && (
-          <BusyButton
-            className="btn"
-            onClick={async () => await apply({ kind: "ids", ids: [id] }, null)}
-          >
+        {(source === "manual" || count > 1) && (
+          <BusyButton className="btn" onClick={() => run(null)}>
             {t("place.reset")}
           </BusyButton>
         )}

@@ -94,12 +94,15 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   );
   await screen.findByTestId("inspector");
 
-  // Catalogazione: il valore corrente è preselezionato, lo si corregge in "Ritratto".
+  // Scenario "Ispezione file": un clic sul valore del tipo soggetto lo rende modificabile.
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
+  );
   const value = await screen.findByLabelText("Nuovo valore");
   await waitFor(() => expect(value).toHaveValue("paesaggio"));
-  expect(screen.getByText("Correggi campo")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Applica" })).toBeDisabled();
   fireEvent.change(value, { target: { value: "ritratto" } });
-  fireEvent.click(screen.getByText("Correggi campo"));
+  fireEvent.click(screen.getByRole("button", { name: "Applica" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
       { kind: "ids", ids: [7] },
@@ -108,9 +111,11 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
     ),
   );
 
-  // Tag utente.
-  fireEvent.change(screen.getByLabelText("Nuovo tag"), { target: { value: " famiglia " } });
-  fireEvent.click(screen.getByText("Aggiungi tag"));
+  // Tag utente: selettore con ricerca, Invio crea il tag.
+  fireEvent.click(screen.getByRole("button", { name: /^Aggiungi un tag/ }));
+  const tag = await screen.findByRole("combobox", { name: "Cerca o scrivi un tag" });
+  fireEvent.change(tag, { target: { value: " famiglia " } });
+  fireEvent.keyDown(tag, { key: "Enter" });
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
       { kind: "ids", ids: [7] },
@@ -120,11 +125,10 @@ it("corregge il tipo soggetto e aggiunge tag e catalogo dall'ispettore", async (
   );
 
   // Catalogo: solo i cataloghi manuali sono proposti.
-  const catalog = screen.getByLabelText("Catalogo");
-  await screen.findByRole("option", { name: "Vacanze" });
+  fireEvent.click(screen.getByRole("button", { name: /^Aggiungi a un catalogo/ }));
+  const vacanze = await screen.findByRole("option", { name: "Vacanze" });
   expect(screen.queryByRole("option", { name: "Smart" })).not.toBeInTheDocument();
-  fireEvent.change(catalog, { target: { value: "3" } });
-  fireEvent.click(screen.getByText("Aggiungi a catalogo"));
+  fireEvent.click(vacanze);
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
       { kind: "ids", ids: [7] },
@@ -154,7 +158,8 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
       <Inspector />
     </QueryClientProvider>,
   );
-  const field = await screen.findByLabelText("Luogo");
+  fireEvent.click(await screen.findByRole("button", { name: "Luogo: D7000. Modifica" }));
+  const field = await screen.findByRole("textbox", { name: "Luogo" });
   await waitFor(() => expect(field).toHaveValue("D7000"));
   // Scenario "Suggerimenti del luogo".
   fireEvent.change(field, { target: { value: "Gi" } });
@@ -174,8 +179,11 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
       false,
     ),
   );
-  // Scenario "Correzione del luogo": testo libero.
-  fireEvent.change(field, { target: { value: "Giappone " } });
+  // Scenario "Correzione del luogo": testo libero (la modifica sul campo si riapre).
+  fireEvent.click(await screen.findByRole("button", { name: "Luogo: D7000. Modifica" }));
+  fireEvent.change(await screen.findByRole("textbox", { name: "Luogo" }), {
+    target: { value: "Giappone " },
+  });
   fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
@@ -197,6 +205,7 @@ it("corregge il luogo con i suggerimenti e ripristina quello automatico", async 
       <Inspector />
     </QueryClientProvider>,
   );
+  fireEvent.click(await screen.findByRole("button", { name: "Luogo: Giappone. Modifica" }));
   fireEvent.click(await screen.findByRole("button", { name: "Ripristina automatico" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
@@ -219,6 +228,9 @@ it("nuova voce dall'Inspector: Invio crea e assegna, Esc annulla, nome obbligato
     <QueryClientProvider client={new QueryClient()}>
       <Inspector />
     </QueryClientProvider>,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
   );
   const value = await screen.findByLabelText("Nuovo valore");
   await screen.findByRole("option", { name: "Nuova voce…" });
@@ -320,4 +332,62 @@ it("esclude dal catalogo smart nell'Inspector", async () => {
     }),
   );
   await screen.findByRole("status");
+});
+
+it("Selezione multipla: Valori diversi, poi il luogo vale per tutte", async () => {
+  const detail = (await commandsMock.mediaDetail(7)) as unknown as Record<string, unknown>;
+  commandsMock.mediaDetail.mockImplementation(
+    async (id: number) =>
+      ({
+        ...detail,
+        item: { ...(detail.item as object), id },
+        location:
+          id === 1
+            ? { name: "Milano", country: null, lat: null, lon: null, source: "manual" }
+            : { name: "Torino", country: null, lat: null, lon: null, source: "manual" },
+        tags: id === 1 ? ["tramonto", "mare"] : ["tramonto"],
+      }) as never,
+  );
+  useLibrary.setState({ focused: 2, selection: idsSelection([1, 2]) });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("2 foto selezionate")).toBeInTheDocument();
+  // Prima della modifica i luoghi diversi sono "Valori diversi"; i tag comuni restano.
+  const place = await screen.findByRole("button", { name: "Luogo: Valori diversi. Modifica" });
+  expect(await screen.findByText("tramonto")).toBeInTheDocument();
+  expect(screen.queryByText("mare")).not.toBeInTheDocument();
+  fireEvent.click(place);
+  fireEvent.change(await screen.findByRole("textbox", { name: "Luogo" }), {
+    target: { value: "Roma" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Imposta luogo" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenCalledWith(
+      { kind: "ids", ids: [1, 2] },
+      { action: "set_place", place: { name: "Roma" } },
+      false,
+    ),
+  );
+});
+
+it("Sezione richiusa: resta richiusa anche su un'altra foto", async () => {
+  useLayout.setState({ collapsedSections: [] });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  const tech = await screen.findByRole("button", { name: "Dati tecnici e percorso" });
+  expect(screen.getByText("D:\\Foto\\IMG_0007.JPG")).toBeInTheDocument();
+  fireEvent.click(tech);
+  expect(screen.queryByText("D:\\Foto\\IMG_0007.JPG")).not.toBeInTheDocument();
+  act(() => useLibrary.setState({ focused: 8, selection: idsSelection([8]) }));
+  await screen.findByTestId("inspector");
+  expect(screen.getByRole("button", { name: "Dati tecnici e percorso" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
 });

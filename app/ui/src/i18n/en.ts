@@ -273,6 +273,16 @@ export const en: Messages = {
       value: "New value",
       tag: "New tag",
       catalog: "Catalog",
+      addTag: "Add a tag",
+      addCatalog: "Add to a catalog",
+      multiple_one: "{{count}} photo selected",
+      multiple_other: "{{count}} photos selected",
+      commonTags: "Tags shared by all",
+      sections: {
+        data: "Date, place, people and tags",
+        collections: "Catalogs and similar photos",
+        tech: "Technical data and path",
+      },
     },
   },
   models: {
