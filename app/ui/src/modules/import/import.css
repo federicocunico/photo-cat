@@ -1,0 +1,128 @@
+/* Importa: modulo per aggiungere una cartella, avanzamento e cartelle della libreria. */
+.import-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.import-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-5);
+  padding: 0 var(--pc-space-5) var(--pc-space-5);
+}
+.import-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-5);
+  align-items: flex-start;
+}
+.import-form {
+  flex: 2 1 520px;
+  min-width: 0;
+}
+.import-side {
+  flex: 1 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-5);
+}
+.import-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pc-space-3) var(--pc-space-5);
+}
+.import-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  min-height: 24px;
+}
+.import-formats {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  padding: var(--pc-space-3) var(--pc-space-4);
+  margin: 0;
+}
+.import-formats > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+}
+.import-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+.import-path {
+  word-break: break-all;
+}
+.import-warn {
+  color: var(--pc-warn);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+}
+.import-idle {
+  margin: 0;
+}
+.import-scan {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pc-space-2) var(--pc-space-3);
+  margin: 0;
+}
+.import-scan dd {
+  margin: 0;
+}
+.import-folders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.import-folder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+  padding: var(--pc-space-3) 0;
+  border-top: 1px solid var(--pc-border);
+}
+.import-folder:first-child {
+  border-top: 0;
+}
+.import-folder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-3);
+}
+.import-folder-head > .mono {
+  font-size: 13px;
+}
+.import-folder-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.import-folder-summary {
+  display: flex;
+  gap: var(--pc-space-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.import-removal-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}
+.import-relink-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}

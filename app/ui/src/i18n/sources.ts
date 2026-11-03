@@ -1,4 +1,4 @@
-// Testi della gestione delle importazioni: menu della sorgente, rimozione,
+// Testi della gestione delle importazioni: menu della cartella, rimozione,
 // riepilogo dell'aggiornamento, ricollegamento e rimozione dei mancanti.
 export const sources = {
   it: {
@@ -8,7 +8,7 @@ export const sources = {
       updateFolder: "Aggiorna cartella…",
       updateFolderOf: "Aggiorna la cartella {{name}}",
       remove: "Rimuovi dalla libreria…",
-      openImport: "Apri in Import",
+      openImport: "Apri in Importa",
       relink: "Ricollega mancanti…",
       removeMissing: "Rimuovi mancanti…",
       updateStarted: "Aggiornamento avviato",
@@ -46,8 +46,8 @@ export const sources = {
       },
       relinkDialog: {
         title: "Ricollega i file mancanti",
-        intro_one: "{{count}} file mancante in questa sorgente.",
-        intro_other: "{{count}} file mancanti in questa sorgente.",
+        intro_one: "{{count}} file mancante in questa cartella.",
+        intro_other: "{{count}} file mancanti in questa cartella.",
         oldFolder: "Cartella in cui si trovavano",
         newFolder: "Nuova posizione della cartella",
         browse: "Sfoglia…",
@@ -59,18 +59,18 @@ export const sources = {
         still_other: "{{count}} file restano mancanti.",
         ambiguous_one: "{{count}} con più copie identiche: non ricollegato.",
         ambiguous_other: "{{count}} con più copie identiche: non ricollegati.",
-        outside: "La nuova cartella non fa parte di nessuna sorgente.",
-        addSource: "Aggiungi come sorgente",
-        moveSource: "Sposta la sorgente qui",
-        sourceAdded: "Sorgente aggiunta",
-        sourceMoved: "Sorgente spostata",
+        outside: "La nuova posizione non è dentro nessuna cartella della libreria.",
+        addSource: "Aggiungi alla libreria",
+        moveSource: "Usa la nuova posizione per la cartella",
+        sourceAdded: "Cartella aggiunta alla libreria",
+        sourceMoved: "Posizione della cartella aggiornata",
       },
       missingDialog: {
         title: "Rimuovere i file mancanti?",
         body_one:
-          "{{count}} file mancante verrà tolto dalla libreria con le sue catalogazioni. Gli altri file della sorgente restano invariati.",
+          "{{count}} file mancante verrà tolto dalla libreria con le sue catalogazioni. Gli altri file della cartella restano invariati.",
         body_other:
-          "{{count}} file mancanti verranno tolti dalla libreria con le loro catalogazioni. Gli altri file della sorgente restano invariati.",
+          "{{count}} file mancanti verranno tolti dalla libreria con le loro catalogazioni. Gli altri file della cartella restano invariati.",
         confirm: "Rimuovi mancanti",
         done_one: "{{count}} file rimosso",
         done_other: "{{count}} file rimossi",
@@ -122,8 +122,8 @@ export const sources = {
       },
       relinkDialog: {
         title: "Relink missing files",
-        intro_one: "{{count}} missing file in this source.",
-        intro_other: "{{count}} missing files in this source.",
+        intro_one: "{{count}} missing file in this folder.",
+        intro_other: "{{count}} missing files in this folder.",
         oldFolder: "Folder where they used to be",
         newFolder: "New location of the folder",
         browse: "Browse…",
@@ -135,18 +135,18 @@ export const sources = {
         still_other: "{{count}} files are still missing.",
         ambiguous_one: "{{count}} with several identical copies: not relinked.",
         ambiguous_other: "{{count}} with several identical copies: not relinked.",
-        outside: "The new folder is not part of any source.",
-        addSource: "Add as source",
-        moveSource: "Move the source here",
-        sourceAdded: "Source added",
-        sourceMoved: "Source moved",
+        outside: "The new location is not inside any library folder.",
+        addSource: "Add to library",
+        moveSource: "Use the new location for the folder",
+        sourceAdded: "Folder added to the library",
+        sourceMoved: "Folder location updated",
       },
       missingDialog: {
         title: "Remove missing files?",
         body_one:
-          "{{count}} missing file will be removed from the library with its cataloguing. The other files of the source stay as they are.",
+          "{{count}} missing file will be removed from the library with its cataloguing. The other files of the folder stay as they are.",
         body_other:
-          "{{count}} missing files will be removed from the library with their cataloguing. The other files of the source stay as they are.",
+          "{{count}} missing files will be removed from the library with their cataloguing. The other files of the folder stay as they are.",
         confirm: "Remove missing",
         done_one: "{{count}} file removed",
         done_other: "{{count}} files removed",

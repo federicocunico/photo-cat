@@ -1,12 +1,12 @@
-import { QueryView } from "../../components/feedback/QueryView";
-import { BusyButton } from "../../components/feedback/BusyButton";
-// Gestione delle importazioni, condivisa tra Libreria e pagina Import:
+// Gestione delle importazioni, condivisa tra Libreria e pagina Importa:
 // rimozione con riepilogo, riepilogo dell'aggiornamento, ricollegamento e
 // rimozione dei mancanti, aggiornamento di una cartella.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type React from "react";
 import { useTranslation } from "react-i18next";
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
+import { Button, ConfirmDialog, Dialog, FolderPicker, InlineAlert } from "../../components/ui";
 import {
   commands,
   type ChangeGroup,
@@ -17,56 +17,12 @@ import {
 import { fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
+import { notify } from "../../store/toasts";
 import { pickFolder, TERMINAL, useShowInLibrary } from "./sourceActions";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 
-export function Modal({
-  label,
-  onClose,
-  children,
-}: {
-  label: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        background: "rgba(0,0,0,0.35)",
-        display: "grid",
-        placeItems: "center",
-      }}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        onKeyDown={(e) => e.key === "Escape" && onClose()}
-        style={{
-          width: "min(560px, 92vw)",
-          maxHeight: "86vh",
-          overflow: "auto",
-          border: "1px solid var(--pc-border)",
-          borderRadius: 8,
-          padding: 20,
-          background: "var(--pc-raised)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/** Conferma della rimozione di una sorgente con il riepilogo di cosa si perde. */
+/** Rimozione di una cartella dalla libreria, con il riepilogo di cosa si perde. */
 export function RemoveSourceDialog({
   source,
   onClose,
@@ -102,61 +58,50 @@ export function RemoveSourceDialog({
       setBusy(false);
     }
   };
-  const title = t("sources.removal.title", { path: source.path });
   return (
-    <QueryView query={summary} enabled={true} isEmpty={() => false}>
-      {() => (
-        <Modal label={title} onClose={busy ? () => {} : onClose}>
-          <strong style={{ wordBreak: "break-all" }}>{title}</strong>
-          {summary.error && <p role="alert">{errorText(summary.error)}</p>}
-          {s && (
-            <ul
-              style={{
-                margin: 0,
-                paddingLeft: 18,
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <li>{t("sources.removal.items", { count: s.items, n: fmtInt(s.items) })}</li>
-              {s.edited > 0 && <li>{t("sources.removal.edited", { count: s.edited })}</li>}
-              {s.catalogs.length > 0 && (
-                <li>
-                  {t("sources.removal.catalogs")}{" "}
-                  {s.catalogs
-                    .map((c) =>
-                      t("sources.removal.catalogItems", { name: c.name, n: fmtInt(c.items) }),
-                    )
-                    .join(", ")}
-                </li>
-              )}
-              {s.orphanedPeople.length > 0 && (
-                <li>{t("sources.removal.people", { names: s.orphanedPeople.join(", ") })}</li>
-              )}
-              {s.jobs > 0 && <li>{t("sources.removal.jobs", { count: s.jobs })}</li>}
-            </ul>
-          )}
-          <span className="muted" style={{ fontSize: 13 }}>
-            {t("sources.removal.disk")}
-          </span>
-          {error && <p role="alert">{error}</p>}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <BusyButton type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
-              {t("sources.cancel")}
-            </BusyButton>
-            <BusyButton
-              type="button"
-              className="btn btn-danger"
-              disabled={busy || !s}
-              onClick={async () => await remove()}
-            >
-              {busy ? t("sources.removal.busy") : t("sources.removal.confirm")}
-            </BusyButton>
-          </div>
-        </Modal>
-      )}
-    </QueryView>
+    <Dialog
+      open
+      onOpenChange={(o) => !o && !busy && onClose()}
+      title={
+        <span className="import-path">{t("sources.removal.title", { path: source.path })}</span>
+      }
+      width={560}
+      footer={
+        <>
+          <Button disabled={busy} onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="danger" busy={busy} disabled={!s} onClick={remove}>
+            {busy ? t("sources.removal.busy") : t("sources.removal.confirm")}
+          </Button>
+        </>
+      }
+    >
+      <QueryView query={summary} isEmpty={() => false}>
+        {(s) => (
+          <ul className="import-removal-list">
+            <li>{t("sources.removal.items", { count: s.items, n: fmtInt(s.items) })}</li>
+            {s.edited > 0 && <li>{t("sources.removal.edited", { count: s.edited })}</li>}
+            {s.catalogs.length > 0 && (
+              <li>
+                {t("sources.removal.catalogs")}{" "}
+                {s.catalogs
+                  .map((c) =>
+                    t("sources.removal.catalogItems", { name: c.name, n: fmtInt(c.items) }),
+                  )
+                  .join(", ")}
+              </li>
+            )}
+            {s.orphanedPeople.length > 0 && (
+              <li>{t("sources.removal.people", { names: s.orphanedPeople.join(", ") })}</li>
+            )}
+            {s.jobs > 0 && <li>{t("sources.removal.jobs", { count: s.jobs })}</li>}
+          </ul>
+        )}
+      </QueryView>
+      <p className="muted">{t("sources.removal.disk")}</p>
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
+    </Dialog>
   );
 }
 
@@ -223,7 +168,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
   );
 }
 
-/** Conferma della rimozione di tutti i mancanti di una sorgente. */
+/** Conferma della rimozione di tutti i mancanti di una cartella; l'esito è un avviso. */
 export function RemoveMissingDialog({
   sourceId,
   missing,
@@ -235,49 +180,22 @@ export function RemoveMissingDialog({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [done, setDone] = useState<number | null>(null);
-  const title = t("sources.missingDialog.title");
-  const remove = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      setDone(await commands.removeMissing(sourceId, true));
-      await qc.invalidateQueries();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
-    <Modal label={title} onClose={onClose}>
-      <strong>{title}</strong>
-      {done === null ? (
-        <p style={{ margin: 0 }}>{t("sources.missingDialog.body", { count: missing })}</p>
-      ) : (
-        <p role="status" style={{ margin: 0 }}>
-          {t("sources.missingDialog.done", { count: done })}
-        </p>
-      )}
-      {error && <p role="alert">{error}</p>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <BusyButton type="button" className="btn btn-ghost" onClick={onClose}>
-          {done === null ? t("sources.cancel") : t("sources.close")}
-        </BusyButton>
-        {done === null && (
-          <BusyButton
-            type="button"
-            className="btn btn-danger"
-            disabled={busy}
-            onClick={async () => await remove()}
-          >
-            {t("sources.missingDialog.confirm")}
-          </BusyButton>
-        )}
-      </div>
-    </Modal>
+    <ConfirmDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t("sources.missingDialog.title")}
+      message={t("sources.missingDialog.body", { count: missing })}
+      confirmLabel={t("sources.missingDialog.confirm")}
+      count={missing}
+      files="untouched"
+      onConfirm={async () => {
+        // Un errore lascia il dialogo aperto e compare come avviso.
+        const done = await commands.removeMissing(sourceId, true);
+        notify({ tone: "ok", message: t("sources.missingDialog.done", { count: done }) });
+        await qc.invalidateQueries();
+      }}
+    />
   );
 }
 
@@ -347,49 +265,45 @@ export function RelinkDialog({
       setError(errorText(e));
     }
   };
-  const title = t("sources.relinkDialog.title");
   const sameRoot = (a: string, b: string) =>
     a.replace(/[\\/]+$/, "").toLowerCase() === b.replace(/[\\/]+$/, "").toLowerCase();
   return (
-    <Modal label={title} onClose={onClose}>
-      <strong>{title}</strong>
-      <span>{t("sources.relinkDialog.intro", { count: missing })}</span>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {t("sources.relinkDialog.oldFolder")}
-        <input
-          className="field mono"
-          value={old}
-          disabled={jobId !== null}
-          onChange={(e) => setOldFolder(e.target.value)}
-        />
-      </label>
-      <label htmlFor="relink-new" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {t("sources.relinkDialog.newFolder")}
-      </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          id="relink-new"
-          className="field mono"
-          style={{ flex: 1 }}
-          value={newFolder}
-          disabled={jobId !== null}
-          onChange={(e) => setNewFolder(e.target.value)}
-        />
-        <BusyButton
-          type="button"
-          className="btn"
-          disabled={jobId !== null}
-          onClick={async () => {
-            const p = await pickFolder();
-            if (p) setNewFolder(p);
-          }}
-        >
-          {t("sources.relinkDialog.browse")}
-        </BusyButton>
-      </div>
-      {jobId !== null && !r && <span role="status">{t("sources.relinkDialog.running")}</span>}
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t("sources.relinkDialog.title")}
+      description={t("sources.relinkDialog.intro", { count: missing })}
+      width={560}
+      footer={
+        <>
+          <Button onClick={onClose}>
+            {jobId === null ? t("common.cancel") : t("common.close")}
+          </Button>
+          {jobId === null && (
+            <Button variant="primary" disabled={!newFolder.trim() || !old.trim()} onClick={start}>
+              {t("sources.relinkDialog.start")}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <FolderPicker
+        label={t("sources.relinkDialog.oldFolder")}
+        value={old}
+        disabled={jobId !== null}
+        pick={() => pickFolder(old)}
+        onChange={setOldFolder}
+      />
+      <FolderPicker
+        label={t("sources.relinkDialog.newFolder")}
+        value={newFolder}
+        disabled={jobId !== null}
+        pick={() => pickFolder()}
+        onChange={setNewFolder}
+      />
+      {jobId !== null && !r && <p role="status">{t("sources.relinkDialog.running")}</p>}
       {r && (
-        <div role="status" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div role="status" className="import-relink-result">
           <span>
             {t("sources.relinkDialog.result", {
               found: fmtInt(r.relinked + r.byHash),
@@ -398,7 +312,7 @@ export function RelinkDialog({
             })}
           </span>
           {r.stillMissing > 0 && (
-            <span style={{ color: "var(--pc-warn)" }}>
+            <span className="import-warn">
               {t("sources.relinkDialog.still", { count: r.stillMissing })}
             </span>
           )}
@@ -409,37 +323,18 @@ export function RelinkDialog({
           )}
           {r.outsideSources && <span>{t("sources.relinkDialog.outside")}</span>}
           {r.outsideSources && !note && (
-            <div style={{ display: "flex", gap: 8 }}>
+            <div>
               {r.sourceComplete && sameRoot(r.oldFolder, source.path) ? (
-                <BusyButton type="button" className="btn" onClick={async () => await moveSource()}>
-                  {t("sources.relinkDialog.moveSource")}
-                </BusyButton>
+                <Button onClick={moveSource}>{t("sources.relinkDialog.moveSource")}</Button>
               ) : (
-                <BusyButton type="button" className="btn" onClick={async () => await addSource()}>
-                  {t("sources.relinkDialog.addSource")}
-                </BusyButton>
+                <Button onClick={addSource}>{t("sources.relinkDialog.addSource")}</Button>
               )}
             </div>
           )}
           {note && <span>{note}</span>}
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <BusyButton type="button" className="btn btn-ghost" onClick={onClose}>
-          {jobId === null ? t("sources.cancel") : t("sources.close")}
-        </BusyButton>
-        {jobId === null && (
-          <BusyButton
-            type="button"
-            className="btn btn-primary"
-            disabled={!newFolder.trim() || !old.trim()}
-            onClick={async () => await start()}
-          >
-            {t("sources.relinkDialog.start")}
-          </BusyButton>
-        )}
-      </div>
-    </Modal>
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
+    </Dialog>
   );
 }

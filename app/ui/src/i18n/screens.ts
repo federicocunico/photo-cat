@@ -104,7 +104,8 @@ export const screens = {
         symlink_privilege:
           "I collegamenti simbolici richiedono la Modalità sviluppatore di Windows o privilegi di amministratore.",
         symlink_denied: "Collegamenti simbolici non consentiti su questa destinazione.",
-        cross_volume: "Gli hard link richiedono sorgenti e destinazione sullo stesso volume.",
+        cross_volume:
+          "I collegamenti fissi richiedono che le foto originali e la destinazione siano sullo stesso disco.",
         hardlink_unsupported: "Hard link non supportati su questa destinazione.",
       },
       start: "Crea cartelle",
@@ -241,7 +242,8 @@ export const screens = {
         symlink_privilege:
           "Symbolic links require Windows Developer Mode or administrator privileges.",
         symlink_denied: "Symbolic links are not allowed at this destination.",
-        cross_volume: "Hard links require the sources and the destination on the same volume.",
+        cross_volume:
+          "Hard links require the original photos and the destination to be on the same drive.",
         hardlink_unsupported: "Hard links are not supported at this destination.",
       },
       start: "Create folders",
@@ -274,7 +276,8 @@ export const screens = {
       recomputeAsk: "Ignored folders updated: recompute places inferred from folders?",
       recompute: "Recompute places",
       rawThresholds: "Threshold values",
-      purgeHint: "Deletes faces, face fingerprints and crops: they will be recomputed by a new analysis.",
+      purgeHint:
+        "Deletes faces, face fingerprints and crops: they will be recomputed by a new analysis.",
       sensitivity: {
         title: "Sensitivity",
         more: "More results",
