@@ -6,6 +6,7 @@ import type { TagOverview } from "../../bindings";
 import { commandsMock, emit, ipcMockModule, job } from "../../test/ipcMock";
 import { emptyFilter, idsSelection, selCount, selTarget, useLibrary } from "../../store/library";
 import { useLiveEvents } from "../../store/live";
+import { useToast } from "../../store/toasts";
 import { useTagHotkeys } from "./useTagHotkeys";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 
@@ -138,4 +139,32 @@ it("does nothing while typing in the search box, for free keys or without select
   useLibrary.setState({ selection: idsSelection() });
   fireEvent.keyDown(window, { key: "3" });
   expect(commandsMock.startBulk).toHaveBeenCalledTimes(1);
+});
+
+it("Errore dei tasti rapidi: il tag non applicato è segnalato con un avviso", async () => {
+  commandsMock.startBulk.mockRejectedValueOnce({ detail: "Libreria non disponibile" });
+  renderHarness();
+  await waitFor(() => expect(commandsMock.tagOverview).toHaveBeenCalled());
+  await waitFor(() => {
+    fireEvent.keyDown(window, { key: "1" });
+    expect(commandsMock.startBulk).toHaveBeenCalled();
+  });
+  await waitFor(() =>
+    expect(useToast.getState().notices).toContainEqual(
+      expect.objectContaining({ message: "Libreria non disponibile", tone: "error" }),
+    ),
+  );
+});
+
+it("Errore dei tasti rapidi: un'attività non riuscita è segnalata con un avviso d'errore", async () => {
+  renderHarness();
+  await waitFor(() => expect(commandsMock.tagOverview).toHaveBeenCalled());
+  await waitFor(() => {
+    fireEvent.keyDown(window, { key: "2" });
+    expect(commandsMock.startBulk).toHaveBeenCalled();
+  });
+  act(() => emit("job", job({ id: 41, kind: "bulk", state: "failed", failed: 6 })));
+  await waitFor(() =>
+    expect(useToast.getState().notices).toContainEqual(expect.objectContaining({ tone: "error" })),
+  );
 });

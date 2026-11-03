@@ -3,36 +3,28 @@ import { useBusyAction } from "../../components/feedback/useBusyAction";
 import { isTauri } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, type TagInfo, type TagSetView } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
+import { notify, notifyError } from "../../store/toasts";
+import { notifyUndoable } from "../../store/undo";
 import { TAG_COLORS, tagColorVar } from "../../theme/tokens";
 import { activeSet, errorText, refreshTags, useTagOverview } from "./data";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Icon } from "../../components/icons";
-
-type Pending =
-  | { kind: "merge"; source: string; target: string; fromRename?: boolean }
-  | { kind: "delete"; name: string; count: number }
-  | { kind: "deleteSet"; set: TagSetView }
-  | null;
+import { Button, ConfirmDialog, InlineAlert, InlineEdit } from "../../components/ui";
+import "./tags.css";
 
 export function Swatch({ color, size = 14 }: { color: string; size?: number }) {
   return (
     <span
       aria-hidden="true"
-      style={{
-        display: "inline-block",
-        flex: "none",
-        width: size,
-        height: size,
-        borderRadius: 4,
-        background: tagColorVar(color),
-      }}
+      className="tags-swatch"
+      style={{ width: size, height: size, background: tagColorVar(color) }}
     />
   );
 }
@@ -44,6 +36,23 @@ function openInLibrary(filter: { tags?: string[] }, ids?: number[]) {
   if (filter.tags) lib.setFilter({ ...emptyFilter(), tags: filter.tags });
   if (ids) lib.setSelection(ids, ids[0] ?? null);
   useLayout.getState().openModule({ module: "library" });
+}
+
+/**
+ * Rinomina, unione ed eliminazione di un tag: si eseguono subito e si annullano dallo
+ * store `undo` (avviso con "Annulla operazione" e Ctrl+Z), che chiama `undo_bulk`.
+ */
+async function undoableTagOperation(qc: QueryClient, run: () => Promise<unknown>, message: string) {
+  await run();
+  await refreshTags(qc);
+  notifyUndoable({
+    key: "tags-result",
+    message,
+    run: async () => {
+      await commands.undoBulk();
+      await refreshTags(qc);
+    },
+  });
 }
 
 function SetList({
@@ -86,21 +95,8 @@ function SetList({
     }
   });
   return (
-    <section
-      aria-label={t("tags.sets")}
-      style={{
-        flex: "1 1 240px",
-        maxWidth: 280,
-        padding: "20px 12px",
-        background: "var(--pc-panel-alt)",
-        borderRight: "1px solid var(--pc-border)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        overflow: "auto",
-      }}
-    >
-      <h2 ref={tipAnchor} className="section-title" style={{ margin: "0 8px 4px" }}>
+    <section aria-label={t("tags.sets")} className="tags-sets">
+      <h2 ref={tipAnchor} className="section-title tags-sets-title">
         {t("tags.sets")}
       </h2>
       <Coachmark tip="tags" anchor={tipAnchor} side="right" learnMore="tags" />
@@ -118,33 +114,18 @@ function SetList({
               refs.current[i] = el;
             }}
             type="button"
+            className="tags-set"
             aria-pressed={selected}
             tabIndex={selected || (current === null && i === 0) ? 0 : -1}
             onClick={() => onSelect(s.id)}
             onKeyDown={(e) => move(e, i)}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: 2,
-              padding: "10px 12px",
-              borderRadius: 6,
-              border: 0,
-              textAlign: "left",
-              cursor: "pointer",
-              color: "var(--pc-text)",
-              background: selected ? "var(--pc-tree-selected)" : "transparent",
-              outline: selected ? "1px solid var(--pc-selection-border)" : undefined,
-            }}
           >
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <strong style={{ fontWeight: 600 }}>{s.name}</strong>
+            <span className="tags-set-name">
+              <strong>{s.name}</strong>
               {s.isBase && <span className="chip">{t("tags.badgeBase")}</span>}
               {s.id === active && <span className="chip">{t("tags.badgeActive")}</span>}
             </span>
-            <span className="muted" style={{ fontSize: 12 }}>
-              {meta}
-            </span>
+            <span className="muted tags-small">{meta}</span>
           </BusyButton>
         );
       })}
@@ -154,7 +135,7 @@ function SetList({
             e.preventDefault();
             void create();
           }}
-          style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          className="tags-stack"
         >
           <input
             className="field"
@@ -163,7 +144,7 @@ function SetList({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <div className="feature-actions" style={{ margin: 0 }}>
+          <div className="feature-actions tags-actions">
             <BusyButton
               busy={actionBusy}
               className="btn btn-primary"
@@ -178,20 +159,60 @@ function SetList({
           </div>
         </form>
       ) : (
-        <BusyButton
-          type="button"
-          className="btn"
-          style={{ minHeight: 40, borderStyle: "dashed", background: "transparent" }}
-          onClick={() => setCreating(true)}
-        >
+        <BusyButton type="button" className="btn tags-new-set" onClick={() => setCreating(true)}>
           {t("tags.newSet")}
         </BusyButton>
       )}
-      {error && <p role="alert">{error}</p>}
-      <p className="muted" style={{ margin: 8, fontSize: 12, lineHeight: 1.45 }}>
-        {t("tags.baseNote")}
-      </p>
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
+      <p className="muted tags-note">{t("tags.baseNote")}</p>
     </section>
+  );
+}
+
+type NameProps = {
+  label: string;
+  value: string;
+  busy: boolean;
+  /** Restituisce `true` se l'editor può chiudersi. */
+  onSave: (name: string) => Promise<boolean>;
+};
+
+/** Nome modificabile sul campo (set o tag): l'unico modo di rinominare. */
+function NameEdit(props: NameProps) {
+  return (
+    <InlineEdit label={props.label} value={props.value}>
+      {(close) => <NameForm {...props} close={close} />}
+    </InlineEdit>
+  );
+}
+
+function NameForm({ label, value, busy, onSave, close }: NameProps & { close: () => void }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(value);
+  const changed = name.trim() !== "" && name.trim() !== value;
+  return (
+    <form
+      className="tags-name-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!changed) return close();
+        void onSave(name.trim()).then((ok) => ok && close());
+      }}
+    >
+      <input
+        className="field"
+        autoFocus
+        aria-label={label}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <BusyButton busy={busy} className="btn btn-primary" type="submit" disabled={!changed}>
+        {t("tags.save")}
+      </BusyButton>
+      <BusyButton className="btn" type="button" onClick={close}>
+        {t("tags.cancel")}
+      </BusyButton>
+    </form>
   );
 }
 
@@ -200,7 +221,6 @@ function SetDetail({
   tags,
   isActive,
   onSelectTag,
-  onRenameTag,
   onAskDelete,
   onDuplicated,
 }: {
@@ -208,19 +228,16 @@ function SetDetail({
   tags: TagInfo[];
   isActive: boolean;
   onSelectTag: (name: string) => void;
-  onRenameTag: (name: string) => void;
   onAskDelete: () => void;
   onDuplicated: (id: number) => void;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [adding, setAdding] = useState("");
-  const [renaming, setRenaming] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<number[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
     setConflicts([]);
-    setRenaming(null);
     setError("");
   }, [set.id]);
   const [run, actionBusy] = useBusyAction(async (fn: () => Promise<unknown>) => {
@@ -228,8 +245,10 @@ function SetDetail({
     try {
       await fn();
       await refreshTags(qc);
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     }
   });
   const count = (name: string) =>
@@ -237,65 +256,29 @@ function SetDetail({
   const color = (name: string) =>
     tags.find((x) => x.name.toLowerCase() === name.toLowerCase())?.color ?? "gray";
   const freeKey = [1, 2, 3, 4, 5, 6, 7, 8, 9].find((k) => !set.tags.some((x) => x.key === k));
-  const grid = "56px 28px minmax(0, 1fr) 100px 150px";
   return (
-    <section
-      style={{
-        flex: "999 1 480px",
-        minWidth: 0,
-        padding: 24,
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        {renaming === null ? (
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{set.name}</h2>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                await commands.saveTagSet(
+    <section className="tags-detail">
+      <div className="tags-detail-head">
+        <h2 className="tags-detail-title">
+          <NameEdit
+            label={t("tags.setName")}
+            value={set.name}
+            busy={actionBusy}
+            onSave={async (name) =>
+              (await run(() =>
+                commands.saveTagSet(
                   set.id,
-                  renaming,
+                  name,
                   set.tags.map((x) => x.name),
-                );
-                setRenaming(null);
-              });
-            }}
-            style={{ display: "flex", gap: 8 }}
-          >
-            <input
-              className="field"
-              autoFocus
-              aria-label={t("tags.setName")}
-              value={renaming}
-              onChange={(e) => setRenaming(e.target.value)}
-            />
-            <BusyButton
-              busy={actionBusy}
-              className="btn btn-primary"
-              type="submit"
-              disabled={!renaming.trim()}
-            >
-              {t("tags.save")}
-            </BusyButton>
-            <BusyButton className="btn" type="button" onClick={() => setRenaming(null)}>
-              {t("tags.cancel")}
-            </BusyButton>
-          </form>
-        )}
+                ),
+              )) === true
+            }
+          />
+        </h2>
         <span className="muted">
           {t("tags.setSummary", { tags: set.tags.length, photos: fmtInt(set.tagged) })}
         </span>
-        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {renaming === null && (
-            <BusyButton className="btn" onClick={() => setRenaming(set.name)}>
-              {t("tags.renameSet")}
-            </BusyButton>
-          )}
+        <div className="tags-detail-actions">
           <BusyButton
             className="btn"
             onClick={async () =>
@@ -307,9 +290,9 @@ function SetDetail({
             {t("tags.duplicate")}
           </BusyButton>
           {!set.isBase && (
-            <BusyButton className="btn btn-danger" onClick={onAskDelete}>
+            <Button variant="danger" onClick={onAskDelete}>
               {t("tags.deleteSet")}
-            </BusyButton>
+            </Button>
           )}
           <BusyButton
             className="btn btn-primary"
@@ -320,11 +303,8 @@ function SetDetail({
           </BusyButton>
         </div>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-        <label
-          className="feature-card"
-          style={{ flex: "1 1 260px", flexDirection: "row", alignItems: "flex-start" }}
-        >
+      <div className="tags-options">
+        <label className="feature-card tags-option">
           <input
             type="checkbox"
             checked={set.exclusive}
@@ -337,15 +317,10 @@ function SetDetail({
           <span>
             <strong>{t("tags.exclusive")}</strong>
             <br />
-            <span className="muted" style={{ fontSize: 13 }}>
-              {t("tags.exclusiveHelp")}
-            </span>
+            <span className="muted tags-help">{t("tags.exclusiveHelp")}</span>
           </span>
         </label>
-        <label
-          className="feature-card"
-          style={{ flex: "1 1 260px", flexDirection: "row", alignItems: "flex-start" }}
-        >
+        <label className="feature-card tags-option">
           <input
             type="checkbox"
             checked={set.exportKeywords}
@@ -356,44 +331,22 @@ function SetDetail({
           <span>
             <strong>{t("tags.exportKeywords")}</strong>
             <br />
-            <span className="muted" style={{ fontSize: 13 }}>
-              {t("tags.exportKeywordsHelp")}
-            </span>
+            <span className="muted tags-help">{t("tags.exportKeywordsHelp")}</span>
           </span>
         </label>
       </div>
       {conflicts.length > 0 && (
-        <div
-          role="alert"
-          className="feature-actions"
-          style={{ margin: 0, color: "var(--pc-warn)" }}
+        <InlineAlert
+          tone="warn"
+          action={
+            <Button onClick={() => openInLibrary({}, conflicts)}>{t("tags.openConflicts")}</Button>
+          }
         >
-          <span>{t("tags.conflicts", { count: conflicts.length })}</span>
-          <BusyButton className="btn" onClick={() => openInLibrary({}, conflicts)}>
-            {t("tags.openConflicts")}
-          </BusyButton>
-        </div>
+          {t("tags.conflicts", { count: conflicts.length })}
+        </InlineAlert>
       )}
-      <div
-        role="table"
-        aria-label={set.name}
-        style={{ border: "1px solid var(--pc-border)", borderRadius: 8, overflow: "hidden" }}
-      >
-        <div
-          role="row"
-          style={{
-            display: "grid",
-            gridTemplateColumns: grid,
-            gap: 12,
-            alignItems: "center",
-            padding: "8px 14px",
-            background: "var(--pc-panel)",
-            fontSize: 12,
-            textTransform: "uppercase",
-            letterSpacing: 0.6,
-          }}
-          className="muted"
-        >
+      <div role="table" aria-label={set.name} className="tags-table">
+        <div role="row" className="tags-row tags-row-head muted">
           <span role="columnheader">{t("tags.colKey")}</span>
           <span role="columnheader" />
           <span role="columnheader">{t("tags.colTag")}</span>
@@ -401,35 +354,9 @@ function SetDetail({
           <span role="columnheader" />
         </div>
         {set.tags.map((x) => (
-          <div
-            role="row"
-            key={x.key}
-            style={{
-              display: "grid",
-              gridTemplateColumns: grid,
-              gap: 12,
-              alignItems: "center",
-              padding: "6px 14px",
-              borderTop: "1px solid var(--pc-raised)",
-              minHeight: 44,
-            }}
-          >
+          <div role="row" key={x.key} className="tags-row">
             <span role="cell">
-              <kbd
-                className="mono"
-                style={{
-                  width: 28,
-                  height: 28,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 6,
-                  background: "var(--pc-raised)",
-                  border: "1px solid var(--pc-border)",
-                }}
-              >
-                {x.key}
-              </kbd>
+              <kbd className="mono tags-key">{x.key}</kbd>
             </span>
             <span role="cell">
               <Swatch color={color(x.name)} />
@@ -437,24 +364,16 @@ function SetDetail({
             <span role="cell">
               <BusyButton
                 type="button"
-                className="btn btn-ghost"
-                style={{ border: 0, fontWeight: 600, padding: 0 }}
+                className="btn btn-ghost tags-row-name"
                 onClick={() => onSelectTag(x.name)}
               >
                 {x.name}
               </BusyButton>
             </span>
-            <span role="cell" className="mono" style={{ fontSize: 13 }}>
+            <span role="cell" className="mono tags-small">
               {fmtInt(count(x.name))}
             </span>
-            <span role="cell" style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-              <BusyButton
-                className="btn"
-                aria-label={t("tags.renameTag", { name: x.name })}
-                onClick={() => onRenameTag(x.name)}
-              >
-                {t("tags.rename")}
-              </BusyButton>
+            <span role="cell" className="tags-row-actions">
               <BusyButton
                 className="btn icon-btn"
                 aria-label={t("tags.removeFromSet", { name: x.name })}
@@ -473,13 +392,7 @@ function SetDetail({
               setAdding("");
             });
           }}
-          style={{
-            display: "flex",
-            gap: 8,
-            padding: "10px 14px",
-            borderTop: "1px solid var(--pc-raised)",
-            background: "var(--pc-panel-alt)",
-          }}
+          className="tags-add"
         >
           <input
             className="field"
@@ -491,7 +404,6 @@ function SetDetail({
             disabled={!freeKey}
             value={adding}
             onChange={(e) => setAdding(e.target.value)}
-            style={{ flex: 1, minHeight: 36 }}
           />
           <BusyButton
             busy={actionBusy}
@@ -503,7 +415,7 @@ function SetDetail({
           </BusyButton>
         </form>
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
     </section>
   );
 }
@@ -511,106 +423,128 @@ function SetDetail({
 function TagPanel({
   tag,
   sets,
-  nameRef,
-  onAsk,
-  onError,
+  onSelectTag,
 }: {
   tag: TagInfo | undefined;
   sets: TagSetView[];
-  nameRef: RefObject<HTMLInputElement>;
-  onAsk: (p: Pending) => void;
-  onError: (msg: string) => void;
+  onSelectTag: (name: string | null) => void;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [name, setName] = useState(tag?.name ?? "");
   const [merging, setMerging] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
+  // Rinomina verso un nome esistente: l'unione si propone accanto al nome.
+  const [conflict, setConflict] = useState<string | null>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    setName(tag?.name ?? "");
     setMerging(null);
     setAddingTo(null);
+    setConflict(null);
+    setError("");
   }, [tag?.name]);
   const [run, actionBusy] = useBusyAction(async (fn: () => Promise<unknown>) => {
+    setError("");
     try {
       await fn();
-      await refreshTags(qc);
+      return true;
     } catch (e) {
-      onError(errorText(e));
+      setError(errorText(e));
+      return false;
     }
   });
   if (!tag) {
     return <p className="muted">{t("tags.none")}</p>;
   }
 
-  const rename = () =>
+  const merge = (target: string) =>
+    run(() =>
+      undoableTagOperation(
+        qc,
+        async () => {
+          await commands.mergeTag(tag.name, target);
+          onSelectTag(target);
+        },
+        t("tags.merged", { source: tag.name, target }),
+      ),
+    );
+  const rename = (to: string) =>
     run(async () => {
-      const out = await commands.renameTag(tag.name, name.trim());
-      if (out.outcome === "needsMerge")
-        onAsk({ kind: "merge", source: tag.name, target: out.target, fromRename: true });
+      const out = await commands.renameTag(tag.name, to);
+      if (out.outcome === "needsMerge") {
+        setConflict(out.target);
+        return;
+      }
+      onSelectTag(to);
+      await refreshTags(qc);
+      notifyUndoable({
+        key: "tags-result",
+        message: t("tags.renamed", { from: tag.name, to }),
+        run: async () => {
+          await commands.undoBulk();
+          await refreshTags(qc);
+        },
+      });
     });
   return (
     <>
-      <div className="muted" style={{ fontSize: 12 }}>
-        {t("tags.selected")}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="muted tags-small">{t("tags.selected")}</div>
+      <div className="tags-panel-name">
         <Swatch color={tag.color} />
-        <strong style={{ fontSize: 20 }}>{tag.name}</strong>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim() && name.trim() !== tag.name) void rename();
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: 6 }}
-      >
-        <label htmlFor="pc-tag-name" style={{ fontWeight: 600 }}>
-          {t("tags.name")}
-        </label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            id="pc-tag-name"
-            ref={nameRef}
-            className="field"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ flex: 1, minHeight: 40 }}
-          />
-          <BusyButton
+        <strong>
+          <NameEdit
+            label={t("tags.name")}
+            value={tag.name}
             busy={actionBusy}
-            className="btn"
-            type="submit"
-            disabled={!name.trim() || name.trim() === tag.name}
-          >
-            {t("tags.rename")}
-          </BusyButton>
-        </div>
-      </form>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontWeight: 600 }}>{t("tags.color")}</span>
-        <div role="radiogroup" aria-label={t("tags.color")} style={{ display: "flex", gap: 8 }}>
+            onSave={async (name) => (await rename(name)) === true}
+          />
+        </strong>
+      </div>
+      {conflict && (
+        <InlineAlert
+          tone="warn"
+          action={
+            <span className="tags-actions">
+              <Button
+                variant="primary"
+                busy={actionBusy}
+                onClick={async () => {
+                  const target = conflict;
+                  setConflict(null);
+                  await merge(target);
+                }}
+              >
+                {t("tags.merge")}
+              </Button>
+              <Button onClick={() => setConflict(null)}>{t("tags.cancel")}</Button>
+            </span>
+          }
+        >
+          {t("tags.renameConflict", { source: tag.name, target: conflict })}
+        </InlineAlert>
+      )}
+      <div className="tags-stack">
+        <span className="tags-label">{t("tags.color")}</span>
+        <div role="radiogroup" aria-label={t("tags.color")} className="tags-colors">
           {TAG_COLORS.map((c) => (
             <BusyButton
               key={c}
               type="button"
               role="radio"
+              className="tags-color"
               aria-checked={tag.color === c}
               aria-label={t(`tags.colors.${c}`)}
-              onClick={() => run(() => commands.setTagColor(tag.name, c))}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                cursor: "pointer",
-                background: tagColorVar(c),
-                border: `2px solid ${tag.color === c ? "var(--pc-text)" : "transparent"}`,
-              }}
+              onClick={() =>
+                run(async () => {
+                  await commands.setTagColor(tag.name, c);
+                  await refreshTags(qc);
+                })
+              }
+              style={{ width: 32, height: 32, background: tagColorVar(c) }}
             />
           ))}
         </div>
       </div>
-      <div style={{ color: "var(--pc-text-soft)", lineHeight: 1.5 }}>
+      <div className="tags-usage">
         {t("tags.usage", { count: tag.count })} ·{" "}
         {tag.sets.length ? t("tags.inSets", { sets: tag.sets.join(", ") }) : t("tags.noSets")}
       </div>
@@ -625,18 +559,18 @@ function TagPanel({
           {t("tags.showPhotos", { count: tag.count })}
         </a>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+      <div className="tags-stack tags-panel-actions">
         {merging === null ? (
-          <BusyButton className="btn" style={{ minHeight: 40 }} onClick={() => setMerging("")}>
+          <BusyButton className="btn tags-tall" onClick={() => setMerging("")}>
             {t("tags.mergeInto")}
           </BusyButton>
         ) : (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              onAsk({ kind: "merge", source: tag.name, target: merging.trim() });
+              void merge(merging.trim()).then((ok) => ok && setMerging(null));
             }}
-            style={{ display: "flex", gap: 8 }}
+            className="tags-inline-form"
           >
             <input
               className="field"
@@ -645,7 +579,6 @@ function TagPanel({
               aria-label={t("tags.mergeTarget")}
               value={merging}
               onChange={(e) => setMerging(e.target.value)}
-              style={{ flex: 1 }}
             />
             <BusyButton
               busy={actionBusy}
@@ -655,21 +588,23 @@ function TagPanel({
             >
               {t("tags.merge")}
             </BusyButton>
+            <BusyButton className="btn" type="button" onClick={() => setMerging(null)}>
+              {t("tags.cancel")}
+            </BusyButton>
           </form>
         )}
         {addingTo === null ? (
-          <BusyButton className="btn" style={{ minHeight: 40 }} onClick={() => setAddingTo("")}>
+          <BusyButton className="btn tags-tall" onClick={() => setAddingTo("")}>
             {t("tags.addToSet")}
           </BusyButton>
         ) : (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="tags-inline-form">
             <select
               className="field"
               autoFocus
               aria-label={t("tags.chooseSet")}
               value={addingTo}
               onChange={(e) => setAddingTo(e.target.value)}
-              style={{ flex: 1 }}
             >
               <option value="">{t("tags.chooseSet")}</option>
               {sets
@@ -686,6 +621,7 @@ function TagPanel({
               onClick={async () =>
                 await run(async () => {
                   await commands.addTagToSet(Number(addingTo), tag.name);
+                  await refreshTags(qc);
                   setAddingTo(null);
                 })
               }
@@ -694,17 +630,28 @@ function TagPanel({
             </BusyButton>
           </div>
         )}
-        <BusyButton
-          className="btn btn-danger"
-          style={{ minHeight: 40 }}
-          onClick={() => onAsk({ kind: "delete", name: tag.name, count: tag.count })}
+        <Button
+          variant="danger"
+          className="tags-tall"
+          busy={actionBusy}
+          onClick={() =>
+            run(() =>
+              undoableTagOperation(
+                qc,
+                async () => {
+                  await commands.deleteTag(tag.name, true);
+                  onSelectTag(null);
+                },
+                t("tags.deleted", { name: tag.name }),
+              ),
+            )
+          }
         >
           {t("tags.deleteTag", { count: tag.count })}
-        </BusyButton>
+        </Button>
       </div>
-      <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
-        {t("tags.undoNote")}
-      </p>
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
+      <p className="muted tags-note">{t("tags.undoNote")}</p>
     </>
   );
 }
@@ -717,53 +664,29 @@ export function TagsPage() {
   const [setId, setSetId] = useState<number | null>(null);
   const [tagName, setTagName] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [pending, setPending] = useState<Pending>(null);
-  const [error, setError] = useState("");
-  const nameRef = useRef<HTMLInputElement>(null);
+  // Eliminazione di un set: non ha annullamento lato backend, quindi si conferma.
+  const [deleting, setDeleting] = useState<TagSetView | null>(null);
   const current = o?.sets.find((s) => s.id === setId) ?? activeSet(o);
   const tag = o?.tags.find((x) => x.name.toLowerCase() === tagName?.toLowerCase());
   const shown = useMemo(
     () => (o?.tags ?? []).filter((x) => x.name.toLowerCase().includes(filter.trim().toLowerCase())),
     [o, filter],
   );
-  const confirm = async () => {
-    const p = pending;
-    setPending(null);
-    setError("");
+  const deleteSet = async (set: TagSetView) => {
     try {
-      if (p?.kind === "merge") {
-        await commands.mergeTag(p.source, p.target);
-        setTagName(p.target);
-      } else if (p?.kind === "delete") {
-        await commands.deleteTag(p.name, true);
-        setTagName(null);
-      } else if (p?.kind === "deleteSet") {
-        await commands.deleteTagSet(p.set.id);
-        setSetId(null);
-      }
+      await commands.deleteTagSet(set.id);
+      setSetId(null);
       await refreshTags(qc);
+      notify({ key: "tags-result", message: t("tags.setDeleted", { name: set.name }), tone: "ok" });
     } catch (e) {
-      setError(errorText(e));
+      notifyError(e);
     }
   };
-  const question =
-    pending?.kind === "merge"
-      ? t(pending.fromRename ? "tags.renameConflict" : "tags.mergeConfirm", {
-          source: pending.source,
-          target: pending.target,
-        })
-      : pending?.kind === "delete"
-        ? t("tags.deleteConfirm", { name: pending.name, count: pending.count })
-        : pending?.kind === "deleteSet"
-          ? t("tags.deleteSetConfirm", { name: pending.set.name })
-          : "";
   return (
     <ModulePage title={t("modules.tags")}>
       <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
         {() => (
-          <div
-            style={{ flex: 1, display: "flex", flexWrap: "wrap", minWidth: 0, overflow: "auto" }}
-          >
+          <div className="tags-page">
             <datalist id="pc-all-tags">
               {o?.tags.map((x) => (
                 <option key={x.name} value={x.name} />
@@ -776,33 +699,21 @@ export function TagsPage() {
               onSelect={setSetId}
               onCreated={setSetId}
             />
-            <div
-              style={{ flex: "999 1 480px", minWidth: 0, display: "flex", flexDirection: "column" }}
-            >
+            <div className="tags-main">
               {current && (
                 <SetDetail
+                  key={current.id}
                   set={current}
                   tags={o?.tags ?? []}
                   isActive={current.id === o?.activeSet}
                   onSelectTag={setTagName}
-                  onRenameTag={(name) => {
-                    setTagName(name);
-                    setTimeout(() => nameRef.current?.focus(), 0);
-                  }}
-                  onAskDelete={() => setPending({ kind: "deleteSet", set: current })}
+                  onAskDelete={() => setDeleting(current)}
                   onDuplicated={setSetId}
                 />
               )}
-              <section
-                style={{
-                  padding: "0 24px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("tags.allTags")}</h2>
+              <section className="tags-all">
+                <div className="tags-all-head">
+                  <h2>{t("tags.allTags")}</h2>
                   <span className="muted">
                     {t("tags.tagCount", { count: o?.tags.length ?? 0 })}
                   </span>
@@ -813,10 +724,9 @@ export function TagsPage() {
                     placeholder={t("tags.filterPlaceholder")}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    style={{ marginLeft: "auto", width: 180 }}
                   />
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div className="tags-pills">
                   {shown.map((x) => {
                     const inSet = current?.tags.some(
                       (s) => s.name.toLowerCase() === x.name.toLowerCase(),
@@ -828,74 +738,32 @@ export function TagsPage() {
                         type="button"
                         className="pill"
                         aria-pressed={sel}
+                        data-in-set={inSet || undefined}
                         onClick={() => setTagName(x.name)}
-                        style={{
-                          background: sel ? "var(--pc-accent-soft-bg)" : undefined,
-                          borderColor: sel
-                            ? "var(--pc-accent)"
-                            : inSet
-                              ? "var(--pc-selection-border)"
-                              : undefined,
-                        }}
                       >
                         <Swatch color={x.color} size={10} />
                         <span>{x.name}</span>
-                        <span className="muted mono" style={{ fontSize: 12 }}>
-                          {fmtInt(x.count)}
-                        </span>
+                        <span className="muted mono tags-small">{fmtInt(x.count)}</span>
                       </BusyButton>
                     );
                   })}
                 </div>
               </section>
             </div>
-            <aside
-              aria-label={t("tags.selected")}
-              style={{
-                flex: "1 1 300px",
-                maxWidth: 340,
-                padding: 20,
-                background: "var(--pc-panel)",
-                borderLeft: "1px solid var(--pc-border)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 14,
-              }}
-            >
-              {pending && (
-                <div
-                  role="alertdialog"
-                  aria-label={question}
-                  className="feature-card"
-                  style={{ alignItems: "stretch", borderColor: "var(--pc-warn)" }}
-                >
-                  <p style={{ margin: 0 }}>{question}</p>
-                  <div className="feature-actions" style={{ margin: 0 }}>
-                    <BusyButton
-                      className={pending.kind === "merge" ? "btn btn-primary" : "btn btn-danger"}
-                      autoFocus
-                      onClick={async () => await confirm()}
-                    >
-                      {t("tags.confirm")}
-                    </BusyButton>
-                    <BusyButton className="btn" onClick={() => setPending(null)}>
-                      {t("tags.cancel")}
-                    </BusyButton>
-                  </div>
-                </div>
-              )}
-              {error && <p role="alert">{error}</p>}
-              <TagPanel
-                tag={tag}
-                sets={o?.sets ?? []}
-                nameRef={nameRef}
-                onAsk={setPending}
-                onError={setError}
-              />
+            <aside aria-label={t("tags.selected")} className="tags-panel">
+              <TagPanel tag={tag} sets={o?.sets ?? []} onSelectTag={setTagName} />
             </aside>
           </div>
         )}
       </QueryView>
+      <ConfirmDialog
+        open={deleting != null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={t("tags.deleteSetTitle", { name: deleting?.name ?? "" })}
+        message={t("tags.deleteSetMessage")}
+        confirmLabel={t("tags.deleteSet")}
+        onConfirm={() => deleting && deleteSet(deleting)}
+      />
     </ModulePage>
   );
 }
