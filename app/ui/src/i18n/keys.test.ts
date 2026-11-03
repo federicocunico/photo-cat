@@ -85,6 +85,10 @@ const dynamic: Record<string, string[]> = {
     "orig",
   ],
   "jobs.phases": ["orari", "preparazione", "codifica", "per_tag", "manifest", "archivi"],
+  // Diagnostica: livelli degli errori e del log (errors.ts).
+  "diag.levels": ["error", "warn"],
+  "diag.levelFilter": ["error", "warn"],
+  "diag.logLevels": ["error", "warn", "info", "debug", "trace"],
   "onboarding.steps": ["0", "1", "2"],
   "guide.steps": ["import", "models", "person", "catalog", "tags"],
   "guide.tips": ["people", "catalogs", "tags", "sequence", "moved"],
