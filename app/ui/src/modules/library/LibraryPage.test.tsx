@@ -63,14 +63,13 @@ it("Sidebar loading has feedback and Inspector ignores a double click on an asyn
   const inspector = await screen.findByTestId("inspector");
   const pending = deferred<number>();
   commandsMock.startBulk.mockImplementationOnce(() => pending.promise);
-  fireEvent.change(within(inspector).getByLabelText(i18n.t("library.inspector.tag")), {
-    target: { value: "Test" },
-  });
-  const button = within(inspector).getByRole("button", { name: i18n.t("bulk.actions.add_tag") });
-  fireEvent.click(button);
-  fireEvent.click(button);
+  fireEvent.click(within(inspector).getByRole("button", { name: /^Aggiungi un tag/ }));
+  const field = await within(inspector).findByRole("combobox", { name: "Cerca o scrivi un tag" });
+  fireEvent.change(field, { target: { value: "Test" } });
+  // Il primo Invio applica e chiude il selettore: il secondo non ha effetto.
+  fireEvent.keyDown(field, { key: "Enter" });
+  fireEvent.keyDown(field, { key: "Enter" });
   expect(commandsMock.startBulk).toHaveBeenCalledOnce();
-  expect(button).toHaveAttribute("aria-busy", "true");
   await act(async () => {
     pending.resolve(1);
     pendingSources.resolve([]);
@@ -261,7 +260,9 @@ describe("Libreria", () => {
     expect(insp).toHaveTextContent("8,4 MB");
     expect(insp).toHaveTextContent("Val d'Orcia");
     expect(insp).toHaveTextContent("GPS EXIF");
-    expect(insp).toHaveTextContent("Tipo soggetto: Paesaggio");
+    expect(
+      within(insp).getByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
+    ).toBeInTheDocument();
     expect(insp).toHaveTextContent("0,82");
     expect(insp).toHaveTextContent("Giulia");
     expect(insp).toHaveTextContent("tramonto");
