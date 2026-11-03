@@ -6,6 +6,7 @@ import "../../test/layoutMock";
 import type { SequenceItem, SequenceOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { parseShift, shiftText, useSequence } from "../../store/sequence";
+import { useLibrary } from "../../store/library";
 import { SequencePage } from "./SequencePage";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
@@ -131,11 +132,64 @@ it("parses and prints clock shifts", () => {
 
 it("shows sessions with device strip and active-set tag", async () => {
   renderPage();
-  expect(await screen.findByText(/2026-08-19 · 10:41–10:43/)).toBeInTheDocument();
+  // Data della sessione formattata nella lingua dell'app, non in ISO.
+  expect(await screen.findByText(/19 ago 2026 · 10:41–10:43/)).toBeInTheDocument();
+  expect(screen.queryByText(/2026-08-19/)).not.toBeInTheDocument();
   expect(screen.getByText("Moab · 2 foto")).toBeInTheDocument();
   expect(within(screen.getByTestId("seq-1")).getByLabelText("Tag Paesaggi")).toBeInTheDocument();
   expect(screen.getByTestId("seq-1")).toHaveTextContent("10:41:50");
   expect(screen.getByTestId("seq-1")).toHaveTextContent("Fujifilm X-T5");
+});
+
+it("distingue i dispositivi anche con l'iniziale, non solo con il colore", async () => {
+  renderPage();
+  const fuji = await screen.findByTestId("seq-1");
+  const iphone = screen.getByTestId("seq-2");
+  expect(fuji.querySelector(".seq-device-mark")).toHaveTextContent("F");
+  expect(iphone.querySelector(".seq-device-mark")).toHaveTextContent("A");
+  const panel = screen.getByRole("group", { name: /Fujifilm X-T5/ });
+  expect(panel.querySelector(".seq-device-mark")).toHaveTextContent("F");
+});
+
+it("«Pausa tra sessioni» conferma il salvataggio o segnala il valore non valido", async () => {
+  commandsMock.setSessionGap.mockResolvedValue(null);
+  renderPage();
+  await screen.findByTestId("seq-1");
+  const gap = screen.getByLabelText("Pausa tra sessioni (min)");
+  fireEvent.change(gap, { target: { value: "45" } });
+  fireEvent.keyDown(gap, { key: "Enter" });
+  await waitFor(() => expect(commandsMock.setSessionGap).toHaveBeenCalledWith(45));
+  expect(await screen.findByText(/Salvato: una pausa di oltre 45 minuti/)).toBeInTheDocument();
+
+  fireEvent.change(gap, { target: { value: "0" } });
+  fireEvent.blur(gap);
+  expect(await screen.findByText(/numero di minuti maggiore di zero/)).toBeInTheDocument();
+  expect(gap).toHaveAttribute("aria-invalid", "true");
+  expect(commandsMock.setSessionGap).toHaveBeenCalledTimes(1);
+});
+
+it("mostra un segnaposto durante il caricamento", async () => {
+  commandsMock.sequenceOverview.mockReturnValue(new Promise(() => {}));
+  renderPage();
+  expect(await screen.findByRole("status", { name: /Caricamento/i })).toBeInTheDocument();
+});
+
+it("l'apertura del gruppo di simili è un pulsante separato dalla miniatura", async () => {
+  const grouped = items.map((it, i) =>
+    i < 2 ? { ...it, similarGroup: 7, similarCover: i === 0 } : it,
+  );
+  commandsMock.sequencePage.mockResolvedValue({ items: grouped, next: null });
+  useLibrary.setState({ groupSimilar: true });
+  renderPage();
+  const toggle = await screen.findByTestId("seq-group-1");
+  expect(toggle.tagName).toBe("BUTTON");
+  expect(screen.getByTestId("seq-1")).not.toContainElement(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(toggle);
+  await waitFor(() =>
+    expect(screen.getByTestId("seq-group-1")).toHaveAttribute("aria-expanded", "true"),
+  );
+  useLibrary.setState({ groupSimilar: false });
 });
 
 it("applies a clock shift after showing the preview", async () => {

@@ -164,13 +164,14 @@
 - [ ] 7.3 **Tag**: conferme vicino al comando o `ConfirmDialog`; annullamento tramite lo store `undo` (la nota non rimanda più alla Libreria); errori dei tasti rapidi segnalati con un avviso; un solo "Rinomina".
 - [x] 7.4 **Persone**: allineare `PeopleModule` di `people-faces-workspace` ai componenti condivisi, al glossario e allo store `undo` (unione, separazione, ignora), senza cambiarne il flusso.
   - Fatto: correzioni annullabili (sposta, non è questa persona, separa, recupera, copertina, ignora, ripristina, unione, persone diverse) con l'avviso "Annulla operazione" e Ctrl+Z tramite `store/undo.ts` (`people/peopleUndo.ts`); senza voce registrata Ctrl+Z in Persone chiama ancora `undoPeople` e mostra l'esito. "Sposta in…" agisce solo con il pulsante "Sposta". "Rimuovi volto", unione ed eliminazione di identità (non annullabili) con `ConfirmDialog`; `MergeDialog` usa `Dialog`. Niente controlli annidati né `role="row"`/`grid` nell'elenco; caricamento con `Skeleton`; niente id interni nelle etichette.
-- [ ] 7.5 **Sequenza**:
+- [x] 7.5 **Sequenza**:
   - `PageHeader`;
   - date formattate;
   - "Pausa tra sessioni" con conferma visibile;
   - iniziale o icona del dispositivo oltre al colore;
   - export con le voci tecniche dietro "Avanzate" e testi comprensibili;
   - caricamento con `QueryView`.
+  - Fatto in `SequencePage.tsx`: titolo da `ModulePage` (`PageHeader`); date con `lib/format.ts`; esito "Salvato…" o errore accanto a "Pausa tra sessioni" (salva anche con Invio); iniziale del dispositivo sulle miniature e nel pannello dei dispositivi; `QueryView` con `Skeleton`; l'apertura del gruppo di simili è un pulsante separato. L'export ("Avanzate", testi) è in `SequenceExport.tsx`, nel ramo di un altro task della fase 7.
 - [ ] 7.6 **Esporta** (ex "Esporta e organizza"):
   - sezioni "Esporta dati", "Organizza in cartelle" e "Sequenza";
   - ambito predefinito "Libreria filtrata" quando non c'è una selezione;

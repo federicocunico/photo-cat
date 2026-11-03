@@ -15,7 +15,7 @@ import {
   type SourceGroupView,
   type UndatedItem,
 } from "../../lib/ipc";
-import { fmtInt } from "../../lib/format";
+import { fmtDate, fmtDateTime, fmtInt } from "../../lib/format";
 import { clickSelect, selIds, useLibrary } from "../../store/library";
 import { collapseLoaded } from "../library/similarView";
 import { Icon } from "../../components/icons";
@@ -28,7 +28,10 @@ import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { hotkeyAction, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
-import { Kbd } from "../../components/ui";
+import { InlineAlert, Kbd } from "../../components/ui";
+import { QueryView } from "../../components/feedback/QueryView";
+import { Skeleton } from "../../components/feedback/Skeleton";
+import "./sequence.css";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Viewer } from "../../components/viewer/Viewer";
 import { useBulkJob } from "../library/bulkJob";
@@ -107,10 +110,57 @@ async function refreshSequence(qc: ReturnType<typeof useQueryClient>) {
 const groupName = (g: SourceGroupView | undefined, t: (k: string) => string) =>
   g?.device ?? t("sequence.otherSources");
 
+/**
+ * Ora locale della foto ("AAAA-MM-GG hh:mm:ss") come `Date` nel fuso del computer, così la
+ * formattazione mostra la stessa data e ora scritte nella foto.
+ */
+function localDate(local: string): Date {
+  const [y, m, d] = local.slice(0, 10).split("-").map(Number);
+  const [hh = 0, mm = 0, ss = 0] = local.slice(11, 19).split(":").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, hh, mm, ss);
+}
+
+/**
+ * Iniziale di ogni dispositivo (gruppo di origine), mostrata accanto al colore: il colore da
+ * solo non basta a distinguere le fotocamere. Se due dispositivi iniziano con la stessa
+ * lettera, il secondo ha un numero (F, F2).
+ */
+function deviceMarks(groups: SourceGroupView[], t: (k: string) => string): Map<number, string> {
+  const seen = new Map<string, number>();
+  const out = new Map<number, string>();
+  for (const g of groups) {
+    const letter = (groupName(g, t).match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase();
+    const n = (seen.get(letter) ?? 0) + 1;
+    seen.set(letter, n);
+    out.set(g.id, n === 1 ? letter : `${letter}${n}`);
+  }
+  return out;
+}
+
 /** Barra con ambito, soglia delle sessioni e tasti del set attivo. */
 function Toolbar({ gap }: { gap: number }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  // Esito visibile della modifica della pausa: salvata, non valida o non riuscita.
+  const [gapState, setGapState] = useState<
+    | { kind: "saved"; value: number }
+    | { kind: "invalid" }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
+  const saveGap = (raw: string) => {
+    const n = Number(raw);
+    if (!raw.trim() || !Number.isFinite(n) || n <= 0) {
+      setGapState({ kind: "invalid" });
+      return;
+    }
+    if (n === gap) return;
+    void commands
+      .setSessionGap(n)
+      .then(() => refreshSequence(qc))
+      .then(() => setGapState({ kind: "saved", value: n }))
+      .catch((e) => setGapState({ kind: "error", message: errorText(e) }));
+  };
   const scope = useSequence((s) => s.scope);
   const setScope = useSequence((s) => s.setScope);
   // Una selezione "tutti i risultati" della Libreria non diventa un elenco di id qui.
@@ -186,15 +236,32 @@ function Toolbar({ gap }: { gap: number }) {
           type="number"
           min={1}
           aria-label={t("sequence.gap")}
+          aria-invalid={gapState?.kind === "invalid" || undefined}
           defaultValue={gap}
           key={gap}
           style={{ width: 72 }}
-          onBlur={(e) => {
-            const n = Number(e.target.value);
-            if (n > 0 && n !== gap) void commands.setSessionGap(n).then(() => refreshSequence(qc));
+          onChange={() => setGapState(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveGap(e.currentTarget.value);
           }}
+          onBlur={(e) => saveGap(e.target.value)}
         />
       </label>
+      {gapState?.kind === "saved" && (
+        <span role="status" className="seq-gap-status muted">
+          {t("sequence.gapSaved", { count: gapState.value })}
+        </span>
+      )}
+      {gapState?.kind === "invalid" && (
+        <span role="alert" className="seq-gap-status ui-text-danger">
+          {t("sequence.gapInvalid")}
+        </span>
+      )}
+      {gapState?.kind === "error" && (
+        <span role="alert" className="seq-gap-status ui-text-danger">
+          {gapState.message}
+        </span>
+      )}
       {set && (
         <div
           role="group"
@@ -224,6 +291,7 @@ function Card({
   item,
   selected,
   color,
+  mark,
   tagColor,
   onClick,
   onDropUndated,
@@ -234,6 +302,8 @@ function Card({
   /** Gruppo di foto simili rappresentato (numero di foto, aperto o chiuso). */
   group?: { count: number; open: boolean; onToggle: () => void };
   color: string;
+  /** Iniziale del dispositivo, accanto al colore. */
+  mark: string;
   tagColor: (n: string) => string;
   onClick: (e: MouseEvent) => void;
   onDropUndated: (media: number) => void;
@@ -242,121 +312,108 @@ function Card({
   const url = thumbUrl(item.thumb);
   const [over, setOver] = useState(false);
   return (
-    <BusyButton
-      type="button"
-      data-testid={`seq-${item.id}`}
-      aria-pressed={selected}
-      aria-label={`${item.name} ${timeOf(item.local)}`}
-      onClick={onClick}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-photocat-undated")) {
-          e.preventDefault();
-          setOver(true);
-        }
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e: DragEvent) => {
-        setOver(false);
-        const id = Number(e.dataTransfer.getData("application/x-photocat-undated"));
-        if (id) onDropUndated(id);
-      }}
-      style={{
-        width: CELL,
-        padding: 0,
-        borderRadius: 8,
-        overflow: "hidden",
-        cursor: "pointer",
-        textAlign: "left",
-        color: "inherit",
-        background: "var(--pc-panel)",
-        border: 0,
-        outline: selected
-          ? "2px solid var(--pc-accent)"
-          : over
-            ? "2px dashed var(--pc-accent)"
-            : "1px solid var(--pc-raised)",
-      }}
-    >
-      <div
+    <div className="seq-card">
+      <BusyButton
+        type="button"
+        data-testid={`seq-${item.id}`}
+        aria-pressed={selected}
+        aria-label={`${item.name} ${timeOf(item.local)}`}
+        onClick={onClick}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("application/x-photocat-undated")) {
+            e.preventDefault();
+            setOver(true);
+          }
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e: DragEvent) => {
+          setOver(false);
+          const id = Number(e.dataTransfer.getData("application/x-photocat-undated"));
+          if (id) onDropUndated(id);
+        }}
         style={{
-          position: "relative",
-          aspectRatio: "3 / 2",
-          background: "var(--pc-thumb-bg)",
+          width: CELL,
+          padding: 0,
+          borderRadius: 8,
+          overflow: "hidden",
+          cursor: "pointer",
+          textAlign: "left",
+          color: "inherit",
+          background: "var(--pc-panel)",
+          border: 0,
+          outline: selected
+            ? "2px solid var(--pc-accent)"
+            : over
+              ? "2px dashed var(--pc-accent)"
+              : "1px solid var(--pc-raised)",
         }}
       >
-        {url && (
-          <img
-            src={url}
-            alt=""
-            loading="lazy"
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        )}
-        {item.tags[0] && (
-          <span style={{ position: "absolute", left: 6, bottom: 6 }}>
-            <TagChip name={item.tags[0]} color={tagColor(item.tags[0])} compact />
-          </span>
-        )}
-        {group && (
-          <span
-            role="button"
-            tabIndex={0}
-            aria-expanded={group.open}
-            aria-label={t(group.open ? "similar.collapse" : "similar.expand", {
-              count: group.count,
-            })}
-            data-testid={`seq-group-${item.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              group.onToggle();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                group.onToggle();
-              }
-            }}
-            style={{
-              position: "absolute",
-              right: 6,
-              top: 6,
-              padding: "1px 7px",
-              borderRadius: 10,
-              background: "var(--pc-accent)",
-              color: "var(--pc-on-accent, #fff)",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {group.open && <Icon.Minus size={12} />}
-            {group.count}
-          </span>
-        )}
-      </div>
-      <div aria-hidden="true" style={{ height: 4, background: color }} />
-      <div
-        className="mono"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 6,
-          padding: "4px 8px",
-          fontSize: 11,
-        }}
-      >
-        <span title={item.presumed ? t("sequence.presumed") : undefined}>
-          {timeOf(item.local)}
-          {item.presumed ? "*" : ""}
-        </span>
-        <span
-          className="muted"
-          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        <div
+          style={{
+            position: "relative",
+            aspectRatio: "3 / 2",
+            background: "var(--pc-thumb-bg)",
+          }}
         >
-          {item.device ?? t("sequence.otherSources")}
-        </span>
-      </div>
-    </BusyButton>
+          {url && (
+            <img
+              src={url}
+              alt=""
+              loading="lazy"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+          {item.tags[0] && (
+            <span style={{ position: "absolute", left: 6, bottom: 6 }}>
+              <TagChip name={item.tags[0]} color={tagColor(item.tags[0])} compact />
+            </span>
+          )}
+        </div>
+        <div aria-hidden="true" style={{ height: 4, background: color }} />
+        <div
+          className="mono"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 6,
+            padding: "4px 8px",
+            fontSize: 11,
+          }}
+        >
+          <span title={item.presumed ? t("sequence.presumed") : undefined}>
+            {timeOf(item.local)}
+            {item.presumed ? "*" : ""}
+          </span>
+          <span
+            className="muted"
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}
+          >
+            <span aria-hidden="true" className="seq-device-mark" style={{ borderColor: color }}>
+              {mark}
+            </span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {item.device ?? t("sequence.otherSources")}
+            </span>
+          </span>
+        </div>
+      </BusyButton>
+      {/* Apertura del gruppo: pulsante a parte, sopra la miniatura (non annidato). */}
+      {group && (
+        <button
+          type="button"
+          className="seq-group-toggle"
+          aria-expanded={group.open}
+          aria-label={t(group.open ? "similar.collapse" : "similar.expand", {
+            count: group.count,
+          })}
+          data-testid={`seq-group-${item.id}`}
+          onClick={group.onToggle}
+        >
+          {group.open && <Icon.Minus size={12} />}
+          {group.count}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -431,6 +488,7 @@ function SessionsGrid({
         groups.findIndex((x) => x.id === g),
       ),
     );
+  const marks = useMemo(() => deviceMarks(groups, t), [groups, t]);
   const rowHeight = Math.round((CELL * 2) / 3) + 4 + 24 + GAP;
   const virt = useVirtualizer({
     count: rows.length,
@@ -472,7 +530,7 @@ function SessionsGrid({
               {row.kind === "header" ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
                   <h2 style={{ margin: 0, fontSize: 16 }}>
-                    {row.session.startLocal.slice(0, 10)} ·{" "}
+                    {fmtDate(localDate(row.session.startLocal))} ·{" "}
                     {timeOf(row.session.startLocal).slice(0, 5)}–
                     {timeOf(row.session.endLocal).slice(0, 5)}
                   </h2>
@@ -496,6 +554,7 @@ function SessionsGrid({
                     item={it}
                     selected={selected.includes(it.id)}
                     color={color(it.groupId)}
+                    mark={(it.groupId != null && marks.get(it.groupId)) || "?"}
                     tagColor={(n) => colorOf(tags, n)}
                     onDropUndated={(media) => onPlace(media, it.id)}
                     group={
@@ -609,7 +668,7 @@ function Undated({
           >
             {candidates.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.local.slice(0, 16)} · {c.name}
+                {fmtDateTime(localDate(c.local))} · {c.name}
               </option>
             ))}
           </select>
@@ -644,6 +703,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [previews, setPreviews] = useState<Record<number, string>>({});
+  const marks = useMemo(() => deviceMarks(groups, t), [groups, t]);
   const current = (g: SourceGroupView): Staged =>
     staged[g.id] ?? {
       tz: g.displayTz,
@@ -743,8 +803,11 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
                 aria-hidden="true"
-                style={{ width: 12, height: 12, borderRadius: 3, background: deviceColorVar(i) }}
-              />
+                className="seq-device-mark"
+                style={{ borderColor: deviceColorVar(i) }}
+              >
+                {marks.get(g.id)}
+              </span>
               <strong style={{ flex: 1 }}>
                 {name}
                 {g.declaredOffsetMin != null && (
@@ -977,24 +1040,35 @@ export function SequencePage() {
             );
           })}
           {error && (
-            <p role="alert" style={{ margin: "8px 16px" }}>
-              {error}
-            </p>
+            <div style={{ margin: "8px 16px" }}>
+              <InlineAlert tone="danger" onDismiss={() => setError("")}>
+                {error}
+              </InlineAlert>
+            </div>
           )}
-          {o && !o.total && !o.undated.length ? (
-            <p className="muted" style={{ padding: 32 }}>
-              {t("sequence.empty")}
-            </p>
-          ) : (
-            <SessionsGrid
-              sessions={o?.sessions ?? []}
-              items={items}
-              groups={o?.groups ?? []}
-              hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
-              loadMore={() => void pages.fetchNextPage()}
-              onPlace={(m, a) => void place(m, a)}
-            />
-          )}
+          {/* Caricamento con QueryView: segnaposto, errore con "Riprova", stato vuoto. */}
+          <QueryView
+            query={overview}
+            enabled={isTauri()}
+            skeleton={<Skeleton kind="thumbnail" count={8} />}
+            isEmpty={(ov) => !ov.total && !ov.undated.length}
+            empty={
+              <p className="muted" style={{ padding: 32 }}>
+                {t("sequence.empty")}
+              </p>
+            }
+          >
+            {(ov) => (
+              <SessionsGrid
+                sessions={ov?.sessions ?? []}
+                items={items}
+                groups={ov?.groups ?? []}
+                hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
+                loadMore={() => void pages.fetchNextPage()}
+                onPlace={(m, a) => void place(m, a)}
+              />
+            )}
+          </QueryView>
           <Undated
             items={o?.undated ?? []}
             candidates={items}
@@ -1015,7 +1089,7 @@ export function SequencePage() {
                     src: thumbUrl(it.thumb),
                     details: (
                       <span className="mono">
-                        {[it.local, it.device].filter(Boolean).join(" · ")}
+                        {[fmtDateTime(localDate(it.local)), it.device].filter(Boolean).join(" · ")}
                       </span>
                     ),
                   }
