@@ -147,3 +147,17 @@ it("starts the export as a job with the chosen options", async () => {
   );
   expect(await screen.findByText("Export avviato.")).toBeInTheDocument();
 });
+
+it("le voci tecniche stanno in Avanzate, con testi comprensibili", async () => {
+  renderView();
+  await screen.findByLabelText("Modello");
+  expect(screen.queryByLabelText("Dettaglio dei colori")).toBeNull();
+  expect(screen.queryByText(/manifest\.csv/)).toBeNull();
+  expect(screen.queryByText(/SSIM|PSNR/)).toBeNull();
+  for (const b of screen.getAllByRole("button", { name: "Avanzate" })) fireEvent.click(b);
+  expect(screen.getByLabelText("Dettaglio dei colori")).toHaveValue("444");
+  expect(screen.getByRole("option", { name: "Ridotto, file più piccoli (4:2:0)" })).toBeTruthy();
+  expect(screen.getByLabelText(/Controlla che ogni copia sia fedele/)).toBeChecked();
+  expect(screen.getByLabelText(/Elenco dei file/)).toBeChecked();
+  expect(screen.queryByText(/SSIM|PSNR/)).toBeNull();
+});

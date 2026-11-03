@@ -160,7 +160,7 @@ export const it = {
     },
   },
   import: {
-    title: "Aggiungi una sorgente",
+    title: "Aggiungi una cartella",
     subtitle: "Le foto restano dove sono: photo-cat legge i file e salva solo il catalogo.",
     folder: "Cartella",
     browse: "Sfoglia…",
@@ -169,9 +169,11 @@ export const it = {
     watch: "Monitora",
     formats: "Formati inclusi",
     ignore: "Ignora percorsi che corrispondono a",
-    ignoreHint: "Pattern separati da punto e virgola, es. **/Cestino/** oppure *.tmp",
+    ignoreHint:
+      "Separa i modelli con un punto e virgola. Esempi: «**/Cestino/**» salta tutte le cartelle chiamate Cestino, a qualunque livello; «*.tmp» salta i file che finiscono con .tmp.",
+    advanced: "Avanzate",
     start: "Avvia importazione",
-    sources: "Sorgenti nella libreria",
+    sources: "Cartelle nella libreria",
     itemsCount: "{{n}} elementi",
     missing: "{{n}} mancanti",
     rescan: "Aggiorna",
@@ -180,6 +182,15 @@ export const it = {
     found: "File trovati",
     processed: "Elaborati",
     openJob: "Segui l'importazione",
+    started: "Importazione di {{path}} avviata",
+    updateStarted: "Aggiornamento di {{path}} avviato",
+    idle: "Nessuna importazione in corso. Quando ne avvii una, l'avanzamento compare qui e puoi continuare a lavorare.",
+    noFolders: "Nessuna cartella nella libreria",
+    noFoldersHint:
+      "Scegli una cartella qui sopra e avvia l'importazione: le foto restano dove sono.",
+    needFolder: "Scegli prima la cartella da importare",
+    needFormat: "Scegli almeno un formato da includere",
+    notFound: "La cartella non esiste o non è raggiungibile. Scegline un'altra.",
   },
   library: {
     header: {
@@ -207,7 +218,7 @@ export const it = {
     count: "{{n}} elementi",
     countFiltered: "{{n}} elementi (filtrati)",
     selected: "{{n}} selezionati",
-    empty: "Nessun elemento. Aggiungi una sorgente da Importa.",
+    empty: "Nessun elemento. Aggiungi una cartella da Importa.",
     noResults: "Nessun elemento corrisponde ai filtri.",
     clearFilters: "Azzera filtri",
     removeFilter: "Rimuovi filtro {{name}}",
@@ -424,7 +435,7 @@ export const it = {
     access_denied:
       "Verifica i permessi della cartella o esegui l'app con un utente che vi abbia accesso.",
     not_found:
-      "Il file potrebbe essere stato spostato o cancellato: riesegui la scansione della sorgente.",
+      "Il file potrebbe essere stato spostato o cancellato: aggiorna la cartella da Importa.",
     decode_failed: "Il file potrebbe essere danneggiato o in un formato non supportato.",
     unsupported_format: "Il file è stato importato con i soli metadati disponibili.",
     corrupt_exif: "Il file è stato importato comunque, senza i metadati danneggiati.",

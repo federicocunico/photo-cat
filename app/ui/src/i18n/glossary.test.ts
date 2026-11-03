@@ -36,38 +36,12 @@ const BANNED: Record<"it" | "en", Record<string, RegExp>> = {
 const PENDING: Record<string, string[]> = {
   "it:job": [],
   "en:job": [],
-  // 7.1 (Importa: "cartella" al posto di "sorgente").
-  "it:sorgente": [
-    "import.title",
-    "import.sources",
-    "library.empty",
-    "hints.not_found",
-    "organize.reasons.cross_volume",
-    "sequence.otherSources",
-    "sequence.sources",
-    "seqExport.namesHelp",
-    "sources.relinkDialog.intro_one",
-    "sources.relinkDialog.intro_other",
-    "sources.relinkDialog.outside",
-    "sources.relinkDialog.addSource",
-    "sources.relinkDialog.moveSource",
-    "sources.relinkDialog.sourceAdded",
-    "sources.relinkDialog.sourceMoved",
-    "sources.missingDialog.body_one",
-    "sources.missingDialog.body_other",
-  ],
+  "it:sorgente": [],
   // 3.2/3.3 (SelectionBar e store undo).
   "it:annullaUltimaAzione": ["bulk.undo"],
   "en:undoLastAction": ["bulk.undo"],
-  // 7.5 (export di Sequenza).
-  "it:gergo": [
-    "seqExport.verify",
-    "seqExport.outManifest",
-  ],
-  "en:gergo": [
-    "seqExport.verify",
-    "seqExport.outManifest",
-  ],
+  "it:gergo": [],
+  "en:gergo": [],
 };
 
 describe("glossario", () => {

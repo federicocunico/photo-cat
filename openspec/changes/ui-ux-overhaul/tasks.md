@@ -153,7 +153,7 @@
 
 ## 7. Moduli
 
-- [ ] 7.1 **Importa**: titolo "Importa", `FolderPicker`, pattern di esclusione dietro "Avanzate" con esempi in parole; nessun salto automatico ad Attività (avviso con "Segui l'importazione"); azioni della cartella in un menu; dialoghi su `Dialog`.
+- [x] 7.1 **Importa**: titolo "Importa", `FolderPicker`, pattern di esclusione dietro "Avanzate" con esempi in parole; nessun salto automatico ad Attività (avviso con "Segui l'importazione"); azioni della cartella in un menu; dialoghi su `Dialog`.
 - [ ] 7.2 **Cataloghi**:
   - editor delle regole leggibile (etichette dei campi e degli operatori, selettori di valore per tipo, frase di riepilogo, conteggio dal vivo);
   - schede con tipo, foto ed escluse;
@@ -170,7 +170,7 @@
   - iniziale o icona del dispositivo oltre al colore;
   - export con le voci tecniche dietro "Avanzate" e testi comprensibili;
   - caricamento con `QueryView`.
-- [ ] 7.6 **Esporta** (ex "Esporta e organizza"):
+- [x] 7.6 **Esporta** (ex "Esporta e organizza"):
   - sezioni "Esporta dati", "Organizza in cartelle" e "Sequenza";
   - ambito predefinito "Libreria filtrata" quando non c'è una selezione;
   - passi "Anteprima → Verifica → Crea" come elenco numerato con lo stato;
