@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -78,17 +79,17 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               {models.data?.filter((m) => m.state.state === "verified").length ?? 0} /{" "}
               {models.data?.length ?? 7}
             </p>
-            <button
+            <BusyButton
               className="btn"
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
+              onClick={async () =>
+                await run(async () => {
                   await commands.verifyModels();
                 })
               }
             >
               {t("onboarding.prepareModels")}
-            </button>
+            </BusyButton>
           </>
         )}
         {step === 3 && (
@@ -100,10 +101,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               value={source}
               onChange={(e) => setSource(e.target.value)}
             />
-            <button
+            <BusyButton
               className="btn"
-              onClick={() =>
-                void run(async () => {
+              onClick={async () =>
+                await run(async () => {
                   const { open } = await import("@tauri-apps/plugin-dialog");
                   const p = await open({ directory: true, multiple: false });
                   if (typeof p === "string") setSource(p);
@@ -111,12 +112,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               }
             >
               {t("organize.browse")}
-            </button>
-            <button
+            </BusyButton>
+            <BusyButton
               className="btn"
               disabled={busy || !source.trim()}
-              onClick={() =>
-                void run(async () => {
+              onClick={async () =>
+                await run(async () => {
                   const id = await commands.addSource({
                     path: source,
                     recursive: true,
@@ -131,29 +132,29 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               }
             >
               {t("onboarding.import")}
-            </button>
+            </BusyButton>
           </>
         )}
         <div className="feature-actions">
           {step > 0 && (
-            <button className="btn" onClick={() => setStep((s) => s - 1)}>
+            <BusyButton className="btn" onClick={() => setStep((s) => s - 1)}>
               {t("onboarding.back")}
-            </button>
+            </BusyButton>
           )}
           {step < 3 ? (
-            <button className="btn btn-primary" onClick={() => setStep((s) => s + 1)}>
+            <BusyButton className="btn btn-primary" onClick={() => setStep((s) => s + 1)}>
               {t("onboarding.next")}
-            </button>
+            </BusyButton>
           ) : (
-            <button className="btn" disabled={busy} onClick={() => void run(finish)}>
+            <BusyButton className="btn" disabled={busy} onClick={async () => await run(finish)}>
               {t("onboarding.later")}
-            </button>
+            </BusyButton>
           )}
           {/* La verifica del sistema è l'unico passo che non si può rimandare. */}
           {step !== 1 && (
-            <button className="btn" disabled={busy} onClick={() => void run(finish)}>
+            <BusyButton className="btn" disabled={busy} onClick={async () => await run(finish)}>
               {t("onboarding.skip")}
-            </button>
+            </BusyButton>
           )}
         </div>
       </section>

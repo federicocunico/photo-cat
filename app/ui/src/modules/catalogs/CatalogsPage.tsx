@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -46,9 +48,9 @@ export function CatalogsPage() {
     <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
       <h1>{t("catalogs.title")}</h1>
       {error && <p role="alert">{error}</p>}
-      <button className="btn" onClick={() => edit()}>
+      <BusyButton className="btn" onClick={() => edit()}>
         {t("catalogs.create")}
-      </button>
+      </BusyButton>
       {editing && (
         <div className="feature-card" style={{ alignItems: "stretch", marginTop: 16 }}>
           <input
@@ -67,59 +69,65 @@ export function CatalogsPage() {
               <p role="status">
                 {preview.error
                   ? String((preview.error as { detail?: string }).detail ?? preview.error)
-                  : t("catalogs.preview", { count: preview.data ?? 0 })}
+                  : preview.isPending
+                    ? t("feedback.calculating")
+                    : t("catalogs.preview", { count: preview.data })}
               </p>
             </>
           )}
           <div className="feature-actions">
-            <button
+            <BusyButton
               className="btn"
               disabled={!name.trim() || (smart && preview.isError)}
-              onClick={() => void save()}
+              onClick={async () => await save()}
             >
               {t("people.save")}
-            </button>
-            <button className="btn" onClick={() => setEditing(false)}>
+            </BusyButton>
+            <BusyButton className="btn" onClick={() => setEditing(false)}>
               {t("catalogs.cancel")}
-            </button>
+            </BusyButton>
           </div>
         </div>
       )}
-      <div className="feature-grid">
-        {catalogs.data?.map(({ catalog: c, items }) => (
-          <article className="feature-card" key={c.id}>
-            <h2>{c.name}</h2>
-            <p>
-              {c.kind === "smart" ? t("catalogs.smart") : t("catalogs.manual")} · {items}
-            </p>
-            <button
-              className="btn"
-              onClick={() => {
-                useLibrary.getState().resetFilter();
-                useLibrary.getState().setFilter({ catalogId: c.id });
-                useLayout.getState().setModule("library");
-              }}
-            >
-              {t("catalogs.open")}
-            </button>
-            <button className="btn" onClick={() => edit(c)}>
-              {t("catalogs.edit")}
-            </button>
-            <button
-              className="btn"
-              onClick={() => {
-                if (window.confirm(t("catalogs.deleteConfirm", { count: items })))
-                  void commands
-                    .deleteCatalog(c.id, true)
-                    .then(() => qc.invalidateQueries({ queryKey: ["catalogs"] }))
-                    .catch((e) => setError(String(e)));
-              }}
-            >
-              {t("catalogs.delete")}
-            </button>
-          </article>
-        ))}
-      </div>
+      <QueryView query={catalogs} isEmpty={() => false}>
+        {() => (
+          <div className="feature-grid">
+            {catalogs.data?.map(({ catalog: c, items }) => (
+              <article className="feature-card" key={c.id}>
+                <h2>{c.name}</h2>
+                <p>
+                  {c.kind === "smart" ? t("catalogs.smart") : t("catalogs.manual")} · {items}
+                </p>
+                <BusyButton
+                  className="btn"
+                  onClick={() => {
+                    useLibrary.getState().resetFilter();
+                    useLibrary.getState().setFilter({ catalogId: c.id });
+                    return useLayout.getState().setModule("library");
+                  }}
+                >
+                  {t("catalogs.open")}
+                </BusyButton>
+                <BusyButton className="btn" onClick={() => edit(c)}>
+                  {t("catalogs.edit")}
+                </BusyButton>
+                <BusyButton
+                  className="btn"
+                  onClick={async () => {
+                    if (window.confirm(t("catalogs.deleteConfirm", { count: items })))
+                      await commands
+                        .deleteCatalog(c.id, true)
+                        .then(() => qc.invalidateQueries({ queryKey: ["catalogs"] }))
+                        .catch((e) => setError(String(e)));
+                  }}
+                >
+                  {t("catalogs.delete")}
+                </BusyButton>
+              </article>
+            ))}
+          </div>
+        )}
+      </QueryView>
     </section>
   );
 }

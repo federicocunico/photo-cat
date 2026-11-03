@@ -1,6 +1,8 @@
 // Ogni chiave letterale usata con t("...") deve esistere in italiano e in inglese.
 import { describe, expect, it } from "vitest";
+import { features } from "./features";
 import i18n from "./index";
+import { modules } from "./modules";
 
 const files = import.meta.glob(["../**/*.{ts,tsx}", "!../**/*.test.{ts,tsx}"], {
   query: "?raw",
@@ -76,9 +78,37 @@ const dynamic: Record<string, string[]> = {
     "catalogs",
     "labels",
   ],
+  // GroupList: t(`people.sort.${s}`) con s ∈ GroupSort.
+  "people.sort": ["photos_desc", "name_asc", "faces_desc"],
+  // ModuleNav: t(`modules.${id}`) — moduli attivi in registry.ts (niente identities).
+  modules: [
+    "library",
+    "sequence",
+    "catalogs",
+    "tags",
+    "people",
+    "import",
+    "jobs",
+    "models",
+    "diagnostics",
+    "organize",
+    "settings",
+    "navLabel",
+  ],
 };
 for (const [prefix, values] of Object.entries(dynamic))
   for (const v of values) used.add(`${prefix}.${v}`);
+
+function leafKeys(obj: unknown, prefix: string, out: string[] = []): string[] {
+  if (obj && typeof obj === "object") {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const key = `${prefix}.${k}`;
+      if (v && typeof v === "object") leafKeys(v, key, out);
+      else out.push(key);
+    }
+  }
+  return out;
+}
 
 describe("risorse di traduzione", () => {
   it("trova le chiavi usate nel codice", () => expect(used.size).toBeGreaterThan(100));
@@ -92,4 +122,14 @@ describe("risorse di traduzione", () => {
       expect(missing).toEqual([]);
     });
   }
+
+  it("people.* e identities.* hanno le stesse chiavi in it e en", () => {
+    const peopleIt = leafKeys(features.it.people, "people").sort();
+    const peopleEn = leafKeys(features.en.people, "people").sort();
+    expect(peopleEn).toEqual(peopleIt);
+
+    const idIt = leafKeys(modules.it.identities, "identities").sort();
+    const idEn = leafKeys(modules.en.identities, "identities").sort();
+    expect(idEn).toEqual(idIt);
+  });
 });

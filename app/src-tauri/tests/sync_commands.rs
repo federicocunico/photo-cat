@@ -8,6 +8,8 @@ use std::path::Path;
 /// Comandi sincroni ammessi: nessuno legge il catalogo, l'archivio dell'app o i job persistiti.
 const ALLOWED_SYNC: &[&str] = &[
     "app_info",
+    "boot_retry",
+    "boot_status",
     "dismiss_crash_notice",
     "take_ui_recovery",
     "report_long_tasks",

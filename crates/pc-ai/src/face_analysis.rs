@@ -209,10 +209,19 @@ pub fn analyze(
             continue;
         };
         let aligned = faces::align(img, &face.landmarks);
+        let sharp = crate::quality::sharpness(&aligned);
+        let front = crate::quality::frontality(&face.bbox, &face.landmarks);
+        let size_px = (face.size() * scale).round().max(1.0) as u32;
+        let qscore =
+            pc_store::people::combined_quality(face.score, Some(sharp), Some(front), Some(size_px));
         let embedding = faces::embed(&mut rec.session.lock(), &aligned)?;
         result.push(DetectedFace {
             bbox: [b[0], b[1], b[2], b[3]],
             quality: face.score,
+            sharpness: Some(sharp),
+            frontality: Some(front),
+            size_px: Some(size_px),
+            quality_score: Some(qscore),
             embedding,
         });
     }
@@ -328,6 +337,7 @@ mod tests {
                     v[0] = 1.0;
                     v
                 },
+                ..Default::default()
             }],
             embedding_model: "sface".into(),
             analysis_model: "det+sface".into(),
@@ -337,7 +347,7 @@ mod tests {
             matching: pc_store::people::FaceMatch {
                 similarity: 0.363,
                 min_quality: 0.0,
-                floor: None,
+                ..Default::default()
             },
         };
         policy.invalidate();
@@ -345,5 +355,50 @@ mod tests {
         policy.set_enabled(true);
         queued.write(&c, 1).unwrap();
         assert!(pc_store::people::records(&c, None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn motion_blurred_face_is_saved_as_discarded_for_quality() {
+        let mut c = rusqlite::Connection::open_in_memory().unwrap();
+        pc_store::migrate::migrate(&mut c, None).unwrap();
+        c.execute(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'blur.jpg','blur.jpg','jpg',1,1,1,1)",
+            [],
+        )
+        .unwrap();
+        let sharp_crop = image::RgbImage::from_fn(112, 112, |x, y| {
+            let v = ((x / 4 + y / 4) % 2) as u8 * 180 + 30;
+            image::Rgb([v, v, v])
+        });
+        let blurred_crop = image::imageops::blur(&sharp_crop, 4.0);
+        let s = crate::quality::sharpness(&blurred_crop);
+        assert!(s < pc_core::AiThresholds::DEFAULT_FACE_MIN_SHARPNESS);
+        let mut emb = vec![0.0; 128];
+        emb[0] = 1.0;
+        let matching = crate::analyze::face_match(&pc_core::AiThresholds::default());
+        pc_store::people::save_faces_tuned(
+            &c,
+            1,
+            &[DetectedFace {
+                bbox: [0.2, 0.2, 0.3, 0.3],
+                quality: 0.95,
+                sharpness: Some(s),
+                frontality: Some(0.95),
+                size_px: Some(120),
+                quality_score: None,
+                embedding: emb,
+            }],
+            "sface",
+            "det+sface",
+            matching,
+            &Default::default(),
+        )
+        .unwrap();
+        let rec = &pc_store::people::records(&c, Some(1)).unwrap()[0];
+        assert_eq!(rec.person_id, None);
+        assert_eq!(
+            rec.discard_reason(&matching),
+            Some(pc_store::people::DiscardReason::Blurred)
+        );
     }
 }

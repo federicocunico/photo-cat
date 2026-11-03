@@ -1,3 +1,6 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { Skeleton } from "../../components/feedback/Skeleton";
+import { RefreshBar } from "../../components/feedback/RefreshBar";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
@@ -334,8 +337,9 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     enabled: isTauri(),
   });
   const size = thumbPx(thumbSize);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(initialWidth ?? 800);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const drag = useRef<{ x: number; y: number; initial: Selection } | null>(null);
   const tagInfo = useTagOverview().data;
@@ -413,12 +417,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   };
 
   useLayoutEffect(() => {
-    const el = scrollRef.current;
+    const el = scrollEl;
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scrollEl]);
 
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (size + GAP)));
   // Le colonne si allargano per riempire la riga: nessuno spazio vuoto a destra.
@@ -457,7 +461,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const onClick = (id: number) => (e: MouseEvent) => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (selection.mode === "filter" && ctrl) {
-      // "Tutti tranne…": Ctrl+clic aggiunge o toglie un'eccezione.
+      // "Tutti tranne…€¦": Ctrl+clic aggiunge o toglie un'eccezione.
       replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
       return;
     }
@@ -476,6 +480,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     }
   };
 
+  if (isTauri() && (pages.isPending || (pages.isError && !pages.data))) {
+    return (
+      <QueryView query={pages} skeleton={<Skeleton kind="thumbnail" count={24} />}>
+        {() => null}
+      </QueryView>
+    );
+  }
+
   if (pages.isSuccess && items.length === 0 && start === 0 && (count.data ?? 0) === 0) {
     const filtered = JSON.stringify(filter) !== JSON.stringify(emptyFilter());
     return (
@@ -487,7 +499,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
 
   return (
     <div
-      ref={scrollRef}
+      aria-busy={pages.isFetching || undefined}
+      data-refreshing={pages.isPlaceholderData || undefined}
+      ref={(el) => {
+        scrollRef.current = el;
+        setScrollEl(el);
+      }}
       tabIndex={0}
       onKeyDown={(e) => {
         if ((e.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]"))
@@ -510,7 +527,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       data-testid="grid-scroll"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       style={{ flex: 1, overflow: "auto", position: "relative" }}
-      aria-label={t("library.count", { n: fmtInt(count.data ?? total) })}
+      aria-label={
+        count.isPending
+          ? t("feedback.calculating")
+          : t("library.count", { n: fmtInt(count.data ?? total) })
+      }
       role="region"
       onPointerDown={(e) => {
         if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
@@ -556,6 +577,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         setBox(null);
       }}
     >
+      <RefreshBar active={pages.isFetching && !pages.isPending} />
+      {pages.isError && <QueryView query={pages}>{() => null}</QueryView>}
       <div style={{ height: virt.getTotalSize() + PAD * 2, position: "relative" }}>
         {box && (
           <div

@@ -204,6 +204,7 @@ export function useFacetValues(
       render(a.value).localeCompare(render(b.value), undefined, { sensitivity: "base" }),
     );
     return {
+      query: whole,
       values,
       total: whole.data?.total ?? 0,
       loading: whole.isLoading,
@@ -212,6 +213,7 @@ export function useFacetValues(
     };
   }
   return {
+    query: pages,
     values: pages.data?.pages.flatMap((p) => p.values) ?? [],
     total: pages.data?.pages[0]?.total ?? 0,
     loading: pages.isLoading,

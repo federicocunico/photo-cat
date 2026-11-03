@@ -7,6 +7,40 @@ import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
 
+it("Primo avvio: does not render Library before startup and onboarding decisions", async () => {
+  commandsMock.bootStatus.mockResolvedValue({
+    phase: "migration",
+    ready: false,
+    error: null,
+    logsPath: "D:/logs",
+  });
+  commandsMock.onboardingDone.mockResolvedValue(false);
+  renderApp();
+  expect(screen.queryByText("page:library")).not.toBeInTheDocument();
+  expect(commandsMock.onboardingDone).not.toHaveBeenCalled();
+  act(() => emit("boot", { phase: "ready", ready: true, error: null, logsPath: "D:/logs" }));
+  expect(await screen.findByText(/1 \/ 4/, {}, { timeout: 10000 })).toBeInTheDocument();
+  expect(screen.queryByText("page:library")).not.toBeInTheDocument();
+});
+
+it("Errore all'avvio: displays the error and logs with retry and another data folder", async () => {
+  commandsMock.bootStatus.mockResolvedValue({
+    phase: "migration",
+    ready: false,
+    error: "Catalog locked",
+    logsPath: "D:/logs",
+  });
+  renderApp();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Catalog locked");
+  expect(screen.getByText("Log: D:/logs")).toBeInTheDocument();
+  expect(screen.queryByText("page:library")).not.toBeInTheDocument();
+  expect(commandsMock.getConfig).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
+  await waitFor(() => expect(commandsMock.bootRetry).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole("button", { name: "Scegli un’altra cartella dati" }));
+  await waitFor(() => expect(commandsMock.bootChooseFolder).toHaveBeenCalledOnce());
+});
+
 vi.mock("./lib/ipc", () => ipcMockModule(true));
 
 // Le pagine reali sono coperte dai loro test: qui interessa solo quale modulo è mostrato.
@@ -17,10 +51,7 @@ vi.mock("./modules/sequence/SequencePage", () => ({
   SequencePage: () => <p>page:sequence</p>,
   SequenceStatus: () => null,
 }));
-vi.mock("./modules/people/PeoplePage", () => ({ PeoplePage: () => <p>page:people</p> }));
-vi.mock("./modules/identities/IdentitiesPage", () => ({
-  IdentitiesPage: () => <p>page:identities</p>,
-}));
+vi.mock("./modules/people/PeopleModule", () => ({ PeopleModule: () => <p>page:people</p> }));
 vi.mock("./modules/import/ImportPage", () => ({ ImportPage: () => <p>page:import</p> }));
 vi.mock("./modules/jobs/JobsPage", () => ({ JobsPage: () => <p>page:jobs</p> }));
 vi.mock("./modules/models/ModelsPage", () => ({ ModelsPage: () => <p>page:models</p> }));
@@ -47,6 +78,12 @@ const info = (previousCrash: unknown) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  commandsMock.bootStatus.mockResolvedValue({
+    phase: "ready",
+    ready: true,
+    error: null,
+    logsPath: "D:/logs",
+  });
   localStorage.clear();
   useLayout.setState({ module: "library", theme: "dark", language: "it", diagFilter: {} });
   commandsMock.onboardingDone.mockResolvedValue(true);
@@ -66,7 +103,6 @@ describe("moduli di navigazione", () => {
       "catalogs",
       "tags",
       "people",
-      "identities",
       "import",
       "jobs",
       "models",
@@ -78,14 +114,13 @@ describe("moduli di navigazione", () => {
 
   it("la selezione dalla nav mostra il modulo corrispondente", async () => {
     renderApp();
-    const nav = screen.getByRole("navigation", { name: "Moduli" });
+    const nav = await screen.findByRole("navigation", { name: "Moduli" }, { timeout: 10000 });
     const labels: Record<string, string> = {
       library: "Libreria",
       sequence: "Sequenza",
       catalogs: "Cataloghi",
       tags: "Tag",
       people: "Persone",
-      identities: "Identità",
       import: "Importa",
       jobs: "Job",
       organize: "Esporta e organizza",

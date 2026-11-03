@@ -274,3 +274,77 @@ fn reanalysis_below_floor_marks_only_affected_files_as_stale() {
         .unwrap();
     assert_eq!(pending, vec![1], "la foto 1 torna nel job di analisi");
 }
+
+#[test]
+fn changing_min_sharpness_reclusters_saved_faces_without_models() {
+    // Scenario "Soglia di nitidezza cambiata": abbassando o alzando la nitidezza minima,
+    // i volti salvati entrano o escono dal raggruppamento senza rianalizzare le foto.
+    let (_t, db, _) = library();
+    let mut emb = vec![0.0f32; 128];
+    emb[0] = 1.0;
+    db.write(move |c| {
+        for (id, sharp) in [(1i64, 0.70f32), (2i64, 0.28f32)] {
+            pc_store::people::save_faces_tuned(
+                c,
+                id,
+                &[pc_store::people::DetectedFace {
+                    bbox: [0.1, 0.1, 0.2, 0.2],
+                    quality: 0.95,
+                    sharpness: Some(sharp),
+                    frontality: Some(0.95),
+                    size_px: Some(120),
+                    quality_score: None,
+                    embedding: emb.clone(),
+                }],
+                "sface",
+                "det+sface",
+                pc_ai::analyze::face_match(&AiThresholds::default()),
+                &Default::default(),
+            )?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let default_t = AiThresholds::default();
+    apply(
+        &db,
+        RetuneSpec {
+            faces_quality: true,
+            faces: true,
+            ..Default::default()
+        },
+        None,
+        &default_t,
+    );
+    let recs = db.read(|c| pc_store::people::records(c, None)).unwrap();
+    assert!(recs[0].person_id.is_some());
+    assert_eq!(
+        recs[1].person_id, None,
+        "volto a 0.28 scartato con soglia 0.35"
+    );
+
+    // L'utente abbassa la nitidezza minima a 0.20.
+    let lower = AiThresholds {
+        face_min_sharpness: 0.20,
+        ..default_t
+    };
+    let impact = retune::preview(&db, None, &default_t, &lower, &JobControl::new()).unwrap();
+    assert_eq!(impact.faces_discarded_sharpness, 0);
+    let spec = RetuneSpec::between(&default_t, &lower);
+    assert!(spec.faces_quality && spec.faces);
+    apply(&db, spec, None, &lower);
+    let recs = db.read(|c| pc_store::people::records(c, None)).unwrap();
+    assert!(recs[0].person_id.is_some());
+    assert_eq!(
+        recs[0].person_id, recs[1].person_id,
+        "il volto entra nel raggruppamento senza rianalizzare le foto"
+    );
+
+    // L'utente alza la nitidezza minima a 0.50: l'anteprima indica 1 volto scartato.
+    let higher = AiThresholds {
+        face_min_sharpness: 0.50,
+        ..default_t
+    };
+    let impact = retune::preview(&db, None, &lower, &higher, &JobControl::new()).unwrap();
+    assert_eq!(impact.faces_discarded_sharpness, 1);
+}

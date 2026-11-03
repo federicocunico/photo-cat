@@ -108,6 +108,81 @@ pub enum UndoAction {
         group: String,
         category: serde_json::Value,
     },
+    /// Persona ignorata: ripristina `ignored_at` / `ignored_faces` precedenti.
+    PersonIgnored {
+        id: i64,
+        prev_ignored_at: Option<i64>,
+        prev_ignored_faces: i64,
+    },
+    /// Persona ripristinata da ignorati: torna allo stato ignorato precedente.
+    PersonRestored {
+        id: i64,
+        prev_ignored_at: Option<i64>,
+        prev_ignored_faces: i64,
+    },
+    /// Vincolo "persone diverse": l'annullamento elimina la coppia.
+    PersonNotSame {
+        a: i64,
+        b: i64,
+    },
+    /// Volti recuperati dalla qualità: l'annullamento azzera `quality_override`.
+    FacesRecovered {
+        ids: Vec<i64>,
+    },
+    /// Copertina impostata: ripristina il valore precedente (`None` = automatica).
+    PersonCover {
+        group: i64,
+        prev: Option<i64>,
+    },
+    /// Volti spostati su un altro gruppo.
+    FacesMoved {
+        /// `(face_id, person_id precedente)` (voci registrate prima di `states`).
+        faces: Vec<(i64, Option<i64>)>,
+        to: i64,
+        /// Stato completo dei volti prima dello spostamento (persona, origine, rifiuti).
+        #[serde(default)]
+        states: Vec<crate::people::FaceState>,
+    },
+    /// Persone unite in `to`: snapshot dei gruppi eliminati e assegnazioni previe.
+    PersonsMerged {
+        from: Vec<crate::people::PersonSnapshot>,
+        /// `(face_id, person_id)` dei volti che erano nei gruppi `from`.
+        faces: Vec<(i64, i64)>,
+        to: i64,
+        /// Stato completo dei volti toccati dall'unione (anche i rifiuti riscritti).
+        #[serde(default)]
+        states: Vec<crate::people::FaceState>,
+        /// Gruppo di destinazione prima dell'unione (nome e identità possono cambiare).
+        #[serde(default)]
+        target: Option<crate::people::PersonSnapshot>,
+        /// Vincoli "persone diverse" di `from` e `to` prima dell'unione.
+        #[serde(default)]
+        not_same: Vec<(i64, i64, i64)>,
+    },
+    /// Correzione sui volti (rifiuto, separazione): ripristina lo stato salvato.
+    FacesRestored {
+        states: Vec<crate::people::FaceState>,
+        /// Gruppo creato dalla correzione (es. separazione): eliminato se resta vuoto.
+        #[serde(default)]
+        created: Option<i64>,
+    },
+}
+
+impl UndoAction {
+    /// `true` per le correzioni del modulo Persone: Ctrl+Z lì annulla solo queste.
+    pub fn is_people(&self) -> bool {
+        matches!(
+            self,
+            UndoAction::PersonNotSame { .. }
+                | UndoAction::PersonIgnored { .. }
+                | UndoAction::PersonRestored { .. }
+                | UndoAction::FacesRecovered { .. }
+                | UndoAction::PersonCover { .. }
+                | UndoAction::FacesMoved { .. }
+                | UndoAction::PersonsMerged { .. }
+                | UndoAction::FacesRestored { .. }
+        )
+    }
 }
 
 /// Luogo scelto dall'utente (nome libero o località del dataset geografico).
@@ -224,7 +299,7 @@ pub fn set_place(
         Some(l) => format!("Imposta luogo {}", l.name.as_deref().unwrap_or_default()),
         None => "Ripristina luogo automatico".to_string(),
     };
-    record(c, &description, &UndoAction::LocationReplaced { previous })?;
+    record_undo(c, &description, &UndoAction::LocationReplaced { previous })?;
     Ok(BulkOutcome {
         changed: ids.len(),
         requested: ids.len(),
@@ -261,7 +336,7 @@ pub fn rename_place(c: &Connection, from: &str, to: &str) -> StoreResult<BulkOut
         params![from, to],
     )?;
     refresh_all(c, &ids)?;
-    record(
+    record_undo(
         c,
         &format!("Rinomina luogo {from} → {to}"),
         &UndoAction::LocationReplaced { previous },
@@ -343,7 +418,7 @@ pub fn with_undo_group<T>(
         .collect::<Result<Vec<_>, _>>()?;
     c.execute("DELETE FROM undo_log WHERE id>?1", [first])?;
     if !actions.is_empty() {
-        record(c, description, &UndoAction::Group { actions })?;
+        record_undo(c, description, &UndoAction::Group { actions })?;
     }
     result
 }
@@ -358,7 +433,8 @@ pub struct BulkOutcome {
     pub requested: usize,
 }
 
-pub(crate) fn record(c: &Connection, description: &str, action: &UndoAction) -> StoreResult<()> {
+/// Registra un'azione annullabile in `undo_log`.
+pub fn record_undo(c: &Connection, description: &str, action: &UndoAction) -> StoreResult<()> {
     c.execute(
         "INSERT INTO undo_log(ts, description, payload) VALUES (?1, ?2, ?3)",
         params![now_ms(), description, serde_json::to_string(action)?],
@@ -417,7 +493,7 @@ pub fn add_tag(
         actions.push(add_action);
         UndoAction::Group { actions }
     };
-    record(c, &format!("Aggiungi tag \"{name}\""), &action)?;
+    record_undo(c, &format!("Aggiungi tag \"{name}\""), &action)?;
     Ok(BulkOutcome {
         changed,
         requested: ids.len(),
@@ -465,7 +541,7 @@ fn record_with_app(
         },
         None => action,
     };
-    record(c, description, &action)
+    record_undo(c, description, &action)
 }
 
 /// Rinomina un tag mantenendo le assegnazioni. Se esiste già un altro tag con
@@ -583,7 +659,7 @@ pub fn remove_tag(c: &Connection, name: &str, ids: &[MediaId]) -> StoreResult<Bu
     };
     let removed = tag::remove(c, tag_id, ids)?;
     refresh_all(c, &removed)?;
-    record(
+    record_undo(
         c,
         &format!("Rimuovi tag \"{name}\""),
         &UndoAction::TagsRemoved {
@@ -619,7 +695,7 @@ pub fn remove_tags(c: &Connection, names: &[String], ids: &[MediaId]) -> StoreRe
     touched.dedup();
     refresh_all(c, &touched)?;
     if !actions.is_empty() {
-        record(c, "Rimuovi i tag del set", &UndoAction::Group { actions })?;
+        record_undo(c, "Rimuovi i tag del set", &UndoAction::Group { actions })?;
     }
     Ok(BulkOutcome {
         changed: touched.len(),
@@ -679,7 +755,7 @@ pub fn add_to_catalog(
     let name = catalog::get(c, catalog_id)?.name;
     let previous = catalog_snapshot(c, catalog_id, ids, true)?;
     let changed = catalog::add_items(c, catalog_id, ids)?.len();
-    record(c, &format!("Aggiungi a {name}"), &previous)?;
+    record_undo(c, &format!("Aggiungi a {name}"), &previous)?;
     Ok(BulkOutcome {
         changed,
         requested: ids.len(),
@@ -721,7 +797,7 @@ fn change_catalog(
     } else {
         catalog::exclude(c, catalog_id, ids)?
     };
-    record(
+    record_undo(
         c,
         &format!(
             "{} {name}",
@@ -785,7 +861,7 @@ pub fn set_label(
         }
     }
     refresh_all(c, ids)?;
-    record(
+    record_undo(
         c,
         &format!("Imposta {group} = {}", value.unwrap_or("—")),
         &UndoAction::LabelsReplaced {
@@ -856,7 +932,7 @@ pub fn remove_label_value(
         1 => actions.remove(0),
         _ => UndoAction::Group { actions },
     };
-    record(c, &format!("Elimina voce {group} = {value}"), &action)?;
+    record_undo(c, &format!("Elimina voce {group} = {value}"), &action)?;
     Ok(ids)
 }
 
@@ -914,6 +990,22 @@ pub fn last_undoable(c: &Connection) -> StoreResult<Option<String>> {
         |r| r.get(0),
     )
     .optional()?)
+}
+
+/// Annulla l'ultima operazione solo se è una correzione delle persone: dal modulo Persone
+/// Ctrl+Z non deve annullare un tag o un catalogo assegnati prima in Libreria.
+pub fn undo_last_people(c: &Connection) -> StoreResult<Option<String>> {
+    let payload: Option<String> = c
+        .query_row(
+            "SELECT payload FROM undo_log ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match payload {
+        Some(p) if serde_json::from_str::<UndoAction>(&p)?.is_people() => undo_last(c),
+        _ => Ok(None),
+    }
 }
 
 /// Annulla l'ultima operazione registrata; restituisce la sua descrizione.
@@ -1078,6 +1170,71 @@ fn undo_action(
                 ])?;
             }
             refresh_all(c, &ids)?;
+        }
+        UndoAction::PersonIgnored {
+            id,
+            prev_ignored_at,
+            prev_ignored_faces,
+        }
+        | UndoAction::PersonRestored {
+            id,
+            prev_ignored_at,
+            prev_ignored_faces,
+        } => {
+            crate::people::set_ignored_state(c, id, prev_ignored_at, prev_ignored_faces)?;
+        }
+        UndoAction::PersonNotSame { a, b } => {
+            crate::people::remove_not_same(c, a, b)?;
+        }
+        UndoAction::FacesRecovered { ids } => {
+            crate::people::unrecover_faces(c, &ids)?;
+        }
+        UndoAction::PersonCover { group, prev } => match prev {
+            Some(face) => crate::people::set_cover(c, group, face)?,
+            None => crate::people::clear_cover(c, group)?,
+        },
+        UndoAction::FacesMoved { faces, states, .. } => {
+            if states.is_empty() {
+                crate::people::restore_face_persons(c, &faces)?;
+            } else {
+                crate::people::restore_face_states(c, &states)?;
+            }
+        }
+        UndoAction::PersonsMerged {
+            from,
+            faces,
+            to,
+            states,
+            target,
+            not_same,
+        } => {
+            for snap in &from {
+                crate::people::restore_person_row(c, snap)?;
+            }
+            if let Some(t) = &target {
+                crate::people::restore_person_fields(c, t)?;
+            }
+            if states.is_empty() {
+                let pairs: Vec<(i64, Option<i64>)> = faces
+                    .into_iter()
+                    .map(|(face, person)| (face, Some(person)))
+                    .collect();
+                crate::people::restore_face_persons(c, &pairs)?;
+            } else {
+                let mut persons: Vec<i64> = from.iter().map(|s| s.id).collect();
+                persons.push(to);
+                crate::people::restore_not_same(c, &persons, &not_same)?;
+                crate::people::restore_face_states(c, &states)?;
+            }
+        }
+        UndoAction::FacesRestored { states, created } => {
+            crate::people::restore_face_states(c, &states)?;
+            if let Some(id) = created {
+                c.execute(
+                    "DELETE FROM person WHERE id=?1 AND NOT EXISTS (SELECT 1 FROM face WHERE person_id=?1)",
+                    [id],
+                )?;
+            }
         }
     }
     Ok(())

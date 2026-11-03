@@ -8,6 +8,22 @@ import { emptyFilter, useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
 import { ImportPage } from "./ImportPage";
 import { splitPatterns } from "./formats";
+import { deferred } from "../../test/deferred";
+
+it("Elenco delle sorgenti in caricamento: no false empty state and retry after failure", async () => {
+  const pending = deferred<never[]>();
+  commandsMock.listSources.mockImplementation(() => pending.promise);
+  renderPage();
+  expect(screen.getByRole("status", { name: "Caricamento…" })).toBeInTheDocument();
+  expect(screen.queryByText("Nessuna sorgente configurata.")).not.toBeInTheDocument();
+  pending.reject(new Error("Sources unavailable"));
+  const retry = await screen.findByRole("button", { name: "Riprova" }, { timeout: 5000 });
+  commandsMock.listSources.mockResolvedValue([]);
+  fireEvent.click(retry);
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument(),
+  );
+});
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 
@@ -25,7 +41,9 @@ afterEach(cleanup);
 
 const renderPage = () =>
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <ImportPage />
     </QueryClientProvider>,
   );

@@ -1,9 +1,14 @@
 //! Comandi per le correzioni delle identità; non espongono embedding alla UI.
+use crate::events;
 use crate::state::AppState;
 use pc_core::{AppError, AppResult};
-use pc_store::people::{self, PersonView};
+use pc_store::bulk::{self, UndoAction};
+use pc_store::people::{
+    self, FaceCursor, FacePage, FaceScope, FaceSort, FaceView, GroupPage, GroupRow, GroupSort,
+    LocateFaceRequest, LocatedFace, PeopleSection, PeopleSections, PersonView,
+};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -14,7 +19,20 @@ pub enum Correction {
     Assign { person: i64, faces: Vec<i64> },
     Reject { person: i64, face: i64 },
     Remove { face: i64 },
+    MergeMany { from: Vec<i64>, to: i64 },
+    Move { faces: Vec<i64>, to: i64 },
+    NotSame { a: i64, b: i64 },
+    Ignore { group: i64 },
+    Restore { group: i64 },
+    Recover { faces: Vec<i64> },
+    SetCover { group: i64, face: i64 },
 }
+
+fn face_match(state: &AppState) -> people::FaceMatch {
+    let cfg = state.config.read();
+    pc_ai::analyze::face_match_with_size(&cfg.ai.thresholds, cfg.ai.face_min_size_px)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn list_people(state: State<'_, AppState>) -> AppResult<Vec<PersonView>> {
@@ -23,6 +41,96 @@ pub async fn list_people(state: State<'_, AppState>) -> AppResult<Vec<PersonView
         .await
         .map_err(|e| AppError::internal(e.to_string()))?
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn people_sections(state: State<'_, AppState>) -> AppResult<PeopleSections> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::people_sections(c, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_groups(
+    state: State<'_, AppState>,
+    section: PeopleSection,
+    query: Option<String>,
+    sort: GroupSort,
+    after: Option<i64>,
+    limit: Option<i64>,
+) -> AppResult<GroupPage> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| {
+            people::list_groups(
+                c,
+                section,
+                query.as_deref(),
+                sort,
+                after,
+                limit.unwrap_or(50),
+                &m,
+            )
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Un singolo gruppo, in qualunque sezione: `None` se non esiste più.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_group(state: State<'_, AppState>, id: i64) -> AppResult<Option<GroupRow>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::group_row(c, id, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn group_faces(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+    sort: FaceSort,
+    after: Option<FaceCursor>,
+    limit: Option<i64>,
+) -> AppResult<FacePage> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| {
+            people::group_faces(c, scope, sort, after.as_ref(), limit.unwrap_or(100), &m)
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn locate_face(
+    state: State<'_, AppState>,
+    request: LocateFaceRequest,
+) -> AppResult<LocatedFace> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::locate_face(c, &request, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn face_count(app: tauri::AppHandle) -> AppResult<i64> {
@@ -38,12 +146,13 @@ pub async fn face_count(app: tauri::AppHandle) -> AppResult<i64> {
 pub async fn person_faces(
     state: State<'_, AppState>,
     person: Option<i64>,
-    after: Option<people::FaceCursor>,
-    limit: u32,
-) -> AppResult<people::FacePage> {
-    let db = state.store.clone();
+    limit: Option<u32>,
+) -> AppResult<Vec<FaceView>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    // Memoria limitata anche per le persone con migliaia di volti.
+    let limit = i64::from(limit.unwrap_or(500).clamp(1, 2000));
     tauri::async_runtime::spawn_blocking(move || {
-        db.read(|c| people::faces_page(c, person, after, limit))
+        db.read(move |c| people::views_limited(c, person, Some(limit), &m))
             .map_err(Into::into)
     })
     .await
@@ -52,32 +161,184 @@ pub async fn person_faces(
 #[tauri::command]
 #[specta::specta]
 pub async fn correct_person(
-    app: tauri::AppHandle,
+    app: AppHandle,
     state: State<'_, AppState>,
     correction: Correction,
 ) -> AppResult<()> {
     let db = state.store.clone();
-    let res = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         db.write(move |c| {
             match correction {
                 Correction::Rename { person, name } => people::rename(c, person, &name)?,
-                Correction::Merge { from, to } => people::merge(c, from, to)?,
+                Correction::Merge { from, to } => merge_with_undo(c, vec![from], to)?,
                 Correction::Separate { person, faces } => {
-                    people::separate(c, &faces, person)?;
+                    let touched = people::faces_touching(c, &[person])?;
+                    let states = people::face_states(c, &touched)?;
+                    let created = people::separate(c, &faces, person)?;
+                    bulk::record_undo(
+                        c,
+                        "Separa volti",
+                        &UndoAction::FacesRestored {
+                            states,
+                            created: Some(created),
+                        },
+                    )?;
                 }
-                Correction::Assign { person, faces } => people::assign(c, &faces, person)?,
-                Correction::Reject { person, face } => people::reject(c, face, person)?,
+                Correction::Assign { person, faces } => {
+                    move_with_undo(c, &faces, person, |c| people::assign(c, &faces, person))?
+                }
+                Correction::Reject { person, face } => {
+                    let states = people::face_states(c, &[face])?;
+                    people::reject(c, face, person)?;
+                    bulk::record_undo(
+                        c,
+                        "Non è questa persona",
+                        &UndoAction::FacesRestored {
+                            states,
+                            created: None,
+                        },
+                    )?;
+                }
                 Correction::Remove { face } => people::remove_face(c, face)?,
+                Correction::MergeMany { from, to } => {
+                    let from: Vec<i64> = from.into_iter().filter(|id| *id != to).collect();
+                    if from.is_empty() {
+                        return Err(pc_store::StoreError::Invalid(
+                            "nessun gruppo da unire".into(),
+                        ));
+                    }
+                    merge_with_undo(c, from, to)?;
+                }
+                Correction::Move { faces, to } => {
+                    move_with_undo(c, &faces, to, |c| people::move_faces(c, &faces, to))?
+                }
+                Correction::NotSame { a, b } => {
+                    people::mark_not_same(c, a, b)?;
+                    bulk::record_undo(c, "Persone diverse", &UndoAction::PersonNotSame { a, b })?;
+                }
+                Correction::Ignore { group } => {
+                    let (prev_ignored_at, prev_ignored_faces) = people::ignore_person(c, group)?;
+                    bulk::record_undo(
+                        c,
+                        "Ignora persona",
+                        &UndoAction::PersonIgnored {
+                            id: group,
+                            prev_ignored_at,
+                            prev_ignored_faces,
+                        },
+                    )?;
+                }
+                Correction::Restore { group } => {
+                    let (prev_ignored_at, prev_ignored_faces) = people::restore_person(c, group)?;
+                    bulk::record_undo(
+                        c,
+                        "Ripristina persona",
+                        &UndoAction::PersonRestored {
+                            id: group,
+                            prev_ignored_at,
+                            prev_ignored_faces,
+                        },
+                    )?;
+                }
+                Correction::Recover { faces } => {
+                    if !faces.is_empty() {
+                        people::recover_faces(c, &faces)?;
+                        bulk::record_undo(
+                            c,
+                            "Recupera volti",
+                            &UndoAction::FacesRecovered { ids: faces },
+                        )?;
+                    }
+                }
+                Correction::SetCover { group, face } => {
+                    let prev = people::cover_face_id(c, group)?;
+                    people::set_cover(c, group, face)?;
+                    bulk::record_undo(
+                        c,
+                        "Imposta copertina",
+                        &UndoAction::PersonCover { group, prev },
+                    )?;
+                }
             }
             Ok(())
         })
-        .map_err(Into::into)
+        .map_err(AppError::from)
     })
     .await
-    .map_err(|e| AppError::internal(e.to_string()))?;
-    crate::events::faces_changed(&app);
-    res
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    events::faces_changed(&app);
+    Ok(())
 }
+/// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento: gruppi
+/// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse".
+fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {
+    let mut snaps = Vec::with_capacity(from.len());
+    for id in &from {
+        snaps.push(people::person_snapshot(c, *id)?);
+    }
+    let target = people::person_snapshot(c, to)?;
+    let faces = people::faces_of_persons(c, &from)?;
+    let mut groups = from.clone();
+    groups.push(to);
+    let states = people::face_states(c, &people::faces_touching(c, &groups)?)?;
+    let not_same = people::not_same_rows(c, &groups)?;
+    people::merge_many(c, &from, to)?;
+    bulk::record_undo(
+        c,
+        "Unisci persone",
+        &UndoAction::PersonsMerged {
+            from: snaps,
+            faces,
+            to,
+            states,
+            target: Some(target),
+            not_same,
+        },
+    )
+}
+
+/// Sposta volti su un gruppo registrando lo stato completo dei volti per l'annullamento.
+fn move_with_undo(
+    c: &rusqlite::Connection,
+    faces: &[i64],
+    to: i64,
+    apply: impl FnOnce(&rusqlite::Connection) -> pc_store::StoreResult<()>,
+) -> pc_store::StoreResult<()> {
+    let prev = people::face_person_ids(c, faces)?;
+    let states = people::face_states(c, faces)?;
+    apply(c)?;
+    if !prev.is_empty() {
+        bulk::record_undo(
+            c,
+            "Sposta volti",
+            &UndoAction::FacesMoved {
+                faces: prev,
+                to,
+                states,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
+/// operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
+#[tauri::command]
+#[specta::specta]
+pub async fn undo_people(app: AppHandle, state: State<'_, AppState>) -> AppResult<Option<String>> {
+    let db = state.store.clone();
+    let done = tauri::async_runtime::spawn_blocking(move || {
+        db.write(pc_store::bulk::undo_last_people)
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    if done.is_some() {
+        events::faces_changed(&app);
+    }
+    Ok(done)
+}
+
 /// Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati.
 #[tauri::command]
 #[specta::specta]
@@ -114,6 +375,16 @@ pub fn face_protocol(
 ) {
     use tauri::Manager;
     let handle = ctx.app_handle().clone();
+    if handle.try_state::<AppState>().is_none() {
+        responder.respond(
+            tauri::http::Response::builder()
+                .status(503)
+                .header("Retry-After", "1")
+                .body(Vec::new())
+                .expect("risposta avvio"),
+        );
+        return;
+    }
     let id = request
         .uri()
         .path()

@@ -4,11 +4,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { IdentitiesView, IdentityRow } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
-import { IdentitiesPage } from "./IdentitiesPage";
+import { useLayout } from "../../store/layout";
+import { PeopleModule } from "./PeopleModule";
+import { deferred } from "../../test/deferred";
+
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(async () => "D:\\ref.jpg"),
   save: vi.fn(),
+}));
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,
 }));
 
 const row = (p: Partial<IdentityRow> & { uid: string; name: string }): IdentityRow => ({
@@ -50,18 +56,40 @@ const view = (): IdentitiesView => ({
   defaultThreshold: 0.363,
 });
 
-function renderPage() {
+function renderModule() {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <IdentitiesPage />
+      <PeopleModule />
     </QueryClientProvider>,
   );
 }
 
+async function openPeopleSection() {
+  renderModule();
+  const tabs = await screen.findByRole("tablist");
+  fireEvent.click(within(tabs).getByRole("tab", { name: /^Persone/i }));
+  await screen.findByText("Giulia Bianchi");
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  useLayout.setState({
+    module: "people",
+    peopleSection: "review",
+    theme: "dark",
+    language: "it",
+  });
+  commandsMock.peopleSections.mockResolvedValue({
+    review: 0,
+    people: 3,
+    ignored: 0,
+    singles: 0,
+    discarded: 0,
+  } as never);
+  commandsMock.listGroups.mockResolvedValue({ items: [], next: null, total: 0 } as never);
   commandsMock.listIdentities.mockImplementation(async (q: string | null = null) => {
     const v = view();
     if (!q) return v;
@@ -78,12 +106,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it("lists identities with group filter, link state and store location", async () => {
-  renderPage();
-  const table = await screen.findByRole("table", { name: "Identità" });
-  expect(await within(table).findByText("Giulia Bianchi")).toBeInTheDocument();
-  expect(within(table).getByText("412")).toBeInTheDocument();
-  expect(within(table).getByText("non collegata")).toBeInTheDocument();
-  expect(within(table).getByText("nessuno")).toBeInTheDocument();
+  await openPeopleSection();
+  const table = screen.getByRole("table", { name: "Identità" });
+  expect(within(table).getByText("Giulia Bianchi")).toBeInTheDocument();
+  expect(within(table).getByText("412 foto")).toBeInTheDocument();
+  expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+  expect(within(table).getByText(/nessuno/)).toBeInTheDocument();
   expect(screen.getByRole("note")).toHaveTextContent("app.db");
   fireEvent.click(screen.getByRole("button", { name: "Lavoro (1)" }));
   expect(within(table).queryByText("Giulia Bianchi")).toBeNull();
@@ -91,21 +119,20 @@ it("lists identities with group filter, link state and store location", async ()
 });
 
 it("finds an identity by alias", async () => {
-  renderPage();
-  await screen.findByText("Giulia Bianchi");
+  await openPeopleSection();
   fireEvent.change(screen.getByLabelText("Cerca nome o alias"), {
     target: { value: "Nonna Rita" },
   });
   await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita"));
-  const table = screen.getByRole("table", { name: "Identità" });
+  const table = await waitFor(() => screen.getByRole("table", { name: "Identità" }));
   await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
   expect(within(table).getByText("Rita Rossi")).toBeInTheDocument();
 });
 
 it("creates an identity, leaving the short name to the default", async () => {
   commandsMock.saveIdentity.mockResolvedValueOnce("new-uid");
-  renderPage();
-  fireEvent.click(await screen.findByText("+ Nuova identità"));
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("+ Nuova identità"));
   fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
     target: { value: "Marco Russo" },
   });
@@ -128,8 +155,8 @@ it("shows the conflict when the name already exists", async () => {
     code: "INVALID_INPUT",
     detail: 'conflitto: esiste già un\'identità "Giulia Bianchi"',
   });
-  renderPage();
-  fireEvent.click(await screen.findByText("+ Nuova identità"));
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("+ Nuova identità"));
   fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
     target: { value: "Giulia Bianchi" },
   });
@@ -148,13 +175,45 @@ it("asks which face to use when the reference image has several", async () => {
       })),
     })
     .mockResolvedValueOnce({ outcome: "added", id: 9 });
-  renderPage();
-  fireEvent.click(await screen.findByText("Giulia Bianchi"));
-  fireEvent.click(screen.getByRole("button", { name: "+ Da file…" }));
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("Giulia Bianchi"));
+  fireEvent.click(await screen.findByRole("button", { name: "+ Da file…" }));
   const group = await screen.findByRole("group", { name: /più volti/ });
   expect(within(group).getAllByRole("button")).toHaveLength(3);
   fireEvent.click(within(group).getByRole("button", { name: "Volto 2" }));
   await waitFor(() =>
     expect(commandsMock.addIdentityReferenceFile).toHaveBeenLastCalledWith("g", "D:\\ref.jpg", 1),
   );
+});
+
+it("shows identities without photos in the library as editable", async () => {
+  await openPeopleSection();
+  const table = screen.getByRole("table", { name: "Identità" });
+  expect(within(table).getByText("Elena Conti")).toBeInTheDocument();
+  expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+  fireEvent.click(within(table).getByText("Elena Conti"));
+  expect(await screen.findByLabelText("Nome visualizzato")).toHaveValue("Elena Conti");
+  expect(screen.getByRole("button", { name: "Salva" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Esporta/ })).toBeInTheDocument();
+  const card = screen.getByLabelText("Scheda del gruppo");
+  expect(within(card).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+});
+
+it("Doppio clic su Salva: il salvataggio parte una sola volta", async () => {
+  const pending = deferred<string>();
+  commandsMock.saveIdentity.mockImplementationOnce(() => pending.promise);
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("+ Nuova identità"));
+  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
+    target: { value: "Test identity" },
+  });
+  const save = screen.getByRole("button", { name: "Crea identità" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  fireEvent.submit(save.closest("form")!);
+  await waitFor(() => expect(save).toHaveAttribute("aria-busy", "true"));
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
+  pending.resolve("new-uid");
+  await waitFor(() => expect(commandsMock.listIdentities.mock.calls.length).toBeGreaterThan(1));
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
 });

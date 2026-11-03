@@ -3,6 +3,7 @@
 
 import { vi } from "vitest";
 import type {
+  SourceSummary,
   ErrorBatch,
   JobSnapshot,
   LogLine,
@@ -34,11 +35,22 @@ import type {
   FacetValue,
   UpdateSummary,
   RelinkSummary,
+  PeopleSections,
+  GroupPage,
+  PeopleSection,
+  GroupSort,
+  FacePage,
+  FaceScope,
+  FaceSort,
+  FaceCursor,
+  LocateFaceRequest,
+  LocatedFace,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
 
 export const emitters = {
+  boot: [] as Cb<import("../bindings").BootStatus>[],
   job: [] as Cb<JobSnapshot>[],
   resources: [] as Cb<ResourceSnapshot>[],
   log: [] as Cb<LogLine[]>[],
@@ -57,6 +69,14 @@ export function emit<K extends keyof typeof emitters>(
 }
 
 export const commandsMock = {
+  bootStatus: vi.fn(async () => ({
+    phase: "ready",
+    ready: true,
+    error: null as string | null,
+    logsPath: "D:/logs",
+  })),
+  bootRetry: vi.fn(async () => {}),
+  bootChooseFolder: vi.fn(async () => null),
   appInfo: vi.fn(),
   dismissCrashNotice: vi.fn(),
   takeUiRecovery: vi.fn(async () => null),
@@ -75,7 +95,7 @@ export const commandsMock = {
   errorGroups: vi.fn(async () => []),
   logTail: vi.fn(async () => []),
   setLogLevel: vi.fn(async () => null),
-  listSources: vi.fn(async () => []),
+  listSources: vi.fn(async () => [] as SourceSummary[]),
   addSource: vi.fn(),
   updateSource: vi.fn(),
   removeSource: vi.fn(),
@@ -115,13 +135,54 @@ export const commandsMock = {
   setResourceProfile: vi.fn(),
   reanalyze: vi.fn(async () => 1),
   listPeople: vi.fn(async () => []),
-  personFaces: vi.fn(async () => ({ items: [], next: null })),
+  peopleSections: vi.fn(async (): Promise<PeopleSections> => ({
+    review: 0,
+    people: 0,
+    ignored: 0,
+    singles: 0,
+    discarded: 0,
+  })),
+  listGroups: vi.fn<
+    (
+      section: PeopleSection,
+      query: string | null,
+      sort: GroupSort,
+      after: number | null,
+      limit: number | null,
+    ) => Promise<GroupPage>
+  >(async () => ({ items: [], next: null, total: 0 })),
+  // Di default cerca il gruppo nelle pagine simulate da `listGroups`.
+  getGroup: vi.fn(async (id: number) => {
+    for (const section of ["review", "people", "ignored"] as const) {
+      const page = await commandsMock.listGroups(section, null, "photos_desc", null, 200);
+      const found = page?.items?.find((g) => g.id === id);
+      if (found) return found;
+    }
+    return null;
+  }),
+  groupFaces: vi.fn<
+    (
+      scope: FaceScope,
+      sort: FaceSort,
+      after: FaceCursor | null,
+      limit: number | null,
+    ) => Promise<FacePage>
+  >(async () => ({
+    items: [],
+    next: null,
+    total: 0,
+    goodCount: 0,
+    discardedCount: 0,
+  })),
+  locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
+  personFaces: vi.fn(async () => []),
   correctPerson: vi.fn(async () => null),
   purgeFaces: vi.fn(async () => null),
   saveCatalog: vi.fn(async () => 1),
   deleteCatalog: vi.fn(async () => null),
   startBulk: vi.fn(async () => 1),
   undoBulk: vi.fn(async () => null),
+  undoPeople: vi.fn(async () => null),
   lastBulkUndo: vi.fn(async () => null),
   tagOverview: vi.fn(async (): Promise<TagOverview> => ({
     tags: [],
@@ -252,8 +313,10 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: {},
+    EVENTS: { facesChanged: "faces://changed" },
     events: {
+      onBootPhase: reg(emitters.boot),
+      onBootReady: reg(emitters.boot),
       onJobProgress: reg(emitters.job),
       onResources: reg(emitters.resources),
       onLogLines: reg(emitters.log),

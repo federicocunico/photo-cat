@@ -2,7 +2,7 @@
 // Scorrendo in avanti si scaricano le prime, tornando indietro si ricaricano dal cursore del
 // primo elemento; un salto lontano (barra di scorrimento) riparte da un offset (`anchor`).
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   commands,
@@ -54,6 +54,7 @@ export function useGridPages(filter: LibraryFilter, sort: SortKey, anchor: numbe
         : undefined,
     maxPages: MAX_PAGES,
     gcTime: GRID_GC_MS,
+    placeholderData: keepPreviousData,
     enabled: isTauri(),
   });
   const start = pages.data?.pages[0]?.offset ?? anchor;

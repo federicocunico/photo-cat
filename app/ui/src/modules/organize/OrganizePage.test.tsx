@@ -18,7 +18,7 @@ const renderPage = () =>
 
 it("esporta in CSV con separatore, BOM e campi scelti", async () => {
   renderPage();
-  fireEvent.change(screen.getByLabelText("Ambito"), { target: { value: "library" } });
+  fireEvent.change(await screen.findByLabelText("Ambito"), { target: { value: "library" } });
   await screen.findByLabelText("Persone");
   fireEvent.click(screen.getByLabelText("Persone"));
   fireEvent.change(screen.getByLabelText("File di destinazione"), {
@@ -63,7 +63,7 @@ it("mostra anteprima con conteggi e spazio, propone l'alternativa e solo dopo av
     } as never);
   commandsMock.startOrganize.mockResolvedValue(9 as never);
   renderPage();
-  fireEvent.change(screen.getByLabelText("Ambito"), { target: { value: "library" } });
+  fireEvent.change(await screen.findByLabelText("Ambito"), { target: { value: "library" } });
   fireEvent.change(screen.getByLabelText("Cartella di destinazione"), {
     target: { value: "E:\\Organizzate" },
   });

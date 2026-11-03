@@ -126,7 +126,7 @@ L'analisi AI SHALL essere idempotente per file: un'analisi interrotta SHALL pote
 - **THEN** alla ripresa vengono elaborati solo i file rimanenti
 
 ### Requirement: Soglie dell'automatismo configurabili
-Il sistema SHALL esporre nelle impostazioni, con valori predefiniti ripristinabili, le soglie che governano l'automatismo: soglia CLIP per gruppo e per categoria, soglia di rilevamento persone, soglia di rilevamento volti, dimensione minima dei volti, soglia di somiglianza per il raggruppamento dei volti e soglia di somiglianza dei gruppi di foto simili. Valori fuori dall'intervallo 0–1 MUST essere rifiutati.
+Il sistema SHALL esporre nelle impostazioni, con valori predefiniti ripristinabili, le soglie che governano l'automatismo: soglia CLIP per gruppo e per categoria, soglia di rilevamento persone, soglia di rilevamento volti, dimensione minima dei volti, nitidezza minima dei volti, soglia di somiglianza per il raggruppamento dei volti e soglia di somiglianza dei gruppi di foto simili. Valori fuori dall'intervallo 0–1 MUST essere rifiutati.
 
 #### Scenario: Ripristino dei predefiniti
 - **WHEN** l'utente ha modificato più soglie e sceglie "Ripristina predefiniti"
@@ -139,6 +139,10 @@ Il sistema SHALL esporre nelle impostazioni, con valori predefiniti ripristinabi
 #### Scenario: Soglia dei gruppi di foto simili
 - **WHEN** l'utente cambia la soglia di somiglianza dei gruppi di foto simili
 - **THEN** l'anteprima indica quanti gruppi si formerebbero e, al salvataggio, i gruppi vengono ricalcolati senza rieseguire i modelli
+
+#### Scenario: Nitidezza minima dei volti
+- **WHEN** l'utente alza la nitidezza minima dei volti
+- **THEN** l'anteprima indica quanti volti verrebbero scartati e, al salvataggio, il raggruppamento viene ricalcolato senza rianalizzare le foto
 
 ### Requirement: Anteprima dell'effetto delle soglie
 Prima di salvare nuove soglie il sistema SHALL mostrare quante foto della libreria cambierebbero catalogazioni o conteggio persone e quante persone cambierebbero raggruppamento, calcolandolo dai risultati già salvati senza eseguire i modelli.

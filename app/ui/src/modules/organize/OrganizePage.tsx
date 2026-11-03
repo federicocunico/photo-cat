@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -109,9 +110,9 @@ export function OrganizePage() {
       {notice && (
         <p role="status">
           {notice}{" "}
-          <button className="btn" onClick={() => useLayout.getState().setModule("jobs")}>
+          <BusyButton className="btn" onClick={() => useLayout.getState().setModule("jobs")}>
             {t("organize.jobs")}
-          </button>
+          </BusyButton>
         </p>
       )}
       <div className="feature-actions">
@@ -193,10 +194,10 @@ export function OrganizePage() {
             value={exportPath}
             onChange={(e) => setExportPath(e.target.value)}
           />
-          <button className="btn" onClick={() => void run(() => pick(false))}>
+          <BusyButton className="btn" onClick={() => run(() => pick(false))}>
             {t("organize.browse")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             className="btn"
             disabled={
               busy ||
@@ -222,7 +223,7 @@ export function OrganizePage() {
             }
           >
             {t("organize.export")}
-          </button>
+          </BusyButton>
         </div>
       </div>
       <div className="feature-card" style={{ alignItems: "stretch", marginTop: 20 }}>
@@ -234,9 +235,9 @@ export function OrganizePage() {
             value={destination}
             onChange={(e) => setDestination(e.target.value)}
           />
-          <button className="btn" onClick={() => void run(() => pick(true))}>
+          <BusyButton className="btn" onClick={() => run(() => pick(true))}>
             {t("organize.browse")}
-          </button>
+          </BusyButton>
           <select
             className="field"
             aria-label={t("organize.method")}
@@ -265,7 +266,7 @@ export function OrganizePage() {
                   </option>
                 ))}
               </select>
-              <button
+              <BusyButton
                 className="btn"
                 disabled={i === 0}
                 onClick={() =>
@@ -277,26 +278,26 @@ export function OrganizePage() {
                 }
               >
                 ↑
-              </button>
-              <button
+              </BusyButton>
+              <BusyButton
                 className="btn"
                 disabled={levels.length === 1}
                 onClick={() => setLevels((s) => s.filter((_, j) => j !== i))}
               >
                 ×
-              </button>
+              </BusyButton>
             </li>
           ))}
         </ol>
         <div className="feature-actions">
-          <button
+          <BusyButton
             className="btn"
             disabled={levels.length >= 6}
             onClick={() => setLevels((s) => [...s, "year"])}
           >
             {t("organize.addLevel")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             className="btn"
             disabled={busy || !valid || !destination}
             onClick={() =>
@@ -306,8 +307,8 @@ export function OrganizePage() {
             }
           >
             {t("organize.preview")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             className="btn"
             disabled={busy || !valid || !destination}
             onClick={() =>
@@ -317,7 +318,7 @@ export function OrganizePage() {
             }
           >
             {t("organize.verify")}
-          </button>
+          </BusyButton>
         </div>
         {preview?.key === key && (
           <>
@@ -343,19 +344,19 @@ export function OrganizePage() {
             {check.data.reason && t(`organize.reasons.${check.data.reason}`)}{" "}
             {!check.data.available && t("organize.alternative")}{" "}
             {!check.data.available && (
-              <button className="btn" onClick={() => setMethod(check.data.alternative)}>
+              <BusyButton className="btn" onClick={() => setMethod(check.data.alternative)}>
                 {t(`organize.methods.${check.data.alternative}`)}
-              </button>
+              </BusyButton>
             )}
           </p>
         )}
-        <button
+        <BusyButton
           className="btn"
           disabled={busy || preview?.key !== key || check?.key !== key || !check?.data.available}
-          onClick={() => void run(async () => queued(await commands.startOrganize(options)))}
+          onClick={() => run(async () => queued(await commands.startOrganize(options)))}
         >
           {t("organize.start")}
-        </button>
+        </BusyButton>
       </div>
       <h2>{t("organize.history")}</h2>
       {history.data
@@ -365,7 +366,7 @@ export function OrganizePage() {
             <span>
               #{o.id} · {o.dest} · {o.entries}
             </span>
-            <button
+            <BusyButton
               className="btn"
               disabled={busy || o.state === "running"}
               onClick={() => {
@@ -378,7 +379,7 @@ export function OrganizePage() {
               }}
             >
               {t("organize.undo")}
-            </button>
+            </BusyButton>
           </div>
         ))}
     </section>

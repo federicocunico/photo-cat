@@ -6,6 +6,9 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	bootStatus: () => __TAURI_INVOKE<BootStatus>("boot_status"),
+	bootRetry: () => __TAURI_INVOKE<void>("boot_retry"),
+	bootChooseFolder: () => __TAURI_INVOKE<null>("boot_choose_folder"),
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**  Segna come letto l'avviso di chiusura anomala. */
 	dismissCrashNotice: () => __TAURI_INVOKE<void>("dismiss_crash_notice"),
@@ -89,9 +92,20 @@ export const commands = {
 	reanalyze: (target: Target) => __TAURI_INVOKE<number>("reanalyze", { target }),
 	setResourceProfile: (profile: ResourceProfile) => __TAURI_INVOKE<null>("set_resource_profile", { profile }),
 	listPeople: () => __TAURI_INVOKE<PersonView[]>("list_people"),
+	peopleSections: () => __TAURI_INVOKE<PeopleSections>("people_sections"),
+	listGroups: (section: PeopleSection, query: string | null, sort: GroupSort, after: number | null, limit: number | null) => __TAURI_INVOKE<GroupPage>("list_groups", { section, query, sort, after, limit }),
+	/**  Un singolo gruppo, in qualunque sezione: `None` se non esiste più. */
+	getGroup: (id: number) => __TAURI_INVOKE<GroupRow | null>("get_group", { id }),
+	groupFaces: (scope: FaceScope, sort: FaceSort, after: FaceCursor | null, limit: number | null) => __TAURI_INVOKE<FacePage>("group_faces", { scope, sort, after, limit }),
+	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
-	personFaces: (person: number | null, after: FaceCursor | null, limit: number) => __TAURI_INVOKE<FacePage>("person_faces", { person, after, limit }),
+	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
 	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
+	/**
+	 *  Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
+	 *  operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
+	 */
+	undoPeople: () => __TAURI_INVOKE<string | null>("undo_people"),
 	/**  Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati. */
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
@@ -269,6 +283,8 @@ export type AiThresholds = {
 	person_detection?: number | null,
 	/**  Confidenza minima di un volto usato per il riconoscimento. */
 	face_detection?: number | null,
+	/**  Nitidezza minima (0..1) di un volto usato per il riconoscimento. */
+	face_min_sharpness?: number | null,
 	/**  Somiglianza coseno minima tra due volti della stessa persona. */
 	face_similarity?: number | null,
 	/**  Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili. */
@@ -299,6 +315,13 @@ export type AppInfo = {
 	dataDir: string,
 	logsDir: string,
 	previousCrash: CrashInfo | null,
+};
+
+export type BootStatus = {
+	phase: string,
+	ready: boolean,
+	error: string | null,
+	logsPath: string,
 };
 
 export type Budget = {
@@ -390,7 +413,7 @@ export type Config = {
 	external_apps?: ExternalApp[],
 };
 
-export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number };
+export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number };
 
 export type CrashInfo = {
 	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */
@@ -424,6 +447,9 @@ export type Cursor = {
 };
 
 export type DateSource = "exif_original" | "exif_create" | "file_system";
+
+/**  Motivo per cui un volto è scartato per qualità dal raggruppamento e dai suggerimenti. */
+export type DiscardReason = "blurred" | "too_small" | "non_frontal" | "low_confidence";
 
 export type Entry = {
 	id: string,
@@ -588,23 +614,36 @@ export type FaceChoice = {
 	bbox: [(number | null), (number | null), (number | null), (number | null)],
 };
 
-/**  Posizione dopo l'ultimo volto di una pagina (ordine: qualità decrescente, id). */
 export type FaceCursor = {
-	/**  Qualità come salvata nel catalogo (f64), per un confronto esatto. */
-	quality: number | null,
+	qualityScore: number | null,
 	id: number,
 };
 
 export type FacePage = {
 	items: FaceView[],
 	next: FaceCursor | null,
+	total: number,
+	goodCount: number,
+	discardedCount: number,
 };
+
+/**  Ambito dei volti richiesti con `group_faces`. */
+export type FaceScope = { kind: "group"; group: number } | { kind: "singles" } | { kind: "discarded"; group: number | null };
+
+/**  Ordinamento dei volti in `group_faces`. */
+export type FaceSort = "quality_desc" | "captured_desc";
 
 export type FaceView = {
 	id: number,
 	mediaId: number,
 	bbox: [(number | null), (number | null), (number | null), (number | null)],
 	quality: number | null,
+	qualityScore: number | null,
+	sharpness: number | null,
+	frontality: number | null,
+	sizePx: number | null,
+	discardReason: DiscardReason | null,
+	year: number | null,
 	thumb: string | null,
 	personId: number | null,
 };
@@ -708,6 +747,31 @@ export type Group = {
 	threshold: number | null,
 	categories: Category[],
 };
+
+export type GroupPage = {
+	items: GroupRow[],
+	next: number | null,
+	total: number,
+};
+
+export type GroupRow = {
+	id: number,
+	name: string | null,
+	identityUid: string | null,
+	section: PeopleSection,
+	faces: number,
+	goodFaces: number,
+	discardedFaces: number,
+	photos: number,
+	cover: FaceView | null,
+	ignoredAt: number | null,
+	newFaces: number,
+	nameHint: NameHint | null,
+	mergeHint: MergeHint | null,
+};
+
+/**  Ordinamento dei gruppi nel modulo Persone. */
+export type GroupSort = "photos_desc" | "name_asc" | "faces_desc";
 
 export type IdentitiesView = {
 	identities: IdentityRow[],
@@ -864,6 +928,19 @@ export type LibraryFilter = {
 	groupSimilar?: boolean,
 };
 
+export type LocateFaceRequest = { kind: "face"; face_id: number } | { kind: "media"; media_id: number; person_id: number | null };
+
+export type LocatedFace = {
+	faceId: number,
+	mediaId: number,
+	mediaName: string,
+	section: PeopleSection,
+	groupId: number | null,
+	singles: boolean,
+	discarded: boolean,
+	index: number,
+};
+
 export type Location = {
 	name: string | null,
 	country: string | null,
@@ -912,9 +989,20 @@ export type MediaDetail = {
 	labels: LabelView[],
 	peopleCount: number | null,
 	people: string[],
+	faces: MediaFaceView[],
 	tags: string[],
 	catalogs: string[],
 	duplicates: number[],
+};
+
+export type MediaFaceView = {
+	id: number,
+	bbox: [(number | null), (number | null), (number | null), (number | null)],
+	personId: number | null,
+	personName: string | null,
+	identityUid: string | null,
+	ignored: boolean,
+	discarded: boolean,
 };
 
 export type MediaItem = {
@@ -949,6 +1037,15 @@ export type MemorySummary = {
 	totalMb: number,
 };
 
+export type MergeHint = {
+	otherId: number,
+	otherName: string | null,
+	otherFaces: number,
+	otherPhotos: number,
+	otherCover: FaceView | null,
+	score: number | null,
+};
+
 export type Method = "symlink" | "hardlink" | "copy";
 
 export type ModelState = { state: "missing" } | { state: "downloading"; done_bytes: number; total_bytes: number; bytes_per_second?: number } | { state: "verified" } | { state: "error"; code: string; message: string } | { state: "self_test_failed"; message: string } | { state: "update_available" };
@@ -957,6 +1054,14 @@ export type ModelStatus = {
 	entry: Entry,
 	state: ModelState,
 	selfTest: SelfTestResult | null,
+};
+
+export type NameHint = {
+	uid: string,
+	name: string,
+	shortName: string,
+	group: string | null,
+	score: number | null,
 };
 
 export type NamePreview = {
@@ -1034,6 +1139,17 @@ export type PageAt =
 { kind: "before"; cursor: Cursor } | 
 /**  Dalla posizione `offset` (salto con la barra di scorrimento). */
 { kind: "offset"; offset: number };
+
+/**  Sezione del modulo Persone. */
+export type PeopleSection = "review" | "people" | "ignored";
+
+export type PeopleSections = {
+	review: number,
+	people: number,
+	ignored: number,
+	singles: number,
+	discarded: number,
+};
 
 export type PersonView = {
 	id: number,
@@ -1435,6 +1551,8 @@ export type ThresholdImpact = {
 	mediaPeopleChanged: number,
 	/**  Volti esclusi dal riconoscimento con la nuova soglia di rilevamento. */
 	facesExcluded: number,
+	/**  Volti scartati per nitidezza sotto la nuova soglia di nitidezza minima. */
+	facesDiscardedSharpness: number,
 	/**  Stima delle persone senza nome che cambierebbero raggruppamento. */
 	personsAffectedEstimate: number,
 	/**  File salvati con un minimo di persone più alto della nuova soglia. */

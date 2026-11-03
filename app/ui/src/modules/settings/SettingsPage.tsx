@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -62,7 +64,28 @@ export function SettingsPage() {
       setBusy(false);
     }
   };
-  if (!cfg) return <p style={{ padding: 24 }}>{t("settings.loading")}</p>;
+  if (!cfg)
+    return (
+      <QueryView query={config} enabled={isTauri()} isEmpty={() => false}>
+        {() => (
+          <QueryView query={system} enabled={isTauri()} isEmpty={() => false}>
+            {() => (
+              <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
+                {() => (
+                  <QueryView query={taxonomy} enabled={isTauri()} isEmpty={() => false}>
+                    {() => (
+                      <QueryView query={faces} enabled={isTauri()} isEmpty={() => false}>
+                        {() => <p style={{ padding: 24 }}>{t("settings.loading")}</p>}
+                      </QueryView>
+                    )}
+                  </QueryView>
+                )}
+              </QueryView>
+            )}
+          </QueryView>
+        )}
+      </QueryView>
+    );
   const save = async () => {
     const clean = cleanSettings(cfg);
     await commands.saveSettings(clean);
@@ -86,188 +109,244 @@ export function SettingsPage() {
     }
   };
   return (
-    <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-      <h1>{t("settings.title")}</h1>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
-      <div className="feature-card" style={{ alignItems: "stretch" }}>
-        <label>
-          {t("settings.profile")}{" "}
-          <select
-            className="field"
-            value={cfg.resources.profile}
-            onChange={(e) =>
-              setCfg({
-                ...cfg,
-                resources: { ...cfg.resources, profile: e.target.value as ResourceProfile },
-              })
-            }
-          >
-            {["light", "balanced", "performance"].map((p) => (
-              <option key={p} value={p}>
-                {t(`models.profiles.${p}`, { defaultValue: p })}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("settings.ram")}{" "}
-          <input
-            className="field"
-            type="number"
-            min={512}
-            step={256}
-            value={cfg.resources.ram_limit_mb ?? ""}
-            onChange={(e) =>
-              setCfg({
-                ...cfg,
-                resources: {
-                  ...cfg.resources,
-                  ram_limit_mb: e.target.value ? Number(e.target.value) : null,
-                },
-              })
-            }
-          />
-        </label>
-        <label>
-          {t("settings.provider")}{" "}
-          <select
-            className="field"
-            value={cfg.ai.execution_provider}
-            onChange={(e) =>
-              setCfg({
-                ...cfg,
-                ai: { ...cfg.ai, execution_provider: e.target.value as ExecutionProvider },
-              })
-            }
-          >
-            {["auto", ...(system.data?.providers ?? ["cpu"])].map((p) => (
-              <option key={p} value={p}>
-                {p.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("settings.threshold")}{" "}
-          <input
-            className="field"
-            type="number"
-            min={0}
-            max={1}
-            step={0.01}
-            value={cfg.ai.confidence_threshold ?? 0}
-            onChange={(e) =>
-              setCfg({ ...cfg, ai: { ...cfg.ai, confidence_threshold: Number(e.target.value) } })
-            }
-          />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={cfg.ai.auto_download_models}
-            onChange={(e) =>
-              setCfg({ ...cfg, ai: { ...cfg.ai, auto_download_models: e.target.checked } })
-            }
-          />
-          {t("settings.autoModels")}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={cfg.ai.faces_enabled}
-            onChange={(e) => setCfg({ ...cfg, ai: { ...cfg.ai, faces_enabled: e.target.checked } })}
-          />
-          {t("settings.faces")}
-        </label>
-        <button
-          className="btn"
-          disabled={busy}
-          onClick={() => {
-            if (window.confirm(t("settings.purgeConfirm", { count: faces.data ?? 0 })))
-              void run(async () => {
-                await commands.purgeFaces();
-                await qc.invalidateQueries({ queryKey: ["config"] });
-                await qc.invalidateQueries({ queryKey: ["face-count"] });
-                setNotice(t("settings.purged"));
-              });
-          }}
-        >
-          {t("settings.purge")}
-        </button>
-        <label>
-          {t("settings.log")}{" "}
-          <select
-            className="field"
-            value={cfg.logging.level}
-            onChange={(e) =>
-              setCfg({ ...cfg, logging: { ...cfg.logging, level: e.target.value as LogLevel } })
-            }
-          >
-            {["error", "warn", "info", "debug", "trace"].map((l) => (
-              <option key={l}>{l}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("settings.theme")}{" "}
-          <select
-            className="field"
-            value={cfg.ui.theme}
-            onChange={(e) =>
-              setCfg({ ...cfg, ui: { ...cfg.ui, theme: e.target.value as "dark" | "light" } })
-            }
-          >
-            <option value="dark">{t("settings.dark")}</option>
-            <option value="light">{t("settings.light")}</option>
-          </select>
-        </label>
-        <label>
-          {t("settings.language")}{" "}
-          <select
-            className="field"
-            value={cfg.ui.language}
-            onChange={(e) =>
-              setCfg({ ...cfg, ui: { ...cfg.ui, language: e.target.value as "it" | "en" } })
-            }
-          >
-            <option value="it">Italiano</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <p className="mono">
-          {t("settings.currentPath")}: {info.data?.dataDir}
-        </p>
-        <label>
-          {t("settings.path")}{" "}
-          <input
-            className="field"
-            value={cfg.data_dir ?? ""}
-            onChange={(e) => setCfg({ ...cfg, data_dir: e.target.value || null })}
-          />
-        </label>
-        <p className="muted">{t("settings.pathHint")}</p>
-      </div>
-      <ThresholdsSection
-        cfg={cfg}
-        setCfg={setCfg}
-        tax={tax}
-        setTax={setTax}
-        saved={config.data as Settings}
-        savedTax={taxonomy.data}
-      />
-      <ExternalAppsSection cfg={cfg} setCfg={setCfg} />
-      <button className="btn" disabled={busy} onClick={() => void run(save)}>
-        {t("people.save")}
-      </button>
-      {tax && (
-        <TaxonomySection
-          tax={tax}
-          setTax={setTax}
-          saved={taxonomy.data}
-          defaultThreshold={cfg.ai.confidence_threshold ?? 0.25}
-        />
+    <QueryView query={config} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <QueryView query={system} enabled={isTauri()} isEmpty={() => false}>
+          {() => (
+            <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
+              {() => (
+                <QueryView query={taxonomy} enabled={isTauri()} isEmpty={() => false}>
+                  {() => (
+                    <QueryView query={faces} enabled={isTauri()} isEmpty={() => false}>
+                      {() => (
+                        <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
+                          <h1>{t("settings.title")}</h1>
+                          {error && <p role="alert">{error}</p>}
+                          {notice && <p role="status">{notice}</p>}
+                          <div className="feature-card" style={{ alignItems: "stretch" }}>
+                            <label>
+                              {t("settings.profile")}{" "}
+                              <select
+                                className="field"
+                                value={cfg.resources.profile}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    resources: {
+                                      ...cfg.resources,
+                                      profile: e.target.value as ResourceProfile,
+                                    },
+                                  })
+                                }
+                              >
+                                {["light", "balanced", "performance"].map((p) => (
+                                  <option key={p} value={p}>
+                                    {t(`models.profiles.${p}`, { defaultValue: p })}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              {t("settings.ram")}{" "}
+                              <input
+                                className="field"
+                                type="number"
+                                min={512}
+                                step={256}
+                                value={cfg.resources.ram_limit_mb ?? ""}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    resources: {
+                                      ...cfg.resources,
+                                      ram_limit_mb: e.target.value ? Number(e.target.value) : null,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              {t("settings.provider")}{" "}
+                              <select
+                                className="field"
+                                value={cfg.ai.execution_provider}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ai: {
+                                      ...cfg.ai,
+                                      execution_provider: e.target.value as ExecutionProvider,
+                                    },
+                                  })
+                                }
+                              >
+                                {["auto", ...(system.data?.providers ?? ["cpu"])].map((p) => (
+                                  <option key={p} value={p}>
+                                    {p.toUpperCase()}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              {t("settings.threshold")}{" "}
+                              <input
+                                className="field"
+                                type="number"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={cfg.ai.confidence_threshold ?? 0}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ai: { ...cfg.ai, confidence_threshold: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={cfg.ai.auto_download_models}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ai: { ...cfg.ai, auto_download_models: e.target.checked },
+                                  })
+                                }
+                              />
+                              {t("settings.autoModels")}
+                            </label>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={cfg.ai.faces_enabled}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ai: { ...cfg.ai, faces_enabled: e.target.checked },
+                                  })
+                                }
+                              />
+                              {t("settings.faces")}
+                            </label>
+                            <BusyButton
+                              className="btn"
+                              disabled={busy}
+                              onClick={async () => {
+                                if (
+                                  window.confirm(
+                                    t("settings.purgeConfirm", { count: faces.data ?? 0 }),
+                                  )
+                                )
+                                  await run(async () => {
+                                    await commands.purgeFaces();
+                                    await qc.invalidateQueries({ queryKey: ["config"] });
+                                    await qc.invalidateQueries({ queryKey: ["face-count"] });
+                                    setNotice(t("settings.purged"));
+                                  });
+                              }}
+                            >
+                              {t("settings.purge")}
+                            </BusyButton>
+                            <label>
+                              {t("settings.log")}{" "}
+                              <select
+                                className="field"
+                                value={cfg.logging.level}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    logging: { ...cfg.logging, level: e.target.value as LogLevel },
+                                  })
+                                }
+                              >
+                                {["error", "warn", "info", "debug", "trace"].map((l) => (
+                                  <option key={l}>{l}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              {t("settings.theme")}{" "}
+                              <select
+                                className="field"
+                                value={cfg.ui.theme}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ui: { ...cfg.ui, theme: e.target.value as "dark" | "light" },
+                                  })
+                                }
+                              >
+                                <option value="dark">{t("settings.dark")}</option>
+                                <option value="light">{t("settings.light")}</option>
+                              </select>
+                            </label>
+                            <label>
+                              {t("settings.language")}{" "}
+                              <select
+                                className="field"
+                                value={cfg.ui.language}
+                                onChange={(e) =>
+                                  setCfg({
+                                    ...cfg,
+                                    ui: { ...cfg.ui, language: e.target.value as "it" | "en" },
+                                  })
+                                }
+                              >
+                                <option value="it">Italiano</option>
+                                <option value="en">English</option>
+                              </select>
+                            </label>
+                            <p className="mono">
+                              {t("settings.currentPath")}: {info.data?.dataDir}
+                            </p>
+                            <label>
+                              {t("settings.path")}{" "}
+                              <input
+                                className="field"
+                                value={cfg.data_dir ?? ""}
+                                onChange={(e) =>
+                                  setCfg({ ...cfg, data_dir: e.target.value || null })
+                                }
+                              />
+                            </label>
+                            <p className="muted">{t("settings.pathHint")}</p>
+                          </div>
+                          <ThresholdsSection
+                            cfg={cfg}
+                            setCfg={setCfg}
+                            tax={tax}
+                            setTax={setTax}
+                            saved={config.data as Settings}
+                            savedTax={taxonomy.data}
+                          />
+                          <ExternalAppsSection cfg={cfg} setCfg={setCfg} />
+                          <BusyButton
+                            className="btn"
+                            disabled={busy}
+                            onClick={async () => await run(save)}
+                          >
+                            {t("people.save")}
+                          </BusyButton>
+                          {tax && (
+                            <TaxonomySection
+                              tax={tax}
+                              setTax={setTax}
+                              saved={taxonomy.data}
+                              defaultThreshold={cfg.ai.confidence_threshold ?? 0.25}
+                            />
+                          )}
+                        </section>
+                      )}
+                    </QueryView>
+                  )}
+                </QueryView>
+              )}
+            </QueryView>
+          )}
+        </QueryView>
       )}
-    </section>
+    </QueryView>
   );
 }

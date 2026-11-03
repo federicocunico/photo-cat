@@ -7,6 +7,23 @@ import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { selIds, useLibrary } from "../../store/library";
 import { TagsPage } from "./TagsPage";
+import { deferred } from "../../test/deferred";
+
+it("Doppio clic: a pending tag rename submits only once", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Rinomina Paesaggi" }));
+  const name = await screen.findByLabelText("Nome");
+  fireEvent.change(name, { target: { value: "Panorami" } });
+  const pending = deferred<Awaited<ReturnType<typeof commandsMock.renameTag>>>();
+  commandsMock.renameTag.mockImplementationOnce(() => pending.promise);
+  const save = screen.getByRole("button", { name: "Rinomina" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  expect(commandsMock.renameTag).toHaveBeenCalledOnce();
+  expect(save).toHaveAttribute("aria-busy", "true");
+  pending.resolve({ outcome: "renamed" } as never);
+  await waitFor(() => expect(save).toBeEnabled());
+});
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 
 const overview = (): TagOverview => ({

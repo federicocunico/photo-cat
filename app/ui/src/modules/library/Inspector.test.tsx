@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { idsSelection, useLibrary } from "../../store/library";
+import { useLayout } from "../../store/layout";
 import { CatalogFeedback } from "./catalogActions";
 import { useLive } from "../../store/live";
 import { Inspector } from "./Inspector";
@@ -45,6 +46,7 @@ beforeEach(() => {
     labels: [{ group: "subject", value: "paesaggio", score: 0.82, origin: "auto" }],
     peopleCount: 0,
     people: [],
+    faces: [],
     tags: ["tramonto"],
     catalogs: [],
     duplicates: [],
@@ -234,6 +236,55 @@ it("nuova voce dall'Inspector: Invio crea e assegna, Esc annulla, nome obbligato
   await waitFor(() =>
     expect(screen.queryByLabelText("Nome della nuova voce")).not.toBeInTheDocument(),
   );
+});
+
+it("chip volti: Apri in Persone imposta peopleTarget", async () => {
+  const detail = await commandsMock.mediaDetail(7);
+  commandsMock.mediaDetail.mockResolvedValue({
+    ...detail,
+    faces: [
+      {
+        id: 42,
+        bbox: [0.1, 0.1, 0.2, 0.2],
+        personId: 4,
+        personName: "Giulia",
+        identityUid: "g",
+        ignored: false,
+        discarded: false,
+      },
+      {
+        id: 43,
+        bbox: [0.5, 0.1, 0.2, 0.2],
+        personId: null,
+        personName: null,
+        identityUid: null,
+        ignored: false,
+        discarded: false,
+      },
+      {
+        id: 44,
+        bbox: [0.7, 0.1, 0.2, 0.2],
+        personId: 9,
+        personName: null,
+        identityUid: null,
+        ignored: true,
+        discarded: false,
+      },
+    ],
+  } as never);
+  useLayout.setState({ module: "library", peopleTarget: null });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByTestId("inspector-face-42")).toHaveTextContent("Giulia");
+  expect(screen.getByTestId("inspector-face-43")).toHaveTextContent(/volto non riconosciuto/i);
+  expect(screen.getByTestId("inspector-face-44")).toHaveTextContent(/volto ignorato/i);
+  const openButtons = screen.getAllByRole("button", { name: /Apri in Persone/i });
+  fireEvent.click(openButtons[0]);
+  expect(useLayout.getState().module).toBe("people");
+  expect(useLayout.getState().peopleTarget).toEqual({ face: 42 });
 });
 
 it("esclude dal catalogo smart nell'Inspector", async () => {

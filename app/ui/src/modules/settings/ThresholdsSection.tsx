@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Sezione "Soglie AI": soglie dei modelli (configurazione) e di gruppi e
 // categorie CLIP (tassonomia), con anteprima dell'effetto calcolata dai
 // risultati salvati e applicazione senza rianalisi.
@@ -19,6 +20,7 @@ import { cleanSettings } from "./cleanSettings";
 const DEFAULTS = {
   person_detection: 0.4,
   face_detection: 0.8,
+  face_min_sharpness: 0.35,
   face_similarity: 0.363,
   similar_photos: 0.8,
   face_min_size_px: 40,
@@ -32,6 +34,7 @@ function thresholdsOf(cfg: Settings): Full {
   return {
     person_detection: t.person_detection ?? DEFAULTS.person_detection,
     face_detection: t.face_detection ?? DEFAULTS.face_detection,
+    face_min_sharpness: t.face_min_sharpness ?? DEFAULTS.face_min_sharpness,
     face_similarity: t.face_similarity ?? DEFAULTS.face_similarity,
     similar_photos: t.similar_photos ?? DEFAULTS.similar_photos,
   };
@@ -176,6 +179,7 @@ export function ThresholdsSection({
         thresholds: {
           person_detection: DEFAULTS.person_detection,
           face_detection: DEFAULTS.face_detection,
+          face_min_sharpness: DEFAULTS.face_min_sharpness,
           face_similarity: DEFAULTS.face_similarity,
           similar_photos: DEFAULTS.similar_photos,
         },
@@ -225,6 +229,14 @@ export function ThresholdsSection({
             onChange={(e) =>
               setCfg({ ...cfg, ai: { ...cfg.ai, face_min_size_px: Number(e.target.value) } })
             }
+          />
+        </label>
+        <label>
+          {t("thresholds.faceSharpness")}{" "}
+          <ThresholdInput
+            label={t("thresholds.faceSharpness")}
+            value={th.face_min_sharpness}
+            onValid={(v) => setTh({ face_min_sharpness: v ?? DEFAULTS.face_min_sharpness })}
           />
         </label>
         <label>
@@ -312,32 +324,32 @@ export function ThresholdsSection({
           </table>
         )}
         <div className="feature-actions" style={{ margin: 0 }}>
-          <button
+          <BusyButton
             className="btn"
             disabled={busy}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 setImpact(await commands.previewThresholds(th, taxChanged && tax ? tax : null));
               })
             }
           >
             {t("thresholds.preview")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             className="btn"
             disabled={busy || (!cfgChanged && !taxChanged)}
-            onClick={() =>
-              void run(async () => {
+            onClick={async () =>
+              await run(async () => {
                 await apply();
                 setNotice(t("thresholds.applied"));
               })
             }
           >
             {t("thresholds.apply")}
-          </button>
-          <button className="btn btn-ghost" disabled={busy} onClick={restore}>
+          </BusyButton>
+          <BusyButton className="btn btn-ghost" disabled={busy} onClick={restore}>
             {t("thresholds.defaults")}
-          </button>
+          </BusyButton>
         </div>
         {busy && !impact && <span className="muted">{t("thresholds.previewing")}</span>}
         {impact && (
@@ -345,6 +357,11 @@ export function ThresholdsSection({
             <li>{t("thresholds.labelsChanged", { count: impact.mediaLabelsChanged })}</li>
             <li>{t("thresholds.peopleChanged", { count: impact.mediaPeopleChanged })}</li>
             <li>{t("thresholds.facesExcluded", { count: impact.facesExcluded })}</li>
+            <li>
+              {t("thresholds.facesDiscardedSharpness", {
+                count: impact.facesDiscardedSharpness,
+              })}
+            </li>
             {impact.personsAffectedEstimate > 0 && (
               <li>{t("thresholds.personsEstimate", { count: impact.personsAffectedEstimate })}</li>
             )}
@@ -359,11 +376,11 @@ export function ThresholdsSection({
         {belowFloor > 0 && (
           <div style={{ color: "var(--pc-warn)" }}>
             {t("thresholds.belowFloor", { count: belowFloor })}{" "}
-            <button
+            <BusyButton
               className="btn"
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
+              onClick={async () =>
+                await run(async () => {
                   await apply();
                   await commands.reanalyzeBelowFloor();
                   setNotice(t("thresholds.reanalyzeStarted"));
@@ -371,7 +388,7 @@ export function ThresholdsSection({
               }
             >
               {t("thresholds.reanalyze")}
-            </button>
+            </BusyButton>
           </div>
         )}
         {error && <p role="alert">{error}</p>}

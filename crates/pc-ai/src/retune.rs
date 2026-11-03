@@ -34,22 +34,27 @@ pub struct RetuneSpec {
     pub faces: bool,
     /// Soglia dei gruppi di foto simili cambiata.
     pub similar: bool,
+    /// Soglia di nitidezza minima dei volti cambiata.
+    pub faces_quality: bool,
 }
 
 impl RetuneSpec {
     /// Fasi necessarie per passare dalle soglie `prev` a `next` della
     /// configurazione (le soglie CLIP stanno nella tassonomia).
     pub fn between(prev: &AiThresholds, next: &AiThresholds) -> Self {
+        let faces_quality = prev.face_min_sharpness != next.face_min_sharpness;
         Self {
             clip: false,
             persons: prev.person_detection != next.person_detection,
             faces: prev.face_detection != next.face_detection
-                || prev.face_similarity != next.face_similarity,
+                || prev.face_similarity != next.face_similarity
+                || faces_quality,
             similar: prev.similar_photos != next.similar_photos,
+            faces_quality,
         }
     }
     pub fn is_empty(&self) -> bool {
-        !self.clip && !self.persons && !self.faces && !self.similar
+        !self.clip && !self.persons && !self.faces && !self.similar && !self.faces_quality
     }
     pub fn merge(self, other: Self) -> Self {
         Self {
@@ -57,6 +62,7 @@ impl RetuneSpec {
             persons: self.persons || other.persons,
             faces: self.faces || other.faces,
             similar: self.similar || other.similar,
+            faces_quality: self.faces_quality || other.faces_quality,
         }
     }
     pub fn params(&self) -> serde_json::Value {
@@ -75,6 +81,8 @@ pub struct ThresholdImpact {
     pub media_people_changed: i64,
     /// Volti esclusi dal riconoscimento con la nuova soglia di rilevamento.
     pub faces_excluded: i64,
+    /// Volti scartati per nitidezza sotto la nuova soglia di nitidezza minima.
+    pub faces_discarded_sharpness: i64,
     /// Stima delle persone senza nome che cambierebbero raggruppamento.
     pub persons_affected_estimate: i64,
     /// File salvati con un minimo di persone più alto della nuova soglia.
@@ -193,6 +201,7 @@ pub fn preview(
             Ok((
                 analysis::recount_people(c, next.person_detection, false)?.len() as i64,
                 people::faces_below(c, next.face_detection)?,
+                people::faces_below_sharpness(c, next.face_min_sharpness)?,
                 if next.face_similarity > current.face_similarity {
                     people::persons_below_similarity(c, next.face_similarity)?
                 } else {
@@ -209,9 +218,10 @@ pub fn preview(
         media_labels_changed,
         media_people_changed: rest.0,
         faces_excluded: rest.1,
-        persons_affected_estimate: rest.2,
-        reanalysis_persons: rest.3,
-        reanalysis_faces: rest.4,
+        faces_discarded_sharpness: rest.2,
+        persons_affected_estimate: rest.3,
+        reanalysis_persons: rest.4,
+        reanalysis_faces: rest.5,
         similar_groups_current: store.read(pc_store::similar::group_count)?,
         similar_groups: crate::similar::preview_count(store, next.similar_photos)? as i64,
     })
@@ -280,7 +290,7 @@ pub fn apply(
     } else {
         finish_empty(phase(PHASE_PERSONS));
     }
-    if spec.faces {
+    if spec.faces || spec.faces_quality {
         let p = phase(PHASE_FACES);
         if let Some(p) = &p {
             p.set_total(1);
@@ -372,7 +382,7 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 model: m,
             });
             let thresholds = deps.config.read().ai.thresholds;
-            let refs = match (&deps.app_store, spec.faces) {
+            let refs = match (&deps.app_store, spec.faces || spec.faces_quality) {
                 (Some(app), true) => crate::face_analysis::versions(&deps.resources)
                     .ok()
                     .and_then(|(emb, _)| people::IdentityRefs::load(app, &emb).ok())

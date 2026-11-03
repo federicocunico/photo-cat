@@ -1,7 +1,15 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type BulkAction, type LabelView } from "../../lib/ipc";
+import {
+  commands,
+  isTauri,
+  type BulkAction,
+  type LabelView,
+  type MediaFaceView,
+} from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
 import { useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
@@ -12,8 +20,16 @@ import { PlaceEditor } from "./PlaceEditor";
 import { SimilarSection } from "./SimilarSection";
 import { useLabelName } from "./labelName";
 import { CategoryPicker } from "./CategoryPicker";
+import { OpenInPeople } from "../people/OpenInPeople";
 
 import { useCatalogAction } from "./useCatalogAction";
+
+function faceChipLabel(face: MediaFaceView, t: (k: string, o?: Record<string, unknown>) => string) {
+  if (face.personName) return face.personName;
+  if (face.discarded) return t("library.inspector.discardedFace");
+  if (face.ignored) return t("library.inspector.ignoredFace");
+  return t("library.inspector.unrecognizedFace");
+}
 
 function Grid2({ children }: { children: ReactNode }) {
   return (
@@ -109,13 +125,13 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
             if (r.job != null) setJob(r.job);
           }}
         />
-        <button
+        <BusyButton
           className="btn"
           disabled={value === current}
-          onClick={() => void apply({ action: "set_label", group, value: value || null })}
+          onClick={() => apply({ action: "set_label", group, value: value || null })}
         >
           {t("bulk.actions.set_label")}
-        </button>
+        </BusyButton>
       </div>
       <div className="feature-actions" style={{ margin: 0 }}>
         <input
@@ -124,16 +140,17 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
           value={tag}
           onChange={(e) => setTag(e.target.value)}
         />
-        <button
+        <BusyButton
           className="btn"
           disabled={!tag.trim()}
           onClick={() => {
-            void apply({ action: "add_tag", name: tag.trim() });
+            const pending = apply({ action: "add_tag", name: tag.trim() });
             setTag("");
+            return pending;
           }}
         >
           {t("bulk.actions.add_tag")}
-        </button>
+        </BusyButton>
       </div>
       <div className="feature-actions" style={{ margin: 0 }}>
         <select
@@ -151,13 +168,13 @@ function Edits({ id, labels }: { id: number; labels: LabelView[] }) {
               </option>
             ))}
         </select>
-        <button
+        <BusyButton
           className="btn"
           disabled={!catalog}
-          onClick={() => void apply({ action: "add_catalog", catalog: Number(catalog) })}
+          onClick={() => apply({ action: "add_catalog", catalog: Number(catalog) })}
         >
           {t("bulk.actions.add_catalog")}
-        </button>
+        </BusyButton>
       </div>
       {error && <p role="alert">{error}</p>}
     </section>
@@ -184,11 +201,18 @@ export function Inspector() {
     enabled: isTauri() && focused !== null,
   });
   const d = detail.data;
-  if (focused === null || !d) {
+  if (focused === null) {
     return (
       <p className="muted" style={{ padding: "48px 16px 16px" }}>
         {t("library.inspector.none")}
       </p>
+    );
+  }
+  if (!d) {
+    return (
+      <QueryView query={detail} enabled={isTauri()} isEmpty={() => false}>
+        {() => null}
+      </QueryView>
     );
   }
   const url = thumbUrl(d.item.thumb);
@@ -314,9 +338,15 @@ export function Inspector() {
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h3 className="section-title">{t("library.inspector.peopleTags")}</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {d.people.map((p) => (
-            <span key={p} className="chip">
-              {p}
+          {d.faces.map((face) => (
+            <span
+              key={face.id}
+              className="chip"
+              data-testid={`inspector-face-${face.id}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              {faceChipLabel(face, t)}
+              <OpenInPeople target={{ face: face.id }} style={{ padding: "0 4px", fontSize: 12 }} />
             </span>
           ))}
         </div>
@@ -334,13 +364,13 @@ export function Inspector() {
                 <span key={name}>
                   {name}{" "}
                   {cat && (
-                    <button
+                    <BusyButton
                       className="btn"
                       disabled={catalogAction.busy}
-                      onClick={() => void catalogAction.act([d.item.id], cat.catalog.id, name)}
+                      onClick={() => catalogAction.act([d.item.id], cat.catalog.id, name)}
                     >
                       {t("exclusions.exclude")}
-                    </button>
+                    </BusyButton>
                   )}{" "}
                 </span>
               );
@@ -349,7 +379,7 @@ export function Inspector() {
         )}
       </section>
       {filter.excludedFrom != null && (
-        <button
+        <BusyButton
           className="btn"
           disabled={catalogAction.busy}
           onClick={() =>
@@ -362,7 +392,7 @@ export function Inspector() {
           }
         >
           {t("exclusions.restore")}
-        </button>
+        </BusyButton>
       )}
       <Edits key={d.item.id} id={d.item.id} labels={d.labels} />
     </div>

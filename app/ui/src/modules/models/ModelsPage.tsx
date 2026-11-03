@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -153,30 +155,30 @@ function ModelRow({ m }: { m: ModelStatus }) {
       <td style={{ padding: "12px 8px" }}>
         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
           {s.state !== "verified" && s.state !== "downloading" && (
-            <button
+            <BusyButton
               type="button"
               className="btn"
               onClick={() => run(() => commands.downloadModel(m.entry.id))}
             >
               {t("models.download")}
-            </button>
+            </BusyButton>
           )}
-          <button
+          <BusyButton
             type="button"
             className="btn btn-ghost"
             disabled={s.state !== "verified" && s.state !== "self_test_failed"}
             onClick={() => run(() => commands.selfTestModels([m.entry.id]))}
           >
             {t("models.test")}
-          </button>
-          <button
+          </BusyButton>
+          <BusyButton
             type="button"
             className="btn btn-ghost"
             disabled={s.state === "downloading"}
             onClick={install}
           >
             {t("models.installFile")}
-          </button>
+          </BusyButton>
         </div>
       </td>
     </tr>
@@ -216,198 +218,216 @@ export function ModelsPage() {
   };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        overflow: "auto",
-        padding: "24px 32px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
-      }}
-    >
-      <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("models.title")}</h1>
-      {error && (
-        <p role="alert" style={{ color: "var(--pc-danger)", margin: 0 }}>
-          {error}
-        </p>
-      )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-        <section
-          style={{ ...card, flex: "1 1 360px", display: "flex", flexDirection: "column", gap: 12 }}
+    <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
+      {() => (
+        <div
+          style={{
+            flex: 1,
+            overflow: "auto",
+            padding: "24px 32px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+          }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.system")}</h2>
-            {info.data && (
-              <span
-                style={{
-                  marginLeft: "auto",
-                  ...badge(
-                    info.data.onnxRuntime ? "var(--pc-ok-bg)" : "var(--pc-danger-bg)",
-                    info.data.onnxRuntime ? "var(--pc-ok)" : "var(--pc-danger)",
-                  ),
-                }}
-              >
-                {info.data.onnxRuntime ? t("models.runtimeOk") : t("models.runtimeMissing")}
-              </span>
-            )}
-          </div>
-          {sys && (
-            <div
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("models.title")}</h1>
+          {error && (
+            <p role="alert" style={{ color: "var(--pc-danger)", margin: 0 }}>
+              {error}
+            </p>
+          )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+            <section
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "8px 12px",
+                ...card,
+                flex: "1 1 360px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
               }}
             >
-              <span className="muted">{t("models.ramTotal")}</span>
-              <span>{mbToGb(sys.totalMb)} GB</span>
-              <span className="muted">{t("models.ramAvailable")}</span>
-              <span>{mbToGb(sys.availableMb)} GB</span>
-              <span className="muted">{t("models.cpu")}</span>
-              <span>
-                {t("models.cores", { physical: sys.physicalCores, logical: sys.logicalCores })}
-              </span>
-              <span className="muted">{t("models.accelerators")}</span>
-              <span>{info.data!.providers.map((p) => t(`models.providers.${p}`)).join(" · ")}</span>
-              <span className="muted">{t("models.budget")}</span>
-              <span>
-                {mbToGb(info.data!.budget.budgetMb)} GB ·{" "}
-                {t(`models.limitedBy.${info.data!.budget.limitedBy}`)}
-              </span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn"
-            style={{ alignSelf: "flex-start" }}
-            onClick={() => info.refetch()}
-          >
-            {t("models.recheck")}
-          </button>
-        </section>
-        <section
-          style={{ ...card, flex: "1 1 360px", display: "flex", flexDirection: "column", gap: 12 }}
-        >
-          <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.execution")}</h2>
-          <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            {t("models.provider")}
-            <select
-              className="field"
-              value={info.data?.executionProvider ?? "cpu"}
-              onChange={(e) => run(() => setProvider(e.target.value as ExecutionProvider))}
-            >
-              <option value="auto">{t("models.providerOptions.auto")}</option>
-              <option value="cpu">{t("models.providerOptions.cpu")}</option>
-              {(["direct_ml", "cuda", "core_ml"] as const).map((p) => {
-                const reason = info.data?.unavailableProviders.find(
-                  (u) => u.provider === p,
-                )?.reason;
-                return (
-                  <option key={p} value={p} disabled={!info.data?.providers.includes(p)}>
-                    {t(`models.providerOptions.${p}`)}
-                    {reason &&
-                      ` — ${t(`models.unavailable.${reason}`, {
-                        platform: t(`models.unavailable.platforms.${p}`),
-                      })}`}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-          <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            {t("models.profile")}
-            <select
-              className="field"
-              value={info.data?.resourceProfile ?? "balanced"}
-              onChange={(e) => run(() => setProfile(e.target.value as ResourceProfile))}
-            >
-              <option value="light">{t("models.profiles.light")}</option>
-              <option value="balanced">{t("models.profiles.balanced")}</option>
-              <option value="performance">{t("models.profiles.performance")}</option>
-            </select>
-          </label>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {t("models.providerHint")}
-          </span>
-        </section>
-      </div>
-      <section style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.models")}</h2>
-          <span className="muted" data-testid="models-summary">
-            · {t("models.summary", { ready, total: models.length, size: fmtBytes(total) })}
-          </span>
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ marginLeft: "auto" }}
-            onClick={() => run(() => commands.verifyModels())}
-          >
-            {t("models.verifyAll")}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => run(() => commands.selfTestModels([]))}
-          >
-            {t("models.testAll")}
-          </button>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-            <thead>
-              <tr
-                style={{
-                  color: "var(--pc-text-secondary)",
-                  textAlign: "left",
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                }}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.system")}</h2>
+                {info.data && (
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      ...badge(
+                        info.data.onnxRuntime ? "var(--pc-ok-bg)" : "var(--pc-danger-bg)",
+                        info.data.onnxRuntime ? "var(--pc-ok)" : "var(--pc-danger)",
+                      ),
+                    }}
+                  >
+                    {info.data.onnxRuntime ? t("models.runtimeOk") : t("models.runtimeMissing")}
+                  </span>
+                )}
+              </div>
+              {sys && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: "8px 12px",
+                  }}
+                >
+                  <span className="muted">{t("models.ramTotal")}</span>
+                  <span>{mbToGb(sys.totalMb)} GB</span>
+                  <span className="muted">{t("models.ramAvailable")}</span>
+                  <span>{mbToGb(sys.availableMb)} GB</span>
+                  <span className="muted">{t("models.cpu")}</span>
+                  <span>
+                    {t("models.cores", { physical: sys.physicalCores, logical: sys.logicalCores })}
+                  </span>
+                  <span className="muted">{t("models.accelerators")}</span>
+                  <span>
+                    {info.data!.providers.map((p) => t(`models.providers.${p}`)).join(" · ")}
+                  </span>
+                  <span className="muted">{t("models.budget")}</span>
+                  <span>
+                    {mbToGb(info.data!.budget.budgetMb)} GB ·{" "}
+                    {t(`models.limitedBy.${info.data!.budget.limitedBy}`)}
+                  </span>
+                </div>
+              )}
+              <BusyButton
+                type="button"
+                className="btn"
+                style={{ alignSelf: "flex-start" }}
+                onClick={() => info.refetch()}
               >
-                <th style={{ padding: "8px 8px 8px 0" }}>{t("models.col.model")}</th>
-                <th style={{ padding: 8 }}>{t("models.col.use")}</th>
-                <th style={{ padding: 8 }}>{t("models.col.version")}</th>
-                <th style={{ padding: 8 }}>{t("models.col.size")}</th>
-                <th style={{ padding: 8 }}>SHA-256</th>
-                <th style={{ padding: 8 }}>{t("models.col.state")}</th>
-                <th style={{ padding: 8 }}>{t("models.col.test")}</th>
-                <th style={{ padding: 8 }}>
-                  <span className="visually-hidden">{t("models.col.actions")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((m) => (
-                <ModelRow key={m.entry.id} m={m} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      {tested.length > 0 && (
-        <section style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
-          <h2 style={{ margin: "0 0 4px", fontSize: 16 }}>{t("models.selfTests")}</h2>
-          <div
-            className="mono"
-            style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}
-          >
-            {tested.map((m) => (
-              <span
-                key={m.entry.id}
-                style={{ color: m.selfTest!.passed ? "var(--pc-ok)" : "var(--pc-danger)" }}
-              >
-                {m.selfTest!.passed ? "✓" : "✕"} {m.entry.name}: {m.selfTest!.message} ·{" "}
-                {fmtDec(m.selfTest!.avgMs ?? 0, 1)} ms · {fmtDateTime(m.selfTest!.at)}
+                {t("models.recheck")}
+              </BusyButton>
+            </section>
+            <section
+              style={{
+                ...card,
+                flex: "1 1 360px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.execution")}</h2>
+              <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                {t("models.provider")}
+                <select
+                  className="field"
+                  value={info.data?.executionProvider ?? "cpu"}
+                  onChange={(e) => run(() => setProvider(e.target.value as ExecutionProvider))}
+                >
+                  <option value="auto">{t("models.providerOptions.auto")}</option>
+                  <option value="cpu">{t("models.providerOptions.cpu")}</option>
+                  {(["direct_ml", "cuda", "core_ml"] as const).map((p) => {
+                    const reason = info.data?.unavailableProviders.find(
+                      (u) => u.provider === p,
+                    )?.reason;
+                    return (
+                      <option key={p} value={p} disabled={!info.data?.providers.includes(p)}>
+                        {t(`models.providerOptions.${p}`)}
+                        {reason &&
+                          ` — ${t(`models.unavailable.${reason}`, {
+                            platform: t(`models.unavailable.platforms.${p}`),
+                          })}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                {t("models.profile")}
+                <select
+                  className="field"
+                  value={info.data?.resourceProfile ?? "balanced"}
+                  onChange={(e) => run(() => setProfile(e.target.value as ResourceProfile))}
+                >
+                  <option value="light">{t("models.profiles.light")}</option>
+                  <option value="balanced">{t("models.profiles.balanced")}</option>
+                  <option value="performance">{t("models.profiles.performance")}</option>
+                </select>
+              </label>
+              <span className="muted" style={{ fontSize: 13 }}>
+                {t("models.providerHint")}
               </span>
-            ))}
+            </section>
           </div>
-        </section>
+          <section style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.models")}</h2>
+              <span className="muted" data-testid="models-summary">
+                · {t("models.summary", { ready, total: models.length, size: fmtBytes(total) })}
+              </span>
+              <BusyButton
+                type="button"
+                className="btn btn-primary"
+                style={{ marginLeft: "auto" }}
+                onClick={() => run(() => commands.verifyModels())}
+              >
+                {t("models.verifyAll")}
+              </BusyButton>
+              <BusyButton
+                type="button"
+                className="btn"
+                onClick={() => run(() => commands.selfTestModels([]))}
+              >
+                {t("models.testAll")}
+              </BusyButton>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+                <thead>
+                  <tr
+                    style={{
+                      color: "var(--pc-text-secondary)",
+                      textAlign: "left",
+                      fontSize: 12,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.6,
+                    }}
+                  >
+                    <th style={{ padding: "8px 8px 8px 0" }}>{t("models.col.model")}</th>
+                    <th style={{ padding: 8 }}>{t("models.col.use")}</th>
+                    <th style={{ padding: 8 }}>{t("models.col.version")}</th>
+                    <th style={{ padding: 8 }}>{t("models.col.size")}</th>
+                    <th style={{ padding: 8 }}>SHA-256</th>
+                    <th style={{ padding: 8 }}>{t("models.col.state")}</th>
+                    <th style={{ padding: 8 }}>{t("models.col.test")}</th>
+                    <th style={{ padding: 8 }}>
+                      <span className="visually-hidden">{t("models.col.actions")}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {models.map((m) => (
+                    <ModelRow key={m.entry.id} m={m} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          {tested.length > 0 && (
+            <section style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 16 }}>{t("models.selfTests")}</h2>
+              <div
+                className="mono"
+                style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}
+              >
+                {tested.map((m) => (
+                  <span
+                    key={m.entry.id}
+                    style={{ color: m.selfTest!.passed ? "var(--pc-ok)" : "var(--pc-danger)" }}
+                  >
+                    {m.selfTest!.passed ? "✓" : "✕"} {m.entry.name}: {m.selfTest!.message} ·{" "}
+                    {fmtDec(m.selfTest!.avgMs ?? 0, 1)} ms · {fmtDateTime(m.selfTest!.at)}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+          <p className="muted" style={{ fontSize: 12 }}>
+            {t("models.privacy", { n: fmtInt(models.length) })}
+          </p>
+        </div>
       )}
-      <p className="muted" style={{ fontSize: 12 }}>
-        {t("models.privacy", { n: fmtInt(models.length) })}
-      </p>
-    </div>
+    </QueryView>
   );
 }

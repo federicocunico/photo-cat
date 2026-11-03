@@ -1,3 +1,4 @@
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Impostazioni › Tassonomia: voci e gruppi (anche manuali, senza descrizione),
 // eliminazione con il numero di foto coinvolte e avviso quando la modifica
 // cambia l'analisi automatica.
@@ -39,12 +40,12 @@ function NameField({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button type="button" className="btn" onClick={confirm}>
+      <BusyButton type="button" className="btn" onClick={confirm}>
         {t("entries.confirm")}
-      </button>
-      <button type="button" className="btn btn-ghost" onClick={onCancel}>
+      </BusyButton>
+      <BusyButton type="button" className="btn btn-ghost" onClick={onCancel}>
         {t("entries.cancel")}
-      </button>
+      </BusyButton>
       {error && (
         <span role="alert" style={{ color: "var(--pc-danger)" }}>
           {t("entries.required")}
@@ -189,15 +190,15 @@ export function TaxonomySection({
                   {t("entries.manual")}
                 </span>
               )}
-              <button
+              <BusyButton
                 type="button"
                 className="btn btn-ghost"
                 disabled={busy}
                 aria-label={t("entries.deleteOf", { name: c.label })}
-                onClick={() => void askDelete(g.id, c)}
+                onClick={async () => await askDelete(g.id, c)}
               >
                 {t("entries.delete")}
-              </button>
+              </BusyButton>
             </div>
           ))}
           {deleting?.group === g.id && (
@@ -210,17 +211,17 @@ export function TaxonomySection({
                     })
                   : t("entries.deleteConfirmNone", { name: deleting.category.label })}
               </span>
-              <button
+              <BusyButton
                 type="button"
                 className="btn btn-danger"
                 disabled={busy}
-                onClick={() => void confirmDelete(deleting)}
+                onClick={async () => await confirmDelete(deleting)}
               >
                 {t("entries.delete")}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => setDeleting(null)}>
+              </BusyButton>
+              <BusyButton type="button" className="btn btn-ghost" onClick={() => setDeleting(null)}>
                 {t("entries.cancel")}
-              </button>
+              </BusyButton>
             </div>
           )}
           {adding === g.id ? (
@@ -252,9 +253,9 @@ export function TaxonomySection({
               }}
             />
           ) : (
-            <button type="button" className="btn" onClick={() => setAdding(g.id)}>
+            <BusyButton type="button" className="btn" onClick={() => setAdding(g.id)}>
               {t("entries.addEntry")}
-            </button>
+            </BusyButton>
           )}
         </fieldset>
       ))}
@@ -276,9 +277,9 @@ export function TaxonomySection({
           }}
         />
       ) : (
-        <button type="button" className="btn" onClick={() => setAddingGroup(true)}>
+        <BusyButton type="button" className="btn" onClick={() => setAddingGroup(true)}>
           {t("entries.addGroup")}
-        </button>
+        </BusyButton>
       )}
       {reanalysis && (
         <p role="note" style={{ color: "var(--pc-warn)" }}>
@@ -287,9 +288,9 @@ export function TaxonomySection({
       )}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <button className="btn" disabled={busy || !saved} onClick={() => void save()}>
+      <BusyButton className="btn" disabled={busy || !saved} onClick={async () => await save()}>
         {t("settings.saveTaxonomy")}
-      </button>
+      </BusyButton>
     </>
   );
 }

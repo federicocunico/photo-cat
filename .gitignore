@@ -4,3 +4,5 @@ node_modules/
 /app/src-tauri/gen
 *.part
 .DS_Store
+.tmp-people-data/
+.tmp-foto-snap.txt

@@ -17,12 +17,14 @@ export MSYS_NO_PATHCONV=1 # Git Bash su Windows: non convertire i percorsi del c
 
 cd "$(git rev-parse --show-toplevel)"
 image=photo-cat-linux-ci
+# Separate caches for concurrent worktrees when requested.
+cache_suffix=${PHOTO_CAT_TEST_SUFFIX:-}
 docker build -q -t "$image" scripts/linux-docker >/dev/null
 
 ref=$(git stash create)
 git -c core.autocrlf=false archive "${ref:-HEAD}" | docker run --rm -i \
   -e SKIP_PACKAGE="${SKIP_PACKAGE:-}" \
-  -v pc-linux-target:/src/target \
-  -v pc-linux-nm:/src/app/ui/node_modules \
+  -v "pc-linux-target${cache_suffix}":/src/target \
+  -v "pc-linux-nm${cache_suffix}":/src/app/ui/node_modules \
   -v pc-linux-cargo:/root/.cargo/registry \
   "$image" bash -c 'tar -x -C /src && bash scripts/linux-docker/ci.sh'

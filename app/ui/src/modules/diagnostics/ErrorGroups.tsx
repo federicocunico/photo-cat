@@ -74,7 +74,7 @@ function GroupFiles({ group }: { group: ErrorGroup }) {
           type="button"
           className="btn btn-ghost"
           disabled={files.isFetchingNextPage}
-          onClick={() => void files.fetchNextPage()}
+          onClick={() => files.fetchNextPage()}
         >
           {t("diag.moreFiles", { n: fmtInt(Math.max(0, group.count - rows.length)) })}
         </button>

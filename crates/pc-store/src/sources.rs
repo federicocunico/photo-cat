@@ -108,10 +108,10 @@ fn orphan_thumbs(c: &Connection, keys: HashSet<String>) -> StoreResult<Vec<Strin
     Ok(out)
 }
 
-/// Elimina le persone senza nome né identità che non hanno più volti.
+/// Elimina le persone senza nome né identità né stato ignorato che non hanno più volti.
 pub fn prune_unnamed_people(c: &Connection) -> StoreResult<usize> {
     let n = c.execute(
-        "DELETE FROM person WHERE name IS NULL AND identity_uid IS NULL
+        "DELETE FROM person WHERE name IS NULL AND identity_uid IS NULL AND ignored_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM face f WHERE f.person_id=person.id)",
         [],
     )?;

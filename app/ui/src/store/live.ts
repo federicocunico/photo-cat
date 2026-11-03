@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
+import { notify } from "./toasts";
+import i18n from "../i18n";
 import { commands, events, isTauri } from "../lib/ipc";
 import type { ErrorBatch, ErrorRecord, JobSnapshot, LogLine, ResourceSnapshot } from "../lib/ipc";
 
@@ -61,8 +63,27 @@ export const activeJobs = (jobs: Record<number, JobSnapshot>) =>
 export function useLiveEvents() {
   useEffect(() => {
     const s = useLive.getState();
+    const started = new Map<number, number>();
+    const progress = (job: JobSnapshot) => {
+      if (["queued", "running", "paused"].includes(job.state)) {
+        if (!started.has(job.id)) started.set(job.id, Date.now());
+      } else {
+        const since = started.get(job.id);
+        if (since !== undefined && Date.now() - since >= 1000)
+          notify({
+            message:
+              job.state === "completed"
+                ? i18n.t("feedback.done")
+                : job.state === "completed_with_errors" || job.state === "failed"
+                  ? i18n.t("feedback.failed")
+                  : i18n.t(`jobs.states.${job.state}`),
+          });
+        started.delete(job.id);
+      }
+      s.upsertJob(job);
+    };
     const unlisten = [
-      events.onJobProgress(s.upsertJob),
+      events.onJobProgress(progress),
       events.onResources(s.setResources),
       events.onErrorBatch(s.addErrors),
       events.onLogLines(s.addLines),

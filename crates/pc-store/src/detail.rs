@@ -19,6 +19,19 @@ pub struct LabelView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
+pub struct MediaFaceView {
+    pub id: i64,
+    pub bbox: [f32; 4],
+    pub person_id: Option<i64>,
+    pub person_name: Option<String>,
+    pub identity_uid: Option<String>,
+    pub ignored: bool,
+    pub discarded: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
 pub struct MediaDetail {
     pub item: MediaItem,
     pub tech: Option<TechInfo>,
@@ -28,6 +41,7 @@ pub struct MediaDetail {
     pub labels: Vec<LabelView>,
     pub people_count: Option<i64>,
     pub people: Vec<String>,
+    pub faces: Vec<MediaFaceView>,
     pub tags: Vec<String>,
     pub catalogs: Vec<String>,
     pub duplicates: Vec<MediaId>,
@@ -57,11 +71,12 @@ pub fn media_detail(c: &Connection, id: MediaId) -> StoreResult<MediaDetail> {
         .ok();
     let mut st = c.prepare_cached(
         "SELECT DISTINCT p.name FROM face f JOIN person p ON p.id = f.person_id
-         WHERE f.media_id = ?1 AND p.name IS NOT NULL ORDER BY p.name",
+         WHERE f.media_id = ?1 AND p.name IS NOT NULL AND p.ignored_at IS NULL ORDER BY p.name",
     )?;
     let people = st
         .query_map(params![id], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
+    let faces = crate::people::media_faces(c, id)?;
     Ok(MediaDetail {
         tech: meta::tech(c, id)?,
         dates: meta::dates(c, id)?,
@@ -73,6 +88,7 @@ pub fn media_detail(c: &Connection, id: MediaId) -> StoreResult<MediaDetail> {
         labels,
         people_count,
         people,
+        faces,
         tags: tag::of_media(c, id)?,
         catalogs: catalog::catalogs_of(c, id)?,
         duplicates: media::duplicates_of(c, id)?,

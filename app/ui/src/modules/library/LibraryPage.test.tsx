@@ -18,6 +18,60 @@ import { useLive } from "../../store/live";
 import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
 import type { GridItem, SourceSummary } from "../../bindings";
+import { deferred } from "../../test/deferred";
+import { LibraryStatus } from "./LibraryStatus";
+
+it("Primo caricamento della griglia: placeholders and calculating count, never an empty library", () => {
+  commandsMock.libraryPage.mockImplementationOnce(() => new Promise(() => {}));
+  commandsMock.libraryCount.mockImplementation(() => new Promise(() => {}));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <LibraryPage />
+      <LibraryStatus />
+    </QueryClientProvider>,
+  );
+  expect(document.querySelectorAll(".feedback-skeleton-thumbnail")).toHaveLength(24);
+  expect(screen.getByTestId("status-count")).toHaveTextContent("in calcolo…");
+  expect(screen.queryByText(i18n.t("library.empty"))).not.toBeInTheDocument();
+});
+
+it("Aggiornamento in background: keeps and dims the previous photos until the new filter completes", async () => {
+  const pending = deferred<{ items: GridItem[]; next: null }>();
+  renderPage();
+  await screen.findByTestId("thumb-1");
+  commandsMock.libraryPage.mockImplementationOnce(() => pending.promise);
+  act(() => useLibrary.getState().setFilter({ text: "new filter" }));
+  await waitFor(() =>
+    expect(screen.getByTestId("grid-scroll")).toHaveAttribute("data-refreshing", "true"),
+  );
+  expect(screen.getByTestId("thumb-1")).toBeInTheDocument();
+  await act(async () => pending.resolve({ items: [item(99)], next: null }));
+  expect(await screen.findByTestId("thumb-99")).toBeInTheDocument();
+  expect(screen.queryByTestId("thumb-1")).not.toBeInTheDocument();
+});
+
+it("Sidebar loading has feedback and Inspector ignores a double click on an async action", async () => {
+  const pendingSources = deferred<SourceSummary[]>();
+  commandsMock.listSources.mockImplementationOnce(() => pendingSources.promise);
+  renderPage();
+  expect(screen.getAllByRole("status", { name: "Caricamento…" }).length).toBeGreaterThan(0);
+  fireEvent.click(await screen.findByTestId("thumb-1"));
+  const inspector = await screen.findByTestId("inspector");
+  const pending = deferred<number>();
+  commandsMock.startBulk.mockImplementationOnce(() => pending.promise);
+  fireEvent.change(within(inspector).getByLabelText(i18n.t("library.inspector.tag")), {
+    target: { value: "Test" },
+  });
+  const button = within(inspector).getByRole("button", { name: i18n.t("bulk.actions.add_tag") });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(commandsMock.startBulk).toHaveBeenCalledOnce();
+  expect(button).toHaveAttribute("aria-busy", "true");
+  await act(async () => {
+    pending.resolve(1);
+    pendingSources.resolve([]);
+  });
+});
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -142,6 +196,17 @@ beforeEach(() => {
       labels: [{ group: "subject", value: "paesaggio", score: 0.82, origin: "auto" }],
       peopleCount: 2,
       people: ["Giulia"],
+      faces: [
+        {
+          id: 11,
+          bbox: [0.1, 0.1, 0.2, 0.2],
+          personId: 4,
+          personName: "Giulia",
+          identityUid: "g",
+          ignored: false,
+          discarded: false,
+        },
+      ],
       tags: ["tramonto"],
       catalogs: [],
       duplicates: [],

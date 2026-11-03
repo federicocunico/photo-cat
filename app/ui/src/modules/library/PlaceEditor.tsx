@@ -1,3 +1,5 @@
+import { QueryView } from "../../components/feedback/QueryView";
+import { BusyButton } from "../../components/feedback/BusyButton";
 // Luogo modificabile: campo con suggerimenti (luoghi della libreria e località
 // del dataset geografico) e ripristino del luogo automatico. Le modifiche
 // passano dal job bulk "set_place", annullabile come le altre.
@@ -44,6 +46,11 @@ export function PlaceField({
         }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
       />
+      {open && prefix.length > 0 && (
+        <QueryView query={suggestions} isEmpty={() => false}>
+          {() => null}
+        </QueryView>
+      )}
       {open && list.length > 0 && (
         <ul
           role="listbox"
@@ -118,17 +125,20 @@ export function PlaceEditor({
             setPicked(s);
           }}
         />
-        <button
+        <BusyButton
           className="btn"
           disabled={!trimmed || (trimmed === (name ?? "") && source === "manual")}
-          onClick={() => void apply({ kind: "ids", ids: [id] }, input())}
+          onClick={async () => await apply({ kind: "ids", ids: [id] }, input())}
         >
           {t("place.set")}
-        </button>
+        </BusyButton>
         {source === "manual" && (
-          <button className="btn" onClick={() => void apply({ kind: "ids", ids: [id] }, null)}>
+          <BusyButton
+            className="btn"
+            onClick={async () => await apply({ kind: "ids", ids: [id] }, null)}
+          >
             {t("place.reset")}
-          </button>
+          </BusyButton>
         )}
       </div>
       {error && <p role="alert">{error}</p>}
