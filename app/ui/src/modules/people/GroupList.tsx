@@ -90,7 +90,7 @@ function Cover({ group }: { group: GroupRow }) {
 
 function groupTitle(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
   if (g.name) return g.name;
-  return t("people.groupOfFaces", { count: g.faces });
+  return t("people.unnamed", { count: g.photos });
 }
 
 function groupSub(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
@@ -349,10 +349,7 @@ export const GroupList = forwardRef<
         </div>
         {section === "people" ? (
           <>
-            <button
-              className="btn btn-primary people-stretch"
-              onClick={() => onCreateIdentity?.()}
-            >
+            <button className="btn btn-primary people-stretch" onClick={() => onCreateIdentity?.()}>
               {t("identities.newButton")}
             </button>
             <div className="people-wrap people-wrap--gap-sm">

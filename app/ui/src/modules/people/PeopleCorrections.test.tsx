@@ -112,7 +112,7 @@ describe("Unione persone", () => {
     });
 
     renderModule();
-    fireEvent.click(await screen.findByText(/Gruppo di 61 volti/i));
+    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
 
     const mergeSelect = await screen.findByLabelText(/Gruppo o persona di destinazione/i);
     await waitFor(() =>
@@ -151,7 +151,7 @@ describe("Unione persone", () => {
       total: 1,
     } as never);
     renderModule();
-    fireEvent.click(await screen.findByText(/Gruppo di 61 volti/i));
+    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
     await screen.findByRole("button", { name: /Ignora questa persona/i });
     fireEvent.keyDown(document.body, { key: "i" });
     await waitFor(() =>
@@ -236,7 +236,7 @@ describe("Persone diverse", () => {
     } as never);
 
     renderModule();
-    fireEvent.click(await screen.findByText(/Gruppo di 40 volti/i));
+    fireEvent.click(await screen.findByText(/Persona senza nome · 35 foto/i));
     expect(await screen.findByText(/Somiglia a/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Sono persone diverse/i }));
@@ -274,7 +274,7 @@ describe("Ripristino", () => {
     const tabs = await screen.findByRole("tablist");
     fireEvent.click(within(tabs).getByRole("tab", { name: /Ignorati/i }));
 
-    expect(await screen.findByText(/Gruppo di 146 volti/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Persona senza nome · 140 foto/i)).toBeInTheDocument();
     expect(screen.getByText(/\+6 volti nuovi/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Ripristina$/i }));

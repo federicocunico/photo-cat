@@ -332,3 +332,27 @@ it("Annullamento dopo aver cambiato pagina: Ctrl+Z annulla l'ultima operazione d
   fireEvent.keyDown(window, { key: "z", ctrlKey: true });
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
 });
+
+it("Esito parziale: quante riuscite e quante no, con i dettagli", async () => {
+  const user = userEvent.setup();
+  commandsMock.startBulk.mockResolvedValue(88 as never);
+  useLibrary.setState({ filter: emptyFilter(), selection: idsSelection([1, 2, 3]) });
+  renderBars();
+  await user.click(screen.getByRole("button", { name: "Tag" }));
+  await user.type(await screen.findByRole("combobox"), "mare{Enter}");
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalled());
+  act(() =>
+    useLive.setState({
+      jobs: {
+        88: {
+          id: 88,
+          state: "completed_with_errors",
+          phases: [{ name: "x", done: 98 }],
+          failed: 2,
+        } as never,
+      },
+    }),
+  );
+  expect(await screen.findByText("98 riuscite · 2 non riuscite.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Dettagli" })).toBeInTheDocument();
+});

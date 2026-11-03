@@ -313,10 +313,7 @@ function SingleInspector({ d }: { d: MediaDetail }) {
             {d.faces.map((face) => (
               <span key={face.id} className="chip" data-testid={`inspector-face-${face.id}`}>
                 {faceChipLabel(face, t)}
-                <OpenInPeople
-                  target={{ face: face.id }}
-                  className="btn btn-ghost facet-icon-btn"
-                />
+                <OpenInPeople target={{ face: face.id }} className="btn btn-ghost facet-icon-btn" />
               </span>
             ))}
           </div>

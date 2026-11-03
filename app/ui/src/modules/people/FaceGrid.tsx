@@ -289,10 +289,10 @@ export const FaceGrid = forwardRef<
         : group?.name
           ? group.name
           : group
-            ? t("people.groupOfFaces", { count: group.faces })
+            ? t("people.unnamed", { count: group.photos })
             : t("people.facesLabel");
 
-  const labelOf = (g: GroupRow) => g.name ?? t("people.groupOfFaces", { count: g.faces });
+  const labelOf = (g: GroupRow) => g.name ?? t("people.unnamed", { count: g.photos });
 
   const moveOptions = useMemo(() => {
     const seen = new Set<number>();
@@ -449,7 +449,7 @@ export const FaceGrid = forwardRef<
           <div className="people-merge-hint-body">
             <b>
               {t("people.mergeSuggestTitle", {
-                name: hint.otherName ?? t("people.groupOfFaces", { count: hint.otherFaces }),
+                name: hint.otherName ?? t("people.unnamedPlain"),
               })}
             </b>
             <br />
@@ -592,10 +592,7 @@ export const FaceGrid = forwardRef<
         >
           {() => (
             <>
-              <div
-                className="people-virt-pad"
-                style={{ height: virt.getTotalSize() + PAD * 2 }}
-              >
+              <div className="people-virt-pad" style={{ height: virt.getTotalSize() + PAD * 2 }}>
                 {box && (
                   <div
                     aria-hidden
@@ -609,11 +606,7 @@ export const FaceGrid = forwardRef<
                   />
                 )}
                 {vitems.map((row) => (
-                  <div
-                    key={row.key}
-                    className="people-virt-cells"
-                    style={{ top: row.start + PAD }}
-                  >
+                  <div key={row.key} className="people-virt-cells" style={{ top: row.start + PAD }}>
                     {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
                       const sel = selected.includes(face.id);
                       const lit = highlight?.faceId === face.id;

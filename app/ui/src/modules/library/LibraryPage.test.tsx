@@ -1022,3 +1022,25 @@ describe("visualizzatore", () => {
     expect(commandsMock.openWith).not.toHaveBeenCalledWith([3], { kind: "double_click" }, false);
   });
 });
+
+describe("stati vuoti", () => {
+  it("Libreria vuota: «Non ci sono ancora foto» con «Importa una cartella»", async () => {
+    commandsMock.libraryPage.mockResolvedValue({ items: [], next: null } as never);
+    commandsMock.libraryCount.mockResolvedValue(0 as never);
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    expect(await screen.findByText("Non ci sono ancora foto")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Importa una cartella" }));
+    expect(useLayout.getState().module).toBe("import");
+  });
+
+  it("Nessun risultato per i filtri: «Azzera i filtri»", async () => {
+    commandsMock.libraryPage.mockResolvedValue({ items: [], next: null } as never);
+    commandsMock.libraryCount.mockResolvedValue(0 as never);
+    useLibrary.setState({ filter: { ...emptyFilter(), text: "zzz" }, selection: idsSelection() });
+    renderPage();
+    expect(await screen.findByText("Nessuna foto corrisponde ai filtri")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Azzera filtri" }).slice(-1)[0]);
+    expect(useLibrary.getState().filter.text ?? null).toBeNull();
+  });
+});

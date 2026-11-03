@@ -67,7 +67,14 @@ export function useBulkJob(onFinished?: (state: string) => void) {
         notify({
           key: "library-result",
           tone: "error",
-          message: t("selection.failed", { failed: result.failed }),
+          // Esito parziale: quante riuscite e quante no (bulk-operations, "Esito parziale").
+          message:
+            result.state === "completed_with_errors"
+              ? t("selection.partial", {
+                  done: result.phases.reduce((n, ph) => n + ph.done, 0),
+                  failed: result.failed,
+                })
+              : t("selection.failed", { failed: result.failed }),
           action: {
             label: t("common.details"),
             run: () =>

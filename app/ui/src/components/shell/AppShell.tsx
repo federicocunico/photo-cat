@@ -34,9 +34,7 @@ export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss:
             free: crash.memory.availableMb,
           })}`}
       </span>
-      {crash.message && (
-        <span className="mono muted shell-banner-detail">{crash.message}</span>
-      )}
+      {crash.message && <span className="mono muted shell-banner-detail">{crash.message}</span>}
       <button
         type="button"
         className="btn shell-banner-action"

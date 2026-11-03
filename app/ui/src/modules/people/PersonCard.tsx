@@ -45,12 +45,7 @@ function CoverPreview({ group }: { group: GroupRow }) {
           }}
         >
           {src && !failed && (
-            <img
-              src={src}
-              alt=""
-              onError={() => setFailed(true)}
-              className="people-cover-img"
-            />
+            <img src={src} alt="" onError={() => setFailed(true)} className="people-cover-img" />
           )}
         </span>
         <span className="muted people-muted-sm">{t("people.coverHint")}</span>
@@ -247,7 +242,7 @@ export const PersonCard = forwardRef<
             .filter((g) => g.id !== group.id)
             .map((g) => (
               <option key={g.id} value={g.id}>
-                {g.name ?? t("people.groupOfFaces", { count: g.faces })}
+                {g.name ?? t("people.unnamed", { count: g.photos })}
               </option>
             ))}
         </select>
