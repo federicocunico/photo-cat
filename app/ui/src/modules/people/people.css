@@ -545,3 +545,11 @@
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Avanzamento delle correzioni (issue #28) */
+.people-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  color: var(--pc-text-secondary);
+}

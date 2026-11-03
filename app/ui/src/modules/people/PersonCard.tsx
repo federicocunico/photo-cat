@@ -11,7 +11,7 @@ import {
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Button, InlineAlert } from "../../components/ui";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { IdentityEditor } from "./IdentityEditor";
 import { MergeDialog } from "./MergeDialog";
@@ -119,7 +119,7 @@ export const PersonCard = forwardRef<
     setError("");
     try {
       await commands.correctPerson(c);
-      await refresh();
+      await refreshPeopleFast(qc);
       notifyPeopleUndo(qc, done);
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));

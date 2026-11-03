@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -284,5 +284,37 @@ describe("Ripristino", () => {
         group: 40,
       }),
     );
+  });
+});
+
+describe("Correzioni su librerie grandi (issue #31, #28, #30)", () => {
+  it("dopo «Non è questa persona» i comandi tornano subito, anche se l'elenco si ricarica ancora", async () => {
+    const unnamed = row({ id: 12, faces: 61, photos: 58, section: "review" });
+    let calls = 0;
+    commandsMock.listGroups.mockImplementation(async (section: string) => {
+      calls += 1;
+      // Dopo la correzione l'elenco dei gruppi impiega «secondi»: non arriva mai.
+      if (calls > 3) return new Promise(() => {});
+      if (section === "review") return { items: [unnamed], next: null, total: 1 };
+      return { items: [], next: null, total: 0 };
+    });
+    let finish!: () => void;
+    commandsMock.correctPerson.mockImplementation(
+      () => new Promise((r) => (finish = () => r(undefined as never))),
+    );
+    renderModule();
+    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
+    fireEvent.click(await screen.findByTestId("face-1"));
+    fireEvent.click(screen.getByTestId("face-2"), { ctrlKey: true });
+    const reject = screen.getByRole("button", { name: "Non è questa persona (2)" });
+    fireEvent.click(reject);
+    // Avanzamento visibile durante l'operazione (issue #28).
+    expect(await screen.findByText("Elaborazione: 0 di 2 volti…")).toBeInTheDocument();
+    await act(async () => finish());
+    expect(await screen.findByText("Elaborazione: 1 di 2 volti…")).toBeInTheDocument();
+    await act(async () => finish());
+    await waitFor(() => expect(screen.queryByText(/Elaborazione/)).not.toBeInTheDocument());
+    expect(commandsMock.correctPerson).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Rimuovi volto" })).toBeInTheDocument();
   });
 });

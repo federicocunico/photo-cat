@@ -19,11 +19,12 @@ import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import { Button, ConfirmDialog, InlineAlert } from "../../components/ui";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
 import "./people.css";
 import { FaceCrop } from "./FaceCrop";
 import { MergeDialog } from "./MergeDialog";
 import { discardReasonLabel } from "./discardReason";
+import { Spinner } from "../../components/feedback/Spinner";
 import type { GroupListTarget } from "./GroupList";
 
 const PAGE = 80;
@@ -46,6 +47,9 @@ export type FaceGridHandle = {
   runNotSame: () => boolean;
   scrollTop: () => number;
 };
+
+/** Etichetta con il numero di volti su cui agisce, quando sono più di uno (issue #30). */
+const withCount = (label: string, n: number) => (n > 1 ? `${label} (${n})` : label);
 
 export const FaceGrid = forwardRef<
   FaceGridHandle,
@@ -70,6 +74,8 @@ export const FaceGrid = forwardRef<
   const [focusedFace, setFocusedFace] = useState<number | null>(null);
   const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
+  // Avanzamento delle correzioni su più volti (issue #28): "3 di 40".
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState("");
   const [mergeHintOpen, setMergeHintOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -220,16 +226,22 @@ export const FaceGrid = forwardRef<
     if (!corrections.length) return;
     setBusy(true);
     setError("");
+    setProgress(corrections.length > 1 ? { done: 0, total: corrections.length } : null);
     try {
-      for (const c of corrections) await commands.correctPerson(c);
+      for (const [i, c] of corrections.entries()) {
+        await commands.correctPerson(c);
+        if (corrections.length > 1) setProgress({ done: i + 1, total: corrections.length });
+      }
       setSelected([]);
       setMoveTo("");
-      await refresh();
       if (done) notifyPeopleUndo(qc, done, corrections.length);
+      // I comandi tornano disponibili appena i volti del gruppo sono aggiornati.
+      await refreshPeopleFast(qc);
     } catch (err) {
       setError((err as { detail?: string }).detail ?? String(err));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -267,8 +279,8 @@ export const FaceGrid = forwardRef<
             a: gid,
             b: hint.otherId,
           });
-          await refresh();
           notifyPeopleUndo(qc, t("people.notSameDone"));
+          await refreshPeopleFast(qc);
         } catch (err) {
           setError((err as { detail?: string }).detail ?? String(err));
         } finally {
@@ -338,8 +350,17 @@ export const FaceGrid = forwardRef<
       </div>
 
       <div role="toolbar" aria-label={t("people.facesToolbar")} className="people-toolbar">
-        {selected.length > 0 && (
-          <span className="muted">{t("people.selected", { count: selected.length })}</span>
+        {busy ? (
+          <span role="status" className="people-progress">
+            <Spinner size={14} />
+            {progress
+              ? t("people.progress", { done: progress.done, total: progress.total })
+              : t("people.working")}
+          </span>
+        ) : (
+          selected.length > 0 && (
+            <span className="muted">{t("people.selected", { count: selected.length })}</span>
+          )
         )}
         {/* "Sposta in…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
             una select chiusa); i volti si spostano solo con il pulsante "Sposta". */}
@@ -380,7 +401,7 @@ export const FaceGrid = forwardRef<
         {groupId != null && (
           <>
             <Button disabled={busy || selected.length === 0} onClick={() => reject(groupId)}>
-              {t("people.reject")}
+              {withCount(t("people.reject"), selected.length)}
             </Button>
             <Button
               disabled={busy || selected.length === 0}
@@ -400,7 +421,7 @@ export const FaceGrid = forwardRef<
           disabled={busy || selected.length === 0}
           onClick={() => setRemoveOpen(true)}
         >
-          {t("people.remove")}
+          {withCount(t("people.remove"), selected.length)}
         </Button>
         {discardedOnly && (
           <Button
