@@ -5,7 +5,7 @@ const PAGE = 200;
 const MAX_PAGES = 200;
 
 /**
- * Tutti i gruppi di una sezione, pagina per pagina: le destinazioni di «Sposta in…» e
+ * Tutti i gruppi di una sezione, pagina per pagina: le destinazioni di «Riassegna a…» e
  * dell'unione non devono fermarsi ai primi gruppi dell'elenco.
  */
 export async function listAllGroups(section: PeopleSection, sort: GroupSort): Promise<GroupRow[]> {

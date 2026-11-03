@@ -2725,6 +2725,32 @@ pub fn person_for_identity(c: &Connection, uid: &str) -> StoreResult<Option<i64>
     .optional()?)
 }
 
+/// Riassegna i volti all'identità: alla persona già collegata o, se nella libreria
+/// non c'è, a una nuova persona collegata. Restituisce la persona e se è stata creata.
+pub fn assign_to_identity(
+    c: &Connection,
+    face_ids: &[i64],
+    uid: &str,
+    name: &str,
+) -> StoreResult<(i64, bool)> {
+    if face_ids.is_empty() {
+        return Err(StoreError::Invalid("nessun volto selezionato".into()));
+    }
+    let (person, created) = match person_for_identity(c, uid)? {
+        Some(p) => (p, false),
+        None => {
+            let p = create_person(c, Some(name))?;
+            c.execute(
+                "UPDATE person SET identity_uid=?2 WHERE id=?1",
+                params![p, uid],
+            )?;
+            (p, true)
+        }
+    };
+    assign(c, face_ids, person)?;
+    Ok((person, created))
+}
+
 /// Collega (o scollega, con `None`) una persona a un'identità. Il nome della
 /// persona diventa quello dell'identità. Se un'altra persona era già collegata
 /// alla stessa identità, le due persone vengono unite.

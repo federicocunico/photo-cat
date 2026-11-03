@@ -39,6 +39,8 @@ pub enum BulkAction {
     RestoreFromSystem {
         catalog: i64,
     },
+    /// "Sposta nel cestino": toglie le foto anche dai cataloghi manuali.
+    MoveToTrash,
     SetLabel {
         group: String,
         value: Option<String>,
@@ -101,6 +103,7 @@ impl BulkAction {
             Self::RestoreFromSystem { catalog } => {
                 bulk::restore_from_system(c, *catalog, ids)?.changed
             }
+            Self::MoveToTrash => bulk::move_to_trash(c, ids)?.changed,
             Self::SetLabel { group, value } => {
                 bulk::set_label(c, group, value.as_deref(), ids)?.changed
             }
@@ -287,6 +290,43 @@ mod tests {
                 ..Default::default()
             },
         )
+    }
+
+    #[test]
+    fn move_to_trash_over_several_chunks_is_one_undo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let (ids, cat, trash) = db
+            .write(|c| {
+                let ids = (0..450)
+                    .map(|i| media(c, &format!("t{i}.jpg")))
+                    .collect::<StoreResult<Vec<_>>>()?;
+                let cat = repo::catalog::create(
+                    c,
+                    "Viaggio",
+                    pc_store::model::CatalogKind::Manual,
+                    None,
+                )?;
+                repo::catalog::add_items(c, cat, &ids)?;
+                let trash = repo::catalog::system_id(c, pc_store::model::SYSTEM_TRASH)?;
+                Ok((ids, cat, trash))
+            })
+            .unwrap();
+        let jobs = manager(&db);
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids": ids, "operation": {"action": "move_to_trash"}}),
+        );
+        assert_eq!(s.failed, 0);
+        db.write(move |c| {
+            assert!(repo::catalog::manual_items(c, cat)?.is_empty());
+            assert_eq!(repo::catalog::manual_items(c, trash)?.len(), 450);
+            bulk::undo_last(c)?;
+            assert_eq!(repo::catalog::manual_items(c, cat)?.len(), 450);
+            assert!(repo::catalog::manual_items(c, trash)?.is_empty());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]

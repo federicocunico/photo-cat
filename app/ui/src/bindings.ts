@@ -118,6 +118,7 @@ export const commands = {
 	/**  Avvia il controllo della qualità delle foto (issue #20): attività con avanzamento. */
 	startPhotoQuality: () => __TAURI_INVOKE<number>("start_photo_quality"),
 	startBulk: (target: Target, operation: BulkAction, confirmed: boolean) => __TAURI_INVOKE<number>("start_bulk", { target, operation, confirmed }),
+	trashImpact: (target: Target) => __TAURI_INVOKE<CatalogLoss[]>("trash_impact", { target }),
 	undoBulk: () => __TAURI_INVOKE<string | null>("undo_bulk"),
 	lastBulkUndo: () => __TAURI_INVOKE<string | null>("last_bulk_undo"),
 	tagOverview: () => __TAURI_INVOKE<TagOverview>("tag_overview"),
@@ -345,7 +346,9 @@ exclusive?: string[] } | { action: "remove_tag"; name: string } |
 /**  Rimuove più tag insieme (tasto 0: tutti i tag del set attivo). */
 { action: "remove_tags"; names: string[] } | { action: "add_catalog"; catalog: number } | { action: "exclude_from_catalog"; catalog: number } | { action: "remove_catalog"; catalog: number } | { action: "restore_to_catalog"; catalog: number } | 
 /**  "Ripristina" da un catalogo di sistema (Cestino, Duplicati, Qualità insufficiente). */
-{ action: "restore_from_system"; catalog: number } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
+{ action: "restore_from_system"; catalog: number } | 
+/**  "Sposta nel cestino": toglie le foto anche dai cataloghi manuali. */
+{ action: "move_to_trash" } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
 { action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
 
@@ -427,7 +430,7 @@ export type Config = {
 	external_apps?: ExternalApp[],
 };
 
-export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number };
+export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number } | { action: "assign_identity"; identity: string; faces: number[] };
 
 export type CrashInfo = {
 	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */

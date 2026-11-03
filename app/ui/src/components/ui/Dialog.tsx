@@ -83,7 +83,8 @@ export function Dialog({
 /**
  * Conferma di un'azione che non si può annullare, o che tocca i file. Il pulsante dice il
  * verbo ("Elimina 3 tag"), il testo dice quanti elementi e cosa succede ai file.
- * Il focus iniziale va su "Annulla", così Invio per sbaglio non conferma.
+ * Il focus iniziale va su "Annulla", così Invio per sbaglio non conferma; con
+ * `focusConfirm` va invece sul pulsante di conferma (Invio conferma).
  */
 export function ConfirmDialog({
   open,
@@ -94,6 +95,7 @@ export function ConfirmDialog({
   count,
   files,
   danger = true,
+  focusConfirm = false,
   onConfirm,
 }: {
   open: boolean;
@@ -107,11 +109,14 @@ export function ConfirmDialog({
   /** Effetto sui file: `untouched` (solo catalogo) o `affected` (sposta/elimina file). */
   files?: "untouched" | "affected";
   danger?: boolean;
+  /** Focus iniziale sul pulsante di conferma anziché su "Annulla". */
+  focusConfirm?: boolean;
   onConfirm: () => unknown;
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const onCloseAutoFocus = useReturnFocus(open);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const confirm = async () => {
     if (busy) return;
     setBusy(true);
@@ -126,7 +131,19 @@ export function ConfirmDialog({
     <RAlert.Root open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <RAlert.Portal>
         <RAlert.Overlay className="ui-overlay" />
-        <RAlert.Content className="ui-dialog ui-dialog-confirm" onCloseAutoFocus={onCloseAutoFocus}>
+        <RAlert.Content
+          className="ui-dialog ui-dialog-confirm"
+          onCloseAutoFocus={onCloseAutoFocus}
+          onOpenAutoFocus={
+            focusConfirm
+              ? (e) => {
+                  // Radix mette il focus su "Annulla": qui lo si sposta sulla conferma.
+                  e.preventDefault();
+                  confirmRef.current?.focus({ preventScroll: true });
+                }
+              : undefined
+          }
+        >
           <RAlert.Title>{title}</RAlert.Title>
           <RAlert.Description asChild>
             <div className="ui-dialog-body">
@@ -144,6 +161,7 @@ export function ConfirmDialog({
               <Button disabled={busy}>{t("common.cancel")}</Button>
             </RAlert.Cancel>
             <Button
+              ref={confirmRef}
               variant={danger ? "danger" : "primary"}
               busy={busy}
               onClick={(e) => {

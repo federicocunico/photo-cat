@@ -108,11 +108,12 @@ const item = (id: number): GridItem => ({
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  useLayout.setState({ leftOpen: true, rightOpen: true });
+  useLayout.setState({ leftOpen: true, rightOpen: true, collapsedSections: [] });
   useLibrary.setState({
     filter: emptyFilter(),
     selection: idsSelection(),
     focused: null,
+    anchor: null,
     scrollTop: 0,
     thumbSize: 3,
   });
@@ -237,6 +238,44 @@ describe("selezione", () => {
     expect(clickSelect(order, [1, 3], 3, 3, { ctrl: true, shift: false })).toEqual([1]);
     expect(clickSelect(order, [2], 2, 4, { ctrl: false, shift: true })).toEqual([2, 3, 4]);
     expect(clickSelect(order, [5], 4, 2, { ctrl: true, shift: true })).toEqual([5, 2, 3, 4]);
+  });
+});
+
+describe("ancora degli intervalli", () => {
+  const sel = () => selIds(useLibrary.getState().selection)?.sort((a, b) => a - b);
+  const click = (id: number, o: { ctrlKey?: boolean; shiftKey?: boolean } = {}) =>
+    fireEvent.click(screen.getByTestId(`thumb-${id}`), o);
+
+  it("Maiusc+clic ripetuti partono sempre dall'ultimo clic semplice", async () => {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    click(2);
+    click(5, { shiftKey: true });
+    click(8, { shiftKey: true });
+    expect(sel()).toEqual([2, 3, 4, 5, 6, 7, 8]);
+    click(4, { shiftKey: true });
+    expect(sel()).toEqual([2, 3, 4]);
+  });
+
+  it("Ctrl+Maiusc+clic unisce l'intervallo dall'ancora di Ctrl+clic", async () => {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    click(2);
+    click(6, { ctrlKey: true });
+    click(9, { ctrlKey: true, shiftKey: true });
+    expect(sel()).toEqual([2, 6, 7, 8, 9]);
+  });
+
+  it("Maiusc+freccia dopo un clic usa la stessa ancora", async () => {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    click(2);
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    expect(sel()).toEqual([2, 3, 4]);
+    click(6, { shiftKey: true });
+    expect(sel()).toEqual([2, 3, 4, 5, 6]);
   });
 });
 
@@ -1087,8 +1126,270 @@ it("issue #24: Canc fuori da un catalogo sposta la selezione nel cestino", async
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
       { kind: "ids", ids: [1] },
-      { action: "add_catalog", catalog: 90 },
+      { action: "move_to_trash" },
       false,
     ),
   );
+  expect(commandsMock.trashImpact).toHaveBeenCalledWith({ kind: "ids", ids: [1] });
+});
+
+describe("trascinamento sui cataloghi e barra laterale dei cataloghi", () => {
+  const cat = (id: number, name: string, kind: string, system: string | null = null) => ({
+    catalog: { id, name, kind, rules: null, createdAt: 0, system },
+    items: 0,
+    excluded: 0,
+  });
+  const realFromPoint = document.elementFromPoint;
+  let under: Element | null = null;
+  beforeEach(() => {
+    // jsdom non ha sempre PointerEvent: un MouseEvent con pointerId basta ai gestori.
+    if (typeof window.PointerEvent === "undefined")
+      Object.defineProperty(window, "PointerEvent", {
+        configurable: true,
+        value: class extends MouseEvent {
+          pointerId = 1;
+        },
+      });
+    under = null;
+    document.elementFromPoint = (() => under) as never;
+    commandsMock.listCatalogs.mockResolvedValue([
+      cat(3, "Vacanze", "manual"),
+      cat(2, "amici", "manual"),
+      cat(5, "Recenti", "smart"),
+      cat(90, "Cestino", "manual", "trash"),
+      cat(91, "Duplicati", "manual", "duplicates"),
+    ] as never);
+    commandsMock.startBulk.mockResolvedValue(130 as never);
+  });
+  afterEach(() => {
+    document.elementFromPoint = realFromPoint;
+  });
+
+  const rowOf = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
+  const press = (id: number, x = 10, y = 10) =>
+    fireEvent.pointerDown(screen.getByTestId(`thumb-${id}`), {
+      button: 0,
+      clientX: x,
+      clientY: y,
+    });
+  const move = (x: number, y: number) => fireEvent.pointerMove(window, { clientX: x, clientY: y });
+  const release = (x = 60, y = 60) => fireEvent.pointerUp(window, { clientX: x, clientY: y });
+  async function ready() {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    await screen.findByRole("button", { name: /^Vacanze/ });
+  }
+
+  it("trascina l'intera selezione su un catalogo manuale", async () => {
+    useLibrary.setState({ selection: idsSelection([1, 2, 3]) });
+    await ready();
+    press(2);
+    move(40, 40);
+    expect(screen.getByText("3 foto")).toBeTruthy();
+    under = rowOf("Vacanze");
+    release();
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [1, 2, 3] },
+        { action: "add_catalog", catalog: 3 },
+        false,
+      ),
+    );
+    expect(screen.queryByText("3 foto")).toBeNull();
+  });
+
+  it("una miniatura non selezionata porta solo se stessa e non cambia la selezione", async () => {
+    useLibrary.setState({ selection: idsSelection([1, 2]) });
+    await ready();
+    press(5);
+    move(40, 40);
+    under = rowOf("Vacanze");
+    release();
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [5] },
+        { action: "add_catalog", catalog: 3 },
+        false,
+      ),
+    );
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2]);
+  });
+
+  it("con una selezione per filtro il bersaglio è il filtro", async () => {
+    useLibrary.getState().selectAll({ maxId: 12, count: 12 } as never);
+    await ready();
+    press(1);
+    move(40, 40);
+    under = rowOf("Vacanze");
+    release();
+    await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalled());
+    const [target, op] = commandsMock.startBulk.mock.calls[0] as unknown as [
+      { kind: string; maxId: number },
+      unknown,
+    ];
+    expect(target).toMatchObject({ kind: "filter", maxId: 12 });
+    expect(op).toEqual({ action: "add_catalog", catalog: 3 });
+  });
+
+  it("i cataloghi smart e di sistema (tranne il Cestino) rifiutano il rilascio", async () => {
+    await ready();
+    press(1);
+    move(40, 40);
+    under = rowOf("Recenti");
+    move(41, 41);
+    await waitFor(() => expect(rowOf("Recenti")).toHaveAttribute("data-drop-refused"));
+    expect(rowOf("Duplicati")).toHaveAttribute("data-drop-refused");
+    expect(rowOf("Recenti")).not.toHaveAttribute("data-drop-over");
+    release();
+    await act(async () => {});
+    expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  });
+
+  it("il rilascio sul Cestino sposta le foto nel cestino", async () => {
+    useLibrary.setState({ selection: idsSelection([1, 2]) });
+    await ready();
+    press(1);
+    move(40, 40);
+    under = rowOf("Cestino");
+    release();
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [1, 2] },
+        { action: "move_to_trash" },
+        false,
+      ),
+    );
+  });
+
+  it("Esc annulla il trascinamento senza toccare la selezione", async () => {
+    useLibrary.setState({ selection: idsSelection([1, 2]) });
+    await ready();
+    press(1);
+    move(40, 40);
+    expect(screen.getByText("2 foto")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByText("2 foto")).toBeNull();
+    under = rowOf("Vacanze");
+    release();
+    await act(async () => {});
+    expect(commandsMock.startBulk).not.toHaveBeenCalled();
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2]);
+  });
+
+  it("sotto i 5 px resta un clic; dopo un trascinamento il clic è ignorato", async () => {
+    await ready();
+    press(4);
+    move(12, 12);
+    release();
+    fireEvent.click(screen.getByTestId("thumb-4"));
+    expect(selIds(useLibrary.getState().selection)).toEqual([4]);
+    expect(screen.queryByText("1 foto")).toBeNull();
+
+    press(6);
+    move(40, 40);
+    release();
+    fireEvent.click(screen.getByTestId("thumb-6"));
+    expect(selIds(useLibrary.getState().selection)).toEqual([4]);
+    // Il clic successivo è di nuovo normale.
+    fireEvent.click(screen.getByTestId("thumb-6"));
+    expect(selIds(useLibrary.getState().selection)).toEqual([6]);
+  });
+
+  it("ordine delle sezioni e dei cataloghi", async () => {
+    await ready();
+    const names = screen
+      .getAllByRole("region")
+      .map((r) => r.getAttribute("aria-label"))
+      .filter((n) => ["Cataloghi", "Filtri", "Cartelle"].includes(n ?? ""));
+    expect(names).toEqual(["Cataloghi", "Filtri", "Cartelle"]);
+    const section = screen.getByRole("region", { name: "Cataloghi" });
+    const labels = within(section)
+      .getAllByRole("button")
+      .map((b) => b.textContent ?? "");
+    const at = (s: string) => labels.findIndex((l) => l.startsWith(s));
+    expect(at("amici")).toBeLessThan(at("Recenti"));
+    expect(at("Recenti")).toBeLessThan(at("Vacanze"));
+    expect(at("Vacanze")).toBeLessThan(at("Nuovo catalogo"));
+    expect(at("Nuovo catalogo")).toBeLessThan(at("Cestino"));
+    expect(at("Cestino")).toBeLessThan(at("Duplicati"));
+    expect(within(section).getByRole("separator")).toBeTruthy();
+  });
+
+  it("creazione sul posto: Invio crea, Esc annulla", async () => {
+    commandsMock.saveCatalog.mockResolvedValue(77 as never);
+    const user = userEvent.setup();
+    await ready();
+    await user.click(rowOf("Nuovo catalogo"));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("textbox", { name: "Nome del nuovo catalogo" })).toBeNull();
+    await user.click(rowOf("Nuovo catalogo"));
+    await user.type(
+      screen.getByRole("textbox", { name: "Nome del nuovo catalogo" }),
+      "Mare{Enter}",
+    );
+    await waitFor(() =>
+      expect(commandsMock.saveCatalog).toHaveBeenCalledWith(null, "Mare", "manual", null),
+    );
+    expect(commandsMock.startBulk).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("textbox", { name: "Nome del nuovo catalogo" })).toBeNull(),
+    );
+  });
+
+  it("nome duplicato: l'errore compare accanto al campo", async () => {
+    commandsMock.saveCatalog.mockRejectedValue("Esiste già un catalogo «Mare»" as never);
+    const user = userEvent.setup();
+    await ready();
+    await user.click(rowOf("Nuovo catalogo"));
+    await user.type(
+      screen.getByRole("textbox", { name: "Nome del nuovo catalogo" }),
+      "Mare{Enter}",
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Esiste già");
+    expect(screen.getByRole("textbox", { name: "Nome del nuovo catalogo" })).toBeTruthy();
+  });
+
+  it("il rilascio su Nuovo catalogo apre il campo; Invio crea e aggiunge le foto", async () => {
+    commandsMock.saveCatalog.mockResolvedValue(77 as never);
+    const user = userEvent.setup();
+    useLibrary.setState({ selection: idsSelection([1, 2]) });
+    await ready();
+    press(1);
+    move(40, 40);
+    under = rowOf("Nuovo catalogo");
+    release();
+    const field = await screen.findByRole("textbox", { name: "Nome del nuovo catalogo" });
+    await user.type(field, "Mare{Enter}");
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [1, 2] },
+        { action: "add_catalog", catalog: 77 },
+        false,
+      ),
+    );
+  });
+
+  it("il rilascio su Nuovo catalogo seguito da Esc scarta le foto", async () => {
+    const user = userEvent.setup();
+    await ready();
+    press(1);
+    move(40, 40);
+    under = rowOf("Nuovo catalogo");
+    release();
+    await screen.findByRole("textbox", { name: "Nome del nuovo catalogo" });
+    await user.keyboard("{Escape}");
+    expect(commandsMock.saveCatalog).not.toHaveBeenCalled();
+    expect(commandsMock.startBulk).not.toHaveBeenCalled();
+  });
+
+  it("Cartelle è chiusa di default e Gestisci cartelle apre Importa", async () => {
+    expect(useLayout.getInitialState().collapsedSections).toEqual(["library.sources"]);
+    useLayout.setState({ collapsedSections: ["library.sources"] });
+    await ready();
+    expect(screen.queryByRole("button", { name: "Gestisci cartelle" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Cartelle/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Gestisci cartelle" }));
+    expect(useLayout.getState().module).toBe("import");
+  });
 });

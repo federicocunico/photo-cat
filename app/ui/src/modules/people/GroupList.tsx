@@ -552,7 +552,7 @@ export const GroupList = forwardRef<
                                 <span className="people-list-name">
                                   {groupTitle(item.group, t)}
                                 </span>
-                                <span className="muted people-muted-sm">
+                                <span className="muted people-muted-sm people-list-sub">
                                   {groupSub(item.group, t)}
                                 </span>
                               </span>

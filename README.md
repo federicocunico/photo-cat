@@ -392,8 +392,11 @@ Le foto che contengono spariscono da Libreria, cataloghi, filtri e conteggi, e c
 solo aprendo quel catalogo; da lì **Ripristina** le riporta indietro. I file sul disco
 non vengono mai spostati né cancellati.
 
-- **Cestino**: "Sposta nel cestino" dalla barra delle azioni (Altro) o Canc sulla
-  selezione fuori da un catalogo. L'avviso permette di annullare.
+- **Cestino**: "Sposta nel cestino" dalla barra delle azioni (Altro), Canc sulla
+  selezione fuori da un catalogo, oppure trascinando le foto sul Cestino. Le foto escono
+  anche dai cataloghi manuali: se ne fanno parte, un dialogo elenca i cataloghi
+  interessati (Invio conferma). L'avviso permette di annullare, cataloghi compresi;
+  "Ripristina" dal Cestino riporta le foto in Libreria senza i cataloghi.
 - **Duplicati**: "Metti da parte i duplicati" (scheda del catalogo o palette): per ogni
   file presente più volte con lo stesso contenuto resta in Libreria la copia importata
   per prima, le altre vanno in "Duplicati".
@@ -401,6 +404,13 @@ non vengono mai spostati né cancellati.
   nitidezza sulle miniature e la risoluzione, e sposta qui le foto molto sfocate o sotto
   0,3 megapixel. Ogni foto viene misurata una volta sola, quindi una foto ripristinata
   non ci torna al controllo successivo.
+
+La 0.3.1:
+- **Organizzazione per cataloghi**: trascinare le foto dalla griglia sui cataloghi della barra laterale (anche su "Nuovo catalogo"); "Aggiungi a catalogo ▸" nel menu contestuale; barra laterale con cataloghi in alto e cartelle in fondo.
+- **Correzioni**:
+  - Maiusc+clic ripetuti mantengono l'ancora dell'intervallo;
+  - in Persone la griglia dei volti scorre;
+  - "Riassegna a…" elenca le persone con nome e le identità senza foto nella libreria.
 
 La 0.3.0 aggiorna il catalogo allo schema 10 (cataloghi di sistema e misure di qualità);
 la copia di sicurezza in `backups/` permette di tornare alla versione precedente.

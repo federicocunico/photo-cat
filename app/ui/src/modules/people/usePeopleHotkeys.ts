@@ -10,7 +10,7 @@ export type PeopleHotkeyActions = {
   toggleFocusedFace: () => void;
   /** N: focus su «Chi è?». */
   focusWhoIs: () => void;
-  /** M: focus su «Sposta in…». */
+  /** M: focus su «Riassegna a…». */
   focusMove: () => void;
   /** X: non è questa persona (rifiuta i volti selezionati / not_same). */
   notSame: () => void;

@@ -41,6 +41,9 @@ import { useOpenWith } from "./useOpenWith";
 import { usePlaceAction } from "./usePlaceAction";
 import { Viewer } from "../../components/viewer/Viewer";
 import { useBulkJob } from "./bulkJob";
+import { useMoveToTrash } from "./useMoveToTrash";
+import { useAddToCatalog } from "./useAddToCatalog";
+import { armPhotoDrag, consumeDragClick } from "../../components/dnd/photoDrag";
 import { activeSet } from "../tags/data";
 import { hotkeyAction } from "../tags/useTagHotkeys";
 import { colorOf, useTagOverview } from "../tags/data";
@@ -78,6 +81,7 @@ function Thumb({
   onClick,
   onDoubleClick,
   onMenu,
+  onDragStart,
   tagColor,
   group,
   cover,
@@ -95,6 +99,8 @@ function Thumb({
   onDoubleClick?: () => void;
   /** Menu contestuale alle coordinate indicate (clic destro, tasto Menu, Maiusc+F10). */
   onMenu?: (x: number, y: number) => void;
+  /** Pressione del tasto principale: il trascinamento parte dopo 5 px (photoDrag). */
+  onDragStart?: (x: number, y: number) => void;
   tagColor: (name: string) => string;
 }) {
   const { t } = useTranslation();
@@ -110,6 +116,10 @@ function Thumb({
         data-cursor={cursor || undefined}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
+        onPointerDown={(e) => {
+          if (e.button === 0 && !e.altKey) onDragStart?.(e.clientX, e.clientY);
+        }}
+        onDragStart={(e) => e.preventDefault()}
         onContextMenu={(e) => {
           e.preventDefault();
           onMenu?.(e.clientX, e.clientY);
@@ -212,8 +222,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     sort,
     thumbSize,
     selection,
-    focused,
     setSelection,
+    setAnchor: setRangeAnchor,
     replaceSelection,
     scrollTop,
     setScrollTop,
@@ -245,6 +255,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   // Visualizzatore interno: posizione nella vista, null se chiuso.
   const [viewerAt, setViewerAt] = useState<number | null>(null);
   const bulk = useBulkJob();
+  const trash = useMoveToTrash();
+  const addToCatalog = useAddToCatalog();
   const closeMenu = useCallback(() => setMenu(null), []);
   const actionError = openWith.error || place.error;
 
@@ -304,12 +316,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   // Selezionare un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
   const selectGroup = (it: GridItem) => {
     if (it.similarGroup == null) return;
-    void commands.similarGroupMembers(it.similarGroup, filter, sort).then((page) =>
+    void commands.similarGroupMembers(it.similarGroup, filter, sort).then((page) => {
       setSelection(
         page.items.map((m) => m.id),
         it.id,
-      ),
-    );
+      );
+      setRangeAnchor(it.id);
+    });
   };
 
   useLayoutEffect(() => {
@@ -358,8 +371,6 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const [cursorState, setCursorState] = useState({ key: viewKey, at: 0 });
   const cursor = cursorState.key === viewKey ? Math.min(cursorState.at, Math.max(0, total - 1)) : 0;
   const setCursor = (at: number) => setCursorState({ key: viewKey, at });
-  // Ancora degli intervalli con Maiusc+freccia.
-  const rangeAnchor = useRef<number | null>(null);
   const cursorItem = total > 0 ? at_(cursor).item : undefined;
   const moveCursor = (to: number, extend: boolean) => {
     const n = Math.max(0, Math.min(total - 1, to));
@@ -368,12 +379,11 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     const it = at_(n).item;
     if (!it) return;
     if (extend) {
-      const anchor = rangeAnchor.current ?? cursorItem?.id ?? it.id;
-      rangeAnchor.current = anchor;
+      const anchor = useLibrary.getState().anchor ?? cursorItem?.id ?? it.id;
+      setRangeAnchor(anchor);
       setSelection(clickSelect(order, [], anchor, it.id, { ctrl: false, shift: true }), it.id);
     } else {
-      rangeAnchor.current = it.id;
-      useLibrary.setState({ focused: it.id });
+      useLibrary.setState({ focused: it.id, anchor: it.id });
     }
   };
   const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -403,9 +413,10 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
       else
         setSelection(
-          clickSelect(order, explicit ?? [], focused, id, { ctrl: true, shift: false }),
+          clickSelect(order, explicit ?? [], null, id, { ctrl: true, shift: false }),
           id,
         );
+      setRangeAnchor(id);
       return true;
     }
     if (mod && (e.key === "a" || e.key === "A") && !e.shiftKey) {
@@ -440,10 +451,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     if (selection.mode === "filter" && ctrl) {
       // "Tutti tranne…": Ctrl+clic aggiunge o toglie un'eccezione.
       replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
+      setRangeAnchor(id);
       return;
     }
-    const next = clickSelect(order, explicit ?? [], focused, id, { ctrl, shift: e.shiftKey });
+    const anchor = useLibrary.getState().anchor;
+    const next = clickSelect(order, explicit ?? [], anchor, id, { ctrl, shift: e.shiftKey });
     setSelection(next, id);
+    // Maiusc non sposta l'ancora: solo clic semplice e Ctrl+clic.
+    if (!e.shiftKey || anchor === null) setRangeAnchor(id);
   };
   // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
   const onMenu = (id: number) => (x: number, y: number) => {
@@ -453,6 +468,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       setMenu({ x, y, ids, target: selTarget(selection) });
     } else {
       setSelection([id], id);
+      setRangeAnchor(id);
       setMenu({ x, y, ids: [id], target: { kind: "ids", ids: [id] } });
     }
   };
@@ -517,12 +533,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         ) {
           // Canc fuori da un catalogo: nel cestino, con "Annulla operazione" (issue #24).
           e.preventDefault();
-          const count = selCount(selection);
-          void bulk.start(
-            selTarget(selection),
-            { action: "add_catalog", catalog: trashId },
-            t("selection.done.trash", { count }),
-          );
+          void trash.moveToTrash(selTarget(selection), selCount(selection));
           return;
         }
         if (
@@ -634,8 +645,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                   }
                   cover={open && it.similarCover}
                   onClick={(e) => {
+                    if (consumeDragClick()) return;
                     setCursor(i);
-                    rangeAnchor.current = it.id;
                     if (grouped && !open && !(e.ctrlKey || e.metaKey || e.shiftKey))
                       selectGroup(it);
                     else onClick(it.id)(e);
@@ -647,6 +658,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                     } else void openWith.open([it.id], { kind: "double_click" });
                   }}
                   onMenu={onMenu(it.id)}
+                  onDragStart={(x, y) =>
+                    armPhotoDrag(
+                      { x, y },
+                      selHas(selection, it.id)
+                        ? { target: selTarget(selection), count: selCount(selection) }
+                        : { target: { kind: "ids", ids: [it.id] }, count: 1 },
+                    )
+                  }
                   tagColor={tagColor}
                 />
               ) : (
@@ -721,12 +740,15 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           }}
         />
       )}
+      {trash.dialog}
       {menu && (
         <GridContextMenu
           x={menu.x}
           y={menu.y}
           ids={menu.ids}
           target={menu.target}
+          count={menu.target.kind === "ids" ? menu.target.ids.length : selCount(selection)}
+          onAddToCatalog={addToCatalog}
           onOpen={(ids, target) => void openWith.open(ids, target)}
           onPlace={(target, p) => void place.apply(target, p)}
           onClose={closeMenu}

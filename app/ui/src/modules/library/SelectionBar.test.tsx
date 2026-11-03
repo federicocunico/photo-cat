@@ -427,7 +427,7 @@ describe("cataloghi di sistema", () => {
     await waitFor(() =>
       expect(commandsMock.startBulk).toHaveBeenCalledWith(
         { kind: "ids", ids: [1, 2, 3] },
-        { action: "add_catalog", catalog: 90 },
+        { action: "move_to_trash" },
         false,
       ),
     );

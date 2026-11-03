@@ -1,6 +1,7 @@
 // Barra delle azioni sulla selezione (desktop-shell, ui-ux-overhaul 3.2).
 export const selection = {
   it: {
+    dnd: { ghost_one: "{{count}} foto", ghost_other: "{{count}} foto" },
     selection: {
       label: "Azioni sulla selezione",
       count_one: "{{count}} selezionata",
@@ -36,6 +37,21 @@ export const selection = {
       organize: "Organizza in cartelle",
       removeLibrary: "Rimuovi dalla libreria…",
       trash: "Sposta nel cestino",
+      trashConfirmTitle_one: "Spostare {{count}} foto nel cestino?",
+      trashConfirmTitle_other: "Spostare {{count}} foto nel cestino?",
+      trashConfirmIntro:
+        "Le foto escono da questi cataloghi. Con «Annulla operazione» tornano al loro posto; ripristinandole dal Cestino non rientrano nei cataloghi:",
+      trashConfirmLine_one: "{{name}} — {{count}} foto",
+      trashConfirmLine_other: "{{name}} — {{count}} foto",
+      trashConfirm: "Sposta nel cestino",
+      addToCatalog: "Aggiungi a catalogo",
+      newCatalogMenu: "Nuovo catalogo…",
+      newCatalogRow: "Nuovo catalogo",
+      newCatalogInline: "Nome del nuovo catalogo",
+      manageFolders: "Gestisci cartelle",
+      newCatalogTitle: "Nuovo catalogo",
+      newCatalogName: "Nome del catalogo",
+      newCatalogCreateBtn: "Crea e aggiungi",
       restore: "Ripristina",
       removeTitle_one: "Rimuovere {{count}} foto dalla libreria?",
       removeTitle_other: "Rimuovere {{count}} foto dalla libreria?",
@@ -66,6 +82,7 @@ export const selection = {
     },
   },
   en: {
+    dnd: { ghost_one: "{{count}} photo", ghost_other: "{{count}} photos" },
     selection: {
       label: "Selection actions",
       count_one: "{{count}} selected",
@@ -101,6 +118,21 @@ export const selection = {
       organize: "Organize into folders",
       removeLibrary: "Remove from library…",
       trash: "Move to Trash",
+      trashConfirmTitle_one: "Move {{count}} photo to Trash?",
+      trashConfirmTitle_other: "Move {{count}} photos to Trash?",
+      trashConfirmIntro:
+        "The photos leave these catalogs. «Undo» puts them back; restoring them from Trash does not return them to the catalogs:",
+      trashConfirmLine_one: "{{name}} — {{count}} photo",
+      trashConfirmLine_other: "{{name}} — {{count}} photos",
+      trashConfirm: "Move to Trash",
+      addToCatalog: "Add to catalog",
+      newCatalogMenu: "New catalog…",
+      newCatalogRow: "New catalog",
+      newCatalogInline: "New catalog name",
+      manageFolders: "Manage folders",
+      newCatalogTitle: "New catalog",
+      newCatalogName: "Catalog name",
+      newCatalogCreateBtn: "Create and add",
       restore: "Restore",
       removeTitle_one: "Remove {{count}} photo from the library?",
       removeTitle_other: "Remove {{count}} photos from the library?",

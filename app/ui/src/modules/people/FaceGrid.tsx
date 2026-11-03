@@ -122,14 +122,16 @@ export const FaceGrid = forwardRef<
     placeholderData: (prev) => prev,
   });
 
+  // «Riassegna a…»: tutte le persone con un nome, comprese le identità che in questa
+  // libreria non hanno ancora volti (la persona viene creata alla riassegnazione).
   const moveTargets = useQuery({
     queryKey: ["people-move-targets"],
     queryFn: async () => {
-      const [review, people] = await Promise.all([
-        listAllGroups("review", "photos_desc"),
+      const [people, ids] = await Promise.all([
         listAllGroups("people", "name_asc"),
+        commands.listIdentities(null),
       ]);
-      return [...people, ...review];
+      return { people, identities: ids.identities.filter((i) => i.person == null) };
     },
     enabled: isTauri() && target != null,
   });
@@ -150,7 +152,8 @@ export const FaceGrid = forwardRef<
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+    // Senza gruppo scelto la griglia non è montata: si osserva quando compare.
+  }, [target == null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL_MIN + GAP)));
   const cell = Math.max(CELL_MIN, Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols));
@@ -213,7 +216,8 @@ export const FaceGrid = forwardRef<
       ctrl: e.ctrlKey || e.metaKey,
       shift: e.shiftKey,
     });
-    setSelection(next, id);
+    // Maiusc non sposta l'ancora: solo clic semplice e Ctrl+clic.
+    setSelection(next, e.shiftKey && anchor !== null ? undefined : id);
   };
 
   const refresh = () => refreshPeople(qc);
@@ -306,18 +310,38 @@ export const FaceGrid = forwardRef<
 
   const labelOf = (g: GroupRow) => g.name ?? t("people.unnamed", { count: g.photos });
 
+  // Valore: id del gruppo, oppure "i:<uid>" per un'identità senza volti qui.
+  type MoveOption = {
+    value: string;
+    label: string;
+    name: string;
+    correction: (faces: number[]) => Correction;
+  };
   const moveOptions = useMemo(() => {
     const seen = new Set<number>();
-    const out: GroupRow[] = [];
-    for (const g of moveTargets.data ?? []) {
+    const out: MoveOption[] = [];
+    for (const g of moveTargets.data?.people ?? []) {
       if (g.id === groupId || seen.has(g.id)) continue;
       seen.add(g.id);
-      out.push(g);
+      out.push({
+        value: String(g.id),
+        label: labelOf(g),
+        name: labelOf(g),
+        correction: (faces) => ({ action: "move", faces, to: g.id }),
+      });
     }
-    return out;
-  }, [moveTargets.data, groupId]);
+    for (const i of moveTargets.data?.identities ?? []) {
+      out.push({
+        value: `i:${i.uid}`,
+        label: t("people.reassignNoPhotos", { name: i.name }),
+        name: i.name,
+        correction: (faces) => ({ action: "assign_identity", identity: i.uid, faces }),
+      });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }, [moveTargets.data, groupId, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const moveTarget = moveOptions.find((g) => String(g.id) === moveTo) ?? null;
+  const moveTarget = moveOptions.find((o) => o.value === moveTo) ?? null;
 
   if (!target) {
     return (
@@ -362,8 +386,8 @@ export const FaceGrid = forwardRef<
             <span className="muted">{t("people.selected", { count: selected.length })}</span>
           )
         )}
-        {/* "Sposta in…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
-            una select chiusa); i volti si spostano solo con il pulsante "Sposta". */}
+        {/* "Riassegna a…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
+            una select chiusa); i volti si spostano solo con il pulsante "Riassegna". */}
         <select
           ref={moveSelectRef}
           className="field people-move-select"
@@ -373,9 +397,9 @@ export const FaceGrid = forwardRef<
           onChange={(e) => setMoveTo(e.target.value)}
         >
           <option value="">{t("people.move")}</option>
-          {moveOptions.map((g) => (
-            <option key={g.id} value={g.id}>
-              {labelOf(g)}
+          {moveOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -391,8 +415,8 @@ export const FaceGrid = forwardRef<
           onClick={() =>
             moveTarget &&
             correct(
-              [{ action: "move", faces: selected, to: moveTarget.id }],
-              t("people.movedDone", { count: selected.length, name: labelOf(moveTarget) }),
+              [moveTarget.correction(selected)],
+              t("people.movedDone", { count: selected.length, name: moveTarget.name }),
             )
           }
         >

@@ -763,6 +763,82 @@ pub fn add_to_catalog(
 }
 
 /**
+ * "Sposta nel cestino": le foto entrano nel Cestino e escono dai cataloghi manuali
+ * dell'utente. Un solo annullamento rimette le foto fuori dal Cestino e nei cataloghi.
+ */
+pub fn move_to_trash(c: &Connection, ids: &[MediaId]) -> StoreResult<BulkOutcome> {
+    let trash = catalog::system_id(c, crate::model::SYSTEM_TRASH)?;
+    let mut actions = Vec::new();
+    let manual: Vec<i64> = {
+        let mut q =
+            c.prepare("SELECT id FROM catalog WHERE kind='manual' AND system IS NULL ORDER BY id")?;
+        let rows = q.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        rows
+    };
+    for catalog_id in manual {
+        let removed = catalog::remove_items(c, catalog_id, ids)?;
+        if !removed.is_empty() {
+            actions.push(UndoAction::CatalogRemoved {
+                catalog_id,
+                ids: removed,
+            });
+        }
+    }
+    let added = catalog::add_items(c, trash, ids)?;
+    let changed = added.len();
+    if !added.is_empty() {
+        actions.push(UndoAction::CatalogAdded {
+            catalog_id: trash,
+            ids: added,
+        });
+    }
+    if !actions.is_empty() {
+        record_undo(c, "Sposta nel cestino", &UndoAction::Group { actions })?;
+    }
+    Ok(BulkOutcome {
+        changed,
+        requested: ids.len(),
+    })
+}
+
+/// Cataloghi manuali dell'utente che perderebbero foto spostando `target` nel Cestino.
+pub fn trash_impact(
+    c: &Connection,
+    target: &crate::query::Target,
+) -> StoreResult<Vec<crate::sources::CatalogLoss>> {
+    let mut counts: std::collections::BTreeMap<i64, (String, i64)> = Default::default();
+    let mut q = c.prepare(
+        "SELECT c.id, c.name, count(*) FROM catalog_item ci
+           JOIN catalog c ON c.id=ci.catalog_id
+         WHERE c.kind='manual' AND c.system IS NULL
+           AND ci.media_id IN (SELECT value FROM json_each(?1))
+         GROUP BY c.id",
+    )?;
+    target.for_each_chunk(c, 5000, |chunk| {
+        let json = serde_json::to_string(chunk)?;
+        let rows = q
+            .query_map([json], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (id, name, n) in rows {
+            counts.entry(id).or_insert((name, 0)).1 += n;
+        }
+        Ok(())
+    })?;
+    let mut out: Vec<_> = counts
+        .into_values()
+        .map(|(name, items)| crate::sources::CatalogLoss { name, items })
+        .collect();
+    out.sort_by_key(|l| l.name.to_lowercase());
+    Ok(out)
+}
+
+/**
  * "Ripristina" da un catalogo di sistema (Cestino, Duplicati, Qualità insufficiente):
  * le foto tornano visibili nella libreria. Annullabile.
  */

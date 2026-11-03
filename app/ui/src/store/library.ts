@@ -92,6 +92,9 @@ interface LibraryState {
   selection: Selection;
   /** Ultimo elemento cliccato (ancora per Shift+clic) e mostrato nell'ispettore. */
   focused: number | null;
+  /** Ancora degli intervalli (Maiusc+clic/freccia): ultimo clic semplice o Ctrl+clic. Non persistita. */
+  anchor: number | null;
+  setAnchor: (id: number | null) => void;
   scrollTop: number;
   /** Il filtro per cartella include le sottocartelle. */
   folderRecursive: boolean;
@@ -127,6 +130,8 @@ export const useLibrary = create<LibraryState>()(
       thumbSize: 3,
       selection: idsSelection(),
       focused: null,
+      anchor: null,
+      setAnchor: (anchor) => set({ anchor }),
       scrollTop: 0,
       folderRecursive: true,
       groupSimilar: false,
@@ -149,6 +154,7 @@ export const useLibrary = create<LibraryState>()(
             sort:
               filter.excludedFrom == null && s.sort === "excluded_at" ? "captured_desc" : s.sort,
             scrollTop: 0,
+            anchor: null,
             selection: keepSelection(s.selection),
           };
         }),
@@ -157,6 +163,7 @@ export const useLibrary = create<LibraryState>()(
           filter: emptyFilter(),
           sort: s.sort === "excluded_at" ? "captured_desc" : s.sort,
           scrollTop: 0,
+          anchor: null,
           selection: keepSelection(s.selection),
         })),
       setSort: (sort) => set({ sort, scrollTop: 0 }),
@@ -164,6 +171,7 @@ export const useLibrary = create<LibraryState>()(
       setSelection: (ids, focused) =>
         set((s) => ({
           selection: idsSelection(ids),
+          anchor: ids.length ? s.anchor : null,
           focused: focused === undefined ? s.focused : focused,
         })),
       replaceSelection: (selection, focused) =>

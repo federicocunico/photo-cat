@@ -10,6 +10,7 @@ export function refreshPeople(qc: QueryClient) {
     qc.invalidateQueries({ queryKey: ["group-faces"] }),
     qc.invalidateQueries({ queryKey: ["people"] }),
     qc.invalidateQueries({ queryKey: ["identities"] }),
+    qc.invalidateQueries({ queryKey: ["people-move-targets"] }),
     qc.invalidateQueries({ queryKey: ["faces"] }),
   ]);
 }
@@ -21,7 +22,14 @@ export function refreshPeople(qc: QueryClient) {
  */
 export function refreshPeopleFast(qc: QueryClient) {
   const faces = qc.invalidateQueries({ queryKey: ["group-faces"] });
-  for (const key of ["people-sections", "people-groups", "people", "identities", "faces"])
+  for (const key of [
+    "people-sections",
+    "people-groups",
+    "people",
+    "identities",
+    "faces",
+    "people-move-targets",
+  ])
     void qc.invalidateQueries({ queryKey: [key] });
   return faces;
 }

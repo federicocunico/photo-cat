@@ -1284,3 +1284,34 @@ fn face_pages_use_the_rank_index() {
     assert!(plan.contains("face_person_rank"), "{plan}");
     assert!(!plan.contains("TEMP B-TREE"), "{plan}");
 }
+
+#[test]
+fn assign_to_identity_reuses_or_creates_the_linked_person() {
+    let c = library_with(2);
+    people::save_faces(&c, 1, &[face(0.1, 3)], "sface", "det+sface", 0.363).unwrap();
+    people::save_faces(&c, 2, &[face(0.1, 5)], "sface", "det+sface", 0.363).unwrap();
+    let f1 = people::records(&c, Some(1)).unwrap()[0].id;
+    let f2 = people::records(&c, Some(2)).unwrap()[0].id;
+    // Identità senza persona nella libreria: la persona viene creata e collegata.
+    let (marco, created) = people::assign_to_identity(&c, &[f1], "uid-m", "Marco Russo").unwrap();
+    assert!(created);
+    let p = people::list(&c)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.id == marco)
+        .unwrap();
+    assert_eq!(
+        (p.name.as_deref(), p.identity_uid.as_deref(), p.faces),
+        (Some("Marco Russo"), Some("uid-m"), 1)
+    );
+    // Identità già collegata: i volti vanno alla stessa persona.
+    assert_eq!(
+        people::assign_to_identity(&c, &[f2], "uid-m", "Marco Russo").unwrap(),
+        (marco, false)
+    );
+    assert_eq!(
+        people::records(&c, Some(2)).unwrap()[0].person_id,
+        Some(marco)
+    );
+    assert!(people::assign_to_identity(&c, &[], "uid-m", "Marco Russo").is_err());
+}

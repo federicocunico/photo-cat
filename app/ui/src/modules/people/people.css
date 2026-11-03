@@ -53,8 +53,15 @@
   min-height: 0;
   display: flex;
   flex-wrap: wrap;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
+}
+/* Con flex-wrap l'altezza di ogni riga del contenitore nasce dal contenuto: senza
+   questo limite i pannelli crescono quanto la griglia virtualizzata e non scorrono
+   più (nessuna barra di scorrimento). Se i pannelli vanno a capo (finestra stretta)
+   scorre l'intera area. */
+.people-workspace > * {
+  max-height: 100%;
 }
 .people-faces-pane {
   flex: 999 1 420px;
@@ -350,6 +357,13 @@
 .people-list-name {
   display: block;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Righe a altezza fissa (elenco virtualizzato): la seconda riga non va a capo. */
+.people-list-sub {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

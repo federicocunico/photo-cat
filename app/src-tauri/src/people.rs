@@ -26,6 +26,7 @@ pub enum Correction {
     Restore { group: i64 },
     Recover { faces: Vec<i64> },
     SetCover { group: i64, face: i64 },
+    AssignIdentity { identity: String, faces: Vec<i64> },
 }
 
 fn face_match(state: &AppState) -> people::FaceMatch {
@@ -166,7 +167,15 @@ pub async fn correct_person(
     correction: Correction,
 ) -> AppResult<()> {
     let db = state.store.clone();
+    let app_store = state.app_store.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // L'identità vive in app.db: si legge prima di scrivere nella libreria.
+        let identity = match &correction {
+            Correction::AssignIdentity { identity, .. } => {
+                Some(app_store.with(|c| pc_store::app_store::identities::get(c, identity))?)
+            }
+            _ => None,
+        };
         db.write(move |c| {
             match correction {
                 Correction::Rename { person, name } => people::rename(c, person, &name)?,
@@ -258,6 +267,28 @@ pub async fn correct_person(
                         "Imposta copertina",
                         &UndoAction::PersonCover { group, prev },
                     )?;
+                }
+                Correction::AssignIdentity { faces, .. } => {
+                    let id = identity.expect("identità letta prima della scrittura");
+                    match people::person_for_identity(c, &id.uid)? {
+                        Some(to) => move_with_undo(c, &faces, to, |c| {
+                            people::assign_to_identity(c, &faces, &id.uid, &id.name).map(|_| ())
+                        })?,
+                        None => {
+                            // Annullare rimette i volti com'erano e toglie la persona creata.
+                            let states = people::face_states(c, &faces)?;
+                            let (created, _) =
+                                people::assign_to_identity(c, &faces, &id.uid, &id.name)?;
+                            bulk::record_undo(
+                                c,
+                                "Sposta volti",
+                                &UndoAction::FacesRestored {
+                                    states,
+                                    created: Some(created),
+                                },
+                            )?;
+                        }
+                    }
                 }
             }
             Ok(())

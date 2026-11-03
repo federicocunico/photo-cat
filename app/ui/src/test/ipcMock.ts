@@ -125,6 +125,7 @@ export const commandsMock = {
   startSimilarAnalysis: vi.fn(async () => 1),
   mediaDetail: vi.fn(),
   listCatalogs: vi.fn(async () => []),
+  trashImpact: vi.fn(async () => [] as { name: string; items: number }[]),
   systemInfo: vi.fn(),
   listModels: vi.fn(async () => []),
   verifyModels: vi.fn(),

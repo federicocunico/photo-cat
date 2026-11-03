@@ -30,6 +30,7 @@ import { useSelectItems } from "./useSelectItems";
 import { useSelectionPicker } from "../../store/palette";
 import { catalogLabel, systemCatalogId } from "../catalogs/systemCatalogs";
 import { useBulkJob } from "./bulkJob";
+import { useMoveToTrash } from "./useMoveToTrash";
 
 type DoneKind =
   | "trash"
@@ -119,6 +120,7 @@ export function SelectionBar() {
   const target = selTarget(selection);
   const ids = selection.mode === "ids" ? [...selection.ids] : null;
   const bulk = useBulkJob();
+  const trash = useMoveToTrash();
   const catalogAction = useCatalogAction();
   const openWith = useOpenWith();
   const selectItems = useSelectItems();
@@ -259,7 +261,7 @@ export function SelectionBar() {
             label: t("selection.trash"),
             icon: <Icon.Delete size={14} />,
             shortcut: openCatalog ? undefined : "Canc",
-            onSelect: () => start({ action: "add_catalog", catalog: trashId }, "trash"),
+            onSelect: () => void trash.moveToTrash(target, count),
           },
         ]
       : []),
@@ -268,6 +270,7 @@ export function SelectionBar() {
 
   return (
     <div role="toolbar" aria-label={t("selection.label")} className="lib-header lib-selection">
+      {trash.dialog}
       <IconButton
         label={t("selection.clear")}
         shortcut="Esc"

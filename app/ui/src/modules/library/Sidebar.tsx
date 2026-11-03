@@ -1,11 +1,17 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import type React from "react";
 import { Icon } from "../../components/icons";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type FacetValue, type Source } from "../../lib/ipc";
+import {
+  commands,
+  isTauri,
+  type CatalogSummary,
+  type FacetValue,
+  type Source,
+} from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { latestOnly, retryUnlessSuperseded } from "../../lib/latest";
 import { useLibrary } from "../../store/library";
@@ -18,6 +24,9 @@ import { FacetList } from "./FacetList";
 import { DateFacet } from "./DateFacet";
 import { catalogLabel } from "../catalogs/systemCatalogs";
 import { OpenInPeople } from "../people/OpenInPeople";
+import { useDropTarget, type DragPayload } from "../../components/dnd/photoDrag";
+import { useAddToCatalog } from "./useAddToCatalog";
+import { useMoveToTrash } from "./useMoveToTrash";
 
 function Row({
   label,
@@ -28,7 +37,10 @@ function Row({
   indent = 0,
   icon,
   title,
+  dropProps,
 }: {
+  /** Attributi di useDropTarget se la riga è un bersaglio di rilascio. */
+  dropProps?: Record<string, unknown>;
   icon?: React.ReactNode;
   title?: string;
   label: string;
@@ -43,6 +55,7 @@ function Row({
       type="button"
       aria-pressed={active}
       title={title ?? label}
+      {...dropProps}
       onClick={onClick}
       className={mono ? "sidebar-row mono" : "sidebar-row"}
       style={indent ? { paddingLeft: 6 + indent } : undefined}
@@ -53,6 +66,112 @@ function Row({
       </span>
       <span className="sidebar-row-count">{fmtInt(count)}</span>
     </BusyButton>
+  );
+}
+
+/** Riga di un catalogo: bersaglio di rilascio se manuale (o il Cestino). */
+function CatalogRow({
+  summary,
+  active,
+  onClick,
+  onDrop,
+}: {
+  summary: CatalogSummary;
+  active: boolean;
+  onClick: () => void;
+  onDrop: (payload: DragPayload) => void;
+}) {
+  const { t } = useTranslation();
+  const { catalog, items } = summary;
+  const dropProps = useDropTarget({
+    id: `catalog:${catalog.id}`,
+    accepts: (catalog.kind === "manual" && !catalog.system) || catalog.system === "trash",
+    onDrop,
+  });
+  return (
+    <Row
+      label={catalogLabel(catalog, t)}
+      icon={
+        catalog.kind === "smart" ? <Icon.Smart size={12} className="sidebar-smart" /> : undefined
+      }
+      count={items}
+      active={active}
+      onClick={onClick}
+      dropProps={dropProps}
+    />
+  );
+}
+
+/**
+ * "Nuovo catalogo": un clic apre il campo del nome sul posto; un rilascio lo apre
+ * ricordando le foto trascinate, che vengono aggiunte dopo la creazione.
+ */
+function NewCatalogRow() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const addToCatalog = useAddToCatalog();
+  const [editing, setEditing] = useState<{ payload: DragPayload | null } | null>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const open = (payload: DragPayload | null) => {
+    setName("");
+    setError(null);
+    setEditing({ payload });
+  };
+  const dropProps = useDropTarget({ id: "catalog:new", accepts: true, onDrop: open });
+  const create = async () => {
+    const value = name.trim();
+    if (!value || !editing) return;
+    try {
+      const id = await commands.saveCatalog(null, value, "manual", null);
+      await qc.invalidateQueries({ queryKey: ["catalogs"] });
+      if (editing.payload) addToCatalog(editing.payload.target, editing.payload.count, id, value);
+      setEditing(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  return (
+    <div className="sidebar-new">
+      {editing ? (
+        <input
+          className="field"
+          autoFocus
+          aria-label={t("selection.newCatalogInline")}
+          aria-invalid={error != null || undefined}
+          placeholder={t("selection.newCatalogInline")}
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void create();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(null);
+            }
+          }}
+        />
+      ) : (
+        <Row
+          label={t("selection.newCatalogRow")}
+          icon={<Icon.Plus size={12} />}
+          count={0}
+          active={false}
+          onClick={() => open(null)}
+          dropProps={dropProps}
+        />
+      )}
+      {editing && error && (
+        <div role="alert" className="sidebar-new-error">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -196,6 +315,8 @@ export function LibrarySidebar() {
   const setFolderRecursive = useLibrary((s) => s.setFolderRecursive);
   const [openSources, setOpenSources] = useState<number[]>([]);
   const [renaming, setRenaming] = useState<FacetValue | null>(null);
+  const addToCatalog = useAddToCatalog();
+  const trash = useMoveToTrash();
   // Ricerca in tutti i filtri: ogni gruppo mostra solo i valori che corrispondono.
   const [facetQuery, setFacetQuery] = useState("");
   const sources = useQuery({
@@ -228,97 +349,41 @@ export function LibrarySidebar() {
   // nasconde cartelle e cataloghi.
   return (
     <div className="sidebar">
-      <SidebarSection id="library.sources" title={t("library.sources")}>
-        <QueryView query={sources} enabled={isTauri()} isEmpty={() => false}>
-          {(list = []) => (
-            <>
-              {list.map((summary) => {
-                const { source, items } = summary;
-                const label = folderName(
-                  source.path,
-                  list.map((s) => s.source.path),
-                );
-                const expanded = openSources.includes(source.id);
-                return (
-                  <div key={source.id}>
-                    <div className="sidebar-tree-row">
-                      <button
-                        type="button"
-                        className="btn btn-ghost sidebar-toggle"
-                        aria-expanded={expanded}
-                        aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
-                          name: label,
-                        })}
-                        onClick={() =>
-                          setOpenSources(
-                            expanded
-                              ? openSources.filter((x) => x !== source.id)
-                              : [...openSources, source.id],
-                          )
-                        }
-                      >
-                        {expanded ? (
-                          <Icon.ChevronDown size={14} />
-                        ) : (
-                          <Icon.ChevronRight size={14} />
-                        )}
-                      </button>
-                      <Row
-                        title={source.path}
-                        label={label}
-                        count={items}
-                        active={(filter.sourceIds ?? []).includes(source.id)}
-                        onClick={() =>
-                          setFilter({
-                            sourceIds: (filter.sourceIds ?? []).includes(source.id)
-                              ? []
-                              : [source.id],
-                          })
-                        }
-                      />
-                      <SourceMenu summary={summary} label={label} />
-                    </div>
-                    {expanded && <FolderTree source={source} parent={null} depth={0} />}
-                  </div>
-                );
-              })}
-              {openSources.length > 0 && (
-                <label className="sidebar-check">
-                  <input
-                    type="checkbox"
-                    checked={folderRecursive}
-                    onChange={(e) => setFolderRecursive(e.target.checked)}
-                  />
-                  {t("folders.includeSub")}
-                </label>
-              )}
-            </>
-          )}
-        </QueryView>
-      </SidebarSection>
       <SidebarSection id="library.catalogs" title={t("library.catalogs")}>
         <QueryView query={catalogs} enabled={isTauri()} isEmpty={() => false}>
-          {(list = []) => (
-            <>
-              {list.map(({ catalog, items }) => (
-                <Row
+          {(list = []) => {
+            const row = (summary: CatalogSummary) => {
+              const { catalog } = summary;
+              return (
+                <CatalogRow
                   key={catalog.id}
-                  label={catalogLabel(catalog, t)}
-                  icon={
-                    catalog.kind === "smart" ? (
-                      <Icon.Smart size={12} className="sidebar-smart" />
-                    ) : undefined
-                  }
-                  count={items}
+                  summary={summary}
                   active={filter.catalogId === catalog.id}
                   onClick={() =>
                     setFilter({ catalogId: filter.catalogId === catalog.id ? null : catalog.id })
                   }
+                  onDrop={({ target, count }) =>
+                    catalog.system === "trash"
+                      ? void trash.moveToTrash(target, count)
+                      : addToCatalog(target, count, catalog.id, catalog.name)
+                  }
                 />
-              ))}
-            </>
-          )}
+              );
+            };
+            const user = list
+              .filter((s) => !s.catalog.system)
+              .sort((x, y) => x.catalog.name.localeCompare(y.catalog.name));
+            return (
+              <>
+                {user.map(row)}
+                <NewCatalogRow />
+                <div role="separator" className="sidebar-sep" />
+                {list.filter((s) => s.catalog.system).map(row)}
+              </>
+            );
+          }}
         </QueryView>
+        {trash.dialog}
       </SidebarSection>
       <SidebarSection id="library.filters" title={t("library.filters")} gap={12}>
         <input
@@ -431,6 +496,82 @@ export function LibrarySidebar() {
             )
           }
         </QueryView>
+      </SidebarSection>
+      <SidebarSection id="library.sources" title={t("library.sources")}>
+        <QueryView query={sources} enabled={isTauri()} isEmpty={() => false}>
+          {(list = []) => (
+            <>
+              {list.map((summary) => {
+                const { source, items } = summary;
+                const label = folderName(
+                  source.path,
+                  list.map((s) => s.source.path),
+                );
+                const expanded = openSources.includes(source.id);
+                return (
+                  <div key={source.id}>
+                    <div className="sidebar-tree-row">
+                      <button
+                        type="button"
+                        className="btn btn-ghost sidebar-toggle"
+                        aria-expanded={expanded}
+                        aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
+                          name: label,
+                        })}
+                        onClick={() =>
+                          setOpenSources(
+                            expanded
+                              ? openSources.filter((x) => x !== source.id)
+                              : [...openSources, source.id],
+                          )
+                        }
+                      >
+                        {expanded ? (
+                          <Icon.ChevronDown size={14} />
+                        ) : (
+                          <Icon.ChevronRight size={14} />
+                        )}
+                      </button>
+                      <Row
+                        title={source.path}
+                        label={label}
+                        count={items}
+                        active={(filter.sourceIds ?? []).includes(source.id)}
+                        onClick={() =>
+                          setFilter({
+                            sourceIds: (filter.sourceIds ?? []).includes(source.id)
+                              ? []
+                              : [source.id],
+                          })
+                        }
+                      />
+                      <SourceMenu summary={summary} label={label} />
+                    </div>
+                    {expanded && <FolderTree source={source} parent={null} depth={0} />}
+                  </div>
+                );
+              })}
+              {openSources.length > 0 && (
+                <label className="sidebar-check">
+                  <input
+                    type="checkbox"
+                    checked={folderRecursive}
+                    onChange={(e) => setFolderRecursive(e.target.checked)}
+                  />
+                  {t("folders.includeSub")}
+                </label>
+              )}
+            </>
+          )}
+        </QueryView>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() => useLayout.getState().openModule({ module: "import" })}
+        >
+          {t("selection.manageFolders")}
+        </button>
       </SidebarSection>
     </div>
   );

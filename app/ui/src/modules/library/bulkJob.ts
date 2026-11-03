@@ -21,6 +21,7 @@ const UNDOABLE = new Set<BulkAction["action"]>([
   "remove_tag",
   "remove_tags",
   "add_catalog",
+  "move_to_trash",
   "exclude_from_catalog",
   "restore_to_catalog",
   "set_label",

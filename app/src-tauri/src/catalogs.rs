@@ -98,6 +98,17 @@ pub async fn start_bulk(
 }
 #[tauri::command]
 #[specta::specta]
+pub async fn trash_impact(
+    app: tauri::AppHandle,
+    target: pc_store::query::Target,
+) -> AppResult<Vec<pc_store::sources::CatalogLoss>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(state.store.read(|c| bulk::trash_impact(c, &target))?)
+    })
+    .await
+}
+#[tauri::command]
+#[specta::specta]
 pub async fn undo_bulk(state: State<'_, AppState>) -> AppResult<Option<String>> {
     let (db, app) = (state.store.clone(), state.app_store.clone());
     tauri::async_runtime::spawn_blocking(move || {

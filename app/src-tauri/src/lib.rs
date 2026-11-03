@@ -147,6 +147,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             catalogs::collect_duplicates,
             catalogs::start_photo_quality,
             catalogs::start_bulk,
+            catalogs::trash_impact,
             catalogs::undo_bulk,
             catalogs::last_bulk_undo,
             tags::tag_overview,

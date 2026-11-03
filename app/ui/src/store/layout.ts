@@ -148,7 +148,8 @@ export const useLayout = create<LayoutState>()(
       navCompact: false,
       leftOpen: true,
       rightOpen: true,
-      collapsedSections: [],
+      // Cartelle chiuse per impostazione predefinita; le preferenze salvate restano.
+      collapsedSections: ["library.sources"],
       leftWidth: 240,
       rightWidth: 300,
       // Nuove installazioni: tema del sistema. Le preferenze salvate restano come sono.

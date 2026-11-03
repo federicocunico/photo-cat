@@ -10,6 +10,7 @@ import { LibraryHeader } from "./LibraryHeader";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
 import { FirstSteps } from "./FirstSteps";
 import { useSystemCatalogCommands } from "./useSystemCatalogCommands";
+import { DragGhost } from "../../components/dnd/photoDrag";
 import "./library.css";
 
 export function LibraryPage() {
@@ -22,17 +23,20 @@ export function LibraryPage() {
     return { target: selTarget(s), count: selCount(s) };
   });
   return (
-    <Panels
-      left={<LibrarySidebar />}
-      center={
-        <>
-          {selected > 0 ? <SelectionBar /> : <LibraryHeader />}
-          <FirstSteps />
-          <LibraryGrid />
-          <FacetPanels />
-        </>
-      }
-      right={<Inspector />}
-    />
+    <>
+      <DragGhost />
+      <Panels
+        left={<LibrarySidebar />}
+        center={
+          <>
+            {selected > 0 ? <SelectionBar /> : <LibraryHeader />}
+            <FirstSteps />
+            <LibraryGrid />
+            <FacetPanels />
+          </>
+        }
+        right={<Inspector />}
+      />
+    </>
   );
 }

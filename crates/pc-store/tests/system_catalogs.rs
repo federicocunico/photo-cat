@@ -121,3 +121,76 @@ fn duplicates_keep_the_first_import_and_set_aside_the_others() {
     })
     .unwrap();
 }
+
+#[test]
+fn move_to_trash_removes_from_manual_catalogs_and_undoes_in_one_step() {
+    use pc_store::model::CatalogKind;
+    let tmp = tempfile::tempdir().unwrap();
+    let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+    db.write(|c| {
+        let a = media(c, "a.jpg", None);
+        let b = media(c, "b.jpg", None);
+        let trip = repo::catalog::create(c, "Viaggio", CatalogKind::Manual, None)?;
+        let fam = repo::catalog::create(c, "Famiglia", CatalogKind::Manual, None)?;
+        let smart = repo::catalog::create(
+            c,
+            "Smart",
+            CatalogKind::Smart,
+            Some(&serde_json::json!({"all":[]})),
+        )?;
+        repo::catalog::add_items(c, trip, &[a, b])?;
+        repo::catalog::add_items(c, fam, &[a])?;
+        let trash = repo::catalog::system_id(c, SYSTEM_TRASH)?;
+
+        let out = bulk::move_to_trash(c, &[a])?;
+        assert_eq!((out.changed, out.requested), (1, 1));
+        assert_eq!(repo::catalog::manual_items(c, trip)?, vec![b]);
+        assert!(repo::catalog::manual_items(c, fam)?.is_empty());
+        assert_eq!(repo::catalog::manual_items(c, trash)?, vec![a]);
+        let _ = smart;
+
+        assert_eq!(bulk::undo_last(c)?.as_deref(), Some("Sposta nel cestino"));
+        assert_eq!(repo::catalog::manual_items(c, trip)?, vec![a, b]);
+        assert_eq!(repo::catalog::manual_items(c, fam)?, vec![a]);
+        assert!(repo::catalog::manual_items(c, trash)?.is_empty());
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn trash_impact_counts_manual_catalogs_for_ids_and_filters() {
+    use pc_store::{model::CatalogKind, query::Target};
+    let tmp = tempfile::tempdir().unwrap();
+    let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+    db.write(|c| {
+        let a = media(c, "a.jpg", None);
+        let b = media(c, "b.jpg", None);
+        let d = media(c, "d.jpg", None);
+        let zeta = repo::catalog::create(c, "zeta", CatalogKind::Manual, None)?;
+        let alfa = repo::catalog::create(c, "Alfa", CatalogKind::Manual, None)?;
+        let empty = repo::catalog::create(c, "Vuoto", CatalogKind::Manual, None)?;
+        repo::catalog::add_items(c, zeta, &[a, b])?;
+        repo::catalog::add_items(c, alfa, &[b, d])?;
+        let _ = empty;
+        let loss = |l: Vec<pc_store::sources::CatalogLoss>| {
+            l.into_iter().map(|x| (x.name, x.items)).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            loss(bulk::trash_impact(c, &Target::ids(vec![b]))?),
+            vec![("Alfa".to_string(), 1), ("zeta".to_string(), 1)]
+        );
+        assert!(bulk::trash_impact(c, &Target::ids(vec![]))?.is_empty());
+        let filter = Target::Filter {
+            filter: all(),
+            max_id: d,
+            except: vec![a],
+        };
+        assert_eq!(
+            loss(bulk::trash_impact(c, &filter)?),
+            vec![("Alfa".to_string(), 2), ("zeta".to_string(), 1)]
+        );
+        Ok(())
+    })
+    .unwrap();
+}

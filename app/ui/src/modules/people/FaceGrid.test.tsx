@@ -89,6 +89,17 @@ beforeEach(() => {
 afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 describe("FaceGrid selezione e azioni", () => {
+  it("Maiusc+clic ripetuti non spostano l'ancora", async () => {
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });
+    const pressed = (id: number) =>
+      screen.getByTestId(`face-${id}`).getAttribute("aria-pressed") === "true";
+    fireEvent.click(await screen.findByTestId("face-1"));
+    fireEvent.click(screen.getByTestId("face-3"), { shiftKey: true });
+    expect([1, 2, 3].map(pressed)).toEqual([true, true, true]);
+    fireEvent.click(screen.getByTestId("face-2"), { shiftKey: true });
+    expect([1, 2, 3].map(pressed)).toEqual([true, true, false]);
+  });
+
   it("seleziona con clic, Ctrl e Maiusc e invoca le azioni", async () => {
     commandsMock.listGroups.mockResolvedValue({
       items: [group({ id: 2, name: "Marco", faces: 5, section: "people" })],
@@ -134,13 +145,13 @@ describe("FaceGrid selezione e azioni", () => {
     expect(screen.getByTestId("face-2")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("face-3")).toHaveAttribute("aria-pressed", "true");
 
-    const move = screen.getByLabelText(/Sposta in/i) as HTMLSelectElement;
+    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
     await waitFor(() =>
       expect([...move.options].some((o) => o.textContent?.includes("Marco"))).toBe(true),
     );
     fireEvent.change(move, { target: { value: "2" } });
     expect(commandsMock.correctPerson).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /^Sposta$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "move",
@@ -186,7 +197,7 @@ describe("FaceGrid selezione e azioni", () => {
     );
   });
 
-  it("«Sposta in…»: cambiare la scelta da tastiera non sposta nulla finché non si conferma", async () => {
+  it("«Riassegna a…»: cambiare la scelta da tastiera non sposta nulla finché non si conferma", async () => {
     commandsMock.listGroups.mockResolvedValue({
       items: [
         group({ id: 2, name: "Marco", faces: 5, section: "people" }),
@@ -199,9 +210,9 @@ describe("FaceGrid selezione e azioni", () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1 }) });
 
     fireEvent.click(await screen.findByTestId("face-1"));
-    const move = screen.getByLabelText(/Sposta in/i) as HTMLSelectElement;
+    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
     await waitFor(() => expect(move.options.length).toBe(3));
-    const apply = screen.getByRole("button", { name: /^Sposta$/ });
+    const apply = screen.getByRole("button", { name: /^Riassegna$/ });
     // Senza destinazione il comando spiega perché non è disponibile.
     expect(apply).toHaveAttribute("aria-disabled", "true");
 
@@ -214,7 +225,7 @@ describe("FaceGrid selezione e azioni", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(commandsMock.correctPerson).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sposta$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "move",
@@ -225,7 +236,9 @@ describe("FaceGrid selezione e azioni", () => {
     expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
 
     // Lo spostamento è annullabile dallo store `undo`.
-    await waitFor(() => expect(useUndo.getState().last?.label).toMatch(/Volto spostato in «Anna»/));
+    await waitFor(() =>
+      expect(useUndo.getState().last?.label).toMatch(/Volto riassegnato a «Anna»/),
+    );
     await runUndo();
     expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1);
   });
@@ -329,5 +342,57 @@ describe("Libreria grande", () => {
     expect(nodes.length).toBeGreaterThan(0);
     expect(nodes.length).toBeLessThan(500);
     expect(commandsMock.groupFaces).toHaveBeenCalled();
+  });
+});
+
+describe("FaceGrid «Riassegna a…»", () => {
+  it("elenca solo le persone con nome e le identità senza foto qui, in ordine alfabetico", async () => {
+    commandsMock.listGroups.mockImplementation((async (section: string) =>
+      section === "people"
+        ? {
+            items: [
+              group({ id: 2, name: "Marco", faces: 5, section: "people" }),
+              group({ id: 1, name: "Io", faces: 4, section: "people" }),
+            ],
+            next: null,
+            total: 2,
+          }
+        : {
+            items: [group({ id: 7, name: null, faces: 3, section: "review" })],
+            next: null,
+            total: 1,
+          }) as never);
+    commandsMock.listIdentities.mockResolvedValue({
+      identities: [
+        { uid: "u-m", name: "Marco", person: 2 },
+        { uid: "u-c", name: "Carla", person: null },
+      ],
+      groups: [],
+      storePath: "",
+      defaultThreshold: 0.363,
+    } as never);
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, name: "Io" }) });
+
+    fireEvent.click(await screen.findByTestId("face-1"));
+    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
+    await waitFor(() => expect(move.options.length).toBe(3));
+    expect([...move.options].map((o) => o.textContent)).toEqual([
+      "Riassegna a…",
+      "Carla (nessuna foto in questa libreria)",
+      "Marco",
+    ]);
+
+    fireEvent.change(move, { target: { value: "i:u-c" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
+    await waitFor(() =>
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+        action: "assign_identity",
+        identity: "u-c",
+        faces: [1],
+      }),
+    );
+    await waitFor(() =>
+      expect(useUndo.getState().last?.label).toMatch(/Volto riassegnato a «Carla»/),
+    );
   });
 });
