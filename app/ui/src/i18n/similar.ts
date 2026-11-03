@@ -3,6 +3,7 @@ export const similar = {
     similar: {
       group: "Raggruppa foto simili",
       only: "Solo foto con simili",
+      chip: "Con foto simili",
       expand: "Apri il gruppo di {{count}} foto simili",
       collapse: "Chiudi il gruppo di {{count}} foto simili",
       cover: "Principale",
@@ -26,6 +27,7 @@ export const similar = {
     similar: {
       group: "Group similar photos",
       only: "Only photos with similar ones",
+      chip: "With similar photos",
       expand: "Open the group of {{count}} similar photos",
       collapse: "Close the group of {{count}} similar photos",
       cover: "Main",

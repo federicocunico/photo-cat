@@ -1,14 +1,12 @@
 // Tasti 1–9 e 0 del set attivo sulla selezione corrente (Libreria e Sequenza).
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { commands, type BulkAction, type Target } from "../../lib/ipc";
-import { useLive } from "../../store/live";
-import { activeSet, refreshTags, useTagOverview } from "./data";
+import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import type { BulkAction, Target } from "../../lib/ipc";
+import { activeSet, useTagOverview } from "./data";
 import { isTyping } from "../../lib/keys";
+import { useBulkJob } from "../library/bulkJob";
 
 export { isTyping };
-
-const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
 
 /** Azione bulk per un tasto del set attivo, o `null` se il tasto non ha effetto. */
 export function hotkeyAction(
@@ -30,19 +28,12 @@ export function hotkeyAction(
  * Al termine del job aggiorna le viste senza ricaricare.
  */
 export function useTagHotkeys(selection: () => { target: Target; count: number }, enabled = true) {
-  const qc = useQueryClient();
+  const { t } = useTranslation();
   const set = activeSet(useTagOverview().data);
-  const [job, setJob] = useState<number | null>(null);
-  const result = useLive((s) => (job === null ? undefined : s.jobs[job]));
-  const ref = useRef({ set, selection });
-  ref.current = { set, selection };
-
-  useEffect(() => {
-    if (result && FINAL.includes(result.state)) {
-      setJob(null);
-      void refreshTags(qc);
-    }
-  }, [result, qc]);
+  // Esito, "Annulla operazione" ed eventuali errori nell'unico ToastHost.
+  const bulk = useBulkJob();
+  const ref = useRef({ set, selection, bulk, t });
+  ref.current = { set, selection, bulk, t };
 
   useEffect(() => {
     if (!enabled) return;
@@ -53,10 +44,12 @@ export function useTagHotkeys(selection: () => { target: Target; count: number }
       const { target, count } = ref.current.selection();
       if (!count) return;
       e.preventDefault();
-      void commands
-        .startBulk(target, action, false)
-        .then(setJob)
-        .catch(() => {});
+      const { bulk, t } = ref.current;
+      const message =
+        action.action === "add_tag"
+          ? t("selection.done.add_tag", { name: action.name, count })
+          : t("selection.done.remove_tags", { count });
+      void bulk.start(target, action, message);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import "../../i18n";
 import "../../test/layoutMock";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -62,14 +63,13 @@ it("Sidebar loading has feedback and Inspector ignores a double click on an asyn
   const inspector = await screen.findByTestId("inspector");
   const pending = deferred<number>();
   commandsMock.startBulk.mockImplementationOnce(() => pending.promise);
-  fireEvent.change(within(inspector).getByLabelText(i18n.t("library.inspector.tag")), {
-    target: { value: "Test" },
-  });
-  const button = within(inspector).getByRole("button", { name: i18n.t("bulk.actions.add_tag") });
-  fireEvent.click(button);
-  fireEvent.click(button);
+  fireEvent.click(within(inspector).getByRole("button", { name: /^Aggiungi un tag/ }));
+  const field = await within(inspector).findByRole("combobox", { name: "Cerca o scrivi un tag" });
+  fireEvent.change(field, { target: { value: "Test" } });
+  // Il primo Invio applica e chiude il selettore: il secondo non ha effetto.
+  fireEvent.keyDown(field, { key: "Enter" });
+  fireEvent.keyDown(field, { key: "Enter" });
   expect(commandsMock.startBulk).toHaveBeenCalledOnce();
-  expect(button).toHaveAttribute("aria-busy", "true");
   await act(async () => {
     pending.resolve(1);
     pendingSources.resolve([]);
@@ -260,7 +260,9 @@ describe("Libreria", () => {
     expect(insp).toHaveTextContent("8,4 MB");
     expect(insp).toHaveTextContent("Val d'Orcia");
     expect(insp).toHaveTextContent("GPS EXIF");
-    expect(insp).toHaveTextContent("Tipo soggetto: Paesaggio");
+    expect(
+      within(insp).getByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
+    ).toBeInTheDocument();
     expect(insp).toHaveTextContent("0,82");
     expect(insp).toHaveTextContent("Giulia");
     expect(insp).toHaveTextContent("tramonto");
@@ -292,15 +294,18 @@ describe("Libreria", () => {
     expect(useLibrary.getState().filter.places).toEqual(["Siena"]);
 
     // Sorgenti e cataloghi nel pannello sinistro.
-    expect(screen.getByRole("button", { name: /^D:\\Foto/ })).toHaveTextContent("12");
+    expect(screen.getByRole("button", { name: /^Foto/ })).toHaveTextContent("12");
     fireEvent.click(screen.getByRole("button", { name: /Ritratti di Giulia/ }));
     expect(useLibrary.getState().filter.catalogId).toBe(5);
   });
 
   it("ordinamento e dimensione miniature", async () => {
+    const user = userEvent.setup();
     renderPage();
     await screen.findByTestId("thumb-1");
-    fireEvent.change(screen.getByLabelText("Ordina"), { target: { value: "name_asc" } });
+    screen.getByRole("button", { name: "Ordina: Data acquisizione ↓" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Nome file" }));
     await waitFor(() =>
       expect(commandsMock.libraryPage).toHaveBeenLastCalledWith(
         expect.anything(),
@@ -309,7 +314,10 @@ describe("Libreria", () => {
         300,
       ),
     );
-    fireEvent.change(screen.getByLabelText("Dimensione miniature"), { target: { value: "5" } });
+    await user.click(screen.getByRole("button", { name: "Vista" }));
+    fireEvent.change(await screen.findByLabelText("Dimensione miniature"), {
+      target: { value: "5" },
+    });
     expect(useLibrary.getState().thumbSize).toBe(5);
     // Miniature grandi: meno colonne, ciascuna almeno 260 px e allargata a riempire la riga.
     expect(parseInt(screen.getByTestId("thumb-1").style.width)).toBeGreaterThanOrEqual(260);
@@ -336,10 +344,30 @@ describe("cartelle, luogo e Apri con", () => {
     } as never);
   });
 
+  it("cartelle con nomi leggibili; Aggiorna cartella nel menu della cartella", async () => {
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    // Il nome è l'ultima cartella, il percorso completo è nel suggerimento.
+    const source = await screen.findByRole("button", { name: /^Foto/ });
+    expect(source).toHaveAttribute("title", "D:" + String.fromCharCode(92) + "Foto");
+    expect(screen.getByRole("heading", { name: "Cartelle" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mostra le cartelle di Foto" }));
+    const user = userEvent.setup();
+    const menu = await screen.findByRole("button", {
+      name: "Azioni della cartella Viaggio Giappone",
+    });
+    menu.focus();
+    await user.keyboard("{Enter}");
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Aggiorna la cartella Viaggio Giappone" }),
+    );
+    await waitFor(() => expect(commandsMock.startImport).toHaveBeenCalledWith(1, trip));
+  });
+
   it("albero delle cartelle, filtro e Seleziona tutto in una cartella", async () => {
     renderPage();
     await screen.findByTestId("thumb-1");
-    fireEvent.click(await screen.findByRole("button", { name: "Mostra le cartelle di D:\\Foto" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Mostra le cartelle di Foto" }));
     const tripRow = await screen.findByRole("button", { name: /^Viaggio Giappone/ });
     expect(tripRow).toHaveTextContent("5");
     fireEvent.click(screen.getByRole("button", { name: "Mostra le cartelle di Viaggio Giappone" }));
@@ -369,7 +397,10 @@ describe("cartelle, luogo e Apri con", () => {
 
     // Scenario "Seleziona tutto in una cartella".
     commandsMock.librarySelection.mockResolvedValue({ count: 3, maxId: 6 });
-    fireEvent.click(screen.getByText("Seleziona tutto (filtro)"));
+    const user = userEvent.setup();
+    screen.getByRole("button", { name: "Seleziona" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: /Seleziona tutte le foto/ }));
     await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(3));
     expect(useLibrary.getState().selection).toMatchObject({
       mode: "filter",
@@ -378,7 +409,12 @@ describe("cartelle, luogo e Apri con", () => {
     expect(commandsMock.librarySelection).toHaveBeenLastCalledWith(
       expect.objectContaining({ folder: { path: `${trip}\\D7000`, recursive: false } }),
     );
-    fireEvent.click(chip);
+    // Con la selezione la barra delle azioni prende il posto dei chip: Esc li riporta.
+    expect(chip).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rimuovi filtro Cartella (solo questa): D7000" }),
+    );
     expect(useLibrary.getState().filter.folder).toBeNull();
   });
 
@@ -423,8 +459,10 @@ describe("cartelle, luogo e Apri con", () => {
     );
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
-    // Scenario "Apertura da tastiera": Maiusc+F10, poi frecce.
-    fireEvent.keyDown(screen.getByTestId("thumb-4"), { key: "F10", shiftKey: true });
+    // Scenario "Apertura da tastiera": la griglia ha il focus su thumb-4, Maiusc+F10, poi frecce.
+    fireEvent.click(screen.getByTestId("thumb-4"));
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "F10", shiftKey: true });
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     const items = screen.getAllByRole("menuitem");
     await waitFor(() => expect(items[0]).toHaveFocus());
@@ -434,7 +472,7 @@ describe("cartelle, luogo e Apri con", () => {
     fireEvent.keyDown(menu, { key: "ArrowUp" });
     expect(items[items.length - 1]).toHaveFocus();
     fireEvent.keyDown(menu, { key: "Escape" });
-    fireEvent.keyDown(screen.getByTestId("thumb-4"), { key: "ContextMenu" });
+    fireEvent.keyDown(grid, { key: "ContextMenu" });
     expect(screen.getByRole("menu", { name: "Azioni sulle foto" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "Mostra nella cartella" }));
     await waitFor(() =>
@@ -580,6 +618,25 @@ describe("elenco completo dei filtri e pannelli flottanti", () => {
     }) as never);
   });
   afterEach(() => i18n.changeLanguage("it"));
+
+  it("Cerca nei filtri: ogni gruppo mostra solo i valori che corrispondono", async () => {
+    renderPage();
+    const filters = await screen.findByRole("region", { name: "Filtri" });
+    fireEvent.change(within(filters).getByRole("searchbox", { name: "Cerca nei filtri" }), {
+      target: { value: "mar" },
+    });
+    await waitFor(() =>
+      expect(commandsMock.libraryFacetValues).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ kind: "place" }),
+        "mar",
+        "count",
+        0,
+        expect.any(Number),
+      ),
+    );
+    expect(await within(filters).findByText("mare")).toBeInTheDocument();
+  });
 
   it("molte località: Mostra tutti (340), ricerca e scelta del luogo con meno foto", async () => {
     renderPage();
@@ -809,7 +866,12 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
     }),
   );
   expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Torna al catalogo" }));
+  // Il percorso riporta al catalogo.
+  fireEvent.click(
+    within(screen.getByRole("navigation", { name: "Percorso" })).getByRole("button", {
+      name: "Viaggio",
+    }),
+  );
   expect(await screen.findByRole("button", { name: "Escluse (4)" })).toBeInTheDocument();
 });
 
@@ -839,7 +901,124 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
   expect(
     (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
   ).not.toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+  fireEvent.click(screen.getByRole("button", { name: "Annulla operazione" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
   confirm.mockRestore();
+});
+
+describe("contesto della vista", () => {
+  it("Catalogo aperto: percorso, conteggio, Escluse e ritorno a Tutte le foto", async () => {
+    commandsMock.libraryCount.mockResolvedValue(312 as never);
+    commandsMock.listCatalogs.mockResolvedValue([
+      {
+        catalog: { id: 9, name: "Viaggio Toscana", kind: "manual", rules: null, createdAt: 0 },
+        items: 312,
+        excluded: 6,
+      },
+    ] as never);
+    useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 9 } });
+    renderPage();
+    const path = await screen.findByRole("navigation", { name: "Percorso" });
+    await within(path).findByText("Viaggio Toscana");
+    expect(path).toHaveTextContent("Tutte le foto›Viaggio Toscana");
+    expect(await screen.findByTestId("library-header-count")).toHaveTextContent("312 foto");
+    expect(screen.getByRole("button", { name: "Escluse (6)" })).toBeInTheDocument();
+    fireEvent.click(within(path).getByRole("button", { name: "Tutte le foto" }));
+    expect(useLibrary.getState().filter.catalogId).toBeNull();
+  });
+
+  it("Filtro delle foto simili: dal pannello Filtri al chip che lo rimuove", async () => {
+    commandsMock.libraryCount.mockResolvedValue(3 as never);
+    useLibrary.setState({ filter: emptyFilter() });
+    renderPage();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Solo foto con simili" }));
+    expect(useLibrary.getState().filter.similarOnly).toBe(true);
+    fireEvent.click(await screen.findByRole("button", { name: "Rimuovi filtro Con foto simili" }));
+    expect(useLibrary.getState().filter.similarOnly).toBe(false);
+  });
+});
+
+describe("navigazione da tastiera nella griglia", () => {
+  const active = () => screen.getByTestId("grid-scroll").getAttribute("aria-activedescendant");
+
+  it("frecce, Home e Fine spostano il focus senza cambiare la selezione", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    expect(grid).toHaveAttribute("role", "listbox");
+    expect(active()).toBe("thumb-opt-1");
+    fireEvent.keyDown(grid, { key: "ArrowRight" });
+    expect(active()).toBe("thumb-opt-2");
+    expect(screen.getByTestId("thumb-2")).toHaveAttribute("data-cursor", "true");
+    fireEvent.keyDown(grid, { key: "End" });
+    expect(active()).toBe("thumb-opt-12");
+    fireEvent.keyDown(grid, { key: "Home" });
+    expect(active()).toBe("thumb-opt-1");
+    expect(selCount(useLibrary.getState().selection)).toBe(0);
+  });
+
+  it("Maiusc+freccia estende, Ctrl+Spazio aggiunge o toglie, Ctrl+A seleziona tutto", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    commandsMock.librarySelection.mockResolvedValue({ count: 12, maxId: 12 });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
+    fireEvent.keyDown(grid, { key: " ", ctrlKey: true });
+    expect(selIds(useLibrary.getState().selection)).toEqual([1, 2]);
+    fireEvent.keyDown(grid, { key: "a", ctrlKey: true });
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(12));
+  });
+});
+
+describe("visualizzatore", () => {
+  it("Revisione rapida: Spazio, tre volte →, tasto 2, Esc sulla stessa foto", async () => {
+    commandsMock.tagOverview.mockResolvedValue({
+      tags: [],
+      sets: [
+        {
+          id: 1,
+          name: "Revisione",
+          tags: [{ key: 2, name: "da tenere" }],
+          tagged: 0,
+        },
+      ],
+      activeSet: 1,
+      palette: [],
+    } as never);
+    commandsMock.startBulk.mockResolvedValue(70 as never);
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: " " });
+    const viewer = await screen.findByTestId("viewer");
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0001.JPG");
+    for (let i = 0; i < 3; i++) fireEvent.keyDown(viewer, { key: "ArrowRight" });
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0004.JPG");
+    await waitFor(() => expect(commandsMock.tagOverview).toHaveBeenCalled());
+    fireEvent.keyDown(viewer, { key: "2" });
+    await waitFor(() =>
+      expect(commandsMock.startBulk).toHaveBeenCalledWith(
+        { kind: "ids", ids: [4] },
+        { action: "add_tag", name: "da tenere" },
+        false,
+      ),
+    );
+    fireEvent.keyDown(viewer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("viewer")).not.toBeInTheDocument());
+    expect(grid).toHaveAttribute("aria-activedescendant", "thumb-opt-4");
+  });
+
+  it("Doppio clic sul visualizzatore interno quando è l'azione configurata", async () => {
+    commandsMock.getConfig.mockResolvedValue({ ui: { double_click: "viewer" } } as never);
+    renderPage();
+    fireEvent.doubleClick(await screen.findByTestId("thumb-3"));
+    const viewer = await screen.findByTestId("viewer");
+    expect(within(viewer).getByRole("heading")).toHaveTextContent("IMG_0003.JPG");
+    expect(commandsMock.openWith).not.toHaveBeenCalledWith([3], { kind: "double_click" }, false);
+  });
 });

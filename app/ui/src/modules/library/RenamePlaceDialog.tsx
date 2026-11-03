@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, type FacetValue } from "../../lib/ipc";
+import { notifyUndoable } from "../../store/undo";
 import { useLibrary } from "../../store/library";
 
 export function RenamePlaceDialog({
@@ -37,6 +38,13 @@ export function RenamePlaceDialog({
           places: Array.from(new Set((filter.places ?? []).map((p) => (p === from ? target : p)))),
         });
       await qc.invalidateQueries();
+      notifyUndoable({
+        message: t("place.renamed", { from, to: target }),
+        run: async () => {
+          await commands.undoBulk();
+          await qc.invalidateQueries();
+        },
+      });
       onClose();
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));

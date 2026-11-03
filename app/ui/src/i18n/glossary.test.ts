@@ -40,7 +40,6 @@ const PENDING: Record<string, string[]> = {
   "it:sorgente": [
     "import.title",
     "import.sources",
-    "library.sources",
     "library.empty",
     "hints.not_found",
     "onboarding.source",

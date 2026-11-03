@@ -1,0 +1,179 @@
+/* Barra della Libreria (3.1) */
+.lib-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2) var(--pc-space-3);
+  padding: var(--pc-space-2) var(--pc-space-4);
+  border-bottom: 1px solid var(--pc-border);
+  background: var(--pc-toolbar);
+}
+.lib-path {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  font: var(--pc-font-lg) var(--pc-font-ui);
+}
+.lib-path-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pc-accent-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-1);
+}
+.lib-chip {
+  min-height: 24px;
+  border: 0;
+  cursor: pointer;
+}
+.lib-header-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lib-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  margin-left: auto;
+}
+.lib-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  min-width: 220px;
+}
+.lib-view-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+
+/* Ispettore (3.4) */
+.inspector {
+  padding: 48px var(--pc-space-4) var(--pc-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.inspector-none {
+  padding: 48px var(--pc-space-4) var(--pc-space-4);
+}
+.inspector-preview {
+  aspect-ratio: 3 / 2;
+  background: var(--pc-thumb-bg);
+  border-radius: var(--pc-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.inspector-preview img {
+  max-width: 100%;
+  max-height: 100%;
+}
+.inspector-name {
+  margin: 0;
+  font: 600 var(--pc-font-base) var(--pc-font-ui);
+  overflow-wrap: anywhere;
+}
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  font: var(--pc-font-md) var(--pc-font-ui);
+}
+.inspector-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 4px 12px;
+  align-items: center;
+}
+.inspector-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.inspector-chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.inspector-row,
+.inspector-category-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-2);
+}
+.inspector-category {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inspector-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--pc-space-2);
+}
+.inspector-path {
+  font-size: 11px;
+  color: var(--pc-text-soft);
+  word-break: break-all;
+}
+
+/* Griglia: focus della tastiera distinto dalla selezione (3.5) */
+.grid-scroll:focus-visible {
+  outline: none;
+}
+.grid-scroll:focus-visible [data-cursor] {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}
+.thumb-cell {
+  position: relative;
+  flex: none;
+}
+.thumb-group {
+  position: absolute;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--pc-radius-pill);
+  background: var(--pc-accent);
+  color: var(--pc-on-accent);
+  font: 600 12px/1 var(--pc-font-ui);
+  cursor: pointer;
+}
+
+/* Barra laterale (3.7): bersagli di almeno 24 px */
+.sidebar-toggle {
+  flex: none;
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  justify-content: center;
+}
+.sidebar-menu {
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+}

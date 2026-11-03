@@ -12,6 +12,7 @@ import { tuning } from "./tuning";
 import { sources } from "./sources";
 import { entries } from "./entries";
 import { common } from "./common";
+import { selection } from "./selection";
 
 export type Language = "it" | "en";
 
@@ -30,6 +31,7 @@ void i18n.use(initReactI18next).init({
         ...sources.it,
         ...entries.it,
         ...common.it,
+        ...selection.it,
       },
     },
     en: {
@@ -45,6 +47,7 @@ void i18n.use(initReactI18next).init({
         ...sources.en,
         ...entries.en,
         ...common.en,
+        ...selection.en,
       },
     },
   },

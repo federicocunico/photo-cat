@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,6 +39,10 @@ import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
 import { useOpenWith } from "./useOpenWith";
 import { usePlaceAction } from "./usePlaceAction";
+import { Viewer } from "../../components/viewer/Viewer";
+import { useBulkJob } from "./bulkJob";
+import { activeSet } from "../tags/data";
+import { hotkeyAction } from "../tags/useTagHotkeys";
 import { colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 
@@ -78,6 +83,7 @@ function Thumb({
   item,
   size,
   selected,
+  cursor,
   onClick,
   onDoubleClick,
   onMenu,
@@ -88,6 +94,8 @@ function Thumb({
   item: GridItem;
   size: number;
   selected: boolean;
+  /** Elemento con il focus della tastiera (distinto dalla selezione). */
+  cursor: boolean;
   /** Elemento che rappresenta un gruppo di foto simili (griglia raggruppata). */
   group?: { count: number; expanded: boolean; onToggle: () => void };
   /** Foto principale di un gruppo aperto. */
@@ -102,199 +110,179 @@ function Thumb({
   const url = thumbUrl(item.thumb);
   const [failed, setFailed] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onMenu?.(e.clientX, e.clientY);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
-          e.preventDefault();
-          const r = e.currentTarget.getBoundingClientRect();
-          onMenu?.(r.left + 16, r.top + 16);
-        }
-      }}
-      aria-pressed={selected}
-      data-testid={`thumb-${item.id}`}
-      title={
-        item.excludedAt
-          ? `${item.name} · ${t("exclusions.date", { date: fmtDateTime(item.excludedAt) })}`
-          : item.name
-      }
-      style={{
-        width: size,
-        padding: 0,
-        margin: 0,
-        borderRadius: 6,
-        overflow: "hidden",
-        cursor: "pointer",
-        textAlign: "left",
-        background: "var(--pc-panel)",
-        border: `2px solid ${selected ? "var(--pc-accent)" : cover ? "var(--pc-warn)" : "var(--pc-raised)"}`,
-        color: "inherit",
-      }}
-    >
+    <div className="thumb-cell" style={{ width: size }}>
       <div
+        role="option"
+        id={thumbId(item.id)}
+        aria-selected={selected}
+        aria-label={item.name}
+        data-cursor={cursor || undefined}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onMenu?.(e.clientX, e.clientY);
+        }}
+        data-testid={`thumb-${item.id}`}
+        title={
+          item.excludedAt
+            ? `${item.name} · ${t("exclusions.date", { date: fmtDateTime(item.excludedAt) })}`
+            : item.name
+        }
         style={{
-          position: "relative",
-          height: Math.round(size * 0.75),
-          background: "var(--pc-thumb-bg)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--pc-text-placeholder)",
-          fontSize: 12,
+          width: size,
+          padding: 0,
+          margin: 0,
+          borderRadius: 6,
+          overflow: "hidden",
+          cursor: "pointer",
+          textAlign: "left",
+          background: "var(--pc-panel)",
+          border: `2px solid ${selected ? "var(--pc-accent)" : cover ? "var(--pc-warn)" : "var(--pc-raised)"}`,
+          color: "inherit",
         }}
       >
-        {url && !failed ? (
-          <img
-            src={url}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={() => setFailed(true)}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        ) : (
-          <span>{item.name.split(".").pop()?.toUpperCase()}</span>
-        )}
-        <span style={{ position: "absolute", top: 6, left: 6, display: "flex", gap: 4 }}>
-          {item.faces > 0 && (
-            <span
-              style={{
-                padding: "1px 6px",
-                borderRadius: 4,
-                background: "rgba(20,20,22,0.85)",
-                color: "#E8E8EA",
-                fontSize: 11,
-              }}
-            >
-              {item.faces}
-            </span>
-          )}
-        </span>
-        <span
+        <div
           style={{
-            position: "absolute",
-            top: 6,
-            right: 6,
-            padding: "1px 6px",
-            borderRadius: 4,
-            background: "rgba(20,20,22,0.85)",
-            fontSize: 11,
-            color: item.status === "missing" ? "#F2A38F" : item.analyzed ? "#4FC3B0" : "#E0B252",
+            position: "relative",
+            height: Math.round(size * 0.75),
+            background: "var(--pc-thumb-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--pc-text-placeholder)",
+            fontSize: 12,
           }}
         >
-          {item.status === "missing"
-            ? t("library.missingBadge")
-            : item.analyzed
-              ? t("library.aiBadge")
-              : t("library.queuedBadge")}
-        </span>
-        <ThumbTags tags={item.tags} color={tagColor} />
-        {group && (
-          <span
-            role="button"
-            tabIndex={0}
-            aria-expanded={group.expanded}
-            aria-label={t(group.expanded ? "similar.collapse" : "similar.expand", {
-              count: group.count,
-            })}
-            data-testid={`group-badge-${item.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              group.onToggle();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                group.onToggle();
-              }
-            }}
-            style={{
-              position: "absolute",
-              left: 6,
-              bottom: 6,
-              padding: "1px 7px",
-              borderRadius: 10,
-              background: "var(--pc-accent)",
-              color: "var(--pc-on-accent, #fff)",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {group.expanded && <Icon.Minus size={12} />}
-            {group.count}
+          {url && !failed ? (
+            <img
+              src={url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              onError={() => setFailed(true)}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span>{item.name.split(".").pop()?.toUpperCase()}</span>
+          )}
+          <span style={{ position: "absolute", top: 6, left: 6, display: "flex", gap: 4 }}>
+            {item.faces > 0 && (
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: "rgba(20,20,22,0.85)",
+                  color: "#E8E8EA",
+                  fontSize: 11,
+                }}
+              >
+                {item.faces}
+              </span>
+            )}
           </span>
-        )}
-        {cover && (
           <span
-            data-testid={`cover-${item.id}`}
             style={{
               position: "absolute",
-              left: 6,
-              top: 30,
+              top: 6,
+              right: 6,
               padding: "1px 6px",
               borderRadius: 4,
               background: "rgba(20,20,22,0.85)",
-              color: "var(--pc-warn)",
               fontSize: 11,
+              color: item.status === "missing" ? "#F2A38F" : item.analyzed ? "#4FC3B0" : "#E0B252",
             }}
           >
-            {t("similar.cover")}
+            {item.status === "missing"
+              ? t("library.missingBadge")
+              : item.analyzed
+                ? t("library.aiBadge")
+                : t("library.queuedBadge")}
           </span>
-        )}
-        {item.excludedAt != null && (
-          <span
-            style={{
-              position: "absolute",
-              top: 4,
-              left: 4,
-              background: "var(--pc-panel)",
-              padding: 3,
-              fontSize: 11,
-            }}
-          >
-            {t("exclusions.date", { date: fmtDate(item.excludedAt) })}
-          </span>
-        )}
-        {selected && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              bottom: 6,
-              right: 6,
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              background: "var(--pc-accent)",
-            }}
-          />
-        )}
+          <ThumbTags tags={item.tags} color={tagColor} />
+          {cover && (
+            <span
+              data-testid={`cover-${item.id}`}
+              style={{
+                position: "absolute",
+                left: 6,
+                top: 30,
+                padding: "1px 6px",
+                borderRadius: 4,
+                background: "rgba(20,20,22,0.85)",
+                color: "var(--pc-warn)",
+                fontSize: 11,
+              }}
+            >
+              {t("similar.cover")}
+            </span>
+          )}
+          {item.excludedAt != null && (
+            <span
+              style={{
+                position: "absolute",
+                top: 4,
+                left: 4,
+                background: "var(--pc-panel)",
+                padding: 3,
+                fontSize: 11,
+              }}
+            >
+              {t("exclusions.date", { date: fmtDate(item.excludedAt) })}
+            </span>
+          )}
+          {selected && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                bottom: 6,
+                right: 6,
+                width: 20,
+                height: 20,
+                borderRadius: "50%",
+                background: "var(--pc-accent)",
+              }}
+            />
+          )}
+        </div>
+        <div
+          className="mono"
+          title={item.name}
+          style={{
+            height: CAPTION,
+            padding: "6px 8px",
+            fontSize: 11,
+            color: "var(--pc-text-soft)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.name}
+        </div>
       </div>
-      <div
-        className="mono"
-        title={item.name}
-        style={{
-          height: CAPTION,
-          padding: "6px 8px",
-          fontSize: 11,
-          color: "var(--pc-text-soft)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {item.name}
-      </div>
-    </button>
+      {group && (
+        <button
+          type="button"
+          className="thumb-group"
+          aria-expanded={group.expanded}
+          aria-label={t(group.expanded ? "similar.collapse" : "similar.expand", {
+            count: group.count,
+          })}
+          data-testid={`group-badge-${item.id}`}
+          style={{ top: Math.round(size * 0.75) - 30 }}
+          onClick={group.onToggle}
+        >
+          {group.expanded && <Icon.Minus size={12} aria-hidden="true" />}
+          {group.count}
+        </button>
+      )}
+    </div>
   );
 }
+
+const thumbId = (id: number) => `thumb-opt-${id}`;
 
 /** Segnaposto di un elemento non ancora caricato (fuori dalla finestra di pagine). */
 function Placeholder({ size }: { size: number }) {
@@ -349,6 +337,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   );
   const openWith = useOpenWith();
   const place = usePlaceAction();
+  const config = useQuery({
+    queryKey: ["config"],
+    queryFn: () => commands.getConfig(),
+    enabled: isTauri(),
+  });
+  // Visualizzatore interno: posizione nella vista, null se chiuso.
+  const [viewerAt, setViewerAt] = useState<number | null>(null);
+  const bulk = useBulkJob();
   const closeMenu = useCallback(() => setMenu(null), []);
   const actionError = openWith.error || place.error;
 
@@ -458,6 +454,87 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   }, [firstRow, lastRow, cols, start, items.length, pages, viewKey, expansions, total]);
 
   const explicit = selIds(selection);
+  // Focus della tastiera: indice nella vista, distinto dalla selezione (design D5).
+  const [cursorState, setCursorState] = useState({ key: viewKey, at: 0 });
+  const cursor = cursorState.key === viewKey ? Math.min(cursorState.at, Math.max(0, total - 1)) : 0;
+  const setCursor = (at: number) => setCursorState({ key: viewKey, at });
+  // Ancora degli intervalli con Maiusc+freccia.
+  const rangeAnchor = useRef<number | null>(null);
+  const cursorItem = total > 0 ? at_(cursor).item : undefined;
+  const moveCursor = (to: number, extend: boolean) => {
+    const n = Math.max(0, Math.min(total - 1, to));
+    setCursor(n);
+    virt.scrollToIndex(Math.floor(n / cols), { align: "auto" });
+    const it = at_(n).item;
+    if (!it) return;
+    if (extend) {
+      const anchor = rangeAnchor.current ?? cursorItem?.id ?? it.id;
+      rangeAnchor.current = anchor;
+      setSelection(clickSelect(order, [], anchor, it.id, { ctrl: false, shift: true }), it.id);
+    } else {
+      rangeAnchor.current = it.id;
+      useLibrary.setState({ focused: it.id });
+    }
+  };
+  const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    const page = Math.max(1, Math.floor(e.currentTarget.clientHeight / rowHeight)) * cols;
+    const mod = e.ctrlKey || e.metaKey;
+    const moves: Record<string, number> = {
+      ArrowLeft: cursor - 1,
+      ArrowRight: cursor + 1,
+      ArrowUp: cursor - cols,
+      ArrowDown: cursor + cols,
+      PageUp: cursor - page,
+      PageDown: cursor + page,
+      Home: 0,
+      End: total - 1,
+    };
+    if (e.key in moves && !e.altKey && !mod) {
+      e.preventDefault();
+      moveCursor(moves[e.key], e.shiftKey);
+      return true;
+    }
+    if (mod && e.key === " " && cursorItem) {
+      // Ctrl+Spazio: aggiunge o toglie dalla selezione l'elemento con il focus.
+      e.preventDefault();
+      const id = cursorItem.id;
+      if (selection.mode === "filter")
+        replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
+      else
+        setSelection(
+          clickSelect(order, explicit ?? [], focused, id, { ctrl: true, shift: false }),
+          id,
+        );
+      return true;
+    }
+    if (mod && (e.key === "a" || e.key === "A") && !e.shiftKey) {
+      e.preventDefault();
+      void commands.librarySelection(filter).then((base) => useLibrary.getState().selectAll(base));
+      return true;
+    }
+    const restoreView = filter.excludedFrom != null;
+    if (
+      !mod &&
+      !e.altKey &&
+      !e.shiftKey &&
+      cursorItem &&
+      (e.key === " " || (e.key === "Enter" && !restoreView))
+    ) {
+      // Nelle escluse Invio resta "Reinserisci": il visualizzatore si apre con Spazio.
+      e.preventDefault();
+      setViewerAt(cursor);
+      return true;
+    }
+    if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && cursorItem) {
+      e.preventDefault();
+      const el = document.getElementById(thumbId(cursorItem.id));
+      const r = el?.getBoundingClientRect();
+      onMenu(cursorItem.id)((r?.left ?? 0) + 16, (r?.top ?? 0) + 16);
+      return true;
+    }
+    return false;
+  };
   const onClick = (id: number) => (e: MouseEvent) => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (selection.mode === "filter" && ctrl) {
@@ -506,9 +583,12 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         setScrollEl(el);
       }}
       tabIndex={0}
+      aria-activedescendant={cursorItem ? thumbId(cursorItem.id) : undefined}
+      aria-multiselectable="true"
       onKeyDown={(e) => {
         if ((e.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]"))
           return;
+        if (onGridKey(e)) return;
         const restore = filter.excludedFrom != null;
         if (
           (e.key === "Delete" && filter.catalogId != null && !restore) ||
@@ -532,9 +612,14 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           ? t("feedback.calculating")
           : t("library.count", { n: fmtInt(count.data ?? total) })
       }
-      role="region"
+      role="listbox"
+      className="grid-scroll"
       onPointerDown={(e) => {
-        if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
+        if (
+          e.button !== 0 ||
+          ((e.target as HTMLElement).closest('button, [role="option"]') && !e.altKey)
+        )
+          return;
         const r = e.currentTarget.getBoundingClientRect();
         drag.current = {
           x: e.clientX - r.left,
@@ -613,6 +698,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                   item={it}
                   size={cell}
                   selected={selHas(selection, it.id)}
+                  cursor={i === cursor}
                   group={
                     grouped
                       ? {
@@ -623,13 +709,19 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
                       : undefined
                   }
                   cover={open && it.similarCover}
-                  onClick={
-                    grouped && !open
-                      ? (e) =>
-                          e.ctrlKey || e.metaKey || e.shiftKey ? onClick(it.id)(e) : selectGroup(it)
-                      : onClick(it.id)
-                  }
-                  onDoubleClick={() => void openWith.open([it.id], { kind: "double_click" })}
+                  onClick={(e) => {
+                    setCursor(i);
+                    rangeAnchor.current = it.id;
+                    if (grouped && !open && !(e.ctrlKey || e.metaKey || e.shiftKey))
+                      selectGroup(it);
+                    else onClick(it.id)(e);
+                  }}
+                  onDoubleClick={() => {
+                    if (config.data?.ui?.double_click === "viewer") {
+                      setCursor(i);
+                      setViewerAt(i);
+                    } else void openWith.open([it.id], { kind: "double_click" });
+                  }}
                   onMenu={onMenu(it.id)}
                   tagColor={tagColor}
                 />
@@ -676,6 +768,47 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
         >
           {actionError}
         </div>
+      )}
+      {viewerAt != null && (
+        <Viewer
+          index={viewerAt}
+          total={total}
+          photo={(() => {
+            const it = at_(viewerAt).item;
+            if (!it) return null;
+            return {
+              id: it.id,
+              name: it.name,
+              src: thumbUrl(it.thumb),
+              details: (
+                <span>
+                  {[it.capturedAt ? fmtDateTime(it.capturedAt.replace(" ", "T")) : null, ...it.tags]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              ),
+            };
+          })()}
+          onIndex={(n) => {
+            setViewerAt(n);
+            // La griglia segue: alla chiusura il focus è sulla stessa foto.
+            moveCursor(n, false);
+          }}
+          onClose={() => setViewerAt(null)}
+          onKey={(key) => {
+            const it = at_(viewerAt).item;
+            const action = it ? hotkeyAction(key, activeSet(tagInfo)) : null;
+            if (!it || !action) return false;
+            void bulk.start(
+              { kind: "ids", ids: [it.id] },
+              action,
+              action.action === "add_tag"
+                ? t("selection.done.add_tag", { name: action.name, count: 1 })
+                : t("selection.done.remove_tags", { count: 1 }),
+            );
+            return true;
+          }}
+        />
       )}
       {menu && (
         <GridContextMenu

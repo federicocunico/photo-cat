@@ -2,7 +2,7 @@
 //! e "Mostra nella cartella". I percorsi sono sempre argomenti distinti, mai
 //! interpretati da una shell; i file non vengono modificati.
 use crate::state::AppState;
-use pc_core::config::{DOUBLE_CLICK_NONE, DOUBLE_CLICK_SYSTEM};
+use pc_core::config::{DOUBLE_CLICK_NONE, DOUBLE_CLICK_SYSTEM, DOUBLE_CLICK_VIEWER};
 use pc_core::{AppError, AppResult, Config, ErrorCode, ExternalApp};
 use pc_store::model::{MediaId, MediaStatus};
 use pc_store::{repo, Store};
@@ -137,7 +137,8 @@ fn open(
 ) -> AppResult<()> {
     let target = match target {
         OpenTarget::DoubleClick => match config.ui.double_click.as_str() {
-            DOUBLE_CLICK_NONE => return Ok(()),
+            // Il visualizzatore interno lo apre l'interfaccia: qui non c'è nulla da avviare.
+            DOUBLE_CLICK_NONE | DOUBLE_CLICK_VIEWER => return Ok(()),
             DOUBLE_CLICK_SYSTEM => OpenTarget::System,
             id => OpenTarget::App { id: id.into() },
         },

@@ -38,7 +38,7 @@
   **Inventario (3 novembre 2026).** Il backend ha un solo registro LIFO (`undo_log`): `undo_bulk` annulla l'ultima voce qualunque sia, `undo_people` solo se è una correzione delle persone (ed emette `faces_changed`). Lo store ricorda quindi una sola operazione, e ogni comando che scrive in `undo_log` la fa decadere (`UNDO_LOG_COMMANDS` in `store/undo.ts`), così Ctrl+Z non annulla mai un'operazione diversa da quella mostrata.
 
   Con annullamento lato backend:
-  - `startBulk`: tag, cataloghi, esclusioni e reinserimenti, categorie, luogo, tag del set → `undoBulk`;
+  - `startBulk`: tag, cataloghi, esclusioni e reinserimenti, categorie, luogo, tag del set → `undoBulk` (non `assign_person` e `remove_library`, vedi sotto);
   - `renameTag`, `mergeTag`, `deleteTag` → `undoBulk`;
   - `renamePlace`, `deleteCategory` → `undoBulk`;
   - `setGroupShift`, `placeUndated` (Sequenza) → `undoBulk`;
@@ -52,6 +52,7 @@
   - foto simili: `similarRemove`, `similarGroupTogether`, `similarDissolve`, `similarSetCover` → nessuna conferma, si correggono a mano;
   - identità: `saveIdentity`, `deleteIdentity`, `mergeIdentities`, `removeIdentityFace`, `linkPersonIdentity` → `ConfirmDialog` per eliminazione e unione (7.4);
   - `recomputePlaces` → nessuna conferma (ricalcolo).
+  - `startBulk` con `assign_person` (`people::assign` non registra) e `remove_library` (cancella righe e miniature) → `ConfirmDialog` nella barra delle azioni (3.2).
 
   Da cablare nelle fasi successive: Libreria (3.3), Tag (7.3), Persone (7.4; finché il registro globale è vuoto, Ctrl+Z in Persone chiama ancora `undoPeople`), Sequenza e Luoghi (3.3, 7.5).
 - [x] 1.6 Glossario in `i18n/GLOSSARY.md`; chiavi `common.*` (Annulla, Salva, Chiudi, Interrompi, Annulla operazione, Riprova, Dettagli); formattazione delle date con `Intl`. Test sui termini vietati per lingua.
@@ -82,40 +83,40 @@
 
 ## 3. Libreria
 
-- [ ] 3.1 `LibraryHeader`:
+- [x] 3.1 `LibraryHeader`:
   - percorso, conteggio, chip, menu "Ordina" e "Vista", interruttore dell'ispettore;
   - rimuove `CatalogHeader`, `CatalogFeedback` e la vecchia `Toolbar`;
   - "Solo foto con simili" va al pannello Filtri, con il suo chip.
 
   Verifica: `LibraryPage.test.tsx` (catalogo, escluse, chip).
-- [ ] 3.2 `SelectionBar` al posto di `BulkBar`:
+- [x] 3.2 `SelectionBar` al posto di `BulkBar`:
   - visibile solo con una selezione;
   - comandi diretti con popover di ricerca, "Altro", Esc per deselezionare;
   - "Esporta" apre il modulo Esporta con l'ambito già impostato;
   - mantenere tutte le azioni e i test di `bulk-operations`.
 
   Verifica: `BulkBar.test.tsx` riscritto come `SelectionBar.test.tsx`.
-- [ ] 3.3 Tutte le operazioni della Libreria registrate nello store `undo`, con avvisi "Annulla operazione"; nessun `window.confirm` (la rimozione dalla libreria diventa annullabile oppure usa `ConfirmDialog`, secondo 1.5).
-- [ ] 3.4 Inspector:
+- [x] 3.3 Tutte le operazioni della Libreria registrate nello store `undo`, con avvisi "Annulla operazione"; nessun `window.confirm` (la rimozione dalla libreria diventa annullabile oppure usa `ConfirmDialog`, secondo 1.5).
+- [x] 3.4 Inspector:
   - nuovo ordine delle sezioni;
   - `Disclosure` persistite;
   - modifica sul campo (`InlineEdit`) al posto del modulo "Modifica";
   - selezione multipla con valori comuni.
 
   Verifica: `Inspector.test.tsx`.
-- [ ] 3.5 Griglia:
+- [x] 3.5 Griglia:
   - focus "roving" con frecce, Home/Fine, Pagina su/giù, Maiusc+freccia, Ctrl+Spazio, Ctrl+A;
   - focus distinto dalla selezione;
   - il gruppo di simili diventa un pulsante separato (niente controlli annidati).
 
   Verifica: test della griglia virtualizzata.
-- [ ] 3.6 Visualizzatore condiviso `components/viewer/Viewer.tsx`, estratto da Sequenza:
+- [x] 3.6 Visualizzatore condiviso `components/viewer/Viewer.tsx`, estratto da Sequenza:
   - Spazio/Invio, frecce, 1–9/0, I, Esc;
   - stessa foto con il focus alla chiusura;
   - opzione "Visualizzatore di photo-cat" per il doppio clic (`external-apps`).
 
   Verifica: test in Libreria e Sequenza.
-- [ ] 3.7 Barra laterale: Cartelle (ex Sorgenti) con nomi leggibili e percorso nel suggerimento, Cataloghi, Filtri con ricerca; il comando "aggiorna cartella" passa nel menu della cartella; bersagli di almeno 24 px.
+- [x] 3.7 Barra laterale: Cartelle (ex Sorgenti) con nomi leggibili e percorso nel suggerimento, Cataloghi, Filtri con ricerca; il comando "aggiorna cartella" passa nel menu della cartella; bersagli di almeno 24 px.
 
 ## 4. Palette e scorciatoie
 

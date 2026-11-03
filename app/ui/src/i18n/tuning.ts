@@ -11,6 +11,7 @@ export const tuning = {
       rename: "Rinomina…",
       renameOf: "Rinomina il luogo {{name}}",
       renameTitle: "Rinomina luogo",
+      renamed: "Luogo «{{from}}» rinominato in «{{to}}»",
       renameTo: "Nuovo nome",
       renameCount_one: "Il nuovo nome verrà assegnato a {{count}} foto come correzione manuale.",
       renameCount_other: "Il nuovo nome verrà assegnato a {{count}} foto come correzione manuale.",
@@ -24,6 +25,7 @@ export const tuning = {
     folders: {
       expand: "Mostra le cartelle di {{name}}",
       collapse: "Nascondi le cartelle di {{name}}",
+      menu: "Azioni della cartella {{name}}",
       includeSub: "Includi sottocartelle",
       chip: "Cartella: {{name}}",
       chipExact: "Cartella (solo questa): {{name}}",
@@ -39,6 +41,7 @@ export const tuning = {
       remove: "Rimuovi",
       doubleClick: "Doppio clic su una miniatura",
       system: "Apri con l'app predefinita del sistema",
+      viewer: "Visualizzatore di photo-cat",
       none: "Nessuna azione",
       openWith: "Apri con",
       openDefault: "Apri con l'app predefinita",
@@ -50,6 +53,7 @@ export const tuning = {
       actsOn_one: "{{count}} foto",
       actsOn_other: "{{count}} foto",
       confirmMany: "Aprire {{count}} file insieme?",
+      openMany: "Apri {{count}} file",
       ignoredFolders: "Cartelle da ignorare per il luogo (una per riga)",
       ignoredHint:
         "Nomi di cartella che non indicano un luogo (es. Selezionate, Da stampare). Le cartelle dei dispositivi (D7000, Telefono, …) sono già riconosciute.",
@@ -105,6 +109,7 @@ export const tuning = {
       rename: "Rename…",
       renameOf: "Rename place {{name}}",
       renameTitle: "Rename place",
+      renamed: "Place “{{from}}” renamed to “{{to}}”",
       renameTo: "New name",
       renameCount_one: "The new name will be given to {{count}} photo as a manual correction.",
       renameCount_other: "The new name will be given to {{count}} photos as a manual correction.",
@@ -118,6 +123,7 @@ export const tuning = {
     folders: {
       expand: "Show the folders of {{name}}",
       collapse: "Hide the folders of {{name}}",
+      menu: "Actions for the folder {{name}}",
       includeSub: "Include subfolders",
       chip: "Folder: {{name}}",
       chipExact: "Folder (only this one): {{name}}",
@@ -133,6 +139,7 @@ export const tuning = {
       remove: "Remove",
       doubleClick: "Double click on a thumbnail",
       system: "Open with the system default app",
+      viewer: "photo-cat viewer",
       none: "No action",
       openWith: "Open with",
       openDefault: "Open with the default app",
@@ -144,6 +151,7 @@ export const tuning = {
       actsOn_one: "{{count}} photo",
       actsOn_other: "{{count}} photos",
       confirmMany: "Open {{count}} files at once?",
+      openMany: "Open {{count}} files",
       ignoredFolders: "Folders to ignore for the place (one per line)",
       ignoredHint:
         "Folder names that are not places (e.g. Selected, To print). Device folders (D7000, Phone, …) are already recognised.",

@@ -10,3 +10,5 @@ export { Menu, ContextMenu, Popover, type MenuItem } from "./Menu";
 export { Dialog, ConfirmDialog } from "./Dialog";
 export { FolderPicker, chooseFolder } from "./FolderPicker";
 export { DataTable, type Column } from "./DataTable";
+export { SearchPicker, type PickerOption } from "./SearchPicker";
+export { InlineEdit } from "./InlineEdit";

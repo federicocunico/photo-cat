@@ -1,35 +1,19 @@
-// Azione sul luogo (job bulk "set_place") con aggiornamento di dettagli,
-// griglia e facet al termine.
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { commands, type PlaceInput, type Target } from "../../lib/ipc";
-import { useLive } from "../../store/live";
-
-const FINAL = ["completed", "completed_with_errors", "cancelled", "failed"];
+// Azione sul luogo (job bulk "set_place"): esito e "Annulla operazione" nell'unico
+// ToastHost, viste aggiornate al termine (useBulkJob).
+import { useTranslation } from "react-i18next";
+import type { PlaceInput, Target } from "../../lib/ipc";
+import { useBulkJob } from "./bulkJob";
 
 export function usePlaceAction(onDone?: () => void) {
-  const qc = useQueryClient();
-  const [job, setJob] = useState<number | null>(null);
-  const [error, setError] = useState("");
-  const result = useLive((s) => (job === null ? undefined : s.jobs[job]));
-  const done = useRef(onDone);
-  done.current = onDone;
-  useEffect(() => {
-    if (result && FINAL.includes(result.state)) {
-      void qc.invalidateQueries({ queryKey: ["media-detail"] });
-      void qc.invalidateQueries({ queryKey: ["library"] });
-      void qc.invalidateQueries({ queryKey: ["facets"] });
-      void qc.invalidateQueries({ queryKey: ["bulk-undo"] });
-      done.current?.();
-    }
-  }, [result, qc]);
-  const apply = async (target: Target, place: PlaceInput | null) => {
-    setError("");
-    try {
-      setJob(await commands.startBulk(target, { action: "set_place", place }, false));
-    } catch (e) {
-      setError((e as { detail?: string }).detail ?? String(e));
-    }
+  const { t } = useTranslation();
+  const bulk = useBulkJob(() => onDone?.());
+  const apply = async (target: Target, place: PlaceInput | null, total?: number) => {
+    const count = total ?? (target.kind === "ids" ? target.ids.length : 1);
+    const message = place
+      ? t("selection.done.set_place", { name: place.name, count })
+      : t("selection.done.reset_place", { count });
+    await bulk.start(target, { action: "set_place", place }, message);
   };
-  return { apply, error, result };
+  // Gli errori arrivano come avvisi: il campo resta per i chiamanti esistenti.
+  return { apply, error: "", busy: bulk.busy };
 }

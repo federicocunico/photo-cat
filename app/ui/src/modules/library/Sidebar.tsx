@@ -10,7 +10,7 @@ import { fmtInt } from "../../lib/format";
 import { latestOnly, retryUnlessSuperseded } from "../../lib/latest";
 import { useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
-import { Disclosure } from "../../components/ui";
+import { Disclosure, Menu } from "../../components/ui";
 import { RenamePlaceDialog } from "./RenamePlaceDialog";
 import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
@@ -115,8 +115,7 @@ function FolderTree({
                   {f.hasChildren ? (
                     <BusyButton
                       type="button"
-                      className="btn btn-ghost"
-                      style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                      className="btn btn-ghost sidebar-toggle"
                       aria-expanded={expanded}
                       aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
                         name: f.name,
@@ -126,7 +125,7 @@ function FolderTree({
                       {expanded ? <Icon.ChevronDown size={14} /> : <Icon.ChevronRight size={14} />}
                     </BusyButton>
                   ) : (
-                    <span style={{ width: 20, flexShrink: 0 }} />
+                    <span style={{ width: 24, flexShrink: 0 }} />
                   )}
                   <Row
                     mono
@@ -140,16 +139,25 @@ function FolderTree({
                       })
                     }
                   />
-                  <BusyButton
-                    type="button"
-                    className="btn btn-ghost"
-                    style={{ padding: "0 4px", fontSize: 12 }}
-                    title={t("sources.updateFolder")}
-                    aria-label={t("sources.updateFolderOf", { name: f.name })}
-                    onClick={async () => await updateFolder(source, f.path)}
-                  >
-                    <Icon.Refresh size={14} />
-                  </BusyButton>
+                  <Menu
+                    align="end"
+                    trigger={
+                      <button
+                        type="button"
+                        className="btn btn-ghost icon-btn sidebar-menu"
+                        aria-label={t("folders.menu", { name: f.name })}
+                      >
+                        <Icon.More size={14} aria-hidden="true" />
+                      </button>
+                    }
+                    items={[
+                      {
+                        label: t("sources.updateFolderOf", { name: f.name }),
+                        icon: <Icon.Refresh size={14} />,
+                        onSelect: () => updateFolder(source, f.path),
+                      },
+                    ]}
+                  />
                 </div>
                 {expanded && <FolderTree source={source} parent={f.path} depth={depth + 1} />}
               </div>
@@ -159,6 +167,23 @@ function FolderTree({
       )}
     </QueryView>
   );
+}
+
+/**
+ * Nome leggibile di una cartella importata: l'ultima parte del percorso, oppure le
+ * ultime due se un'altra cartella ha lo stesso nome. Il percorso completo va nel
+ * suggerimento.
+ */
+function folderName(path: string, all: string[]): string {
+  const parts = (p: string) => p.split(/[\\/]/).filter(Boolean);
+  const last = (p: string) => parts(p).slice(-1)[0] ?? p;
+  const name = last(path);
+  const clash = all.some((other) => other !== path && last(other) === name);
+  return clash
+    ? parts(path)
+        .slice(-2)
+        .join(path.includes("\\") ? "\\" : "/")
+    : name;
 }
 
 /** Sezione del pannello sinistro richiudibile; lo stato è ricordato tra i riavvii. */
@@ -192,6 +217,8 @@ export function LibrarySidebar() {
   const setFolderRecursive = useLibrary((s) => s.setFolderRecursive);
   const [openSources, setOpenSources] = useState<number[]>([]);
   const [renaming, setRenaming] = useState<FacetValue | null>(null);
+  // Ricerca in tutti i filtri: ogni gruppo mostra solo i valori che corrispondono.
+  const [facetQuery, setFacetQuery] = useState("");
   const sources = useQuery({
     queryKey: ["sources"],
     queryFn: commands.listSources,
@@ -228,19 +255,17 @@ export function LibrarySidebar() {
             <>
               {list.map((summary) => {
                 const { source, items } = summary;
-                const label = source.path
-                  .split(/[\\/]/)
-                  .filter(Boolean)
-                  .slice(-2)
-                  .join(source.path.includes("\\") ? "\\" : "/");
+                const label = folderName(
+                  source.path,
+                  list.map((s) => s.source.path),
+                );
                 const expanded = openSources.includes(source.id);
                 return (
                   <div key={source.id}>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <button
                         type="button"
-                        className="btn btn-ghost"
-                        style={{ padding: "0 4px", fontSize: 11, width: 20 }}
+                        className="btn btn-ghost sidebar-toggle"
                         aria-expanded={expanded}
                         aria-label={t(expanded ? "folders.collapse" : "folders.expand", {
                           name: label,
@@ -260,7 +285,6 @@ export function LibrarySidebar() {
                         )}
                       </button>
                       <Row
-                        mono
                         title={source.path}
                         label={label}
                         count={items}
@@ -318,16 +342,38 @@ export function LibrarySidebar() {
         </QueryView>
       </SidebarSection>
       <SidebarSection id="library.filters" title={t("library.filters")} gap={12}>
+        <input
+          className="field"
+          type="search"
+          aria-label={t("library.facets.searchAll")}
+          placeholder={t("library.facets.searchAll")}
+          value={facetQuery}
+          onChange={(e) => setFacetQuery(e.target.value)}
+        />
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={filter.similarOnly ?? false}
+            onChange={(e) => setFilter({ similarOnly: e.target.checked })}
+          />
+          {t("similar.only")}
+        </label>
         <QueryView query={facets} enabled={isTauri()} isEmpty={() => false}>
           {(data) =>
             data && (
               <>
                 {data.labels.map(([grp, list]) => (
-                  <FacetList key={grp} facetKey={{ kind: "label", group: grp }} list={list} />
+                  <FacetList
+                    query={facetQuery}
+                    key={grp}
+                    facetKey={{ kind: "label", group: grp }}
+                    list={list}
+                  />
                 ))}
                 {data.places.total > 0 && (
                   <>
                     <FacetList
+                      query={facetQuery}
                       facetKey={{ kind: "place" }}
                       list={data.places}
                       action={(f) => (
@@ -362,9 +408,11 @@ export function LibrarySidebar() {
                   />
                 )}
                 {data.formats.total > 0 && (
-                  <FacetList facetKey={{ kind: "format" }} list={data.formats} />
+                  <FacetList query={facetQuery} facetKey={{ kind: "format" }} list={data.formats} />
                 )}
-                {data.tags.total > 0 && <FacetList facetKey={{ kind: "tag" }} list={data.tags} />}
+                {data.tags.total > 0 && (
+                  <FacetList query={facetQuery} facetKey={{ kind: "tag" }} list={data.tags} />
+                )}
                 {data.people.total > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ fontWeight: 600 }}>{t("library.facets.people")}</div>
