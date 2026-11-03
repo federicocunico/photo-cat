@@ -10,6 +10,7 @@ import { commands, isTauri } from "../../lib/ipc";
 import { Dialog, Kbd, Menu } from "../ui";
 import { usePalette } from "../../store/palette";
 import { usePending } from "../../store/pending";
+import { useShortcutSheet } from "../../store/shortcutSheet";
 import { Spinner } from "../feedback/Spinner";
 
 const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "") ? "⌘" : "Ctrl";
@@ -117,6 +118,12 @@ export function HelpMenu() {
           </button>
         }
         items={[
+          {
+            label: t("commands.shortcuts"),
+            icon: <Icon.Keyboard size={14} />,
+            shortcut: "?",
+            onSelect: () => useShortcutSheet.getState().setOpen(true),
+          },
           {
             label: t("help.diagnostics"),
             icon: <Icon.Diagnostics size={14} />,

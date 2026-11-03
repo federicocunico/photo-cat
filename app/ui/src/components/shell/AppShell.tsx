@@ -7,6 +7,9 @@ import { useUndoHotkey } from "../../store/undo";
 import { fmtDateTime } from "../../lib/format";
 import { CommandPalette } from "../command/CommandPalette";
 import { usePaletteCommand } from "../../commands/paletteCommand";
+import { ShortcutSheet } from "../command/ShortcutSheet";
+import { useShortcutCatalog } from "../../commands/catalog";
+import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 
 const bannerStyle = {
@@ -97,6 +100,8 @@ export function UiRecoveredBanner({
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   useUndoHotkey();
   usePaletteCommand();
+  useShortcutCatalog();
+  useSheetCommand();
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <TopBar />
@@ -107,6 +112,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
           {children}
         </main>
         <CommandPalette />
+        <ShortcutSheet />
       </div>
     </div>
   );

@@ -127,7 +127,7 @@
   - apertura della Libreria filtrata.
 
   Verifica: test di ricerca, navigazione da tastiera e azione.
-- [ ] 4.3 Foglio delle scorciatoie (`?`), generato dal registro, e scorciatoie mostrate in menu e suggerimenti.
+- [x] 4.3 Foglio delle scorciatoie (`?`), generato dal registro, e scorciatoie mostrate in menu e suggerimenti.
 
 ## 5. Guida nell'app
 
