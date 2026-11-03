@@ -5,7 +5,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Layout a pannelli
-L'interfaccia SHALL presentare una barra superiore, una navigazione dei moduli, un pannello laterale sinistro (cartelle, cataloghi, filtri), un'area centrale (griglia o lista), un pannello destro di ispezione e una barra di stato. I pannelli laterali SHALL essere ridimensionabili e richiudibili, anche da tastiera (Tab nasconde e mostra entrambi i pannelli laterali, Ctrl+B la navigazione dei moduli, Ctrl+I l'ispettore). La navigazione dei moduli SHALL potersi ridurre a sole icone con descrizione al passaggio del mouse, e SHALL ridursi automaticamente a icone sotto i 1.008 px di larghezza della finestra. Le sezioni del pannello sinistro SHALL potersi richiudere singolarmente. Lo stato del layout SHALL essere ricordato.
+L'interfaccia SHALL presentare una barra superiore, una navigazione dei moduli, un pannello laterale sinistro (cartelle, cataloghi, filtri), un'area centrale (griglia o lista), un pannello destro di ispezione e una barra di stato. I pannelli laterali SHALL essere ridimensionabili e richiudibili, anche da tastiera (Ctrl+Maiusc+B nasconde e mostra entrambi i pannelli laterali, Ctrl+B la navigazione dei moduli, Ctrl+I l'ispettore; Tab resta riservato allo spostamento del focus). La navigazione dei moduli SHALL potersi ridurre a sole icone con descrizione al passaggio del mouse, e SHALL ridursi automaticamente a icone sotto i 1.008 px di larghezza della finestra. Le sezioni del pannello sinistro SHALL potersi richiudere singolarmente. Lo stato del layout SHALL essere ricordato.
 
 #### Scenario: Pannello richiuso
 - **WHEN** l'utente chiude il pannello di ispezione e riavvia l'app
@@ -20,8 +20,8 @@ L'interfaccia SHALL presentare una barra superiore, una navigazione dei moduli, 
 - **THEN** la navigazione passa a sole icone senza cambiare la preferenza salvata per le finestre larghe
 
 #### Scenario: Concentrazione sulla griglia
-- **WHEN** l'utente preme Tab in Libreria senza un campo di testo attivo
-- **THEN** pannello sinistro e ispettore si nascondono, e un nuovo Tab li ripristina
+- **WHEN** l'utente preme Ctrl+Maiusc+B in Libreria senza un campo di testo attivo
+- **THEN** pannello sinistro e ispettore si nascondono, e un nuovo Ctrl+Maiusc+B li ripristina com'erano
 
 ### Requirement: Moduli di navigazione
 L'applicazione SHALL organizzare la navigazione in gruppi con un'etichetta:

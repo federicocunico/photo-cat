@@ -7,20 +7,27 @@ import { Icon } from "../icons";
 import { useLayout } from "../../store/layout";
 import { isTyping, modalOpen } from "../../lib/keys";
 
-/** Ctrl+I mostra o nasconde l'ispettore del modulo, se c'è. */
-function useInspectorHotkey(enabled: boolean) {
+/**
+ * Ctrl+I mostra o nasconde l'ispettore; Ctrl+Maiusc+B nasconde entrambi i pannelli
+ * laterali e li ripristina com'erano. Tab resta allo spostamento del focus.
+ */
+function usePanelHotkeys(hasRight: boolean) {
   useEffect(() => {
-    if (!enabled) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
-      if (e.key !== "i" && e.key !== "I") return;
+      if (e.defaultPrevented || e.altKey || !(e.ctrlKey || e.metaKey)) return;
       if (isTyping(e.target) || modalOpen()) return;
-      e.preventDefault();
-      useLayout.getState().toggleRight();
+      const key = e.key.toLowerCase();
+      if (e.shiftKey && key === "b") {
+        e.preventDefault();
+        useLayout.getState().toggleSidePanels();
+      } else if (!e.shiftKey && key === "i" && hasRight) {
+        e.preventDefault();
+        useLayout.getState().toggleRight();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled]);
+  }, [hasRight]);
 }
 
 function Resizer({ label, onDelta }: { label: string; onDelta: (dx: number) => void }) {
@@ -93,7 +100,7 @@ export function Panels({
 }) {
   const { t } = useTranslation();
   const s = useLayout();
-  useInspectorHotkey(Boolean(right));
+  usePanelHotkeys(Boolean(right));
   return (
     <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
       {left &&

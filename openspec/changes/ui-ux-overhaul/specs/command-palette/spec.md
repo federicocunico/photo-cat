@@ -39,7 +39,7 @@ L'app SHALL offrire scorciatoie globali:
 | Ctrl+Z | annulla operazione |
 | Ctrl+B | navigazione |
 | Ctrl+I | ispettore |
-| Tab | pannelli |
+| Ctrl+Maiusc+B | pannelli laterali |
 
 Le scorciatoie MUST NOT attivarsi mentre il focus è in un campo di testo, tranne Ctrl+K ed Esc.
 

@@ -71,6 +71,19 @@ beforeEach(() => {
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 describe("layout a pannelli", () => {
+  it("Concentrazione sulla griglia: Ctrl+Maiusc+B nasconde e ripristina i pannelli laterali", () => {
+    render(<Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />);
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
+    expect(screen.queryByTestId("left-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("right-panel")).not.toBeInTheDocument();
+    // Tab resta allo spostamento del focus.
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(screen.queryByTestId("left-panel")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
+    expect(screen.getByTestId("left-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument();
+  });
+
   it("Ctrl+I mostra e nasconde l'ispettore, ma non mentre si scrive", () => {
     render(
       <Panels left={<div>sx</div>} center={<input aria-label="campo" />} right={<div>dx</div>} />,
