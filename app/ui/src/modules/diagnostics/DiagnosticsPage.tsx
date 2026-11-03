@@ -1,104 +1,60 @@
+// Impostazioni › Diagnostica: segnalazione di un problema (pacchetto diagnostico), livello di
+// log, errori registrati (riepilogo per codice e tabella da tastiera con il dettaglio) e log.
+import "./diagnostics.css";
 import { useGuide } from "../../store/guide";
 import { QueryView } from "../../components/feedback/QueryView";
-import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
+import { Badge, Button, DataTable, FormField, InlineAlert, type Column } from "../../components/ui";
 import { commands, events, isTauri, type ErrorEntry, type LogLevel } from "../../lib/ipc";
-import { toQuery, useErrorText } from "./errors";
+import { ENTRY_LEVELS, LOG_LEVELS, PHASES, toQuery, useEntryLabels, useErrorText } from "./errors";
 import { ErrorGroups } from "./ErrorGroups";
 import { fmtDateTime, fmtTime } from "../../lib/format";
 import { useLayout, type DiagFilter } from "../../store/layout";
 import { useLive } from "../../store/live";
+import { SettingsCtx } from "../settings/settingsContext";
 
-const PHASES = [
-  "scansione",
-  "metadati",
-  "miniature",
-  "analisi_ai",
-  "volti",
-  "scrittura",
-  "modelli",
-];
-
-function levelBadge(level: string) {
-  const err = level === "ERROR";
-  return {
-    padding: "2px 8px",
-    borderRadius: 4,
-    fontSize: 12,
-    background: err ? "var(--pc-danger-bg)" : "var(--pc-warn-bg)",
-    color: err ? "var(--pc-danger)" : "var(--pc-warn)",
-  } as const;
-}
+const levelTone = (level: string) => (level === "ERROR" ? "danger" : "warn");
 
 function Detail({ entry }: { entry: ErrorEntry }) {
   const { t, i18n } = useTranslation();
   const text = useErrorText();
+  const labels = useEntryLabels();
   const hintKey = entry.code ? `hints.${entry.code.toLowerCase()}` : "";
   return (
-    <aside
-      aria-label={t("diag.detail")}
-      style={{
-        flex: "1 1 320px",
-        minWidth: 0,
-        background: "var(--pc-panel)",
-        border: "1px solid var(--pc-border)",
-        borderRadius: 8,
-        padding: 18,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={levelBadge(entry.level)}>{entry.level}</span>
-        <strong className="mono">{entry.code ?? "—"}</strong>
+    <aside aria-label={t("diag.detail")} className="diag-detail">
+      <div className="diag-detail-head">
+        <Badge tone={levelTone(entry.level)}>{labels.level(entry.level)}</Badge>
+        <strong data-testid="detail-message">{text(entry)}</strong>
       </div>
-      <div data-testid="detail-message">{text(entry)}</div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: "6px 12px",
-          fontSize: 13,
-        }}
-      >
-        <span className="muted">{t("diag.file")}</span>
-        <span className="mono" style={{ fontSize: 11, wordBreak: "break-all" }}>
-          {entry.path || "—"}
-        </span>
-        <span className="muted">{t("diag.job")}</span>
-        <span>{entry.jobId ?? "—"}</span>
-        <span className="muted">{t("diag.phase")}</span>
-        <span>
-          {entry.phase ? t(`jobs.phases.${entry.phase}`, { defaultValue: entry.phase }) : "—"}
-        </span>
-        <span className="muted">{t("diag.time")}</span>
-        <span>{fmtDateTime(entry.ts)}</span>
-      </div>
+      <dl className="diag-detail-grid">
+        <dt className="muted">{t("diag.file")}</dt>
+        <dd className="mono diag-path">{entry.path || "—"}</dd>
+        <dt className="muted">{t("diag.job")}</dt>
+        <dd>{entry.jobId ?? "—"}</dd>
+        <dt className="muted">{t("diag.phase")}</dt>
+        <dd>{labels.phase(entry.phase)}</dd>
+        <dt className="muted">{t("diag.time")}</dt>
+        <dd>{fmtDateTime(entry.ts)}</dd>
+      </dl>
       {hintKey && i18n.exists(hintKey) && (
-        <div style={{ color: "var(--pc-warn)", fontSize: 13 }} data-testid="detail-hint">
+        <p className="diag-hint" data-testid="detail-hint">
           {t("diag.suggestion")}: {t(hintKey)}
-        </div>
+        </p>
       )}
       <details>
-        <summary style={{ cursor: "pointer" }}>{t("diag.technical")}</summary>
-        <pre
-          className="mono"
-          style={{
-            margin: "8px 0 0",
-            padding: 10,
-            background: "var(--pc-bg)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 6,
-            fontSize: 11,
-            color: "var(--pc-text-soft)",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {[entry.target, entry.message, entry.detail].filter(Boolean).join("\n")}
+        <summary>{t("diag.technical")}</summary>
+        <pre className="mono diag-technical">
+          {[
+            entry.code && `${t("diag.code")}: ${entry.code}`,
+            entry.target,
+            entry.message,
+            entry.detail,
+          ]
+            .filter(Boolean)
+            .join("\n")}
         </pre>
       </details>
     </aside>
@@ -114,38 +70,15 @@ function LogTail() {
     if (follow && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [tail, follow]);
   return (
-    <section
-      aria-label={t("diag.tail")}
-      style={{
-        background: "var(--pc-log-bg)",
-        border: "1px solid var(--pc-border)",
-        borderRadius: 8,
-        padding: "12px 16px",
-      }}
-    >
-      <div
-        style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12 }}
-        className="muted"
-      >
+    <section aria-label={t("diag.tail")} className="diag-tail">
+      <div className="diag-tail-head muted">
         <span>{t("diag.tail")}</span>
-        <label style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+        <label>
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
           {t("diag.follow")}
         </label>
       </div>
-      <pre
-        ref={ref}
-        className="mono"
-        style={{
-          margin: 0,
-          fontSize: 12,
-          lineHeight: 1.6,
-          color: "var(--pc-text-soft)",
-          whiteSpace: "pre-wrap",
-          maxHeight: 220,
-          overflow: "auto",
-        }}
-      >
+      <pre ref={ref} className="mono">
         {tail
           .map((l) => {
             const time = fmtTime(l.ts);
@@ -158,9 +91,12 @@ function LogTail() {
   );
 }
 
+type Notice = { tone: "ok" | "danger"; text: string };
+
 export function DiagnosticsPage() {
   const { t } = useTranslation();
   const text = useErrorText();
+  const labels = useEntryLabels();
   const initial = useLayout((s) => s.diagFilter);
   const [filter, setFilter] = useState<DiagFilter>(initial);
   const [selected, setSelected] = useState<number | null>(null);
@@ -168,8 +104,12 @@ export function DiagnosticsPage() {
   const resetErrors = useLive((s) => s.resetErrors);
   useEffect(() => setFilter(initial), [initial]);
   useEffect(() => resetErrors(), [resetErrors]);
+  // Dalla ricerca delle Impostazioni ("log"): il campo "Livello di log" è evidenziato.
+  const highlight = useContext(SettingsCtx)?.highlight;
   const report = useGuide((g) => g.report);
   const exportRef = useRef<HTMLButtonElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const logLevelId = useId();
   useEffect(() => {
     if (!report) return;
     exportRef.current?.focus();
@@ -205,14 +145,15 @@ export function DiagnosticsPage() {
   const rows = errors.data ?? [];
   const current = rows.find((r) => r.id === selected) ?? rows[0];
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
   const run = async (fn: () => Promise<string | void>) => {
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     try {
-      setNotice((await fn()) ?? "");
+      const done = await fn();
+      if (done) setNotice({ tone: "ok", text: done });
     } catch (e) {
-      setNotice((e as { detail?: string }).detail ?? String(e));
+      setNotice({ tone: "danger", text: (e as { detail?: string }).detail ?? String(e) });
     } finally {
       setBusy(false);
     }
@@ -224,7 +165,7 @@ export function DiagnosticsPage() {
     options: Array<[string, string]>,
     onChange: (v: string) => void,
   ) => (
-    <label style={{ display: "flex", alignItems: "center", gap: 6 }} className="muted">
+    <label className="diag-filter muted">
       {label}
       <select className="field" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(([v, l]) => (
@@ -236,54 +177,52 @@ export function DiagnosticsPage() {
     </label>
   );
 
+  const columns: Column<ErrorEntry>[] = [
+    {
+      key: "time",
+      header: t("diag.time"),
+      width: "90px",
+      cell: (r) => <span className="mono diag-small">{fmtTime(r.ts)}</span>,
+    },
+    {
+      key: "level",
+      header: t("diag.level"),
+      width: "100px",
+      cell: (r) => <Badge tone={levelTone(r.level)}>{labels.level(r.level)}</Badge>,
+    },
+    { key: "phase", header: t("diag.phase"), width: "130px", cell: (r) => labels.phase(r.phase) },
+    {
+      key: "file",
+      header: t("diag.file"),
+      cell: (r) => (
+        <span className="mono diag-small diag-path">
+          {r.path ? r.path.split(/[\\/]/).pop() : "—"}
+        </span>
+      ),
+    },
+    { key: "message", header: t("diag.message"), cell: (r) => text(r) },
+  ];
+
   return (
-    <div
-      style={{
-        flex: 1,
-        overflow: "auto",
-        padding: "24px 32px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{t("diag.title")}</h2>
-        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {select(
-            t("diag.logLevel"),
-            level,
-            ["error", "warn", "info", "debug", "trace"].map((l) => [l, l]),
-            (v) => {
-              setLevel(v as LogLevel);
-              void commands.setLogLevel(v as LogLevel);
-            },
-          )}
-          <BusyButton
-            type="button"
-            className="btn"
-            disabled={busy || rows.length === 0}
-            onClick={async () =>
-              await run(async () => {
-                const jobs = await commands.retryFailed(filter.jobId ?? null, filter.phase ?? null);
-                return t("diag.retried", { n: jobs.length });
-              })
-            }
-          >
-            {t("diag.retryFailed")}
-          </BusyButton>
-          <BusyButton
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={async () => await run(async () => void (await commands.openLogs()))}
-          >
-            {t("diag.openLogs")}
-          </BusyButton>
-          <BusyButton
+    <div className="diag-page">
+      <header className="diag-head">
+        <h2>{t("diag.title")}</h2>
+        <p className="muted">{t("diag.description")}</p>
+      </header>
+
+      <section className="ui-card diag-report" aria-labelledby="diag-report-title">
+        <div className="diag-report-text">
+          <h3 id="diag-report-title">
+            <Icon.Help size={18} /> {t("diag.report.title")}
+          </h3>
+          <p className="muted">{t("diag.report.text")}</p>
+        </div>
+        <div className="diag-actions">
+          <Button
             ref={exportRef}
-            type="button"
-            className={report ? "btn btn-primary ui-highlight" : "btn btn-primary"}
+            variant="primary"
+            icon={<Icon.Export size={16} />}
+            className={report ? "ui-highlight" : undefined}
             disabled={busy}
             onClick={async () =>
               await run(async () => {
@@ -299,134 +238,139 @@ export function DiagnosticsPage() {
             }
           >
             {t("diag.exportBundle")}
-          </BusyButton>
+          </Button>
+          <Button
+            icon={<Icon.OpenExternal size={16} />}
+            disabled={busy}
+            onClick={async () => await run(async () => void (await commands.openLogs()))}
+          >
+            {t("diag.openLogs")}
+          </Button>
         </div>
-      </div>
+      </section>
+
       {notice && (
-        <p role="status" className="muted" style={{ margin: 0 }}>
-          {notice}
-        </p>
+        <InlineAlert
+          tone={notice.tone}
+          title={notice.tone === "danger" ? t("diag.failed") : undefined}
+          onDismiss={() => setNotice(null)}
+        >
+          {notice.text}
+        </InlineAlert>
       )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-        {select(
-          t("diag.level"),
-          filter.level ?? "",
-          [
-            ["", t("diag.any")],
-            ["ERROR", "ERROR"],
-            ["WARN", "WARN"],
-          ],
-          (v) => setFilter({ ...filter, level: v || undefined }),
-        )}
-        {select(
-          t("diag.phase"),
-          filter.phase ?? "",
-          [
-            ["", t("diag.any")],
-            ...PHASES.map(
-              (p) => [p, t(`jobs.phases.${p}`, { defaultValue: p })] as [string, string],
-            ),
-          ],
-          (v) => setFilter({ ...filter, phase: v || undefined }),
-        )}
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }} className="muted">
-          {t("diag.job")}
-          <input
+
+      <div
+        data-setting="logLevel"
+        className={highlight === "logLevel" ? "diag-loglevel ui-highlight" : "diag-loglevel"}
+      >
+        <FormField label={t("diag.logLevel")} hint={t("diag.logLevelHint")}>
+          <select
+            id={logLevelId}
             className="field"
-            style={{ width: 90 }}
-            inputMode="numeric"
-            aria-label={t("diag.job")}
-            value={filter.jobId ?? ""}
+            value={level}
             onChange={(e) => {
-              const n = parseInt(e.target.value, 10);
-              setFilter({ ...filter, jobId: Number.isFinite(n) ? n : undefined });
+              const v = e.target.value as LogLevel;
+              setLevel(v);
+              void commands.setLogLevel(v);
             }}
-          />
-        </label>
-        <label
-          className="field"
-          style={{ flex: "1 1 220px", display: "flex", alignItems: "center", gap: 8 }}
-        >
-          <Icon.Search size={14} />
-          <input
-            aria-label={t("diag.text")}
-            placeholder={t("diag.text")}
-            value={filter.text ?? ""}
-            onChange={(e) => setFilter({ ...filter, text: e.target.value })}
-            style={{ flex: 1, background: "transparent", border: 0, outline: "none" }}
-          />
-        </label>
-        <BusyButton type="button" className="btn btn-ghost" onClick={() => setFilter({})}>
-          {t("diag.clearFilters")}
-        </BusyButton>
+          >
+            {level === "" && <option value="" />}
+            {LOG_LEVELS.map((l) => (
+              <option key={l} value={l}>
+                {t(`diag.logLevels.${l}`)}
+              </option>
+            ))}
+          </select>
+        </FormField>
       </div>
-      <ErrorGroups query={query} />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-        <section
-          style={{
-            flex: "999 1 560px",
-            minWidth: 0,
-            background: "var(--pc-panel)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 8,
-            overflow: "auto",
-            maxHeight: 520,
-          }}
-        >
-          <QueryView query={errors} isEmpty={() => false}>
-            {() => (
-              <table className="table" style={{ minWidth: 760 }}>
-                <thead>
-                  <tr>
-                    <th>{t("diag.time")}</th>
-                    <th>{t("diag.level")}</th>
-                    <th>{t("diag.phase")}</th>
-                    <th>{t("diag.file")}</th>
-                    <th>{t("diag.message")}</th>
-                    <th>{t("diag.code")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="muted" style={{ padding: 16 }}>
-                        {t("diag.empty")}
-                      </td>
-                    </tr>
-                  )}
-                  {rows.map((r) => (
-                    <tr
-                      key={r.id}
-                      aria-selected={current?.id === r.id}
-                      onClick={() => setSelected(r.id)}
-                      style={{ cursor: "pointer" }}
-                      data-testid={`error-row-${r.id}`}
-                    >
-                      <td className="mono" style={{ fontSize: 12 }}>
-                        {fmtTime(r.ts)}
-                      </td>
-                      <td>
-                        <span style={levelBadge(r.level)}>{r.level}</span>
-                      </td>
-                      <td>
-                        {r.phase ? t(`jobs.phases.${r.phase}`, { defaultValue: r.phase }) : "—"}
-                      </td>
-                      <td className="mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                        {r.path ? r.path.split(/[\\/]/).pop() : "—"}
-                      </td>
-                      <td>{text(r)}</td>
-                      <td className="mono muted" style={{ fontSize: 12 }}>
-                        {r.code ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </QueryView>
-        </section>
-        {current && <Detail entry={current} />}
-      </div>
+
+      <section className="ui-card diag-errors" aria-labelledby="diag-errors-title">
+        <div className="diag-errors-head">
+          <h3 id="diag-errors-title">{t("diag.errorsTitle")}</h3>
+          <Button
+            icon={<Icon.Refresh size={16} />}
+            disabled={busy}
+            disabledReason={rows.length === 0 ? t("diag.nothingToRetry") : undefined}
+            onClick={async () =>
+              await run(async () => {
+                const jobs = await commands.retryFailed(filter.jobId ?? null, filter.phase ?? null);
+                return t("diag.retried", { n: jobs.length });
+              })
+            }
+          >
+            {t("diag.retryFailed")}
+          </Button>
+        </div>
+        <div className="diag-filters" role="group" aria-label={t("diag.filters")}>
+          {select(
+            t("diag.level"),
+            filter.level ?? "",
+            [
+              ["", t("diag.any")],
+              ...ENTRY_LEVELS.map(
+                (l) => [l, t(`diag.levelFilter.${l.toLowerCase()}`)] as [string, string],
+              ),
+            ],
+            (v) => setFilter({ ...filter, level: v || undefined }),
+          )}
+          {select(
+            t("diag.phase"),
+            filter.phase ?? "",
+            [["", t("diag.any")], ...PHASES.map((p) => [p, labels.phase(p)] as [string, string])],
+            (v) => setFilter({ ...filter, phase: v || undefined }),
+          )}
+          <label className="diag-filter muted">
+            {t("diag.job")}
+            <input
+              className="field diag-job"
+              inputMode="numeric"
+              value={filter.jobId ?? ""}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                setFilter({ ...filter, jobId: Number.isFinite(n) ? n : undefined });
+              }}
+            />
+          </label>
+          <label className="field diag-search">
+            <Icon.Search size={14} />
+            <input
+              aria-label={t("diag.text")}
+              placeholder={t("diag.text")}
+              value={filter.text ?? ""}
+              onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+            />
+          </label>
+          <Button variant="ghost" onClick={() => setFilter({})}>
+            {t("diag.clearFilters")}
+          </Button>
+        </div>
+        <ErrorGroups query={query} />
+        <div className="diag-split">
+          <div className="diag-table">
+            <QueryView query={errors} empty={<p className="muted diag-empty">{t("diag.empty")}</p>}>
+              {() => (
+                <DataTable
+                  label={t("diag.errorsTitle")}
+                  columns={columns}
+                  rows={rows}
+                  rowId={(r) => r.id}
+                  selected={current?.id ?? null}
+                  onSelect={(r) => setSelected(r.id)}
+                  onActivate={(r) => {
+                    setSelected(r.id);
+                    detailRef.current?.scrollIntoView?.({ block: "nearest" });
+                  }}
+                />
+              )}
+            </QueryView>
+          </div>
+          {current && (
+            <div ref={detailRef} className="diag-detail-wrap">
+              <Detail entry={current} />
+            </div>
+          )}
+        </div>
+      </section>
       <LogTail />
     </div>
   );

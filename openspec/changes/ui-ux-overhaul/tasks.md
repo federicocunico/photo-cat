@@ -177,7 +177,7 @@
   - pulsanti con etichetta;
   - storico leggibile;
   - "Sposta file" con `ConfirmDialog`.
-- [ ] 7.7 **Impostazioni › Diagnostica**:
+- [x] 7.7 **Impostazioni › Diagnostica**:
   - tabella da tastiera (`DataTable`);
   - errori come `InlineAlert` di errore;
   - fasi e livelli tradotti;

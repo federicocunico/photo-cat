@@ -527,6 +527,18 @@ it("ricerca: porta alla sezione ed evidenzia il campo", async () => {
   expect(screen.getByText("Nessuna impostazione trovata.")).toBeInTheDocument();
 });
 
+it("ricerca di 'log': Diagnostica con il campo Livello di log evidenziato", async () => {
+  renderSettings();
+  fireEvent.change(await screen.findByLabelText("Cerca nelle impostazioni"), {
+    target: { value: "log" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Livello di log/ }));
+  expect(useLayout.getState().settingsSection).toBe("diagnostics");
+  const field = await screen.findByLabelText("Livello di log");
+  expect(field.closest("[data-setting]")).toHaveClass("ui-highlight");
+  await waitFor(() => expect(field).toHaveFocus());
+});
+
 it("Elimina tutti i dati dei volti: pericolo e conferma esplicita", async () => {
   commandsMock.faceCount.mockResolvedValue(512 as never);
   renderSettings();

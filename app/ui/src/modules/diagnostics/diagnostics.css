@@ -1,0 +1,237 @@
+/* Impostazioni › Diagnostica */
+.diag-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+  min-width: 0;
+}
+.diag-head h2 {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-xl) var(--pc-font-ui);
+}
+.diag-head p {
+  margin: var(--pc-space-1) 0 0;
+}
+.diag-page h3 {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+
+/* Segnala un problema: in evidenza, in cima. */
+.diag-report {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  border-color: var(--pc-accent);
+}
+.diag-report-text {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.diag-report-text h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.diag-report-text p {
+  margin: var(--pc-space-1) 0 0;
+}
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+}
+
+.diag-loglevel {
+  max-width: 420px;
+  border-radius: var(--pc-radius-md);
+}
+
+/* Errori registrati */
+.diag-errors-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-2);
+  flex-wrap: wrap;
+}
+.diag-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2) var(--pc-space-3);
+}
+.diag-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.diag-job {
+  width: 90px;
+}
+.diag-search {
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.diag-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: inherit;
+  font: inherit;
+}
+
+.diag-groups {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  padding: var(--pc-space-2) 0;
+}
+.diag-groups h3.section-title {
+  margin: 0 var(--pc-space-3) var(--pc-space-1);
+  font: inherit;
+  font-size: 11px;
+}
+.diag-group {
+  display: flex;
+  width: 100%;
+  gap: var(--pc-space-3);
+  align-items: center;
+  padding: 6px var(--pc-space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.diag-group[aria-expanded="true"],
+.diag-group:hover {
+  background: var(--pc-raised);
+}
+.diag-group-level {
+  margin-left: auto;
+}
+.diag-group-files {
+  padding: var(--pc-space-1) var(--pc-space-3) 10px 28px;
+}
+.diag-group-files ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--pc-font-sm) var(--pc-font-ui);
+}
+.diag-group-files li {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+}
+.diag-group-files li .diag-path {
+  flex: 1;
+}
+
+.diag-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+  align-items: flex-start;
+}
+.diag-table {
+  flex: 999 1 520px;
+  min-width: 0;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+}
+.diag-table .ui-table {
+  min-width: 640px;
+}
+.diag-empty {
+  margin: 0;
+  padding: var(--pc-space-4);
+}
+.diag-small {
+  font-size: 12px;
+}
+.diag-path {
+  word-break: break-all;
+}
+
+.diag-detail-wrap {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.diag-detail {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  padding: var(--pc-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.diag-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-2);
+}
+.diag-detail-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px var(--pc-space-3);
+  font: var(--pc-font-md) var(--pc-font-ui);
+}
+.diag-detail-grid dd {
+  margin: 0;
+}
+.diag-hint {
+  margin: 0;
+  color: var(--pc-warn);
+  font: var(--pc-font-md) var(--pc-font-ui);
+}
+.diag-detail summary {
+  cursor: pointer;
+}
+.diag-technical {
+  margin: var(--pc-space-2) 0 0;
+  padding: 10px;
+  background: var(--pc-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  font-size: 11px;
+  color: var(--pc-text-soft);
+  white-space: pre-wrap;
+}
+
+/* Log recenti */
+.diag-tail {
+  background: var(--pc-log-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-lg);
+  padding: var(--pc-space-3) var(--pc-space-4);
+}
+.diag-tail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  margin-bottom: var(--pc-space-2);
+  font-size: 12px;
+}
+.diag-tail-head label {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diag-tail pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pc-text-soft);
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow: auto;
+}

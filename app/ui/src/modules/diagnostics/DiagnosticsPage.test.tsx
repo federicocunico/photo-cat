@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
+import { useGuide } from "../../store/guide";
 import { DiagnosticsPage } from "./DiagnosticsPage";
 import type { ErrorEntry } from "../../bindings";
 import { checkedCleanup } from "../../test/a11y";
@@ -53,26 +54,29 @@ beforeEach(() => {
 });
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
+/** Riga della tabella degli errori che contiene il testo. */
+const row = async (text: RegExp | string) => {
+  const table = await screen.findByRole("table", { name: "Errori registrati" });
+  return within(table).getByRole("row", { name: new RegExp(text) });
+};
+
 describe("schermata Diagnostica", () => {
   it("mostra messaggi localizzati, suggerimento e dettaglio tecnico", async () => {
     renderPage();
-    await screen.findByTestId("error-row-1");
-    expect(screen.getByTestId("error-row-1")).toHaveTextContent(
-      "Accesso negato al file o alla cartella.",
-    );
+    expect(await row("Privato")).toHaveTextContent("Accesso negato al file o alla cartella.");
     expect(screen.getByTestId("detail-message")).toHaveTextContent(
       "Accesso negato al file o alla cartella.",
     );
     expect(screen.getByTestId("detail-hint")).toHaveTextContent("Verifica i permessi");
     expect(screen.getByText(/os error 5/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("error-row-2"));
+    fireEvent.click(await row("IMG_6620"));
     expect(screen.getByTestId("detail-message")).toHaveTextContent("Metadati EXIF danneggiati.");
   });
 
   it("apre con il filtro del job e applica livello, fase e testo", async () => {
     renderPage();
-    await screen.findByTestId("error-row-1");
+    await row("Privato");
     expect(commandsMock.queryErrors).toHaveBeenLastCalledWith(
       expect.objectContaining({ jobId: 7, level: null }),
     );
@@ -108,7 +112,7 @@ describe("schermata Diagnostica", () => {
   it("riprova i file falliti del job filtrato e apre la cartella log", async () => {
     commandsMock.retryFailed.mockResolvedValue([12, 13] as never);
     renderPage();
-    await screen.findByTestId("error-row-1");
+    await row("Privato");
     fireEvent.click(screen.getByRole("button", { name: "Riprova file falliti" }));
     expect(await screen.findByText(/Nuovi tentativi avviati: 2/)).toBeInTheDocument();
     expect(commandsMock.retryFailed).toHaveBeenCalledWith(7, null);
@@ -148,7 +152,7 @@ describe("schermata Diagnostica", () => {
     }) => (q.code === "DECODE_FAILED" ? page(q.offset) : [entry({})])) as never);
     renderPage();
     const row = await screen.findByTestId("group-DECODE_FAILED-miniature");
-    expect(row).toHaveTextContent("DECODE_FAILED — 1240 file");
+    expect(row).toHaveTextContent("Impossibile leggere l'immagine — 1240 file");
     expect(row).toHaveTextContent("Miniature");
     fireEvent.click(row);
     expect(await screen.findByTestId("group-file-1001")).toHaveTextContent(
@@ -190,5 +194,58 @@ describe("schermata Diagnostica", () => {
     renderPage();
     expect(await screen.findByTestId("group-DECODE_FAILED-miniature")).toHaveTextContent("12 file");
     expect(screen.getByTestId("group-UNSUPPORTED_FORMAT-miniature")).toHaveTextContent("3 file");
+  });
+  it("Riga di diagnostica da tastiera: frecce e Invio selezionano la riga e aprono il dettaglio", async () => {
+    renderPage();
+    const first = await row("Privato");
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    const second = await row("IMG_6620");
+    expect(second).toHaveFocus();
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("detail-message")).toHaveTextContent("Metadati EXIF danneggiati.");
+    fireEvent.keyDown(second, { key: "ArrowUp" });
+    fireEvent.keyDown(first, { key: "Enter" });
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("detail-message")).toHaveTextContent("Accesso negato");
+  });
+
+  it("fasi e livelli tradotti: niente valori grezzi del motore", async () => {
+    commandsMock.queryErrors.mockResolvedValue([
+      entry({ phase: "modelli" }),
+      entry({ id: 2, level: "WARN", phase: "sconosciuta", path: "D:/Foto/b.jpg" }),
+    ] as never);
+    renderPage();
+    const table = await screen.findByRole("table", { name: "Errori registrati" });
+    expect(table).toHaveTextContent("Modelli AI");
+    expect(table).toHaveTextContent("Altra fase");
+    expect(table).toHaveTextContent("Errore");
+    expect(table).toHaveTextContent("Avviso");
+    expect(table).not.toHaveTextContent(/ERROR|WARN|modelli|sconosciuta/);
+    const levels = within(screen.getByLabelText("Livello")).getAllByRole("option");
+    expect(levels.map((o) => o.textContent)).toEqual(["Tutti", "Errori", "Avvisi"]);
+    const logLevels = within(screen.getByLabelText("Livello di log")).getAllByRole("option");
+    expect(logLevels.map((o) => o.textContent)).toContain("Errori e avvisi");
+    expect(logLevels.map((o) => o.textContent)).not.toContain("warn");
+  });
+
+  it("un'operazione non riuscita è un avviso di errore", async () => {
+    commandsMock.openLogs.mockRejectedValue({ detail: "cartella log non trovata" } as never);
+    renderPage();
+    await row("Privato");
+    fireEvent.click(screen.getByRole("button", { name: "Apri cartella log" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Operazione non riuscita");
+    expect(alert).toHaveTextContent("cartella log non trovata");
+  });
+
+  it("Segnala un problema: l'esportazione del pacchetto è in evidenza e ha il focus", async () => {
+    useGuide.setState({ report: true });
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Segnala un problema" })).toBeInTheDocument();
+    const exportButton = screen.getByRole("button", { name: "Esporta pacchetto diagnostica" });
+    await waitFor(() => expect(exportButton).toHaveFocus());
+    expect(exportButton).toHaveClass("ui-highlight");
+    useGuide.setState({ report: false });
   });
 });
