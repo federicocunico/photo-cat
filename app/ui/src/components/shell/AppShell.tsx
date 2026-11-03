@@ -8,6 +8,7 @@ import { fmtDateTime } from "../../lib/format";
 import { CommandPalette } from "../command/CommandPalette";
 import { usePaletteCommand } from "../../commands/paletteCommand";
 import { ShortcutSheet } from "../command/ShortcutSheet";
+import { GuideDialog } from "../guide/GuideDialog";
 import { useShortcutCatalog } from "../../commands/catalog";
 import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
@@ -113,6 +114,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
         </main>
         <CommandPalette />
         <ShortcutSheet />
+        <GuideDialog />
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { trackCommand, usePending } from "../../store/pending";
 import { commandsMock } from "../../test/ipcMock";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
+import { useGuide } from "../../store/guide";
 
 it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes", async () => {
   vi.useFakeTimers();
@@ -367,5 +368,50 @@ describe("barra di stato e menu Aiuto", () => {
     await user.keyboard("{Enter}");
     await user.click(await screen.findByRole("menuitem", { name: "Informazioni su photo-cat" }));
     expect(await screen.findByRole("dialog", { name: "photo-cat" })).toBeInTheDocument();
+  });
+
+  const openHelp = async () => {
+    const user = userEvent.setup();
+    screen.getByRole("button", { name: "Aiuto" }).focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("menu");
+    return user;
+  };
+
+  it("menu Aiuto: tutte le voci della guida", async () => {
+    render(<TopBar />);
+    await openHelp();
+    const names = screen.getAllByRole("menuitem").map((m) => m.textContent?.replace(/[?]$/, ""));
+    expect(names).toEqual([
+      "Scorciatoie da tastiera",
+      "Rivedi l'introduzione",
+      "Primi passi",
+      "Mostra di nuovo i suggerimenti",
+      "Guida",
+      "Segnala un problema",
+      "Diagnostica e registri",
+      "Informazioni su photo-cat",
+    ]);
+  });
+
+  it("Segnalare un problema: apre Diagnostica con l'esportazione in evidenza", async () => {
+    render(<TopBar />);
+    const user = await openHelp();
+    await user.click(screen.getByRole("menuitem", { name: "Segnala un problema" }));
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
+    expect(useGuide.getState().report).toBe(true);
+  });
+
+  it("Rivedi l'introduzione e Mostra di nuovo i suggerimenti", async () => {
+    render(<TopBar />);
+    let user = await openHelp();
+    await user.click(screen.getByRole("menuitem", { name: "Rivedi l'introduzione" }));
+    expect(useGuide.getState().intro).toBe(true);
+    user = await openHelp();
+    await user.click(screen.getByRole("menuitem", { name: "Mostra di nuovo i suggerimenti" }));
+    expect(useGuide.getState().seen).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { Coachmark } from "../../components/guide/Coachmark";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -57,6 +58,7 @@ export const FaceGrid = forwardRef<
   { target, group, singlesCount = 0, highlight = null, onSelectedFacesChange },
   ref,
 ) {
+  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [discardedOnly, setDiscardedOnly] = useState(false);
@@ -342,7 +344,10 @@ export const FaceGrid = forwardRef<
           borderBottom: "1px solid var(--pc-border)",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{title}</h1>
+        <h1 ref={tipAnchor} style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+          {title}
+        </h1>
+        <Coachmark tip="people" anchor={tipAnchor} learnMore="people" />
         {target.kind === "group" && (
           <>
             <span className="chip mono">{t("people.photos", { count: photos })}</span>

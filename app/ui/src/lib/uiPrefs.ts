@@ -6,7 +6,13 @@ import type { StateStorage } from "zustand/middleware";
 import { commands, isTauri } from "./ipc";
 
 /** Chiavi dei negozi persistiti (`persist({ name })`). */
-export const UI_PREF_KEYS = ["photo-cat.layout", "photo-cat.library", "photo-cat.floating"];
+export const UI_PREF_KEYS = [
+  "photo-cat.layout",
+  "photo-cat.library",
+  "photo-cat.floating",
+  "photo-cat.palette",
+  "photo-cat.guide",
+];
 
 const SAVE_DELAY = 500;
 let timer: ReturnType<typeof setTimeout> | null = null;

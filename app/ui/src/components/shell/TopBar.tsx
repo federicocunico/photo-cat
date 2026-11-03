@@ -11,6 +11,8 @@ import { Dialog, Kbd, Menu } from "../ui";
 import { usePalette } from "../../store/palette";
 import { usePending } from "../../store/pending";
 import { useShortcutSheet } from "../../store/shortcutSheet";
+import { useGuide } from "../../store/guide";
+import { notify } from "../../store/toasts";
 import { Spinner } from "../feedback/Spinner";
 
 const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "") ? "⌘" : "Ctrl";
@@ -98,7 +100,7 @@ export function JobPill() {
   );
 }
 
-/** Menu Aiuto: le voci della guida si aggiungono con in-app-guidance (5.4). */
+/** Menu Aiuto: scorciatoie, introduzione, primi passi, suggerimenti, guida, problemi, informazioni. */
 export function HelpMenu() {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
@@ -123,6 +125,41 @@ export function HelpMenu() {
             icon: <Icon.Keyboard size={14} />,
             shortcut: "?",
             onSelect: () => useShortcutSheet.getState().setOpen(true),
+          },
+          {
+            label: t("help.intro"),
+            icon: <Icon.Refresh size={14} />,
+            onSelect: () => useGuide.getState().setIntro(true),
+          },
+          {
+            label: t("help.firstSteps"),
+            icon: <Icon.Check size={14} />,
+            onSelect: () => {
+              useGuide.getState().show();
+              openModule({ module: "library" });
+            },
+          },
+          {
+            label: t("help.tips"),
+            icon: <Icon.Info size={14} />,
+            onSelect: () => {
+              useGuide.getState().resetTips();
+              notify({ tone: "ok", message: t("guide.tipsReset") });
+            },
+          },
+          {
+            label: t("help.guide"),
+            icon: <Icon.Help size={14} />,
+            onSelect: () => useGuide.getState().openGuide("library"),
+          },
+          { kind: "separator" },
+          {
+            label: t("help.report"),
+            icon: <Icon.Alert size={14} />,
+            onSelect: () => {
+              useGuide.getState().setReport(true);
+              openModule({ module: "settings", section: "diagnostics" });
+            },
           },
           {
             label: t("help.diagnostics"),

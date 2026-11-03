@@ -1,3 +1,4 @@
+import { useGuide } from "../../store/guide";
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -167,6 +168,15 @@ export function DiagnosticsPage() {
   const resetErrors = useLive((s) => s.resetErrors);
   useEffect(() => setFilter(initial), [initial]);
   useEffect(() => resetErrors(), [resetErrors]);
+  const report = useGuide((g) => g.report);
+  const exportRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!report) return;
+    exportRef.current?.focus();
+    exportRef.current?.scrollIntoView?.({ block: "center" });
+    const timer = setTimeout(() => useGuide.getState().setReport(false), 4000);
+    return () => clearTimeout(timer);
+  }, [report]);
   useEffect(() => {
     if (isTauri())
       commands
@@ -271,8 +281,9 @@ export function DiagnosticsPage() {
             {t("diag.openLogs")}
           </BusyButton>
           <BusyButton
+            ref={exportRef}
             type="button"
-            className="btn btn-primary"
+            className={report ? "btn btn-primary ui-highlight" : "btn btn-primary"}
             disabled={busy}
             onClick={async () =>
               await run(async () => {

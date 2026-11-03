@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Coachmark } from "../guide/Coachmark";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { MODULES, NAV_GROUPS, type NavItem } from "../../modules/registry";
@@ -80,6 +81,7 @@ export function ModuleNav() {
   const narrow = useNarrowWindow();
   const compact = preferCompact || narrow;
   const badges = useBadges();
+  const settingsRef = useRef<HTMLButtonElement>(null);
   useNavCommands();
 
   const badgeText = (id: ModuleId, n: number) =>
@@ -94,6 +96,7 @@ export function ModuleNav() {
         key={id}
         type="button"
         className="nav-item"
+        ref={id === "settings" ? settingsRef : undefined}
         aria-current={active ? "page" : undefined}
         aria-label={name}
         aria-keyshortcuts={shortcut ? `Control+${shortcut}` : undefined}
@@ -134,6 +137,7 @@ export function ModuleNav() {
           return (
             <div key={g.id} className="nav-group nav-bottom">
               {items.map(item)}
+              <Coachmark tip="moved" anchor={settingsRef} side="right" learnMore="settings" />
               {!narrow && (
                 <Tooltip side="right" content={`${toggleLabel} · ${MOD}+B`}>
                   <button

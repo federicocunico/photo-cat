@@ -1,3 +1,4 @@
+import { Coachmark } from "../../components/guide/Coachmark";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -635,6 +636,7 @@ type Staged = { tz: string | null; offset: number | null; shift: number; shiftTe
 
 function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   const { t } = useTranslation();
+  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const qc = useQueryClient();
   const selected = useSequence((s) => s.selected);
   const setView = useSequence((s) => s.setView);
@@ -714,7 +716,10 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
         overflow: "auto",
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 18 }}>{t("sequence.sources")}</h2>
+      <h2 ref={tipAnchor} style={{ margin: 0, fontSize: 18 }}>
+        {t("sequence.sources")}
+      </h2>
+      <Coachmark tip="sequence" anchor={tipAnchor} side="right" learnMore="sequence" />
       <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
         {t("sequence.sourcesHelp")}
       </span>

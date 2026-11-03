@@ -42,8 +42,6 @@ const PENDING: Record<string, string[]> = {
     "import.sources",
     "library.empty",
     "hints.not_found",
-    "onboarding.source",
-    "onboarding.steps.3",
     "organize.reasons.cross_volume",
     "sequence.otherSources",
     "sequence.sources",

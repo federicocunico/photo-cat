@@ -131,15 +131,15 @@
 
 ## 5. Guida nell'app
 
-- [ ] 5.1 Nuovo onboarding in 3 passi (`Onboarding.tsx`):
+- [x] 5.1 Nuovo onboarding in 3 passi (`Onboarding.tsx`):
   - lingua e tema;
   - cartella con `FolderPicker` e trascinamento;
   - riepilogo del sistema in frasi e download in background.
 
   Ogni passo si può saltare e alla fine si apre la Libreria. Verifica: `Onboarding.test.tsx`.
-- [ ] 5.2 Store `photo-cat.guide`, persistito con `mirroredStorage`, e lista "Primi passi" in Libreria, completata dagli eventi esistenti. Verifica: test di completamento da un'altra strada e di persistenza.
-- [ ] 5.3 `Coachmark` e suggerimenti al primo uso di Persone, Cataloghi, Tag e Sequenza, più quello "Dove sono Modelli AI e Diagnostica?" per gli utenti che aggiornano.
-- [ ] 5.4 Menu Aiuto: scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni.
+- [x] 5.2 Store `photo-cat.guide`, persistito con `mirroredStorage`, e lista "Primi passi" in Libreria, completata dagli eventi esistenti. Verifica: test di completamento da un'altra strada e di persistenza.
+- [x] 5.3 `Coachmark` e suggerimenti al primo uso di Persone, Cataloghi, Tag e Sequenza, più quello "Dove sono Modelli AI e Diagnostica?" per gli utenti che aggiornano.
+- [x] 5.4 Menu Aiuto: scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni.
 
 ## 6. Impostazioni
 

@@ -6,6 +6,7 @@ import { activeSet, useTagOverview } from "./data";
 import { isTyping } from "../../lib/keys";
 import { useCommands } from "../../commands/registry";
 import { useBulkJob } from "../library/bulkJob";
+import { useGuide } from "../../store/guide";
 
 export { isTyping };
 
@@ -53,6 +54,7 @@ export function useTagHotkeys(selection: () => { target: Target; count: number }
         run: () => {
           if (!action) return;
           const { target, count } = ref.current.selection();
+          if (action.action === "add_tag") useGuide.getState().complete("tags");
           const message =
             action.action === "add_tag"
               ? t("selection.done.add_tag", { name: action.name, count })

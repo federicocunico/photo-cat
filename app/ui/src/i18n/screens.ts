@@ -52,28 +52,6 @@ const fieldNamesEn: typeof fieldNamesIt = {
 
 export const screens = {
   it: {
-    onboarding: {
-      title: "Benvenuto in photo-cat",
-      welcome:
-        "Cataloga le tue foto in locale: date, luoghi, persone e soggetti, senza che nessuna immagine lasci il computer.",
-      system: "Verifica del sistema",
-      noRuntime: "ONNX Runtime non disponibile: le funzioni AI resteranno disattivate.",
-      models: "Modelli AI",
-      prepareModels: "Prepara i modelli",
-      source: "Prima sorgente",
-      folder: "Scegli una cartella",
-      import: "Importa",
-      back: "Indietro",
-      next: "Avanti",
-      later: "Più tardi",
-      skip: "Salta",
-      steps: {
-        0: "Benvenuto",
-        1: "Verifica del sistema",
-        2: "Modelli AI",
-        3: "Prima sorgente",
-      },
-    },
     organize: {
       title: "Esporta e organizza",
       levelUp: "Sposta su il livello {{n}}",
@@ -178,28 +156,6 @@ export const screens = {
     },
   },
   en: {
-    onboarding: {
-      title: "Welcome to photo-cat",
-      welcome:
-        "Catalog your photos locally: dates, places, people and subjects, without any image leaving your computer.",
-      system: "System check",
-      noRuntime: "ONNX Runtime unavailable: AI features will stay disabled.",
-      models: "AI models",
-      prepareModels: "Prepare models",
-      source: "First source",
-      folder: "Choose a folder",
-      import: "Import",
-      back: "Back",
-      next: "Next",
-      later: "Later",
-      skip: "Skip",
-      steps: {
-        0: "Welcome",
-        1: "System check",
-        2: "AI models",
-        3: "First source",
-      },
-    },
     organize: {
       title: "Export & organize",
       levelUp: "Move level {{n}} up",
