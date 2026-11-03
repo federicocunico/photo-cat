@@ -130,7 +130,7 @@ const dynamic: Record<string, string[]> = {
     "settings.body",
   ],
   "models.profiles": ["light", "balanced", "performance"],
-  "organize.scopes": ["library", "catalog", "selection", "filter"],
+  "organize.scopes": ["library", "catalog", "filter"],
   "organize.methods": ["copy", "hardlink", "symlink"],
   "organize.methodHints": ["copy", "hardlink", "symlink"],
   "organize.createBody": ["copy", "hardlink", "symlink"],

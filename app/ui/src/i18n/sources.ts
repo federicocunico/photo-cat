@@ -14,8 +14,6 @@ export const sources = {
       updateStarted: "Aggiornamento avviato",
       idsChip_one: "Dal riepilogo: {{count}} foto",
       idsChip_other: "Dal riepilogo: {{count}} foto",
-      cancel: "Annulla",
-      close: "Chiudi",
       removal: {
         title: "Rimuovere {{path}} dalla libreria?",
         items_one: "{{count}} foto verrà tolta dal catalogo.",
@@ -50,7 +48,6 @@ export const sources = {
         intro_other: "{{count}} file mancanti in questa cartella.",
         oldFolder: "Cartella in cui si trovavano",
         newFolder: "Nuova posizione della cartella",
-        browse: "Sfoglia…",
         start: "Ricollega",
         running: "Ricerca dei file in corso…",
         result:
@@ -90,8 +87,6 @@ export const sources = {
       updateStarted: "Update started",
       idsChip_one: "From the summary: {{count}} photo",
       idsChip_other: "From the summary: {{count}} photos",
-      cancel: "Cancel",
-      close: "Close",
       removal: {
         title: "Remove {{path}} from the library?",
         items_one: "{{count}} photo will be removed from the catalog.",
@@ -126,7 +121,6 @@ export const sources = {
         intro_other: "{{count}} missing files in this folder.",
         oldFolder: "Folder where they used to be",
         newFolder: "New location of the folder",
-        browse: "Browse…",
         start: "Relink",
         running: "Looking for the files…",
         result:

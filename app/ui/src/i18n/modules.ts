@@ -137,7 +137,6 @@ export const modules = {
       delete: "Elimina identità…",
       deleteConfirm:
         'Eliminare l\'identità "{{name}}" con i suoi volti di riferimento? I gruppi di volti collegati restano nella libreria.',
-      confirm: "Conferma",
       cancel: "Annulla",
       import: "Importa…",
       export: "Esporta…",
@@ -426,7 +425,6 @@ export const modules = {
       delete: "Delete identity…",
       deleteConfirm:
         'Delete the identity "{{name}}" and its reference faces? Linked face groups stay in the library.',
-      confirm: "Confirm",
       cancel: "Cancel",
       import: "Import…",
       export: "Export…",

@@ -67,7 +67,6 @@ export const screens = {
       scopes: {
         library: "Tutta la libreria",
         catalog: "Catalogo",
-        selection: "Selezione",
         filter: "Libreria filtrata",
       },
       scopeSelection: "Selezione ({{count}} foto)",
@@ -227,15 +226,10 @@ export const screens = {
         revert: "Ripristina",
         apply: "Applica",
       },
-      loading: "Caricamento impostazioni…",
-      saved: "Impostazioni salvate.",
-      profile: "Profilo risorse",
       ram: "Limite RAM (MB)",
-      provider: "Provider di esecuzione",
       threshold: "Soglia di confidenza",
       autoModels: "Scarica e verifica i modelli all'avvio",
       faces: "Riconoscimento volti",
-      faceSize: "Dimensione minima volto (px)",
       purge: "Elimina tutti i dati dei volti",
       purgeConfirm:
         "Eliminare definitivamente {{count}} volti, con le impronte e i ritagli? Il conteggio persone resta.",
@@ -252,12 +246,7 @@ export const screens = {
       taxonomy: "Tassonomia",
       taxonomyHint:
         "Voci di catalogazione. Con una descrizione in inglese l'analisi automatica le assegna da sola; senza descrizione sono manuali. Solo descrizioni, voci automatiche e soglie fanno ricalcolare le catalogazioni automatiche.",
-      groupThreshold: "Soglia del gruppo",
       enabled: "Attiva",
-      prompts: "Frasi",
-      newCategory: "Nuova categoria",
-      addCategory: "Aggiungi categoria",
-      saveTaxonomy: "Salva tassonomia",
     },
   },
   en: {
@@ -276,7 +265,6 @@ export const screens = {
       scopes: {
         library: "Whole library",
         catalog: "Catalog",
-        selection: "Selection",
         filter: "Filtered library",
       },
       scopeSelection: "Selection ({{count}} photos)",
@@ -437,15 +425,10 @@ export const screens = {
         revert: "Revert",
         apply: "Apply",
       },
-      loading: "Loading settings…",
-      saved: "Settings saved.",
-      profile: "Resource profile",
       ram: "RAM limit (MB)",
-      provider: "Execution provider",
       threshold: "Confidence threshold",
       autoModels: "Download and verify models at startup",
       faces: "Face recognition",
-      faceSize: "Minimum face size (px)",
       purge: "Delete all face data",
       purgeConfirm:
         "Permanently delete {{count}} faces, with their fingerprints and crops? People counts are kept.",
@@ -462,12 +445,7 @@ export const screens = {
       taxonomy: "Taxonomy",
       taxonomyHint:
         "Cataloguing entries. With an English description automatic analysis assigns them; without one they are manual. Only descriptions, automatic entries and thresholds trigger a recompute of automatic cataloguing.",
-      groupThreshold: "Group threshold",
       enabled: "Enabled",
-      prompts: "Phrases",
-      newCategory: "New category",
-      addCategory: "Add category",
-      saveTaxonomy: "Save taxonomy",
     },
   },
 };

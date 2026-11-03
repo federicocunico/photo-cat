@@ -37,9 +37,8 @@ const PENDING: Record<string, string[]> = {
   "it:job": [],
   "en:job": [],
   "it:sorgente": [],
-  // 3.2/3.3 (SelectionBar e store undo).
-  "it:annullaUltimaAzione": ["bulk.undo"],
-  "en:undoLastAction": ["bulk.undo"],
+  "it:annullaUltimaAzione": [],
+  "en:undoLastAction": [],
   "it:gergo": [],
   "en:gergo": [],
 };

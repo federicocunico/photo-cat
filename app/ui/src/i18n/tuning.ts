@@ -18,7 +18,6 @@ export const tuning = {
       renameMerge: "Esiste già un luogo con questo nome: i due luoghi verranno uniti.",
       renameConfirm: "Rinomina",
       cancel: "Annulla",
-      dialogTitle: "Imposta luogo",
       dialogCount_one: "Il luogo verrà impostato su {{count}} foto.",
       dialogCount_other: "Il luogo verrà impostato su {{count}} foto.",
     },
@@ -57,13 +56,10 @@ export const tuning = {
       ignoredFolders: "Cartelle da ignorare per il luogo (una per riga)",
       ignoredHint:
         "Nomi di cartella che non indicano un luogo (es. Selezionate, Da stampare). Le cartelle dei dispositivi (D7000, Telefono, …) sono già riconosciute.",
-      recomputeConfirm:
-        "Le cartelle da ignorare sono cambiate. Ricalcolare ora i luoghi dedotti dalle cartelle? I luoghi manuali e quelli da GPS non cambiano.",
       recomputed_one: "Luogo ricalcolato per {{count}} foto.",
       recomputed_other: "Luogo ricalcolato per {{count}} foto.",
     },
     thresholds: {
-      title: "Soglie AI",
       hint: "Più alta è una soglia, meno catalogazioni automatiche vengono assegnate. Le nuove soglie si applicano ai risultati già salvati senza rianalizzare le foto.",
       persons: "Rilevamento persone",
       faces: "Rilevamento volti",
@@ -93,7 +89,6 @@ export const tuning = {
         "{{count}} foto sono state analizzate con un minimo più alto: i nuovi risultati emergeranno solo con una rianalisi.",
       reanalyze: "Rianalizza",
       reanalyzeStarted: "Rianalisi avviata: segui l'avanzamento in Attività.",
-      apply: "Applica soglie",
       applied: "Soglie salvate: la rivalutazione è in corso in Attività.",
       defaults: "Ripristina predefiniti",
     },
@@ -116,7 +111,6 @@ export const tuning = {
       renameMerge: "A place with this name already exists: the two places will be merged.",
       renameConfirm: "Rename",
       cancel: "Cancel",
-      dialogTitle: "Set place",
       dialogCount_one: "The place will be set on {{count}} photo.",
       dialogCount_other: "The place will be set on {{count}} photos.",
     },
@@ -155,13 +149,10 @@ export const tuning = {
       ignoredFolders: "Folders to ignore for the place (one per line)",
       ignoredHint:
         "Folder names that are not places (e.g. Selected, To print). Device folders (D7000, Phone, …) are already recognised.",
-      recomputeConfirm:
-        "The folders to ignore have changed. Recompute the places derived from folders now? Manual and GPS places do not change.",
       recomputed_one: "Place recomputed for {{count}} photo.",
       recomputed_other: "Place recomputed for {{count}} photos.",
     },
     thresholds: {
-      title: "AI thresholds",
       hint: "The higher a threshold, the fewer automatic labels are assigned. New thresholds apply to the results already saved without re-analysing the photos.",
       persons: "Person detection",
       faces: "Face detection",
@@ -191,7 +182,6 @@ export const tuning = {
         "{{count}} photos were analysed with a higher minimum: new results will appear only after re-analysis.",
       reanalyze: "Re-analyse",
       reanalyzeStarted: "Re-analysis started: follow it in Activity.",
-      apply: "Apply thresholds",
       applied: "Thresholds saved: re-evaluation is running in Activity.",
       defaults: "Restore defaults",
     },
