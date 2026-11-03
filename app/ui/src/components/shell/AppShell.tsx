@@ -4,6 +4,7 @@ import { ModuleNav } from "./ModuleNav";
 import { TopBar } from "./TopBar";
 import { useLayout } from "../../store/layout";
 import { useUndoHotkey } from "../../store/undo";
+import { fmtDateTime } from "../../lib/format";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 
 const bannerStyle = {
@@ -16,8 +17,7 @@ const bannerStyle = {
   borderBottom: "1px solid var(--pc-selection-border)",
 } as const;
 
-const time = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" });
+const time = (iso: string) => fmtDateTime(iso);
 
 /** Avviso di chiusura anomala della sessione precedente. */
 export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss: () => void }) {

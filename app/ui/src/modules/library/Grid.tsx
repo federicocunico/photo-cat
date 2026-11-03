@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
 import { useQuery } from "@tanstack/react-query";
 import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
-import { fmtInt } from "../../lib/format";
+import { fmtDate, fmtDateTime, fmtInt } from "../../lib/format";
 import { latestOnly, retryUnlessSuperseded, useLibraryCount } from "../../lib/latest";
 import {
   clickSelect,
@@ -121,7 +121,7 @@ function Thumb({
       data-testid={`thumb-${item.id}`}
       title={
         item.excludedAt
-          ? `${item.name} · ${t("exclusions.date", { date: new Date(item.excludedAt).toLocaleString() })}`
+          ? `${item.name} · ${t("exclusions.date", { date: fmtDateTime(item.excludedAt) })}`
           : item.name
       }
       style={{
@@ -259,7 +259,7 @@ function Thumb({
               fontSize: 11,
             }}
           >
-            {t("exclusions.date", { date: new Date(item.excludedAt).toLocaleDateString() })}
+            {t("exclusions.date", { date: fmtDate(item.excludedAt) })}
           </span>
         )}
         {selected && (
