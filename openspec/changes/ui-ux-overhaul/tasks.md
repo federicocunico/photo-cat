@@ -153,49 +153,54 @@
 
 ## 7. Moduli
 
-- [ ] 7.1 **Importa**: titolo "Importa", `FolderPicker`, pattern di esclusione dietro "Avanzate" con esempi in parole; nessun salto automatico ad Attività (avviso con "Segui l'importazione"); azioni della cartella in un menu; dialoghi su `Dialog`.
-- [ ] 7.2 **Cataloghi**:
+- [x] 7.1 **Importa**: titolo "Importa", `FolderPicker`, pattern di esclusione dietro "Avanzate" con esempi in parole; nessun salto automatico ad Attività (avviso con "Segui l'importazione"); azioni della cartella in un menu; dialoghi su `Dialog`.
+- [x] 7.2 **Cataloghi**:
   - editor delle regole leggibile (etichette dei campi e degli operatori, selettori di valore per tipo, frase di riepilogo, conteggio dal vivo);
   - schede con tipo, foto ed escluse;
   - eliminazione con `ConfirmDialog` e annullamento se possibile;
   - stato vuoto.
 
   Verifica: test dell'editor (nessun id interno nel DOM).
-- [ ] 7.3 **Tag**: conferme vicino al comando o `ConfirmDialog`; annullamento tramite lo store `undo` (la nota non rimanda più alla Libreria); errori dei tasti rapidi segnalati con un avviso; un solo "Rinomina".
-- [ ] 7.4 **Persone**: allineare `PeopleModule` di `people-faces-workspace` ai componenti condivisi, al glossario e allo store `undo` (unione, separazione, ignora), senza cambiarne il flusso.
-- [ ] 7.5 **Sequenza**:
+- [x] 7.3 **Tag**: conferme vicino al comando o `ConfirmDialog`; annullamento tramite lo store `undo` (la nota non rimanda più alla Libreria); errori dei tasti rapidi segnalati con un avviso; un solo "Rinomina".
+- [x] 7.4 **Persone**: allineare `PeopleModule` di `people-faces-workspace` ai componenti condivisi, al glossario e allo store `undo` (unione, separazione, ignora), senza cambiarne il flusso.
+  - Fatto: correzioni annullabili (sposta, non è questa persona, separa, recupera, copertina, ignora, ripristina, unione, persone diverse) con l'avviso "Annulla operazione" e Ctrl+Z tramite `store/undo.ts` (`people/peopleUndo.ts`); senza voce registrata Ctrl+Z in Persone chiama ancora `undoPeople` e mostra l'esito. "Sposta in…" agisce solo con il pulsante "Sposta". "Rimuovi volto", unione ed eliminazione di identità (non annullabili) con `ConfirmDialog`; `MergeDialog` usa `Dialog`. Niente controlli annidati né `role="row"`/`grid` nell'elenco; caricamento con `Skeleton`; niente id interni nelle etichette.
+- [x] 7.5 **Sequenza**:
   - `PageHeader`;
   - date formattate;
   - "Pausa tra sessioni" con conferma visibile;
   - iniziale o icona del dispositivo oltre al colore;
   - export con le voci tecniche dietro "Avanzate" e testi comprensibili;
   - caricamento con `QueryView`.
-- [ ] 7.6 **Esporta** (ex "Esporta e organizza"):
+  - Fatto in `SequencePage.tsx`: titolo da `ModulePage` (`PageHeader`); date con `lib/format.ts`; esito "Salvato…" o errore accanto a "Pausa tra sessioni" (salva anche con Invio); iniziale del dispositivo sulle miniature e nel pannello dei dispositivi; `QueryView` con `Skeleton`; l'apertura del gruppo di simili è un pulsante separato. L'export ("Avanzate", testi) è in `SequenceExport.tsx`, nel ramo di un altro task della fase 7.
+- [x] 7.6 **Esporta** (ex "Esporta e organizza"):
   - sezioni "Esporta dati", "Organizza in cartelle" e "Sequenza";
   - ambito predefinito "Libreria filtrata" quando non c'è una selezione;
   - passi "Anteprima → Verifica → Crea" come elenco numerato con lo stato;
   - pulsanti con etichetta;
   - storico leggibile;
-  - "Sposta file" con `ConfirmDialog`.
-- [ ] 7.7 **Impostazioni › Diagnostica**:
+  - "Sposta file" **fuori ambito** (decisione 3 nov 2026): il backend offre solo copia / hard link / symlink; registrato in `design.md`. Non si aggiunge il metodo Rust in questa change.
+- [x] 7.7 **Impostazioni › Diagnostica**:
   - tabella da tastiera (`DataTable`);
   - errori come `InlineAlert` di errore;
   - fasi e livelli tradotti;
   - "Segnala un problema" in evidenza.
-- [ ] 7.8 **Pannelli flottanti**: spostamento e ridimensionamento da tastiera (scorciatoie nel menu del pannello), `z` dai token, etichetta di chiusura propria.
+- [x] 7.8 **Pannelli flottanti**: spostamento e ridimensionamento da tastiera (scorciatoie nel menu del pannello), `z` dai token, etichetta di chiusura propria.
 
 ## 8. Pulizia e verifica
 
-- [ ] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
+- [x] 8.1 Rimuovere i `window.confirm` rimasti (atteso: 0), le chiavi i18n inutilizzate e quelle prese in prestito; ridurre gli stili inline ai valori dinamici. Svuotare le eccezioni `PENDING` di `i18n/glossary.test.ts` e `test/a11yKnown.ts` (stringhe non ancora allineate al glossario). Verifica: `grep` in CI per `window.confirm` e test delle chiavi.
+  - Fatto: 0 `window.confirm`/`alert`; chiavi inutilizzate rimosse + test di regressione; `PENDING` e `A11Y_KNOWN` vuoti; stili statici spostati in CSS di modulo (restano solo valori dinamici: virtualizzazione, dimensioni, colori di stato).
 - [x] 8.2 Aggiornare il README (navigazione, scorciatoie, Impostazioni, primo avvio) e gli screenshot, se ci sono.
-- [ ] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
+- [x] 8.3 Eseguire `npm test`, `npm run typecheck`, `npm run build`, `cargo test` e `make test-linux`, correggendo ogni errore.
+  - 381 vitest ok; typecheck/build ok; cargo test workspace ok; `make test-linux` OK (deb + tar.gz).
 - [ ] 8.4 Prova sull'app reale, con un backup dei dati:
   - aggiornamento da una versione con preferenze salvate (moduli Identità, Modelli e Diagnostica come ultimi aperti);
   - giro completo solo da tastiera: importa → Libreria → selezione → tag → catalogo → visualizzatore → palette → Impostazioni → Attività;
   - temi chiaro, scuro e sistema;
   - finestra a 900 px;
   - lettore di schermo (Narrator / Orca) su dialoghi, palette e barra delle azioni.
-- [ ] 8.5 Confronto finale con i mockup e con l'elenco dei problemi di `audit.md`: ogni voce A e M risolta o motivata.
+- [x] 8.5 Confronto finale con i mockup e con l'elenco dei problemi di `audit.md`: ogni voce A e M risolta o motivata.
+  - Sintesi in `audit.md` §9: nessun A/M aperto; residui marcati Motivato (incluso «Sposta file» fuori ambito).
 
 ## Workflow
 

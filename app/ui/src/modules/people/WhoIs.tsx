@@ -4,6 +4,7 @@ import { useId, useRef, useState, type Ref } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type IdentitySuggestion } from "../../lib/ipc";
+import "./people.css";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 
@@ -88,11 +89,11 @@ export function WhoIs({
       });
   };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
-      <div className="feature-actions" style={{ margin: 0 }}>
+    <div className="people-stack people-stack--gap-sm people-stack--rel">
+      <div className="feature-actions people-actions-flush">
         <input
           ref={inputRef}
-          className="field"
+          className="field people-whois-input"
           role="combobox"
           aria-label={t("identities.whoIs")}
           aria-expanded={open && options.length > 0}
@@ -118,7 +119,6 @@ export function WhoIs({
               choose(active);
             } else if (e.key === "Escape") setOpen(false);
           }}
-          style={{ minWidth: 0, flex: 1 }}
         />
         {linked && (
           <BusyButton
@@ -140,15 +140,7 @@ export function WhoIs({
           id={listId}
           role="listbox"
           aria-label={t("identities.suggestions")}
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 4,
-            background: "var(--pc-panel)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 6,
-            maxWidth: 420,
-          }}
+          className="people-suggest"
         >
           {options.map((o, i) => (
             <li
@@ -159,20 +151,15 @@ export function WhoIs({
                 e.preventDefault();
                 choose(i);
               }}
+              className="people-suggest-item"
               style={{
-                padding: "6px 10px",
-                borderRadius: 4,
-                cursor: "pointer",
                 background: i === active ? "var(--pc-selection-bg)" : undefined,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
               }}
             >
               {o.kind === "link" ? (
                 <>
                   <span>{o.s.name}</span>
-                  <span className="muted mono" style={{ fontSize: 12 }}>
+                  <span className="muted mono people-muted-sm">
                     {o.s.score !== null ? o.s.score.toFixed(2) : ""}
                   </span>
                 </>

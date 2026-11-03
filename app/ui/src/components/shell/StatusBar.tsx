@@ -60,7 +60,7 @@ export function ModelsChip() {
       onClick={() => openModule({ module: "settings", section: "models" })}
     >
       {warn ? (
-        <Icon.Alert size={14} style={{ color: "var(--pc-warn)" }} aria-hidden="true" />
+        <Icon.Alert size={14} className="status-warn-icon" aria-hidden="true" />
       ) : (
         <Icon.Models size={14} aria-hidden="true" />
       )}
@@ -79,31 +79,18 @@ export function StatusBar({ children }: { children?: ReactNode }) {
   const errorCount = useLive((s) => s.errorCount);
   const openModule = useLayout((s) => s.openModule);
   return (
-    <footer
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 20,
-        alignItems: "center",
-        padding: "6px 16px",
-        background: "var(--pc-panel)",
-        borderTop: "1px solid var(--pc-border)",
-        fontSize: 12,
-        color: "var(--pc-text-secondary)",
-      }}
-    >
+    <footer className="status-bar">
       {children}
-      <span style={{ marginLeft: "auto" }} />
+      <span className="status-bar-spacer" />
       <ModelsChip />
       <RamChip />
       <button
         type="button"
-        className="status-item"
+        className={errorCount > 0 ? "status-item status-item-danger" : "status-item"}
         onClick={() =>
           openModule({ module: "settings", section: "diagnostics", target: { level: "ERROR" } })
         }
         data-testid="error-count"
-        style={{ color: errorCount > 0 ? "var(--pc-danger)" : undefined }}
       >
         {errorCount > 0 ? t("shell.errors", { count: errorCount }) : t("shell.noErrors")}
       </button>

@@ -1,0 +1,227 @@
+/* Attività: stili statici della pagina (ui-ux-overhaul 8.1). */
+
+.jobs-card {
+  background: var(--pc-panel);
+  border: 1px solid var(--pc-border);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}
+.jobs-card--compact {
+  padding: var(--pc-space-4) 20px;
+  gap: 10px;
+}
+.jobs-card--resources {
+  gap: 14px;
+}
+.jobs-card--undo {
+  padding: var(--pc-space-4) 20px;
+  flex-direction: row;
+  gap: var(--pc-space-3);
+  align-items: center;
+}
+
+.jobs-badge {
+  padding: 2px var(--pc-space-2);
+  border-radius: var(--pc-radius-sm);
+  font-size: 12px;
+}
+
+/* Riga di fase */
+.jobs-phase-row {
+  border-top: 1px solid var(--pc-border);
+}
+.jobs-phase-row > td {
+  padding: 10px var(--pc-space-2);
+}
+.jobs-phase-row > td:first-child {
+  padding: 10px var(--pc-space-2) 10px 0;
+}
+.jobs-phase-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bar.jobs-phase-bar {
+  flex: 1;
+  height: 6px;
+}
+.jobs-phase-bar.done > span {
+  background: var(--pc-ok);
+}
+.jobs-phase-pct {
+  width: 52px;
+  text-align: right;
+}
+.jobs-nowrap {
+  white-space: nowrap;
+}
+.jobs-provisional {
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--pc-text-soft);
+}
+.jobs-soft {
+  color: var(--pc-text-soft);
+}
+.jobs-errors {
+  color: var(--pc-text-secondary);
+}
+.jobs-errors--failed {
+  color: var(--pc-danger);
+}
+
+/* Intestazione della scheda */
+.jobs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-3);
+}
+.jobs-title-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.jobs-title {
+  margin: 0;
+  font-size: 17px;
+}
+.jobs-status {
+  display: flex;
+  gap: var(--pc-space-2);
+  align-items: center;
+}
+.jobs-warn {
+  color: var(--pc-warn);
+}
+.jobs-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.jobs-overall {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+.bar.jobs-overall-bar {
+  height: 8px;
+  margin-top: 6px;
+  border-radius: var(--pc-radius-sm);
+}
+.jobs-table-wrap {
+  overflow-x: auto;
+}
+.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+.jobs-table-head {
+  color: var(--pc-text-secondary);
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.jobs-table-head > th {
+  padding: var(--pc-space-2);
+}
+.jobs-table-head > th:first-child {
+  padding: var(--pc-space-2) var(--pc-space-2) var(--pc-space-2) 0;
+}
+.jobs-table-head > th.jobs-col-progress {
+  width: 34%;
+}
+.btn.jobs-errors-link {
+  align-self: flex-start;
+  color: var(--pc-danger);
+  border: 0;
+  padding: 0;
+}
+
+/* Storico */
+.jobs-h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.jobs-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-3);
+  align-items: center;
+}
+.jobs-small {
+  font-size: 12px;
+}
+.btn.jobs-push-end {
+  margin-left: auto;
+}
+
+/* Risorse */
+.jobs-ram {
+  display: flex;
+  height: 14px;
+  border-radius: var(--pc-radius-sm);
+  overflow: hidden;
+  background: var(--pc-border);
+}
+.jobs-ram-used {
+  background: var(--pc-text-placeholder);
+}
+.jobs-ram-app {
+  background: var(--pc-accent);
+}
+.jobs-res-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px var(--pc-space-3);
+  font-size: 13px;
+}
+.section-title.jobs-res-models {
+  margin-top: var(--pc-space-1);
+}
+.jobs-split {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Annullabile */
+.jobs-undo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.section-title.jobs-undo-title {
+  margin: 0;
+}
+
+/* Pagina */
+.jobs-page {
+  flex: 1;
+  overflow: auto;
+  padding: var(--pc-space-5) var(--pc-space-6);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-5);
+  align-content: flex-start;
+}
+.jobs-main {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}
+.jobs-aside {
+  flex: 1 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}

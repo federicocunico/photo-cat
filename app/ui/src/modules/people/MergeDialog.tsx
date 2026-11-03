@@ -1,7 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button, Dialog, InlineAlert } from "../../components/ui";
 import { commands, type Correction, type FaceView, type GroupRow } from "../../lib/ipc";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
+import { notifyPeopleUndo } from "./peopleUndo";
+import "./people.css";
 
 function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -10,17 +14,11 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
   return (
     <span
       aria-hidden
+      className="people-cover"
       style={{
-        display: "block",
         width: size,
         height: size,
-        borderRadius: "50%",
-        overflow: "hidden",
-        backgroundColor: "var(--pc-thumb-bg)",
         backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        flexShrink: 0,
       }}
     >
       {src && !failed && (
@@ -28,7 +26,7 @@ function Avatar({ cover, size = 64 }: { cover: FaceView | null; size?: number })
           src={src}
           alt=""
           onError={() => setFailed(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="people-cover-img"
         />
       )}
     </span>
@@ -39,7 +37,10 @@ function labelOf(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => str
   return g.name ?? t("people.groupOfFaces", { count: g.faces });
 }
 
-/** Dialogo di unione: anteprima, scelta del nome se più di uno ne ha uno. */
+/**
+ * Dialogo di unione: anteprima, scelta del nome se più di uno ne ha uno. L'unione compare
+ * poi come avviso "Persone unite · Annulla operazione" (anche Ctrl+Z).
+ */
 export function MergeDialog({
   sources,
   target,
@@ -52,6 +53,7 @@ export function MergeDialog({
   onMerged: (to: number) => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const parties = [target, ...sources.filter((s) => s.id !== target.id)];
   const named = parties.filter((g) => g.name);
   const needNameChoice = named.length >= 2;
@@ -77,6 +79,7 @@ export function MergeDialog({
           ? { action: "merge", from: absorbed[0]!.id, to: survivor.id }
           : { action: "merge_many", from: absorbed.map((g) => g.id), to: survivor.id };
       await commands.correctPerson(correction);
+      notifyPeopleUndo(qc, t("people.mergedDone"));
       onMerged(survivor.id);
       onClose();
     } catch (e) {
@@ -87,81 +90,47 @@ export function MergeDialog({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        background: "rgba(0,0,0,0.35)",
-        display: "grid",
-        placeItems: "center",
-      }}
-      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("people.mergeDialogTitle")}
-        onKeyDown={(e) => e.key === "Escape" && !busy && onClose()}
-        style={{
-          width: "min(480px, 92vw)",
-          maxHeight: "86vh",
-          overflow: "auto",
-          border: "1px solid var(--pc-border)",
-          borderRadius: 8,
-          padding: 20,
-          background: "var(--pc-raised)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
-        <strong style={{ fontSize: 16 }}>{t("people.mergeDialogTitle")}</strong>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto 1fr",
-            gap: 8,
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              alignItems: "center",
-              textAlign: "center",
-            }}
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !busy && onClose()}
+      title={t("people.mergeDialogTitle")}
+      footer={
+        <>
+          <Button variant="ghost" disabled={busy} onClick={onClose}>
+            {t("people.mergeCancel")}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || absorbed.length === 0}
+            onClick={() => confirm()}
           >
+            {t("people.mergeInto", { name: labelOf(survivor, t) })}
+          </Button>
+        </>
+      }
+    >
+      <div className="people-merge">
+        <div className="people-merge-preview">
+          <div className="people-merge-party">
             <Avatar cover={primarySource.cover} />
             <b>{labelOf(primarySource, t)}</b>
-            <span className="muted" style={{ fontSize: 12 }}>
+            <span className="muted people-muted-sm">
               {t("people.photos", { count: primarySource.photos })}
             </span>
           </div>
-          <span aria-hidden style={{ fontSize: 20, color: "var(--pc-text-2)" }}>
+          <span aria-hidden className="people-merge-arrow">
             →
           </span>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              alignItems: "center",
-              textAlign: "center",
-            }}
-          >
+          <div className="people-merge-party">
             <Avatar cover={survivor.cover} />
             <b>{labelOf(survivor, t)}</b>
-            <span className="muted" style={{ fontSize: 12 }}>
+            <span className="muted people-muted-sm">
               {t("people.photos", { count: survivor.photos })}
             </span>
           </div>
         </div>
 
-        <p style={{ margin: 0 }}>
+        <p className="people-merge-body">
           {t("people.mergeDialogBody", {
             count: absorbedFaces,
             name: labelOf(survivor, t),
@@ -169,18 +138,11 @@ export function MergeDialog({
         </p>
 
         {needNameChoice && (
-          <fieldset
-            style={{
-              border: "1px solid var(--pc-border)",
-              borderRadius: 6,
-              padding: 10,
-              margin: 0,
-            }}
-          >
-            <legend style={{ padding: "0 6px" }}>{t("people.mergeKeepName")}</legend>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <fieldset className="people-merge-fieldset">
+            <legend className="people-merge-legend">{t("people.mergeKeepName")}</legend>
+            <div className="people-merge-options">
               {named.map((g) => (
-                <label key={g.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <label key={g.id} className="people-check people-check--gap">
                   <input
                     type="radio"
                     name="merge-keep-name"
@@ -194,22 +156,12 @@ export function MergeDialog({
           </fieldset>
         )}
 
-        {error && <p role="alert">{error}</p>}
-
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
-            {t("people.mergeCancel")}
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={busy || absorbed.length === 0}
-            onClick={() => void confirm()}
-          >
-            {t("people.mergeInto", { name: labelOf(survivor, t) })}
-          </button>
-        </div>
+        {error && (
+          <InlineAlert tone="danger" title={t("people.failed")}>
+            {error}
+          </InlineAlert>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

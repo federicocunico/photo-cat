@@ -9,6 +9,8 @@ import { useLayout } from "../../store/layout";
 import { useSequence } from "../../store/sequence";
 import { useTagOverview } from "../tags/data";
 import { Icon } from "../../components/icons";
+import { Disclosure } from "../../components/ui";
+import "./sequence.css";
 
 const TOKENS: Array<[string, string]> = [
   ["{seq}", "seq"],
@@ -40,8 +42,8 @@ function useDebounced<T>(value: T, ms = 150): T {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="feature-card" style={{ alignItems: "stretch", gap: 10 }} aria-label={title}>
-      <h2 style={{ margin: 0, fontSize: 16 }}>{title}</h2>
+    <section className="feature-card seq-export-section" aria-label={title}>
+      <h2 className="seq-export-h2">{title}</h2>
       {children}
     </section>
   );
@@ -98,11 +100,7 @@ export function SequenceExport() {
   if (!opts)
     return (
       <QueryView query={defaults} enabled={isTauri()} isEmpty={() => false}>
-        {() => (
-          <p className="muted" style={{ padding: 24 }}>
-            …
-          </p>
-        )}
+        {() => <p className="muted seq-export-loading">…</p>}
       </QueryView>
     );
   const set = (p: Partial<SequenceExportOptions>) => setOpts({ ...opts, ...p });
@@ -140,13 +138,15 @@ export function SequenceExport() {
       setError(errorText(e));
     }
   };
+  /** Uscita facoltativa: nome in parole, nome del file o della cartella e spiegazione. */
   const check = (
     key: keyof SequenceExportOptions,
     label: string,
+    file: string,
     help: string,
     disabled = false,
   ) => (
-    <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+    <label className="seq-check">
       <input
         type="checkbox"
         checked={Boolean(opts[key])}
@@ -154,32 +154,21 @@ export function SequenceExport() {
         onChange={(e) => set({ [key]: e.target.checked } as Partial<SequenceExportOptions>)}
       />
       <span>
-        <span className="mono">{label}</span>
+        {label} <span className="mono muted">{file}</span>
         <br />
-        <span className="muted" style={{ fontSize: 12 }}>
-          {help}
-        </span>
+        <span className="muted seq-small">{help}</span>
       </span>
     </label>
   );
   return (
     <QueryView query={defaults} enabled={isTauri()} isEmpty={() => false}>
       {() => (
-        <div
-          style={{
-            flex: 1,
-            overflow: "auto",
-            padding: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
+        <div className="seq-export-page">
+          <div className="seq-export-title-row">
             <BusyButton className="btn btn-ghost" onClick={() => setView("sequence")}>
               <Icon.ChevronLeft size={14} /> {t("modules.sequence")}
             </BusyButton>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600 }}>{t("seqExport.title")}</h1>
+            <h1 className="seq-export-title">{t("seqExport.title")}</h1>
             {pre && (
               <span className="muted">
                 {t("seqExport.summary", {
@@ -189,36 +178,26 @@ export function SequenceExport() {
               </span>
             )}
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-            <div
-              style={{
-                flex: "2 1 520px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-                minWidth: 0,
-              }}
-            >
+          <div className="seq-export-cols">
+            <div className="seq-export-primary">
               <Section title={t("seqExport.names")}>
-                <label htmlFor="pc-seq-pattern" style={{ fontWeight: 600 }}>
+                <label htmlFor="pc-seq-pattern" className="seq-label-strong">
                   {t("seqExport.template")}
                 </label>
                 <input
                   id="pc-seq-pattern"
                   ref={inputRef}
-                  className="field mono"
+                  className="field mono seq-template-input"
                   value={opts.template}
                   aria-invalid={errors.length > 0}
                   onChange={(e) => set({ template: e.target.value })}
-                  style={{ minHeight: 38 }}
                 />
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div className="seq-token-row">
                   {TOKENS.map(([tok, key]) => (
                     <BusyButton
                       key={tok}
                       type="button"
-                      className="chip mono"
-                      style={{ border: 0, cursor: "pointer" }}
+                      className="chip mono seq-token-chip"
                       title={t(`seqExport.tokens.${key}`)}
                       aria-label={t("seqExport.insertToken", {
                         token: tok,
@@ -231,7 +210,7 @@ export function SequenceExport() {
                   ))}
                 </div>
                 {errors.length > 0 && (
-                  <p role="alert" style={{ margin: 0, color: "var(--pc-danger)" }}>
+                  <p role="alert" className="seq-alert-danger">
                     {errors
                       .map((e) =>
                         e.kind === "unknown_token"
@@ -263,7 +242,7 @@ export function SequenceExport() {
                     ))}
                   </tbody>
                 </table>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label className="seq-check-row">
                   {t("seqExport.tagSet")}
                   <select
                     className="field"
@@ -282,17 +261,13 @@ export function SequenceExport() {
                   </select>
                 </label>
                 {tagSet && !tagSet.exclusive && (
-                  <span style={{ color: "var(--pc-warn)", fontSize: 12 }}>
-                    {t("seqExport.notExclusive")}
-                  </span>
+                  <span className="seq-warn-text">{t("seqExport.notExclusive")}</span>
                 )}
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {t("seqExport.namesHelp")}
-                </span>
+                <span className="muted seq-small">{t("seqExport.namesHelp")}</span>
               </Section>
               <Section title={t("seqExport.format")}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div className="seq-format-row">
+                  <label className="seq-field-stack">
                     {t("seqExport.formatLabel")}
                     <select
                       className="field"
@@ -305,10 +280,10 @@ export function SequenceExport() {
                       <option value="original">{t("seqExport.originalCopy")}</option>
                     </select>
                   </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <label className="seq-field-stack">
                     {t("seqExport.quality")}
                     <input
-                      className="field"
+                      className="field seq-quality-input"
                       type="number"
                       min={1}
                       max={100}
@@ -322,34 +297,10 @@ export function SequenceExport() {
                           },
                         })
                       }
-                      style={{ width: 80 }}
                     />
                   </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {t("seqExport.chroma")}
-                    <select
-                      className="field"
-                      disabled={opts.format === "original"}
-                      value={jpeg.chroma444 === false ? "420" : "444"}
-                      onChange={(e) =>
-                        set({ jpeg: { ...jpeg, chroma444: e.target.value === "444" } })
-                      }
-                    >
-                      <option value="444">4:4:4</option>
-                      <option value="420">4:2:0</option>
-                    </select>
-                  </label>
                 </div>
-                <label style={{ display: "flex", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    disabled={opts.format === "original"}
-                    checked={jpeg.verify !== false}
-                    onChange={(e) => set({ jpeg: { ...jpeg, verify: e.target.checked } })}
-                  />
-                  <span>{t("seqExport.verify")}</span>
-                </label>
-                <label style={{ display: "flex", gap: 8 }}>
+                <label className="seq-check-plain">
                   <input
                     type="checkbox"
                     disabled={opts.format === "original"}
@@ -358,36 +309,83 @@ export function SequenceExport() {
                   />
                   <span>{t("seqExport.metadata")}</span>
                 </label>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {t("seqExport.fidelity")}
-                </span>
+                <span className="muted seq-small">{t("seqExport.fidelity")}</span>
+                <Disclosure title={t("seqExport.advanced")} defaultOpen={false}>
+                  <div className="seq-stack-gap">
+                    <label className="seq-field-stack">
+                      {t("seqExport.chroma")}
+                      <select
+                        className="field"
+                        disabled={opts.format === "original"}
+                        value={jpeg.chroma444 === false ? "420" : "444"}
+                        onChange={(e) =>
+                          set({ jpeg: { ...jpeg, chroma444: e.target.value === "444" } })
+                        }
+                      >
+                        <option value="444">{t("seqExport.chromaFull")}</option>
+                        <option value="420">{t("seqExport.chromaReduced")}</option>
+                      </select>
+                    </label>
+                    <label className="seq-check">
+                      <input
+                        type="checkbox"
+                        disabled={opts.format === "original"}
+                        checked={jpeg.verify !== false}
+                        onChange={(e) => set({ jpeg: { ...jpeg, verify: e.target.checked } })}
+                      />
+                      <span>
+                        {t("seqExport.verify")}
+                        <br />
+                        <span className="muted seq-small">{t("seqExport.verifyHelp")}</span>
+                      </span>
+                    </label>
+                  </div>
+                </Disclosure>
               </Section>
             </div>
-            <div style={{ flex: "1 1 340px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="seq-export-side">
               <Section title={t("seqExport.structure")}>
-                <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <label className="seq-check">
                   <input type="checkbox" checked disabled />
                   <span>
-                    <span className="mono">sequenza/</span>
+                    {t("seqExport.sequenceFolder")} <span className="mono muted">sequenza/</span>
                     <br />
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      {t("seqExport.outSequence")}
-                    </span>
+                    <span className="muted seq-small">{t("seqExport.outSequence")}</span>
                   </span>
                 </label>
-                {check("perTag", "per-tag/<Tag>/", t("seqExport.outPerTag"), !opts.tagSet)}
-                {check("manifest", "manifest.csv", t("seqExport.outManifest"))}
-                {check("zip", "sequenza.zip", t("seqExport.outZip"))}
-                {check("zipPerTag", "per-tag.zip", t("seqExport.outZip"), !opts.perTag)}
-                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {check(
+                  "perTag",
+                  t("seqExport.perTagFolders"),
+                  "per-tag/<Tag>/",
+                  t("seqExport.outPerTag"),
+                  !opts.tagSet,
+                )}
+                {check("zip", t("seqExport.zipSequence"), "sequenza.zip", t("seqExport.outZip"))}
+                <Disclosure title={t("seqExport.advanced")} defaultOpen={false}>
+                  <div className="seq-stack-gap">
+                    {check(
+                      "manifest",
+                      t("seqExport.manifest"),
+                      "manifest.csv",
+                      t("seqExport.outManifest"),
+                    )}
+                    {check(
+                      "zipPerTag",
+                      t("seqExport.zipPerTag"),
+                      "per-tag.zip",
+                      t("seqExport.outZip"),
+                      !opts.perTag,
+                    )}
+                  </div>
+                </Disclosure>
+                <label className="seq-dest-label">
                   {t("seqExport.destination")}
-                  <span style={{ display: "flex", gap: 8 }}>
+                  <span className="seq-dest-row">
                     <input
-                      className="field mono"
+                      className="field mono seq-dest-input"
                       value={opts.destination}
                       aria-label={t("seqExport.destination")}
                       onChange={(e) => set({ destination: e.target.value })}
-                      style={{ flex: 1 }}
                     />
                     <BusyButton className="btn" onClick={async () => await browse()}>
                       {t("seqExport.browse")}
@@ -398,12 +396,9 @@ export function SequenceExport() {
               {pre && (
                 <section
                   role={pre.canStart ? "status" : "alert"}
-                  className="feature-card"
-                  style={{
-                    alignItems: "stretch",
-                    gap: 4,
-                    borderColor: pre.canStart ? "var(--pc-ok)" : "var(--pc-danger-border)",
-                  }}
+                  className={`feature-card seq-export-preflight${
+                    pre.canStart ? " seq-export-preflight--ok" : " seq-export-preflight--blocked"
+                  }`}
                 >
                   <strong>
                     {pre.canStart ? t("seqExport.preflightOk") : t("seqExport.preflightBlocked")}
@@ -423,24 +418,18 @@ export function SequenceExport() {
                 </section>
               )}
               {pre && opts.perTag && pre.untagged > 0 && (
-                <section
-                  className="feature-card"
-                  style={{ alignItems: "stretch", color: "var(--pc-warn)" }}
-                >
+                <section className="feature-card seq-export-untagged">
                   {t("seqExport.untagged", { count: pre.untagged })}
                 </section>
               )}
               <BusyButton
-                className="btn btn-primary"
-                style={{ minHeight: 44 }}
+                className="btn btn-primary seq-export-start"
                 disabled={!canStart}
                 onClick={async () => await start()}
               >
                 {t("seqExport.start", { count: pre?.count ?? 0 })}
               </BusyButton>
-              <span className="muted" style={{ fontSize: 12 }}>
-                {t("seqExport.jobNote")}
-              </span>
+              <span className="muted seq-small">{t("seqExport.jobNote")}</span>
               {error && <p role="alert">{error}</p>}
               {started !== null && (
                 <p role="status">

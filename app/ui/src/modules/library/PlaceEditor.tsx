@@ -38,10 +38,9 @@ export function PlaceField({
   });
   const list = (suggestions.data ?? []).filter((s) => s.name !== value);
   return (
-    <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+    <div className="place-field">
       <input
         className="field"
-        style={{ width: "100%" }}
         aria-label={t("place.label")}
         placeholder={t("place.placeholder")}
         value={value}
@@ -58,34 +57,19 @@ export function PlaceField({
         </QueryView>
       )}
       {open && list.length > 0 && (
-        <ul
-          role="listbox"
-          aria-label={t("place.suggestions")}
-          style={{
-            position: "absolute",
-            zIndex: 5,
-            left: 0,
-            right: 0,
-            margin: 0,
-            padding: 4,
-            listStyle: "none",
-            background: "var(--pc-raised)",
-            border: "1px solid var(--pc-border)",
-            borderRadius: 4,
-          }}
-        >
+        <ul role="listbox" aria-label={t("place.suggestions")} className="place-suggest">
           {list.map((s) => (
             <li
               key={`${s.name}/${s.country ?? ""}`}
               role="option"
               aria-selected={false}
               tabIndex={-1}
+              className="place-suggest-item"
               onMouseDown={(e) => {
                 e.preventDefault();
                 onPick(s);
                 setOpen(false);
               }}
-              style={{ padding: "3px 6px", cursor: "pointer", fontSize: 13 }}
             >
               {s.name}{" "}
               <span className="muted">{s.inLibrary ? t("place.fromLibrary") : s.country}</span>
@@ -133,8 +117,8 @@ export function PlaceEditor({
       ? { name: picked.name, country: picked.country, lat: picked.lat, lon: picked.lon }
       : { name: trimmed };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-      <div className="feature-actions" style={{ margin: 0 }}>
+    <div className="place-editor">
+      <div className="feature-actions feature-actions-tight">
         <PlaceField
           autoFocus
           value={value}

@@ -55,7 +55,7 @@ const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
   { id: "section", section: "models", label: "models.provider" },
   { id: "section", section: "models", label: "models.models" },
   { id: "externalApps", section: "apps", label: "externalApps.title" },
-  { id: "section", section: "diagnostics", label: "settings.log" },
+  { id: "logLevel", section: "diagnostics", label: "settings.log" },
   { id: "section", section: "diagnostics", label: "diag.exportBundle" },
   { id: "rawThresholds", section: "advanced", label: "settings.rawThresholds" },
   { id: "rawThresholds", section: "advanced", label: "settings.threshold" },

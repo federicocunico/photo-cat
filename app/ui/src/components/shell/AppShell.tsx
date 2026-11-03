@@ -12,16 +12,7 @@ import { GuideDialog } from "../guide/GuideDialog";
 import { useShortcutCatalog } from "../../commands/catalog";
 import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
-
-const bannerStyle = {
-  display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  gap: 12,
-  padding: "8px 16px",
-  background: "var(--pc-selection-bg)",
-  borderBottom: "1px solid var(--pc-selection-border)",
-} as const;
+import "./shell.css";
 
 const time = (iso: string) => fmtDateTime(iso);
 
@@ -31,9 +22,9 @@ export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss:
   const openModule = useLayout((s) => s.openModule);
   const kind = crash.kind ?? "panic";
   return (
-    <div role="alert" style={bannerStyle}>
+    <div role="alert" className="shell-banner">
       <strong>{t("shell.crashNotice")}</strong>
-      <span className="muted" style={{ fontSize: 12 }}>
+      <span className="muted shell-banner-detail">
         {t(`shell.crashKind.${kind}`)}
         {crash.lastActivity && ` · ${t("shell.crashLast", { time: time(crash.lastActivity) })}`}
         {crash.memory &&
@@ -44,14 +35,11 @@ export function CrashBanner({ crash, onDismiss }: { crash: CrashInfo; onDismiss:
           })}`}
       </span>
       {crash.message && (
-        <span className="mono muted" style={{ fontSize: 12 }}>
-          {crash.message}
-        </span>
+        <span className="mono muted shell-banner-detail">{crash.message}</span>
       )}
       <button
         type="button"
-        className="btn"
-        style={{ marginLeft: "auto" }}
+        className="btn shell-banner-action"
         onClick={() => openModule({ module: "settings", section: "diagnostics", target: {} })}
       >
         {t("shell.crashOpen")}
@@ -74,18 +62,15 @@ export function UiRecoveredBanner({
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
   return (
-    <div role="alert" style={bannerStyle} data-testid="ui-recovered">
+    <div role="alert" className="shell-banner" data-testid="ui-recovered">
       <strong>{t("shell.uiRecovered")}</strong>
-      <span className="muted" style={{ fontSize: 12 }}>
+      <span className="muted shell-banner-detail">
         {t("shell.uiRecoveredDetail", { time: time(info.ts) })}
       </span>
-      <span className="mono muted" style={{ fontSize: 12 }}>
-        {info.reason}
-      </span>
+      <span className="mono muted shell-banner-detail">{info.reason}</span>
       <button
         type="button"
-        className="btn"
-        style={{ marginLeft: "auto" }}
+        className="btn shell-banner-action"
         onClick={() => openModule({ module: "settings", section: "diagnostics", target: {} })}
       >
         {t("shell.crashOpen")}
@@ -104,14 +89,12 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
   useShortcutCatalog();
   useSheetCommand();
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div className="app-shell">
       <TopBar />
       {banner}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <div className="app-shell-body">
         <ModuleNav />
-        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {children}
-        </main>
+        <main className="app-shell-main">{children}</main>
         <CommandPalette />
         <ShortcutSheet />
         <GuideDialog />

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Spinner } from "./Spinner";
 import { BusyButton } from "./BusyButton";
 import type { BootStatus } from "../../lib/ipc";
+import "./feedback.css";
 
 export function BootScreen({
   status,
@@ -14,10 +15,7 @@ export function BootScreen({
 }) {
   const { t } = useTranslation();
   return (
-    <main
-      style={{ minHeight: "100vh", display: "grid", placeContent: "center", gap: 16, padding: 32 }}
-      aria-busy={!status.error}
-    >
+    <main className="boot-screen" aria-busy={!status.error}>
       <h1>photo-cat</h1>
       {status.error ? (
         <>
@@ -34,7 +32,7 @@ export function BootScreen({
           </div>
         </>
       ) : (
-        <div role="status" style={{ display: "flex", gap: 12 }}>
+        <div role="status" className="boot-status">
           <Spinner />
           <span>{t(`boot.${status.phase}`, { defaultValue: t("boot.opening") })}</span>
         </div>

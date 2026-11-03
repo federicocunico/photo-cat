@@ -126,11 +126,7 @@ export function ConfirmDialog({
     <RAlert.Root open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <RAlert.Portal>
         <RAlert.Overlay className="ui-overlay" />
-        <RAlert.Content
-          className="ui-dialog"
-          onCloseAutoFocus={onCloseAutoFocus}
-          style={{ width: "min(440px, calc(100vw - 32px))" }}
-        >
+        <RAlert.Content className="ui-dialog ui-dialog-confirm" onCloseAutoFocus={onCloseAutoFocus}>
           <RAlert.Title>{title}</RAlert.Title>
           <RAlert.Description asChild>
             <div className="ui-dialog-body">

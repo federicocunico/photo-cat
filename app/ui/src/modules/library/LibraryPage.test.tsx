@@ -704,7 +704,7 @@ describe("elenco completo dei filtri e pannelli flottanti", () => {
     fireEvent.click(within(filters).getByRole("button", { name: "Apri Tag in finestra" }));
     const tags = await screen.findByRole("dialog", { name: "Tag" });
     expect(screen.getByRole("dialog", { name: "Luogo" })).toBeTruthy();
-    const z = (el: HTMLElement) => Number(el.style.zIndex);
+    const z = (el: HTMLElement) => Number(el.style.getPropertyValue("--floating-layer"));
     expect(z(tags)).toBeGreaterThan(z(panel));
     fireEvent.pointerDown(within(panel).getByText("340 voci"));
     expect(z(panel)).toBeGreaterThan(z(tags));

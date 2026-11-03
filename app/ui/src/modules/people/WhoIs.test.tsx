@@ -82,7 +82,9 @@ it("suggests identities by name or alias, ordered by similarity", async () => {
   const input = await openUnnamed();
   fireEvent.change(input, { target: { value: "Giu" } });
   await screen.findByRole("option", { name: /Giulia Bianchi/ });
-  const options = within(screen.getByRole("listbox")).getAllByRole("option");
+  const options = within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole(
+    "option",
+  );
   expect(options.map((o) => o.textContent)).toEqual([
     "Giulia Bianchi0.81",
     "Giuseppe Verdi",
@@ -91,9 +93,9 @@ it("suggests identities by name or alias, ordered by similarity", async () => {
   expect(commandsMock.suggestIdentities).toHaveBeenCalledWith(12, "Giu");
   fireEvent.change(input, { target: { value: "Nonna" } });
   await waitFor(() =>
-    expect(within(screen.getByRole("listbox")).getAllByRole("option")[0]).toHaveTextContent(
-      "Rita Rossi",
-    ),
+    expect(
+      within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole("option")[0],
+    ).toHaveTextContent("Rita Rossi"),
   );
 });
 

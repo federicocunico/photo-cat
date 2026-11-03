@@ -23,5 +23,10 @@ export function isTyping(target: EventTarget | null): boolean {
 
 /** Vero se è aperta una finestra modale, che tiene per sé la tastiera. */
 export function modalOpen(): boolean {
-  return document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]') != null;
+  // `.ui-dialog` è il `Dialog` condiviso: Radix non mette `aria-modal`.
+  return (
+    document.querySelector(
+      '[role="dialog"][aria-modal="true"], [role="dialog"].ui-dialog, [role="alertdialog"]',
+    ) != null
+  );
 }

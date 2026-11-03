@@ -8,6 +8,8 @@ Data: 2026-11-03.
 
 **Aggiornamento dopo il rebase** (stessa data): il branch `feat/ui-ux-overhaul` ora parte dalla release 0.3.0, che integra anche `loading-feedback` e `people-faces-workspace`. Tutti i riferimenti `file:riga` sono stati ricontrollati su questo codice. I punti già risolti restano nell'elenco, segnati come **Risolto** o **In parte risolto**. I punti nuovi sono segnati con *(nuovo)*.
 
+**Verifica finale 8.5** (stessa data, su `feat/ui-ux-overhaul` dopo le fasi 7–8): ogni voce **A** e **M** è stata ricontrollata sul codice corrente in `app/ui/src` e marcata **Risolto**, **In parte risolto** (con ciò che resta) o **Motivato** (fuori ambito / differito). Sintesi in §9. Le voci **B** non sono oggetto di questa verifica.
+
 **Metodo**:
 - lettura del codice di shell, moduli e i18n;
 - inventario dei controlli e dei testi;
@@ -42,7 +44,7 @@ Le change ora integrate migliorano parti importanti:
 - `loading-feedback` porta stati di caricamento, toast e pulsanti "in corso";
 - `people-faces-workspace` porta un modulo Persone unico e da tastiera.
 
-Restano però locali: `QueryView` ha lo stato vuoto disattivato in 29 usi su 35 (`isEmpty={() => false}`), solo Persone ha scorciatoie e Ctrl+Z. Questa proposta le generalizza.
+*(Nota storica dell’audit iniziale.)* Dopo le fasi 7–8 lo stato A/M aggiornato è in **§9**; scorciatoie, palette, undo e componenti condivisi sono stati generalizzati oltre Persone.
 
 ---
 
@@ -50,14 +52,14 @@ Restano però locali: `QueryView` ha lo stato vuoto disattivato in 29 usi su 35 
 
 | # | Osservazione | Dove | Pr. |
 |---|---|---|---|
-| S1 | 11 voci piatte: Libreria, Sequenza, Cataloghi, Tag, Persone, Importa, Job, Modelli AI, Diagnostica, Esporta e organizza, Impostazioni. Diagnostica e Modelli stanno in mezzo ai contenuti; "Esporta e organizza" sta dopo Diagnostica. — **In parte risolto da `people-faces-workspace`**: la voce Identità non c'è più (è dentro Persone). Il resto vale ancora. | `modules/registry.ts:8-20` | A |
-| S2 | La navigazione è sempre larga 200 px e non si richiude; non ci sono scorciatoie per cambiare modulo. | `ModuleNav.tsx:13` | M |
-| S3 | La ricerca globale filtra solo la Libreria e ci porta l'utente anche se lui stava altrove. Non cerca persone, cataloghi, tag o comandi come elementi. | `TopBar.tsx:33-47` | M |
+| S1 | 11 voci piatte… — **Risolto**: navigazione a gruppi (`browse` / `organize` / `transfer` / `bottom`); Modelli e Diagnostica non sono più voci di primo livello (stanno in Impostazioni). | `modules/registry.ts:22-55`, `ModuleNav.tsx:134-170` | A |
+| S2 | La navigazione è sempre larga 200 px… — **Risolto**: modalità compatta (`navCompact`, Ctrl+B) e scorciatoie di modulo Ctrl+1…7. | `ModuleNav.tsx:37-61,79-156`, `registry.ts:57-71` | M |
+| S3 | La ricerca globale filtra solo la Libreria… — **Risolto**: il campo apre la palette dei comandi (`openPalette`), non un filtro Libreria. | `TopBar.tsx:44-65,210`, `AppShell` + `CommandPalette` | M |
 | S4 | Barra superiore: il pallino dei job dice "Nessun job attivo" e gira sempre — **Risolto da `loading-feedback`**: senza job mostra un'icona ferma (`TopBar.tsx:81`). Resta il chip RAM, che porta a Job: è un'informazione tecnica sempre in vista. | `TopBar.tsx:92-121` | B |
 | S5 | La barra di stato mostra contenuti diversi a seconda del modulo; le scorciatoie di Sequenza ci finiscono come testo lungo. | `ReadyApp.tsx:111-125`, `SequencePage` | B |
-| S6 | Il modulo chiamato "Importa" ha come titolo "Aggiungi una sorgente"; "Esporta e organizza" contiene due funzioni senza rapporto con Sequenza › Esporta. | `i18n/it.ts:122`, `i18n/screens.ts:78` | M |
-| S7 | Le impostazioni sono duplicate: provider e profilo stanno in Modelli (salvataggio immediato) e in Impostazioni (con "Salva"); il livello di log sta in Diagnostica (immediato) e in Impostazioni (con "Salva"); le etichette sono diverse ("DirectML (GPU)" contro `DIRECT_ML`, ottenuto con `toUpperCase`). | `ModelsPage.tsx:312`, `DiagnosticsPage.tsx:244`, `SettingsPage.tsx:169-187,253` | A |
-| S8 | Non c'è un menu Aiuto, né un elenco delle scorciatoie, né una palette dei comandi. Le scorciatoie nuove di Persone (N, M, X, U, I, Ctrl+Z) non sono scritte da nessuna parte. | `people/usePeopleHotkeys.ts:5-20` | A |
+| S6 | Titolo Importa / Esporta misto… — **Risolto**: titolo Importa = "Aggiungi una cartella"; Esporta è un modulo unico con sezioni (dati / cartelle / sequenza) per design D3. | `i18n/it.ts:161`, `OrganizePage.tsx` | M |
+| S7 | Impostazioni duplicate… — **Risolto**: Modelli e Diagnostica sono sezioni di Impostazioni; un solo posto per provider, profilo e livello di log. | `layout.ts:10-26,115-126`, `SettingsPage.tsx:24-31,97-107` | A |
+| S8 | Nessun Aiuto / scorciatoie / palette… — **Risolto**: `HelpMenu`, `CommandPalette`, `ShortcutSheet` (anche `?`); scorciatoie Persone elencate nel foglio. | `TopBar.tsx:104-222`, `AppShell.tsx:115-116` | A |
 | S9 | *(nuovo)* La schermata di avvio è sempre in italiano: la lingua salvata si applica solo dopo, in `ReadyApp`. Prima ancora compare la schermata statica bilingue "Apertura… / Opening…", con un carattere e un titolo diversi da quelli di `BootScreen`: al passaggio il testo salta. | `i18n/index.ts:48`, `ReadyApp.tsx:88`, `index.html:21-22`, `BootScreen.tsx:21` | B |
 | S10 | *(nuovo)* Se l'avvio fallisce, `BootScreen` mostra il messaggio grezzo del backend e il percorso dei log in monospazio; manca un pulsante per aprire la cartella dei log. Nelle fasi compare il gergo "runtime AI". | `BootScreen.tsx:25-26`, `i18n/feedback.ts:21` | B |
 
@@ -74,18 +76,18 @@ Restano però locali: `QueryView` ha lo stato vuoto disattivato in 29 usi su 35 
 
 | # | Osservazione | Dove | Pr. |
 |---|---|---|---|
-| L1 | Fino a 5 fasce sopra la griglia (CatalogHeader, CatalogFeedback, Toolbar, BulkBar, griglia), più i pannelli flottanti. La griglia, cioè il contenuto, perde spazio verticale. | `LibraryPage.tsx:107-118` | A |
-| L2 | La barra degli strumenti mescola cose diverse: ordinamento (select), dimensione (slider senza valori), "Raggruppa foto simili" (preferenza di vista) e "Solo foto con simili", che è un filtro ma non sta tra i filtri. — **In parte risolto**: "Solo foto con simili" ora genera un chip (`chips.ts:39`). Resta una casella nella barra, lontana dagli altri filtri. | `LibraryPage.tsx:20-78` | M |
-| L3 | La barra bulk è sempre visibile, anche con 0 selezionati. Il flusso è: scegliere un'azione da 12 voci, poi un valore, poi "Applica". Due azioni ("Esporta", "Organizza") cambiano modulo senza dirlo. "Seleziona tutto (filtro)" usa un linguaggio da sviluppatore. Prima del menu ci sono altri 5 pulsanti sempre attivi (Seleziona tutto, Inverti, Tutte tranne la principale, Raggruppa come simili, Deseleziona). | `BulkBar.tsx:124-291` | A |
-| L4 | Non c'è un visualizzatore interno: il doppio clic apre un'app esterna. Sequenza invece ha uno schermo intero (Spazio). Due comportamenti diversi per lo stesso gesto. | `Grid.tsx:632`, `SequencePage.tsx:908` | A |
-| L5 | La griglia non si naviga con le frecce; Canc ed Invio funzionano solo dentro un catalogo. | `Grid.tsx:509-526` | M |
-| L6 | Barra laterale: sorgenti (percorsi mono troncati alle ultime 2 cartelle), cataloghi e filtri in un'unica colonna, senza sezioni richiudibili. Icone testuali "▸ ▾ ↻ ✎" con bersagli di circa 20 px. Un "↻ aggiorna cartella" accanto a ogni sottocartella: è un'azione distruttiva per il tempo e sta accanto al filtro. | `Sidebar.tsx:117-150,207-211,319` | M |
-| L7 | Inspector: si apre con un modulo generico "Modifica" (select del gruppo + valore + tag + catalogo) prima delle informazioni. La modifica non è sul campo. Le sezioni non si possono richiudere. — **In parte risolto**: il modulo "Modifica" ora sta in fondo, dopo le informazioni (`Inspector.tsx:397`). Restano la modifica non sul campo e le sezioni non richiudibili. | `Inspector.tsx:101,397` | M |
+| L1 | Fino a 5 fasce sopra la griglia… — **Risolto**: stack = `SelectionBar` *oppure* `LibraryHeader`, poi griglia; pannelli flottanti a parte. | `LibraryPage.tsx:22-33` | A |
+| L2 | Toolbar mescola sort/size/simili… — **Risolto**: header = Seleziona / Ordina / Vista / inspector; "Raggruppa simili" nel menu Vista; "Solo foto con simili" tra i filtri laterali (+ chip). | `LibraryHeader.tsx:200-268`, `Sidebar.tsx:353-360` | M |
+| L3 | Bulk bar sempre visibile + flusso azione/valore/Applica… — **Motivato**: `SelectionBar` solo con selezione > 0; azioni dirette. Residuo accettato: Esporta / Organizza aprono `organize` senza etichetta extra (i nomi delle voci bastano; toast dedicato fuori change). | `LibraryPage.tsx:26`, `SelectionBar.tsx:263-371` | A |
+| L4 | Nessun visualizzatore interno… — **Risolto**: `Viewer` condiviso; Spazio/Invio; doppio clic rispetta la preferenza viewer/esterno. | `Grid.tsx:346,517-527,719-811` | A |
+| L5 | Griglia non navigabile con frecce… — **Risolto**: frecce / Page / Home / End; Canc resta contestuale al catalogo (esclusione). | `Grid.tsx:479-496,588-605` | M |
+| L6 | Sidebar senza sezioni, icone testuali… — **Risolto**: sezioni richiudibili, icone SVG, aggiorna cartella nel menu, bersagli ≥ 24 px. | `Sidebar.tsx:142-209,252-344` | M |
+| L7 | Inspector con modulo generico "Modifica"… — **Risolto**: sezioni `Disclosure`; modifica sul campo (`InlineEdit` / tag / categorie); niente form generico in testa. | `Inspector.tsx:56-65,288-425` | M |
 | L8 | L'intestazione del catalogo è testo, conteggio e un pulsante "Escluse (N)", senza gerarchia visiva. La vista delle escluse si raggiunge solo da qui (Cataloghi non mostra il conteggio). | `CatalogHeader.tsx:32-37`, `CatalogsPage.tsx:99` | B |
-| L9 | Il toast di esclusione è l'unico uso di `Toast`: non ha pulsante di chiusura e non si impila. — **In parte risolto da `loading-feedback`**: `ToastHost` impila fino a 5 avvisi (`ToastHost.tsx:8`). Restano: nessun pulsante di chiusura; il toast di esclusione e quello di annullamento di Persone non passano da `ToastHost`, quindi compaiono nello stesso angolo e si sovrappongono agli altri; il toast sparisce dopo 8 s anche se il puntatore o il focus sono sopra (WCAG 2.2.1); gli errori usano lo stesso toast neutro (`role="status"`) degli avvisi. | `Toast.tsx:17-28`, `catalogActions.tsx:54`, `people/FaceGrid.tsx:547`, `BusyButton.tsx:35` | M |
-| L10 | *(nuovo)* Il badge dei simili sulla miniatura è un `span role="button"` dentro il `<button>` della miniatura: un controllo annidato in un altro, come in Sequenza. Il badge è piccolo (circa 20 px) e da aperto mostra "−3". | `Grid.tsx:105,199-231` | M |
+| L9 | Toast esclusione senza chiusura / non impilati… — **Risolto**: `ToastHost` con chiusura, pausa su hover/focus, errori `role="alert"`; esclusioni e undo Persone passano da `notify` / `notifyUndoable` / `notifyPeopleUndo`. | `ToastHost.tsx:11-66`, `catalogActions.tsx:51-65`, `peopleUndo.ts` | M |
+| L10 | *(nuovo)* Badge simili annidato nel button… — **Risolto**: cella `role="option"` e badge `button.thumb-group` come sibling, non annidati. | `Grid.tsx:113-280`, `library.css:144-163` | M |
 | L11 | *(nuovo)* Aprire un gruppo di simili o selezionarlo carica i membri senza alcun indicatore; se la richiesta fallisce non succede nulla e l'errore non si vede. | `Grid.tsx:399,411` | B |
-| L12 | *(nuovo)* "Foto simili" nell'Inspector: "Sciogli gruppo" agisce subito, senza conferma né annullamento; i pulsanti non sono `BusyButton` e si possono premere due volte; durante il caricamento o in caso di errore la sezione sparisce senza dire nulla. La principale e la foto corrente si distinguono solo dal colore del bordo (giallo di avviso contro accento). | `SimilarSection.tsx:29,64-70,87-104` | M |
+| L12 | *(nuovo)* "Foto simili" Inspector: sciogli senza conferma, no BusyButton, sezione sparisce… — **Motivato**: accettato (inventario undo 1.5: si correggono a mano); busy/errori della sezione → change successiva. | `SimilarSection.tsx:29,85-106` | M |
 | L13 | *(nuovo)* Il filtro Persone della barra laterale è fatto a mano: mostra solo le prime 8 persone senza "Mostra altre", segna la persona attiva solo con il grassetto (senza `aria-pressed`), e il clic su un nome senza id non fa nulla. Ogni riga ripete un pulsante "Apri in Persone" con lo stesso nome; lo stesso accade per ogni volto nell'Inspector. | `Sidebar.tsx:345-389`, `Inspector.tsx:349` | B |
 
 **Riferimenti**:
@@ -100,43 +102,43 @@ Restano però locali: `QueryView` ha lo stato vuoto disattivato in 29 usi su 35 
 ## 4. Altri moduli
 
 ### Importa
-- **A**: la finestra modale non sposta il focus e Esc non funziona finché l'utente non ci entra con Tab (`import/manage.tsx:46-50`).
-- **M**: "Avvia importazione" porta subito a Job (`ImportPage.tsx:223`) e l'utente lascia la pagina senza una conferma.
-- **M**: i pattern glob sono in vista (`**/.thumbnails/**`; `ImportPage.tsx:199`).
-- **M**: fino a 5 pulsanti per riga di sorgente (`ImportPage.tsx:74-108`).
+- **A**: focus/Esc della modale — **Risolto**: `Dialog` / `ConfirmDialog` Radix; Esc chiude subito (`import/manage.tsx`, `Dialog.tsx`).
+- **M**: "Avvia importazione" → Job — **Risolto**: resta su Importa; toast con azione opzionale verso Attività (`ImportPage.tsx:251-253`).
+- **M**: pattern glob in vista — **Motivato**: sotto «Avanzate» con hint in italiano; sintassi `**/…` nel campo accettabile (7.1).
+- **M**: fino a 5 pulsanti per riga — **Risolto**: «Aggiorna» + menu ⋯ (`ImportPage.tsx:55-124`).
 - **B**: la colonna destra resta vuota quando non c'è un import in corso; anche l'elenco delle sorgenti sparisce del tutto quando è vuoto (`ImportPage.tsx:30`).
 
 ### Cataloghi
-- **A**: l'editor delle regole mostra codici grezzi (`tag, person, people_count, width…`, `eq, neq, gte…`; `RuleEditor.tsx:100-104,112-118`).
-- **M**: `window.confirm` per l'eliminazione, e il pulsante non è segnalato come pericoloso (`CatalogsPage.tsx:114-124`).
-- **M**: l'editor compare sopra la griglia senza titolo (`CatalogsPage.tsx:54`).
+- **A**: RuleEditor con codici grezzi — **Risolto**: etichette tradotte; valori = indici (`RuleEditor.tsx:225-247`).
+- **M**: `window.confirm` + pulsante non danger — **Motivato**: `ConfirmDialog` (confirm danger) ok; stile danger del trigger sulla card differito. Nessun `window.confirm` nel progetto.
+- **M**: editor senza titolo — **Risolto**: `Card` con titolo nuovo/modifica (`CatalogsPage.tsx:200`).
 - **B**: conteggio senza unità ("Smart · 123"), nessuno stato vuoto (`QueryView` con `isEmpty={() => false}`), il numero di foto escluse non è mostrato (`CatalogsPage.tsx:92,99`).
 - **Riferimento**: Smart Album di Apple e Capture One, raccolte smart di Lightroom. Le regole si leggono come frasi ("Anno è 2023 e tag contiene Mare"), con il conteggio aggiornato mentre si scrive.
 
 ### Tag
-- **A**: la nota dice "si possono annullare con Annulla", ma nella pagina non c'è nessun Annulla (`TagsPage.tsx:701`).
-- **M**: la conferma di "Elimina set" compare nel pannello di destra, lontano dal pulsante (`TagsPage.tsx:306,852`).
-- **M**: gli errori dei tasti rapidi vengono ignorati senza avviso (`useTagHotkeys.ts:76`).
+- **A**: nota "Annulla" senza Undo — **Risolto**: nota allineata; Ctrl+Z / Annulla operazione via store (`TagsPage.tsx:42-55,478-486,654`).
+- **M**: conferma Elimina set lontana — **Risolto**: trigger danger + `ConfirmDialog` (`TagsPage.tsx:293-295,759-766`).
+- **M**: errori hotkey ignorati — **Risolto**: `notifyError` via `bulk.start` (`bulkJob.ts:86-98`).
 - **B**: "Rinomina" compare due volte (`TagsPage.tsx:451,581`); colori fissi in `TagChip` (`TagChip.tsx:28`).
 
 ### Persone (integrato con `people-faces-workspace`)
 Punti dell'audit precedente:
 - **A**:
-  - l'unione avviene senza conferma e senza annullamento — **Risolto da `people-faces-workspace`**: `MergeDialog` chiede conferma e Ctrl+Z annulla (`people/MergeDialog.tsx`, `PeopleModule.tsx:262`). Resta: dopo l'unione non compare un toast con "Annulla", quindi chi non conosce Ctrl+Z non lo sa;
+  - l'unione avviene senza conferma e senza annullamento — **Risolto**: `MergeDialog` + Ctrl+Z; dopo l'unione `notifyPeopleUndo` mostra toast con Annulla (`MergeDialog.tsx:84-101`, `peopleUndo.ts`).
   - lo stato vuoto rimanda a una "rianalisi da Modelli AI" che non esiste — **Risolto**: i testi vuoti ora spiegano cosa fare (`i18n/features.ts:131-133`).
 - **M**:
   - id interni in vista ("Persona senza nome 12", `#1234`) — **Risolto**: i gruppi senza nome si chiamano "Gruppo di N volti" (`GroupList.tsx:95-98`);
   - "Apri in Persone" non apre la persona — **Risolto**: `OpenInPeople` apre la persona o il volto indicato (`people/OpenInPeople.tsx:21`).
 
-Il nuovo modulo risolve questi punti. Questa change lo allinea solo ai componenti e alle regole comuni, senza riprogettarlo. Problemi trovati nel modulo integrato *(nuovi)*:
-- **A**: "Sposta in…" agisce appena cambia il valore della select. Su Windows le frecce su una select chiusa cambiano il valore, e il tasto M porta il focus proprio lì: i volti si spostano per sbaglio (`FaceGrid.tsx:357-368`, `usePeopleHotkeys.ts:91-95`).
+Problemi trovati nel modulo integrato *(nuovi)*:
+- **A**: "Sposta in…" al change della select — **Risolto**: la select aggiorna solo lo stato; lo spostamento avviene sul pulsante «Sposta»; undo via toast (`FaceGrid.tsx:374-410`).
 - **M**:
-  - scorciatoie di una sola lettera (N, M, X, U, I) senza modificatori, senza modo di disattivarle e non elencate da nessuna parte (WCAG 2.1.4; `usePeopleHotkeys.ts:86-110`);
-  - I (ignora) e Ctrl+Z agiscono senza alcun riscontro: nessun toast, errori ignorati (`PeopleModule.tsx:248-273`);
-  - due modi diversi di unire: i gruppi con `MergeDialog` modale e annullabile, le identità con una select in linea nella scheda (`IdentityEditor.tsx:365-411`);
-  - numeri 0–1 senza spiegazione: punteggio del nome suggerito ("forse Anna · 0,87"), somiglianza nel suggerimento di unione, qualità sotto ogni volto, soglia dell'identità, punteggi in "Chi è?" (`GroupList.tsx:108`, `FaceGrid.tsx:481,717`, `IdentityEditor.tsx:259`, `WhoIs.tsx:176`);
-  - "Rimuovi volto" usa ancora `window.confirm`, mentre le altre correzioni si annullano (`FaceGrid.tsx:411`);
-  - `MergeDialog` non sposta il focus all'apertura e non lo trattiene (`MergeDialog.tsx:102-105`).
+  - scorciatoie a lettera singola (N, M, X, U, I) — **Motivato**: elencate in Aiuto; senza modificatore/spegnimento → change a11y; non sparano dietro i `Dialog` (`modalOpen()` in `keys.ts`).
+  - I (ignora) e Ctrl+Z senza riscontro — **Risolto**: toast «Gruppo ignorato» / undo; errori → `notifyError` (`PeopleModule.tsx:254-282`, `peopleUndo.ts`).
+  - due modi diversi di unire — **Motivato**: due flussi intenzionali (gruppi vs identità); allineamento UX completo differito.
+  - numeri 0–1 senza spiegazione — **Motivato**: scala % già in Impostazioni › Sensibilità; decimali di debug in Persone → passata dedicata.
+  - "Rimuovi volto" con `window.confirm` — **Risolto**: `ConfirmDialog` (`FaceGrid.tsx:544-551`).
+  - `MergeDialog` senza focus trap — **Risolto**: usa `Dialog` Radix (`MergeDialog.tsx:97-100`).
 - **B**:
   - ruoli ARIA sbagliati: `role="row"` su `<button>` nella tabella delle persone, `role="option"` senza `listbox` e con dentro il pulsante "Ripristina", `role="grid"` senza righe né celle, `aria-selected` su `<button>` (`GroupList.tsx:475,487,602,659`, `FaceGrid.tsx:573`);
   - il pulsante principale del suggerimento e di `MergeDialog` usa la classe `btn primary` invece di `btn-primary`, quindi non ha lo stile principale (`FaceGrid.tsx:487`, `MergeDialog.tsx:205`);
@@ -146,57 +148,58 @@ Il nuovo modulo risolve questi punti. Questa change lo allinea solo ai component
   - la scheda mostra il percorso del file delle identità in monospazio (`PersonCard.tsx:229`).
 
 ### Sequenza
-- **A**: un pulsante annidato in un altro (badge dei simili, `SequencePage.tsx:238/295`).
+- **A**: pulsante annidato (badge simili) — **Risolto**: toggle gruppo sibling fuori dal `BusyButton` (`SequencePage.tsx:400-415`).
 - **M**:
-  - la pagina non ha titolo (`SequencePage.tsx:926-929`);
-  - date ISO grezze nelle intestazioni di sessione (`SequencePage.tsx:468`);
-  - "Pausa tra sessioni" si salva all'uscita dal campo senza alcun riscontro (`SequencePage.tsx:185-188`);
-  - gergo nell'export ("Crominanza 4:4:4", "SSIM ≥ 0.985", "Hard link"; `i18n/modules.ts:246-256`).
+  - pagina senza titolo — **Risolto**: `ModulePage title={…}` (`SequencePage.tsx:910`).
+  - date ISO grezze — **Risolto**: `fmtDate(localDate(…))` (`SequencePage.tsx:532-535`).
+  - "Pausa tra sessioni" senza riscontro — **Risolto**: `gapState` + `role="status"/"alert"` (`SequencePage.tsx:145-163,247-264`).
+  - gergo nell'export — **Risolto**: etichette in prosa (dettaglio colori, verify senza SSIM, hardlink spiegato) (`i18n/modules.ts:254-282`, `SequenceExport.tsx`).
 - **B**: durante il caricamento non si vede nessun indicatore e la griglia resta vuota; `loading-feedback` non ha toccato questa pagina (`SequencePage.tsx:869-878,984`).
 
 ### Esporta e organizza
 - **A**:
-  - l'ambito predefinito è "Selezione", che vale 0 se non è selezionato nulla, quindi tutto è disabilitato senza spiegazione;
-  - "Crea cartelle" richiede di aver lanciato sia l'anteprima sia la verifica, e non lo dice (`OrganizePage.tsx:32,78,355`).
+  - ambito predefinito "Selezione" a 0 — **Risolto**: default `selection` solo se c'è selezione, altrimenti filtro; alert esplicativo (`OrganizePage.tsx:98-100,147-152,276-278`).
+  - "Crea cartelle" richiede anteprima+verifica senza dirlo — **Risolto**: passi, badge `createWaiting`, `disabledReason` (`OrganizePage.tsx:202-229,435-503`).
 - **M**:
-  - pulsanti "↑" e "×" senza etichetta (`OrganizePage.tsx:280,287`);
-  - lo storico è in forma grezza ("#12 · D:\out · 340"; `OrganizePage.tsx:367`);
-  - "Annulla" significa "torna indietro" (`OrganizePage.tsx:381`).
+  - pulsanti "↑" / "×" senza etichetta — **Risolto**: testo + `aria-label` (`OrganizePage.tsx:394-419`).
+  - storico grezzo — **Risolto**: `historyItem` / `historyMeta` (`OrganizePage.tsx:558-577`).
+  - "Annulla" = torna indietro — **Risolto**: undo = «Elimina le cartelle create…» (`OrganizePage.tsx:579-586`).
+- **Motivato** (fuori ambito, `design.md` punto 5): «Sposta file» non è offerto; il backend espone solo `copy` / `hardlink` / `symlink` (`OrganizePage.tsx:45`).
 
 ### Job
-- **A**: il tipo di job compare come identificatore inglese (`#12 · import`; `JobsPage.tsx:126,244`).
+- **A**: tipo job come id inglese — **Risolto**: `jobTitle` / `jobs.kinds.*` (`lib/jobs.ts:66-78`, `JobsPage.tsx:126,149-151`).
 - **M**:
-  - "Annulla" ferma un job senza conferma e senza gestire l'errore (`JobsPage.tsx:151-158`) — **In parte risolto da `loading-feedback`**: ora è un `BusyButton`, che mostra l'errore in un toast (con il testo grezzo del backend). Manca ancora la conferma;
-  - lo storico non ha titolo (`JobsPage.tsx:234-236`).
+  - "Annulla" senza conferma — **Motivato**: etichetta «Interrompi»; conferma solo sui job che scrivono file (2.3). Errori gestiti (`JobsPage.tsx:182-198`).
+  - storico senza titolo — **Risolto**: `<h2 id="jobs-history">` (`JobsPage.tsx:280-283`).
 - **B**: lo stato vuoto non ha un pulsante per andare a Importa (`JobsPage.tsx:392`).
 
 ### Modelli AI
 - **M**:
-  - impostazioni duplicate (vedi S7);
-  - una colonna SHA-256 (`ModelsPage.tsx:118-120,391`);
-  - "Verifica tutti" è l'azione principale, mentre l'utente comune vuole "Scarica" (`ModelsPage.tsx:361-365`).
+  - impostazioni duplicate (vedi S7) — **Risolto**: unico posto in Impostazioni › Modelli / Diagnostica.
+  - colonna SHA-256 — **Motivato**: utile in verifica; nascosta dietro divulgazione progressiva → change successiva.
+  - "Verifica tutti" come azione principale — **Motivato**: priorità Scarica vs Verifica differita (cosmetica).
 - **Gergo**: Runtime AI, ONNX, Provider, Self-test, Budget.
 
 ### Diagnostica
-- **A**: le righe della tabella si selezionano solo con il mouse (`<tr onClick>` senza tabIndex, `DiagnosticsPage.tsx:387-390`).
+- **A**: righe solo mouse — **Risolto**: `DataTable` con `tabIndex` e frecce (`DataTable.tsx:64-119`, `DiagnosticsPage.tsx:352-363`).
 - **M**:
-  - gli errori appaiono come notizie neutre;
-  - la fase `modelli` non è tradotta (`DiagnosticsPage.tsx:21`, manca in `i18n/it.ts:80-96`);
-  - il livello di log è duplicato (`DiagnosticsPage.tsx:244-249`), con i valori grezzi `error`, `warn`…
+  - errori come notizie neutre — **Risolto**: badge `danger`/`warn` (`DiagnosticsPage.tsx:19,191`, `ErrorGroups.tsx:102-105`).
+  - fase `modelli` non tradotta — **Risolto**: `jobs.phases.modelli` (`i18n/it.ts:129`).
+  - livello di log duplicato con valori grezzi — **Risolto**: un solo controllo; label `diag.logLevels.*` (`DiagnosticsPage.tsx:266-283`).
 
 ### Impostazioni
 - **A**:
-  - "Salva" sta a metà pagina, mentre gli avvisi compaiono in cima, fuori schermo (`SettingsPage.tsx:124,329`);
-  - "Elimina tutti i dati dei volti" ha lo stile di un pulsante normale (`SettingsPage.tsx:233-250`).
-- **M**: tre modi di salvare diversi (Salva, Applica soglie, Salva tassonomia) e un unico blocco senza titoli che mescola risorse, AI, aspetto e percorsi.
+  - "Salva" a metà pagina — **Risolto**: autosave + «Salvato» sul campo (`settingsState.tsx:1-6,133-148`).
+  - "Elimina tutti i dati dei volti" stile normale — **Risolto**: `variant="danger"` + `ConfirmDialog` (`AdvancedSection.tsx:183-192`).
+- **M**: tre modi di salvare / blocco misto — **Risolto**: sezioni + autosave vs `ApplyBar` (`SettingsPage.tsx:24-32,214-225`).
 - **Linguaggio**: "embedding", valori 0–1 con nomi diversi per lo stesso concetto (vedi §6).
 
 ### Onboarding
-- **M**: il passo "sistema" mostra numeri senza etichette ("16 GB RAM · 8 CPU · 4000 MB") e non si può saltare (`Onboarding.tsx:69,154`).
-- **M**: il passo "modelli" mostra "3 / 7" e blocca finché l'utente non preme (`Onboarding.tsx:79-80`).
-- **M**: il percorso si scrive in un campo di testo (`Onboarding.tsx:98`).
-- **M**: alla fine porta a Job invece che alle foto (`Onboarding.tsx:130`).
-- **M**: non si può rivedere.
+- **M**: passo sistema con numeri senza etichette / non saltabile — **Risolto**: `SystemSummary` in prosa; «Lo faccio dopo» (`Onboarding.tsx:209-227`).
+- **M**: passo modelli "3 / 7" bloccante — **Risolto**: niente contatore 3/7; skip con later (`Onboarding.tsx:209-246`).
+- **M**: percorso in campo di testo — **Motivato**: `FolderPicker` + campo editabile intenzionale per chi preferisce digitare.
+- **M**: fine → Job — **Risolto**: apre Libreria (`Onboarding.tsx:66-69`).
+- **M**: non si può rivedere — **Risolto**: Aiuto › «Rivedi l'introduzione» (`TopBar.tsx:129-133`).
 
 ### Pannelli flottanti
 - **B**: spostamento e ridimensionamento solo con il mouse (WCAG 2.5.7 chiede un'alternativa al trascinamento).
@@ -268,6 +271,46 @@ Il nuovo modulo risolve questi punti. Questa change lo allinea solo ai component
 6. **Sistema visibile ma discreto**: un indicatore delle attività sempre presente; i dettagli tecnici solo a richiesta.
 7. **Accessibile per costruzione**: i componenti condivisi garantiscono focus, etichette, bersagli e contrasto.
 8. **Stabilità**: una sola riorganizzazione della navigazione, dopo che tutte le funzioni previste sono integrate.
+
+---
+
+## 9. Verifica finale 8.5
+
+Confronto A/M di §2–§4 con il codice corrente su `feat/ui-ux-overhaul` (fasi 7–8). Le voci **B** non sono conteggiate.
+
+| Priorità | Totale | Risolto | In parte risolto | Motivato | Aperto |
+|---|---:|---:|---:|---:|---:|
+| **A** | 19 | 18 | 0 | 1 | 0 |
+| **M** | 46 + 1* | 36 | 0 | 10 + 1* | 0 |
+
+\* **Motivato** aggiuntivo (non era una riga A/M dell’audit originale): «Sposta file» in Esporta › Organizza — fuori ambito; backend solo `copy` / `hardlink` / `symlink` (`design.md`).
+
+### Motivato (A)
+
+| # | Motivo |
+|---|---|
+| **L3** (residuo) | Esporta / Organizza dalla `SelectionBar` cambiano modulo senza etichetta extra: accettato — le voci del menu usano già i nomi dei moduli di destinazione; un toast/indicatore dedicato è fuori da questa change. |
+
+### Motivato (M)
+
+| # | Motivo |
+|---|---|
+| **L12** | Sciogli/rimuovi simili senza conferma/busy: accettato per ora (si correggono a mano, inventario undo 1.5); busy/errori della sezione → change successiva. |
+| **Persone · due UX unione** | Due flussi intenzionali (gruppi vs identità); allineamento UX completo differito. |
+| **Persone · punteggi 0–1** | Scala % già in Impostazioni › Sensibilità (6.3); i decimali di debug in Persone restano fino a una passata dedicata. |
+| **Modelli · SHA-256** | Utile in Diagnostica/verifica; nascosto dietro divulgazione progressiva → change successiva. |
+| **Modelli · Verifica tutti** | Priorità del bottone Scarica vs Verifica: rifinitura cosmetica differita. |
+| **Importa · glob** | Pattern sotto Avanzate con esempi in parole: residuo accettabile (7.1). |
+| **Cataloghi · Elimina** | `ConfirmDialog` ok; stile danger del trigger sulla card differito. |
+| **Persone · hotkey 1 lettera** | Elencate in Aiuto; spegnimento/modificatore → change a11y dedicata. |
+| **Job · Interrompi** | Conferma solo sui job che scrivono file: conforme al design (2.3). |
+| **Onboarding · cartella** | `FolderPicker` + campo editabile per percorso: intenzionale per chi preferisce digitare. |
+
+### Controlli handoff (verificati)
+- Moduli fase 7 allineati (Importa, Cataloghi, Tag, Persone, Sequenza, Esporta, Diagnostica, pannelli).
+- «Sposta in…» solo sul pulsante; undo ok.
+- Scorciatoie non sparano dietro i `Dialog` condivisi.
+- `window.confirm` assente; `PENDING` glossario / `A11Y_KNOWN` svuotati.
 
 ---
 

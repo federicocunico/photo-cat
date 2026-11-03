@@ -34,9 +34,7 @@ export function DateFacet({
         {chosen === v.value && nested?.(v)}
       </div>
     ));
-  const nest = (children: ReactNode) => (
-    <div style={{ paddingLeft: 18, display: "flex", flexDirection: "column" }}>{children}</div>
-  );
+  const nest = (children: ReactNode) => <div className="facet-date-nest">{children}</div>;
   return (
     <FacetList
       facetKey={{ kind: "year" }}

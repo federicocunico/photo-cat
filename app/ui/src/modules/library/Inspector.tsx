@@ -315,7 +315,7 @@ function SingleInspector({ d }: { d: MediaDetail }) {
                 {faceChipLabel(face, t)}
                 <OpenInPeople
                   target={{ face: face.id }}
-                  style={{ padding: "0 4px", fontSize: 12 }}
+                  className="btn btn-ghost facet-icon-btn"
                 />
               </span>
             ))}
@@ -418,7 +418,7 @@ function SingleInspector({ d }: { d: MediaDetail }) {
         </Grid2>
         <div className="mono inspector-path">{d.item.path}</div>
         {d.duplicates.length > 0 && (
-          <span style={{ color: "var(--pc-warn)" }}>
+          <span className="inspector-warn">
             {t("library.inspector.duplicates", { count: d.duplicates.length })}
           </span>
         )}

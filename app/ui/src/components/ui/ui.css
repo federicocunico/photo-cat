@@ -389,6 +389,9 @@
   gap: var(--pc-space-3);
   box-shadow: var(--pc-elevation-dialog);
 }
+.ui-dialog-confirm {
+  width: min(440px, calc(100vw - 32px));
+}
 .ui-dialog h2 {
   margin: 0;
   font: var(--pc-weight-bold) var(--pc-font-lg) var(--pc-font-ui);

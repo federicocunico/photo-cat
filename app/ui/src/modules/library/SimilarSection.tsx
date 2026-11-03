@@ -43,7 +43,7 @@ export function SimilarSection({ id }: { id: number }) {
         {t("similar.title")} ({g.members.length})
       </h3>
       {isCover && <p className="muted">{t("similar.isCover")}</p>}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div className="similar-thumbs">
         {g.members.map((m) => {
           const url = thumbUrl(m.thumb);
           return (
@@ -53,14 +53,9 @@ export function SimilarSection({ id }: { id: number }) {
               title={m.name}
               data-testid={`similar-member-${m.id}`}
               aria-current={m.id === id}
+              className="similar-thumb"
               onClick={() => setSelection([m.id], m.id)}
               style={{
-                width: 56,
-                height: 42,
-                padding: 0,
-                borderRadius: 4,
-                overflow: "hidden",
-                cursor: "pointer",
                 border: `2px solid ${
                   m.id === g.cover
                     ? "var(--pc-warn)"
@@ -68,21 +63,14 @@ export function SimilarSection({ id }: { id: number }) {
                       ? "var(--pc-accent)"
                       : "transparent"
                 }`,
-                background: "var(--pc-thumb-bg)",
               }}
             >
-              {url && (
-                <img
-                  src={url}
-                  alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              )}
+              {url && <img src={url} alt="" />}
             </button>
           );
         })}
       </div>
-      <div className="feature-actions" style={{ marginTop: 8 }}>
+      <div className="feature-actions similar-actions">
         {!isCover && (
           <button
             type="button"

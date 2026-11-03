@@ -20,6 +20,10 @@ import {
   type PeopleSections,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
+import { Button } from "../../components/ui";
+import { notifyError } from "../../store/toasts";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import "./people.css";
 import { fmtDate, fmtDec, fmtInt } from "../../lib/format";
 import { useDebounced } from "../library/facets";
 import { clickSelect } from "../../store/library";
@@ -65,17 +69,9 @@ function Cover({ group }: { group: GroupRow }) {
   return (
     <span
       aria-hidden
+      className="people-cover people-cover--sm"
       style={{
-        display: "block",
-        width: 44,
-        height: 44,
-        borderRadius: "50%",
-        overflow: "hidden",
-        backgroundColor: "var(--pc-thumb-bg)",
         backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        flexShrink: 0,
       }}
     >
       {src && !failed && (
@@ -85,7 +81,7 @@ function Cover({ group }: { group: GroupRow }) {
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="people-cover-img"
         />
       )}
     </span>
@@ -144,12 +140,10 @@ export const GroupList = forwardRef<
     setRestoreBusy(id);
     try {
       await commands.correctPerson({ action: "restore", group: id });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["people"] }),
-        qc.invalidateQueries({ queryKey: ["people-groups"] }),
-        qc.invalidateQueries({ queryKey: ["people-sections"] }),
-        qc.invalidateQueries({ queryKey: ["group-faces"] }),
-      ]);
+      await refreshPeople(qc);
+      notifyPeopleUndo(qc, t("people.restoredDone"));
+    } catch (err) {
+      notifyError(err);
     } finally {
       setRestoreBusy(null);
     }
@@ -278,23 +272,15 @@ export const GroupList = forwardRef<
       type="button"
       role="tab"
       aria-selected={section === id}
-      className="btn"
+      className="btn people-tab"
       onClick={() => onSectionChange(id)}
       style={{
-        flex: "1 1 auto",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 0,
-        padding: "6px 10px",
-        minHeight: 0,
-        textAlign: "left",
         background: section === id ? "var(--pc-raised)" : "transparent",
         borderColor: section === id ? "var(--pc-border)" : "transparent",
       }}
     >
-      <b style={{ fontWeight: 600 }}>{label}</b>
-      <span className="mono muted" style={{ fontSize: 12 }}>
+      <b className="people-tab-label">{label}</b>
+      <span className="mono muted people-muted-sm">
         {id === "review" ? t("people.groupsCount", { count }) : fmtInt(count)}
       </span>
     </button>
@@ -354,29 +340,9 @@ export const GroupList = forwardRef<
   const everyone = identities.data?.identities ?? [];
 
   return (
-    <aside
-      aria-label={t("people.listLabel")}
-      style={{
-        flex: "1 1 260px",
-        maxWidth: 320,
-        minWidth: 0,
-        borderRight: "1px solid var(--pc-border)",
-        background: "var(--pc-panel-alt)",
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-      }}
-    >
-      <div
-        style={{
-          padding: 12,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          borderBottom: "1px solid var(--pc-border)",
-        }}
-      >
-        <div role="tablist" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+    <aside aria-label={t("people.listLabel")} className="people-list">
+      <div className="people-list-head">
+        <div role="tablist" className="people-tabs">
           {tab("review", t("people.sectionReview"), counts.review)}
           {tab("people", t("people.sectionPeople"), peopleCount)}
           {tab("ignored", t("people.sectionIgnored"), counts.ignored)}
@@ -384,13 +350,12 @@ export const GroupList = forwardRef<
         {section === "people" ? (
           <>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary people-stretch"
               onClick={() => onCreateIdentity?.()}
-              style={{ alignSelf: "stretch" }}
             >
               {t("identities.newButton")}
             </button>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div className="people-wrap people-wrap--gap-sm">
               <button
                 type="button"
                 className="pill"
@@ -415,34 +380,31 @@ export const GroupList = forwardRef<
             </div>
             <input
               type="search"
-              className="field"
+              className="field people-full"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("identities.search")}
               aria-label={t("identities.search")}
-              style={{ width: "100%" }}
             />
           </>
         ) : (
           <>
             <input
-              className="field"
+              className="field people-full"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("people.filterPlaceholder")}
               aria-label={t("people.filterPlaceholder")}
-              style={{ width: "100%" }}
             />
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div className="people-wrap people-wrap--gap-sm">
               {SORTS.map((s) => (
                 <button
                   key={s}
                   type="button"
-                  className="chip"
+                  className="chip people-sort-chip"
                   aria-pressed={sort === s}
                   onClick={() => setSort(s)}
                   style={{
-                    cursor: "pointer",
                     border: sort === s ? "1px solid var(--pc-accent)" : "1px solid transparent",
                     background: sort === s ? "var(--pc-accent-soft-bg)" : "var(--pc-raised)",
                     color: sort === s ? "var(--pc-accent-soft-text)" : "var(--pc-text-soft)",
@@ -456,103 +418,59 @@ export const GroupList = forwardRef<
         )}
       </div>
 
-      <div
-        ref={scrollRef}
-        data-testid="group-list-scroll"
-        style={{ flex: 1, overflow: "auto", minHeight: 0, padding: 6 }}
-      >
+      <div ref={scrollRef} data-testid="group-list-scroll" className="people-list-scroll">
         {section === "people" ? (
           <QueryView
             query={identities}
             isEmpty={() => identityRows.length === 0}
-            skeleton={<p className="muted">{t("people.loading")}</p>}
             error={t("people.failed")}
             empty={<p className="muted">{emptyMsg}</p>}
           >
             {() => (
               <>
-                <div
-                  role="table"
-                  aria-label={t("identities.title")}
-                  style={{ display: "flex", flexDirection: "column", gap: 2 }}
-                >
+                <div role="list" aria-label={t("identities.title")} className="people-id-list">
                   {identityRows.map((r) => {
                     const selected =
                       (target?.kind === "identity" && target.uid === r.uid) ||
                       (target?.kind === "group" && r.person != null && target.id === r.person);
                     return (
-                      <button
-                        key={r.uid}
-                        type="button"
-                        role="row"
-                        aria-selected={selected}
-                        onClick={() => selectIdentity(r)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "44px 1fr auto",
-                          gap: 10,
-                          alignItems: "center",
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 6,
-                          border: selected
-                            ? "1px solid var(--pc-selection-border)"
-                            : "1px solid transparent",
-                          background: selected ? "var(--pc-selection-bg)" : "transparent",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          color: "inherit",
-                          font: "inherit",
-                        }}
-                      >
-                        <span
-                          aria-hidden
+                      <div key={r.uid} role="listitem">
+                        <button
+                          type="button"
+                          aria-current={selected || undefined}
+                          onClick={() => selectIdentity(r)}
+                          className="people-list-item people-list-item--id"
                           style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: "50%",
-                            background: "var(--pc-thumb-bg)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: "var(--pc-text-soft)",
+                            border: selected
+                              ? "1px solid var(--pc-selection-border)"
+                              : "1px solid transparent",
+                            background: selected ? "var(--pc-selection-bg)" : "transparent",
                           }}
                         >
-                          {r.name
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((w) => w[0]?.toUpperCase())
-                            .join("")}
-                        </span>
-                        <span style={{ minWidth: 0 }}>
-                          <span
-                            role="cell"
-                            style={{
-                              display: "block",
-                              fontWeight: 600,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {r.name}
+                          <span aria-hidden className="people-initials">
+                            {r.name
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((w) => w[0]?.toUpperCase())
+                              .join("")}
                           </span>
-                          <span className="muted" style={{ fontSize: 12 }}>
-                            {r.group ?? t("identities.notLinkedShort")}
-                            {r.faces
-                              ? ` · ${t("identities.refCount", { count: r.faces })}`
-                              : ` · ${t("identities.noRefs")}`}
+                          <span className="people-list-text">
+                            <span className="people-list-name">{r.name}</span>
+                            <span className="muted people-muted-sm">
+                              {r.group ?? t("identities.notLinkedShort")}
+                              {r.faces
+                                ? ` · ${t("identities.refCount", { count: r.faces })}`
+                                : ` · ${t("identities.noRefs")}`}
+                            </span>
                           </span>
-                        </span>
-                        <span role="cell" className="mono muted" style={{ fontSize: 12 }}>
-                          {r.person != null && r.photos > 0
-                            ? t("people.photos", { count: r.photos })
-                            : t("people.noPhotosInLibrary")}
-                        </span>
-                      </button>
+                          <span className="mono muted people-muted-sm">
+                            {r.person != null && r.photos > 0
+                              ? t("people.photos", { count: r.photos })
+                              : t("people.noPhotosInLibrary")}
+                          </span>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -563,112 +481,99 @@ export const GroupList = forwardRef<
           <QueryView
             query={groups}
             isEmpty={() => rows.length === 0 && counts.singles === 0 && counts.discarded === 0}
-            skeleton={<p className="muted">{t("people.loading")}</p>}
             error={t("people.failed")}
             empty={<p className="muted">{emptyMsg}</p>}
           >
             {() => (
               <>
-                <div style={{ height: virt.getTotalSize(), position: "relative" }}>
+                <div
+                  role="listbox"
+                  aria-label={t("people.listLabel")}
+                  aria-multiselectable
+                  className="people-virt"
+                  style={{ height: virt.getTotalSize() }}
+                >
                   {vitems.map((vi) => {
                     const item = virtItems[vi.index];
                     if (!item) return null;
+                    const groupSelected =
+                      item.kind === "group" &&
+                      ((target?.kind === "group" && target.id === item.group.id) ||
+                        selectedIds.includes(item.group.id));
                     return (
                       <div
                         key={vi.key}
+                        className="people-virt-row"
                         style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          right: 0,
                           height: vi.size,
                           transform: `translateY(${vi.start}px)`,
                         }}
                       >
                         {item.kind === "label" && (
-                          <div
-                            className="label"
-                            style={{
-                              padding: "10px 8px 4px",
-                              fontSize: 12,
-                              letterSpacing: "0.06em",
-                            }}
-                          >
+                          <div role="presentation" className="label people-section-label">
                             {item.label}
                           </div>
                         )}
                         {item.kind === "group" && (
-                          <div
-                            role="option"
-                            tabIndex={0}
-                            data-group-id={item.group.id}
-                            aria-selected={
-                              target?.kind === "group" && target.id === item.group.id
-                                ? true
-                                : selectedIds.includes(item.group.id)
-                            }
-                            onClick={(e) => selectGroup(item.group.id, e, item.group)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                selectGroup(item.group.id, e as unknown as MouseEvent, item.group);
+                          <div className={section === "ignored" ? "people-row" : undefined}>
+                            <div
+                              role="option"
+                              tabIndex={0}
+                              data-group-id={item.group.id}
+                              aria-selected={
+                                target?.kind === "group" && target.id === item.group.id
+                                  ? true
+                                  : selectedIds.includes(item.group.id)
                               }
-                            }}
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "44px 1fr auto",
-                              gap: 10,
-                              alignItems: "center",
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
-                              border:
-                                (target?.kind === "group" && target.id === item.group.id) ||
-                                selectedIds.includes(item.group.id)
+                              onClick={(e) => selectGroup(item.group.id, e, item.group)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  selectGroup(
+                                    item.group.id,
+                                    e as unknown as MouseEvent,
+                                    item.group,
+                                  );
+                                }
+                              }}
+                              className={
+                                section === "ignored"
+                                  ? "people-list-item people-list-item--ignored"
+                                  : "people-list-item people-list-item--group"
+                              }
+                              style={{
+                                border: groupSelected
                                   ? "1px solid var(--pc-selection-border)"
                                   : "1px solid transparent",
-                              background:
-                                (target?.kind === "group" && target.id === item.group.id) ||
-                                selectedIds.includes(item.group.id)
+                                background: groupSelected
                                   ? "var(--pc-selection-bg)"
                                   : "transparent",
-                              cursor: "pointer",
-                              color: "inherit",
-                              font: "inherit",
-                              textAlign: "left",
-                            }}
-                          >
-                            <Cover group={item.group} />
-                            <span style={{ minWidth: 0 }}>
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontWeight: 600,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {groupTitle(item.group, t)}
+                              }}
+                            >
+                              <Cover group={item.group} />
+                              <span className="people-list-text">
+                                <span className="people-list-name">
+                                  {groupTitle(item.group, t)}
+                                </span>
+                                <span className="muted people-muted-sm">
+                                  {groupSub(item.group, t)}
+                                </span>
                               </span>
-                              <span className="muted" style={{ fontSize: 12 }}>
-                                {groupSub(item.group, t)}
-                              </span>
-                            </span>
-                            {section === "ignored" ? (
-                              <button
-                                type="button"
-                                className="btn"
+                              {section !== "ignored" && (
+                                <span className="mono muted people-muted-sm">
+                                  {t("people.photos", { count: item.group.photos })}
+                                </span>
+                              )}
+                            </div>
+                            {/* "Ripristina" accanto alla riga, non dentro: niente controlli annidati. */}
+                            {section === "ignored" && (
+                              <Button
+                                size="sm"
                                 disabled={restoreBusy === item.group.id}
-                                onClick={(e) => void restoreGroup(item.group.id, e)}
-                                style={{ fontSize: 12, padding: "0 10px", minHeight: 28 }}
+                                onClick={(e) => restoreGroup(item.group.id, e)}
                               >
                                 {t("people.restore")}
-                              </button>
-                            ) : (
-                              <span className="mono muted" style={{ fontSize: 12 }}>
-                                {t("people.photos", { count: item.group.photos })}
-                              </span>
+                              </Button>
                             )}
                           </div>
                         )}
@@ -684,15 +589,10 @@ export const GroupList = forwardRef<
                                 identity: null,
                               })
                             }
+                            role="option"
                             aria-selected={target?.kind === "singles"}
+                            className="people-list-item people-list-item--pair"
                             style={{
-                              display: "grid",
-                              gridTemplateColumns: "44px 1fr",
-                              gap: 10,
-                              alignItems: "center",
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
                               border:
                                 target?.kind === "singles"
                                   ? "1px solid var(--pc-selection-border)"
@@ -701,26 +601,14 @@ export const GroupList = forwardRef<
                                 target?.kind === "singles"
                                   ? "var(--pc-selection-bg)"
                                   : "transparent",
-                              textAlign: "left",
-                              cursor: "pointer",
-                              color: "inherit",
-                              font: "inherit",
                             }}
                           >
-                            <span
-                              aria-hidden
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: "50%",
-                                background: "var(--pc-thumb-bg)",
-                              }}
-                            />
-                            <span style={{ minWidth: 0 }}>
-                              <span style={{ display: "block", fontWeight: 600 }}>
+                            <span aria-hidden className="people-cover-ph" />
+                            <span className="people-list-text">
+                              <span className="people-list-name-plain">
                                 {t("people.singlesLabel", { count: item.count })}
                               </span>
-                              <span className="muted" style={{ fontSize: 12 }}>
+                              <span className="muted people-muted-sm">
                                 {t("people.singlesSub")}
                               </span>
                             </span>
@@ -738,15 +626,10 @@ export const GroupList = forwardRef<
                                 identity: null,
                               })
                             }
+                            role="option"
                             aria-selected={target?.kind === "discarded"}
+                            className="people-list-item people-list-item--pair"
                             style={{
-                              display: "grid",
-                              gridTemplateColumns: "44px 1fr",
-                              gap: 10,
-                              alignItems: "center",
-                              width: "100%",
-                              padding: 6,
-                              borderRadius: 6,
                               border:
                                 target?.kind === "discarded"
                                   ? "1px solid var(--pc-selection-border)"
@@ -755,26 +638,14 @@ export const GroupList = forwardRef<
                                 target?.kind === "discarded"
                                   ? "var(--pc-selection-bg)"
                                   : "transparent",
-                              textAlign: "left",
-                              cursor: "pointer",
-                              color: "inherit",
-                              font: "inherit",
                             }}
                           >
-                            <span
-                              aria-hidden
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: "50%",
-                                background: "var(--pc-thumb-bg)",
-                              }}
-                            />
-                            <span style={{ minWidth: 0 }}>
-                              <span style={{ display: "block", fontWeight: 600 }}>
+                            <span aria-hidden className="people-cover-ph" />
+                            <span className="people-list-text">
+                              <span className="people-list-name-plain">
                                 {t("people.discardedAllLabel", { count: item.count })}
                               </span>
-                              <span className="muted" style={{ fontSize: 12 }}>
+                              <span className="muted people-muted-sm">
                                 {t("people.discardedAllSub")}
                               </span>
                             </span>

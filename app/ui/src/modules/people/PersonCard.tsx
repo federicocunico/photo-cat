@@ -10,12 +10,15 @@ import {
   type PeopleSection,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
+import { Button, InlineAlert } from "../../components/ui";
+import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
 import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { IdentityEditor } from "./IdentityEditor";
 import { MergeDialog } from "./MergeDialog";
 import { Transfer } from "./Transfer";
 import { WhoIs } from "./WhoIs";
 import type { GroupListTarget } from "./GroupList";
+import "./people.css";
 
 export type PersonCardHandle = {
   focusWhoIs: () => void;
@@ -31,31 +34,14 @@ function CoverPreview({ group }: { group: GroupRow }) {
   const placeholder = cover?.thumb ? thumbUrl(cover.thumb) : null;
   const [failed, setFailed] = useState(false);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span
-        className="label"
-        style={{
-          fontSize: 12,
-          letterSpacing: "0.06em",
-          color: "var(--pc-text-2)",
-          fontWeight: 600,
-        }}
-      >
-        {t("people.cover")}
-      </span>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="people-stack people-stack--gap-xs">
+      <span className="label people-label">{t("people.cover")}</span>
+      <div className="people-inline">
         <span
           aria-hidden
+          className="people-cover people-cover--md"
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            overflow: "hidden",
-            backgroundColor: "var(--pc-thumb-bg)",
             backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            flexShrink: 0,
           }}
         >
           {src && !failed && (
@@ -63,13 +49,11 @@ function CoverPreview({ group }: { group: GroupRow }) {
               src={src}
               alt=""
               onError={() => setFailed(true)}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              className="people-cover-img"
             />
           )}
         </span>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {t("people.coverHint")}
-        </span>
+        <span className="muted people-muted-sm">{t("people.coverHint")}</span>
       </div>
     </div>
   );
@@ -129,22 +113,16 @@ export const PersonCard = forwardRef<
     identity ??
     (group?.identityUid ? (everyone.find((r) => r.uid === group.identityUid) ?? null) : null);
 
-  const refresh = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: ["people"] }),
-      qc.invalidateQueries({ queryKey: ["people-groups"] }),
-      qc.invalidateQueries({ queryKey: ["people-sections"] }),
-      qc.invalidateQueries({ queryKey: ["group-faces"] }),
-      qc.invalidateQueries({ queryKey: ["faces"] }),
-      qc.invalidateQueries({ queryKey: ["identities"] }),
-    ]);
+  const refresh = () => refreshPeople(qc);
 
-  const correct = async (c: Correction) => {
+  /** Correzione del gruppo; `done` è l'avviso con "Annulla operazione". */
+  const correct = async (c: Correction, done: string) => {
     setBusy(true);
     setError("");
     try {
       await commands.correctPerson(c);
       await refresh();
+      notifyPeopleUndo(qc, done);
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     } finally {
@@ -169,7 +147,7 @@ export const PersonCard = forwardRef<
     },
     ignoreGroup() {
       if (!group || section === "ignored" || busy) return false;
-      void correct({ action: "ignore", group: group.id });
+      void correct({ action: "ignore", group: group.id }, t("people.ignoredDone"));
       return true;
     },
   }));
@@ -177,17 +155,12 @@ export const PersonCard = forwardRef<
   // Sezione Persone (e creazione): editor identità + Transfer.
   if (section === "people" || creating) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
+      <div className="people-stack people-stack--gap-xl people-stack--scroll">
         <QueryView
           query={identities}
           isEmpty={() => !creating && !row}
-          skeleton={<p className="muted">{t("people.loading")}</p>}
           error={t("people.failed")}
-          empty={
-            <p className="muted" style={{ margin: 0 }}>
-              {t("people.pickGroup")}
-            </p>
-          }
+          empty={<p className="muted people-muted-reset">{t("people.pickGroup")}</p>}
         >
           {() => null}
         </QueryView>
@@ -209,24 +182,13 @@ export const PersonCard = forwardRef<
             }}
           />
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            className="label"
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.06em",
-              color: "var(--pc-text-2)",
-              fontWeight: 600,
-            }}
-          >
-            {t("people.transfer")}
-          </span>
+        <div className="people-stack people-stack--gap-xs">
+          <span className="label people-label">{t("people.transfer")}</span>
           <Transfer onDone={() => void refresh()} />
         </div>
         {identities.data?.storePath && (
-          <p role="note" className="muted" style={{ margin: 0, fontSize: 12 }}>
-            {t("identities.appNote")} {t("identities.storeAt")}{" "}
-            <code className="mono">{identities.data.storePath}</code>
+          <p role="note" className="muted people-muted-reset people-muted-sm">
+            {t("identities.appNote")} {t("identities.storeAt")} {identities.data.storePath}
           </p>
         )}
       </div>
@@ -234,73 +196,45 @@ export const PersonCard = forwardRef<
   }
 
   if (target?.kind === "singles") {
-    return (
-      <p className="muted" style={{ margin: 0 }}>
-        {t("people.singlesCard")}
-      </p>
-    );
+    return <p className="muted people-muted-reset">{t("people.singlesCard")}</p>;
   }
 
   if (!group || target?.kind !== "group") {
-    return (
-      <p className="muted" style={{ margin: 0 }}>
-        {t("people.pickGroup")}
-      </p>
-    );
+    return <p className="muted people-muted-reset">{t("people.pickGroup")}</p>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
+    <div className="people-stack people-stack--gap-xl people-stack--scroll">
       {section === "review" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            className="label"
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.06em",
-              color: "var(--pc-text-2)",
-              fontWeight: 600,
-            }}
-          >
-            {t("identities.whoIs")}
-          </span>
+        <div className="people-stack people-stack--gap-xs">
+          <span className="label people-label">{t("identities.whoIs")}</span>
           <WhoIs
             person={group.id}
             linked={group.identityUid ? (group.name ?? null) : null}
             onLinked={onLinked}
             inputRef={whoIsRef}
           />
-          <span className="muted" style={{ fontSize: 12 }}>
-            {t("people.whoIsHint")}
-          </span>
+          <span className="muted people-muted-sm">{t("people.whoIsHint")}</span>
         </div>
       )}
 
       <CoverPreview group={group} />
       {selectedFaceIds.length === 1 && (
-        <button
-          className="btn"
+        <Button
           disabled={busy}
           onClick={() =>
-            void correct({ action: "set_cover", group: group.id, face: selectedFaceIds[0]! })
+            correct(
+              { action: "set_cover", group: group.id, face: selectedFaceIds[0]! },
+              t("people.coverDone"),
+            )
           }
         >
           {t("people.useAsCover")}
-        </button>
+        </Button>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <span
-          className="label"
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.06em",
-            color: "var(--pc-text-2)",
-            fontWeight: 600,
-          }}
-        >
-          {t("people.groupActions")}
-        </span>
+      <div className="people-stack people-stack--gap">
+        <span className="label people-label">{t("people.groupActions")}</span>
         <select
           ref={mergeSelectRef}
           className="field"
@@ -317,34 +251,38 @@ export const PersonCard = forwardRef<
               </option>
             ))}
         </select>
-        <button className="btn" disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
+        <Button disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
           {t("people.merge")}
-        </button>
+        </Button>
         {section !== "ignored" && (
           <>
-            <button
-              className="btn"
+            <Button
               disabled={busy}
-              onClick={() => void correct({ action: "ignore", group: group.id })}
+              onClick={() =>
+                correct({ action: "ignore", group: group.id }, t("people.ignoredDone"))
+              }
             >
               {t("people.ignore")}
-            </button>
-            <span className="muted" style={{ fontSize: 12 }}>
-              {t("people.ignoreHint")}
-            </span>
+            </Button>
+            <span className="muted people-muted-sm">{t("people.ignoreHint")}</span>
           </>
         )}
         {section === "ignored" && (
-          <button
-            className="btn"
+          <Button
             disabled={busy}
-            onClick={() => void correct({ action: "restore", group: group.id })}
+            onClick={() =>
+              correct({ action: "restore", group: group.id }, t("people.restoredDone"))
+            }
           >
             {t("people.restore")}
-          </button>
+          </Button>
         )}
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <InlineAlert tone="danger" title={t("people.failed")}>
+          {error}
+        </InlineAlert>
+      )}
       {mergeOpen && mergeTo && (
         <MergeDialog
           sources={[group]}

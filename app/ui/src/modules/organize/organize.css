@@ -1,0 +1,129 @@
+/* Esporta: sezioni "Esporta dati", "Organizza in cartelle", "Sequenza" e storico. */
+.export-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.export-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-5);
+  padding: 0 var(--pc-space-5) var(--pc-space-5);
+  max-width: 960px;
+}
+.export-hint {
+  margin: 0;
+}
+.export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+  align-items: flex-end;
+}
+.export-file {
+  flex: 1 1 320px;
+  display: flex;
+  gap: var(--pc-space-2);
+  align-items: flex-end;
+}
+.export-file > .ui-field {
+  flex: 1;
+}
+.export-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  min-height: 24px;
+}
+.export-separator {
+  width: 48px;
+}
+.export-fields,
+.export-levels {
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  padding: var(--pc-space-3) var(--pc-space-4);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.export-fields > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2) var(--pc-space-4);
+}
+.export-levels ol {
+  margin: 0;
+  padding-left: var(--pc-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.export-levels li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.export-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.export-steps {
+  margin: 0;
+  padding-left: var(--pc-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+}
+.export-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.export-step p {
+  margin: 0;
+}
+.export-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.export-preview {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  font-size: 12px;
+}
+.export-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.export-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-2) 0;
+  border-top: 1px solid var(--pc-border);
+}
+.export-history li:first-child {
+  border-top: 0;
+}
+.export-history li > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+  min-width: 0;
+}
+.export-path {
+  word-break: break-all;
+}

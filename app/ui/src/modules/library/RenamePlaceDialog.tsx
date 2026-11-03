@@ -58,20 +58,10 @@ export function RenamePlaceDialog({
       aria-modal="true"
       aria-label={t("place.renameTitle")}
       onKeyDown={(e) => e.key === "Escape" && onClose()}
-      style={{
-        border: "1px solid var(--pc-border)",
-        borderRadius: 6,
-        padding: 10,
-        background: "var(--pc-raised)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
+      className="rename-place"
     >
       <strong>{t("place.renameTitle")}</strong>
-      <span className="mono" style={{ fontSize: 12 }}>
-        {from}
-      </span>
+      <span className="mono rename-place-from">{from}</span>
       <input
         className="field"
         aria-label={t("place.renameTo")}
@@ -80,12 +70,10 @@ export function RenamePlaceDialog({
         onChange={(e) => setTo(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && target && target !== from && void confirm()}
       />
-      <span style={{ fontSize: 13 }}>{t("place.renameCount", { count })}</span>
-      {merge && (
-        <span style={{ fontSize: 13, color: "var(--pc-warn)" }}>{t("place.renameMerge")}</span>
-      )}
+      <span className="rename-place-note">{t("place.renameCount", { count })}</span>
+      {merge && <span className="rename-place-warn">{t("place.renameMerge")}</span>}
       {error && <p role="alert">{error}</p>}
-      <div className="feature-actions" style={{ margin: 0 }}>
+      <div className="feature-actions feature-actions-tight">
         <BusyButton
           className="btn"
           disabled={busy || !target || target === from}

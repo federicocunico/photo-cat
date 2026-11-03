@@ -52,7 +52,7 @@ export function CategoryPicker({
   const options = (group?.categories ?? []).filter((c) => c.enabled || c.id === value);
   if (editing)
     return (
-      <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      <span className="category-picker-edit">
         <input
           className="field"
           autoFocus
@@ -86,7 +86,7 @@ export function CategoryPicker({
           {t("entries.cancel")}
         </BusyButton>
         {error && (
-          <span role="alert" style={{ color: "var(--pc-danger)", fontSize: 13 }}>
+          <span role="alert" className="category-picker-error">
             {error}
           </span>
         )}

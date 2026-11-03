@@ -14,35 +14,19 @@ import {
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt, mbToGb } from "../../lib/format";
 import { Icon } from "../../components/icons";
 import { useModelStatuses } from "../../lib/models";
-
-const card = {
-  background: "var(--pc-panel)",
-  border: "1px solid var(--pc-border)",
-  borderRadius: 8,
-  padding: 20,
-} as const;
-
-const badge = (bg: string, fg: string) =>
-  ({
-    padding: "2px 8px",
-    borderRadius: 4,
-    background: bg,
-    color: fg,
-    fontSize: 12,
-    alignSelf: "flex-start",
-  }) as const;
+import "./models.css";
 
 function stateBadge(s: ModelState) {
   switch (s.state) {
     case "verified":
-      return badge("var(--pc-ok-bg)", "var(--pc-ok)");
+      return "models-badge--ok";
     case "downloading":
     case "update_available":
-      return badge("var(--pc-accent-soft-bg)", "var(--pc-accent-soft-text)");
+      return "models-badge--accent";
     case "missing":
-      return badge("var(--pc-warn-bg)", "var(--pc-warn)");
+      return "models-badge--warn";
     default:
-      return badge("var(--pc-danger-bg)", "var(--pc-danger)");
+      return "models-badge--danger";
   }
 }
 
@@ -89,34 +73,24 @@ function ModelRow({ m }: { m: ModelStatus }) {
     }
   };
   return (
-    <tr style={{ borderTop: "1px solid var(--pc-border)" }} data-testid={`model-${m.entry.id}`}>
-      <td style={{ padding: "12px 8px 12px 0", fontWeight: 600 }}>{m.entry.name}</td>
-      <td style={{ padding: "12px 8px", color: "var(--pc-text-soft)" }}>
-        {t(`models.roles.${m.entry.role}`)}
-      </td>
-      <td className="mono" style={{ padding: "12px 8px", fontSize: 12 }}>
-        {m.entry.version}
-      </td>
-      <td className="mono" style={{ padding: "12px 8px", fontSize: 12 }}>
-        {fmtBytes(m.entry.sizeBytes)}
-      </td>
-      <td
-        className="mono muted"
-        style={{ padding: "12px 8px", fontSize: 12 }}
-        title={m.entry.sha256}
-      >
+    <tr className="models-tr" data-testid={`model-${m.entry.id}`}>
+      <td className="models-td--first">{m.entry.name}</td>
+      <td className="models-td models-td--soft">{t(`models.roles.${m.entry.role}`)}</td>
+      <td className="mono models-td models-td--small">{m.entry.version}</td>
+      <td className="mono models-td models-td--small">{fmtBytes(m.entry.sizeBytes)}</td>
+      <td className="mono muted models-td models-td--small" title={m.entry.sha256}>
         {m.entry.sha256.slice(0, 4)}…{m.entry.sha256.slice(-4)}
       </td>
-      <td style={{ padding: "12px 8px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={stateBadge(s)}>{label}</span>
+      <td className="models-td">
+        <div className="models-stack">
+          <span className={`models-badge ${stateBadge(s)}`}>{label}</span>
           {pct !== null && (
             <>
-              <div className="bar" style={{ width: 120 }}>
+              <div className="bar models-bar">
                 <span style={{ width: `${pct}%` }} />
               </div>
               {s.state === "downloading" && (
-                <span className="mono muted" style={{ fontSize: 12 }}>
+                <span className="mono muted models-small">
                   {fmtBytes(s.done_bytes)} / {fmtBytes(s.total_bytes)} ·{" "}
                   {fmtBytes(s.bytes_per_second ?? 0)}/s
                 </span>
@@ -124,24 +98,22 @@ function ModelRow({ m }: { m: ModelStatus }) {
             </>
           )}
           {(s.state === "error" || s.state === "self_test_failed") && (
-            <span className="muted" style={{ fontSize: 12 }}>
-              {s.message}
-            </span>
+            <span className="muted models-small">{s.message}</span>
           )}
           {error && (
-            <span role="alert" style={{ color: "var(--pc-danger)", fontSize: 12 }}>
+            <span role="alert" className="models-danger-small">
               {error}
             </span>
           )}
         </div>
       </td>
-      <td style={{ padding: "12px 8px", fontSize: 12 }} className="muted">
+      <td className="muted models-td models-td--small">
         {m.selfTest
           ? `${m.selfTest.passed ? t("models.passed") : t("models.failed")} · ${fmtDec(m.selfTest.avgMs ?? 0, 1)} ms`
           : "—"}
       </td>
-      <td style={{ padding: "12px 8px" }}>
-        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+      <td className="models-td">
+        <div className="models-actions">
           {s.state !== "verified" && s.state !== "downloading" && (
             <BusyButton
               type="button"
@@ -208,56 +180,27 @@ export function ModelsPage() {
   return (
     <QueryView query={info} enabled={isTauri()} isEmpty={() => false}>
       {() => (
-        <div
-          style={{
-            flex: 1,
-            overflow: "auto",
-            padding: "24px 32px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 20,
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{t("models.title")}</h2>
+        <div className="models-page">
+          <h2 className="models-title">{t("models.title")}</h2>
           {error && (
-            <p role="alert" style={{ color: "var(--pc-danger)", margin: 0 }}>
+            <p role="alert" className="models-error">
               {error}
             </p>
           )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-            <section
-              style={{
-                ...card,
-                flex: "1 1 360px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.system")}</h2>
+          <div className="models-cards">
+            <section className="models-card models-card--half">
+              <div className="models-row">
+                <h2 className="models-h">{t("models.system")}</h2>
                 {info.data && (
                   <span
-                    style={{
-                      marginLeft: "auto",
-                      ...badge(
-                        info.data.onnxRuntime ? "var(--pc-ok-bg)" : "var(--pc-danger-bg)",
-                        info.data.onnxRuntime ? "var(--pc-ok)" : "var(--pc-danger)",
-                      ),
-                    }}
+                    className={`models-badge models-push ${info.data.onnxRuntime ? "models-badge--ok" : "models-badge--danger"}`}
                   >
                     {info.data.onnxRuntime ? t("models.runtimeOk") : t("models.runtimeMissing")}
                   </span>
                 )}
               </div>
               {sys && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "8px 12px",
-                  }}
-                >
+                <div className="models-sysgrid">
                   <span className="muted">{t("models.ramTotal")}</span>
                   <span>{mbToGb(sys.totalMb)} GB</span>
                   <span className="muted">{t("models.ramAvailable")}</span>
@@ -277,26 +220,13 @@ export function ModelsPage() {
                   </span>
                 </div>
               )}
-              <BusyButton
-                type="button"
-                className="btn"
-                style={{ alignSelf: "flex-start" }}
-                onClick={() => info.refetch()}
-              >
+              <BusyButton type="button" className="btn models-start" onClick={() => info.refetch()}>
                 {t("models.recheck")}
               </BusyButton>
             </section>
-            <section
-              style={{
-                ...card,
-                flex: "1 1 360px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.execution")}</h2>
-              <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <section className="models-card models-card--half">
+              <h2 className="models-h">{t("models.execution")}</h2>
+              <label className="models-row models-row--wrap">
                 {t("models.provider")}
                 <select
                   className="field"
@@ -321,7 +251,7 @@ export function ModelsPage() {
                   })}
                 </select>
               </label>
-              <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <label className="models-row models-row--wrap">
                 {t("models.profile")}
                 <select
                   className="field"
@@ -333,21 +263,18 @@ export function ModelsPage() {
                   <option value="performance">{t("models.profiles.performance")}</option>
                 </select>
               </label>
-              <span className="muted" style={{ fontSize: 13 }}>
-                {t("models.providerHint")}
-              </span>
+              <span className="muted models-hint">{t("models.providerHint")}</span>
             </section>
           </div>
-          <section style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-              <h2 style={{ margin: 0, fontSize: 16 }}>{t("models.models")}</h2>
+          <section className="models-card">
+            <div className="models-row models-row--wrap">
+              <h2 className="models-h">{t("models.models")}</h2>
               <span className="muted" data-testid="models-summary">
                 · {t("models.summary", { ready, total: models.length, size: fmtBytes(total) })}
               </span>
               <BusyButton
                 type="button"
-                className="btn btn-primary"
-                style={{ marginLeft: "auto" }}
+                className="btn btn-primary models-push"
                 onClick={() => run(() => commands.verifyModels())}
               >
                 {t("models.verifyAll")}
@@ -360,26 +287,18 @@ export function ModelsPage() {
                 {t("models.testAll")}
               </BusyButton>
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <div className="models-scroll">
+              <table className="models-table">
                 <thead>
-                  <tr
-                    style={{
-                      color: "var(--pc-text-secondary)",
-                      textAlign: "left",
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.6,
-                    }}
-                  >
-                    <th style={{ padding: "8px 8px 8px 0" }}>{t("models.col.model")}</th>
-                    <th style={{ padding: 8 }}>{t("models.col.use")}</th>
-                    <th style={{ padding: 8 }}>{t("models.col.version")}</th>
-                    <th style={{ padding: 8 }}>{t("models.col.size")}</th>
-                    <th style={{ padding: 8 }}>SHA-256</th>
-                    <th style={{ padding: 8 }}>{t("models.col.state")}</th>
-                    <th style={{ padding: 8 }}>{t("models.col.test")}</th>
-                    <th style={{ padding: 8 }}>
+                  <tr className="models-thead">
+                    <th>{t("models.col.model")}</th>
+                    <th>{t("models.col.use")}</th>
+                    <th>{t("models.col.version")}</th>
+                    <th>{t("models.col.size")}</th>
+                    <th>SHA-256</th>
+                    <th>{t("models.col.state")}</th>
+                    <th>{t("models.col.test")}</th>
+                    <th>
                       <span className="visually-hidden">{t("models.col.actions")}</span>
                     </th>
                   </tr>
@@ -393,16 +312,13 @@ export function ModelsPage() {
             </div>
           </section>
           {tested.length > 0 && (
-            <section style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 16 }}>{t("models.selfTests")}</h2>
-              <div
-                className="mono"
-                style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}
-              >
+            <section className="models-card models-card--tight">
+              <h2 className="models-h-tests">{t("models.selfTests")}</h2>
+              <div className="mono models-tests">
                 {tested.map((m) => (
                   <span
                     key={m.entry.id}
-                    style={{ color: m.selfTest!.passed ? "var(--pc-ok)" : "var(--pc-danger)" }}
+                    className={m.selfTest!.passed ? "models-test--ok" : "models-test--fail"}
                   >
                     {m.selfTest!.passed ? <Icon.Check size={14} /> : <Icon.Close size={14} />}{" "}
                     {m.entry.name}: {m.selfTest!.message} · {fmtDec(m.selfTest!.avgMs ?? 0, 1)} ms ·{" "}
@@ -412,9 +328,7 @@ export function ModelsPage() {
               </div>
             </section>
           )}
-          <p className="muted" style={{ fontSize: 12 }}>
-            {t("models.privacy", { n: fmtInt(models.length) })}
-          </p>
+          <p className="muted models-small">{t("models.privacy", { n: fmtInt(models.length) })}</p>
         </div>
       )}
     </QueryView>

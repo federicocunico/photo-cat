@@ -1,137 +1,244 @@
 import { Coachmark } from "../../components/guide/Coachmark";
 import { QueryView } from "../../components/feedback/QueryView";
-import { BusyButton } from "../../components/feedback/BusyButton";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type Catalog } from "../../lib/ipc";
+import { commands, isTauri, type Catalog, type CatalogSummary } from "../../lib/ipc";
+import { fmtInt } from "../../lib/format";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
-import { PageHeader } from "../../components/ui";
-import { RuleEditor, newRule, type RuleNode } from "./RuleEditor";
+import { notify, notifyError } from "../../store/toasts";
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  FormField,
+  InlineAlert,
+  PageHeader,
+  SegmentedControl,
+} from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { useLabelName } from "../library/labelName";
+import { RuleEditor } from "./RuleEditor";
+import { newRule, summarize, type RuleNode } from "./rules";
+import "./catalogs.css";
+
+const CATALOGS_KEY = ["catalogs"];
+
+/** Apre il catalogo (o le sue foto escluse) in Libreria. */
+function openCatalog(id: number, excluded = false) {
+  const lib = useLibrary.getState();
+  lib.resetFilter();
+  lib.setSelection([], null);
+  if (excluded) {
+    lib.setFilter({ catalogId: null, excludedFrom: id, matchingOnly: true });
+    lib.setSort("excluded_at");
+  } else lib.setFilter({ catalogId: id });
+  useLayout.getState().openModule({ module: "library" });
+}
+
 export function CatalogsPage() {
   const { t } = useTranslation();
   const tipAnchor = useRef<HTMLSpanElement>(null);
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [id, setId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [smart, setSmart] = useState(false);
-  const [rule, setRule] = useState<RuleNode>({ op: "and", rules: [newRule()] });
-  const [error, setError] = useState("");
+  // `undefined`: editor chiuso; `null`: nuovo catalogo.
+  const [editing, setEditing] = useState<Catalog | null | undefined>(undefined);
+  const [deleting, setDeleting] = useState<CatalogSummary | null>(null);
   const catalogs = useQuery({
-    queryKey: ["catalogs"],
+    queryKey: CATALOGS_KEY,
     queryFn: commands.listCatalogs,
     enabled: isTauri(),
   });
-  const preview = useQuery({
-    queryKey: ["catalog-preview", rule],
-    queryFn: () => commands.libraryCount({ ...emptyFilter(), rule }, null).then((n) => n ?? 0),
-    enabled: isTauri() && editing && smart,
-    retry: false,
-  });
-  const edit = (c?: Catalog) => {
-    setId(c?.id ?? null);
-    setName(c?.name ?? "");
-    setSmart(c?.kind === "smart");
-    setRule((c?.rules as RuleNode | null) ?? { op: "and", rules: [newRule()] });
-    setEditing(true);
-    setError("");
-  };
-  const save = async () => {
+  const remove = async (s: CatalogSummary) => {
     try {
-      await commands.saveCatalog(id, name, smart ? "smart" : "manual", smart ? rule : null);
-      setEditing(false);
-      await qc.invalidateQueries({ queryKey: ["catalogs"] });
+      await commands.deleteCatalog(s.catalog.id, true);
+      notify({ message: t("catalogs.deleted", { name: s.catalog.name }), tone: "ok" });
+      await qc.invalidateQueries({ queryKey: CATALOGS_KEY });
     } catch (e) {
-      setError((e as { detail?: string }).detail ?? String(e));
+      notifyError(e);
     }
   };
   return (
-    <section style={{ padding: 24, overflow: "auto", flex: 1 }}>
-      <PageHeader title={<span ref={tipAnchor}>{t("modules.catalogs")}</span>} />
+    <section className="cat-page">
+      <PageHeader
+        title={<span ref={tipAnchor}>{t("modules.catalogs")}</span>}
+        actions={
+          <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={() => setEditing(null)}>
+            {t("catalogs.create")}
+          </Button>
+        }
+      />
       <Coachmark tip="catalogs" anchor={tipAnchor} learnMore="catalogs" />
-      {error && <p role="alert">{error}</p>}
-      <BusyButton className="btn" onClick={() => edit()}>
-        {t("catalogs.create")}
-      </BusyButton>
-      {editing && (
-        <div className="feature-card" style={{ alignItems: "stretch", marginTop: 16 }}>
-          <input
-            className="field"
-            aria-label={t("catalogs.name")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <label>
-            <input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} />
-            {t("catalogs.smart")}
-          </label>
-          {smart && (
-            <>
-              <RuleEditor rule={rule} onChange={setRule} />
-              <p role="status">
-                {preview.error
-                  ? String((preview.error as { detail?: string }).detail ?? preview.error)
-                  : preview.isPending
-                    ? t("feedback.calculating")
-                    : t("catalogs.preview", { count: preview.data })}
-              </p>
-            </>
-          )}
-          <div className="feature-actions">
-            <BusyButton
-              className="btn"
-              disabled={!name.trim() || (smart && preview.isError)}
-              onClick={async () => await save()}
-            >
-              {t("people.save")}
-            </BusyButton>
-            <BusyButton className="btn" onClick={() => setEditing(false)}>
-              {t("catalogs.cancel")}
-            </BusyButton>
-          </div>
-        </div>
+      {editing !== undefined && (
+        <CatalogEditor
+          key={editing?.id ?? "new"}
+          catalog={editing}
+          onClose={() => setEditing(undefined)}
+        />
       )}
-      <QueryView query={catalogs} isEmpty={() => false}>
-        {() => (
-          <div className="feature-grid">
-            {catalogs.data?.map(({ catalog: c, items }) => (
-              <article className="feature-card" key={c.id}>
-                <h2>{c.name}</h2>
-                <p>
-                  {c.kind === "smart" ? t("catalogs.smart") : t("catalogs.manual")} · {items}
-                </p>
-                <BusyButton
-                  className="btn"
-                  onClick={() => {
-                    useLibrary.getState().resetFilter();
-                    useLibrary.getState().setFilter({ catalogId: c.id });
-                    return useLayout.getState().openModule({ module: "library" });
-                  }}
-                >
-                  {t("catalogs.open")}
-                </BusyButton>
-                <BusyButton className="btn" onClick={() => edit(c)}>
-                  {t("catalogs.edit")}
-                </BusyButton>
-                <BusyButton
-                  className="btn"
-                  onClick={async () => {
-                    if (window.confirm(t("catalogs.deleteConfirm", { count: items })))
-                      await commands
-                        .deleteCatalog(c.id, true)
-                        .then(() => qc.invalidateQueries({ queryKey: ["catalogs"] }))
-                        .catch((e) => setError(String(e)));
-                  }}
-                >
-                  {t("catalogs.delete")}
-                </BusyButton>
-              </article>
+      <QueryView
+        query={catalogs}
+        empty={
+          editing === undefined && (
+            <EmptyState
+              icon={<Icon.Catalogs size={32} />}
+              title={t("catalogs.emptyTitle")}
+              description={t("catalogs.emptyBody")}
+              action={
+                <Button variant="primary" onClick={() => setEditing(null)}>
+                  {t("catalogs.create")}
+                </Button>
+              }
+            />
+          )
+        }
+      >
+        {(list) => (
+          <div className="cat-grid">
+            {list.map((s) => (
+              <CatalogCard
+                key={s.catalog.id}
+                summary={s}
+                onEdit={() => setEditing(s.catalog)}
+                onDelete={() => setDeleting(s)}
+              />
             ))}
           </div>
         )}
       </QueryView>
+      <ConfirmDialog
+        open={deleting != null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={t("catalogs.deleteTitle", { name: deleting?.catalog.name ?? "" })}
+        message={t("catalogs.deleteMessage", { count: deleting?.items ?? 0 })}
+        files="untouched"
+        confirmLabel={t("catalogs.delete")}
+        onConfirm={() => deleting && remove(deleting)}
+      />
     </section>
+  );
+}
+
+function CatalogCard({
+  summary: { catalog: c, items, excluded },
+  onEdit,
+  onDelete,
+}: {
+  summary: CatalogSummary;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const smart = c.kind === "smart";
+  return (
+    <Card className="cat-card" aria-label={c.name}>
+      <div className="cat-card-head">
+        <h2>{c.name}</h2>
+        <Badge tone={smart ? "info" : "neutral"}>
+          {smart ? t("catalogs.smart") : t("catalogs.manual")}
+        </Badge>
+      </div>
+      <p className="cat-card-meta">
+        <span>{t("catalogs.photos", { count: items, n: fmtInt(items) })}</span>
+        {excluded > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <Button variant="ghost" size="sm" onClick={() => openCatalog(c.id, true)}>
+              {t("catalogs.excluded", { count: excluded, n: fmtInt(excluded) })}
+            </Button>
+          </>
+        )}
+      </p>
+      <div className="cat-card-actions">
+        <Button onClick={() => openCatalog(c.id)}>{t("catalogs.open")}</Button>
+        <Button variant="ghost" icon={<Icon.Edit size={16} />} onClick={onEdit}>
+          {t("catalogs.edit")}
+        </Button>
+        <Button variant="ghost" icon={<Icon.Delete size={16} />} onClick={onDelete}>
+          {t("catalogs.delete")}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function CatalogEditor({ catalog, onClose }: { catalog: Catalog | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const names = useLabelName();
+  const [name, setName] = useState(catalog?.name ?? "");
+  const [smart, setSmart] = useState(catalog?.kind === "smart");
+  const [rule, setRule] = useState<RuleNode>(
+    (catalog?.rules as RuleNode | null) ?? { op: "and", rules: [newRule()] },
+  );
+  const [error, setError] = useState("");
+  const preview = useQuery({
+    queryKey: ["catalog-preview", rule],
+    queryFn: () => commands.libraryCount({ ...emptyFilter(), rule }, null).then((n) => n ?? 0),
+    enabled: isTauri() && smart,
+    retry: false,
+  });
+  const save = async () => {
+    setError("");
+    try {
+      await commands.saveCatalog(
+        catalog?.id ?? null,
+        name.trim(),
+        smart ? "smart" : "manual",
+        smart ? rule : null,
+      );
+      onClose();
+      await qc.invalidateQueries({ queryKey: CATALOGS_KEY });
+    } catch (e) {
+      setError((e as { detail?: string }).detail ?? String(e));
+    }
+  };
+  const previewError = preview.error as { detail?: string } | null;
+  return (
+    <Card className="cat-editor" title={catalog ? t("catalogs.editTitle") : t("catalogs.newTitle")}>
+      <FormField label={t("catalogs.name")}>
+        <input className="field" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+      </FormField>
+      <div className="cat-kind">
+        <SegmentedControl
+          label={t("catalogs.kind")}
+          value={smart ? "smart" : "manual"}
+          onChange={(v) => setSmart(v === "smart")}
+          options={[
+            { value: "manual", label: t("catalogs.manual") },
+            { value: "smart", label: t("catalogs.smart"), icon: <Icon.Smart size={14} /> },
+          ]}
+        />
+        <span className="muted">{smart ? t("catalogs.smartHint") : t("catalogs.manualHint")}</span>
+      </div>
+      {smart && (
+        <>
+          <RuleEditor rule={rule} onChange={setRule} />
+          <div className="cat-rule-summary">
+            <strong role="status">
+              {previewError
+                ? String(previewError.detail ?? previewError)
+                : preview.isPending
+                  ? t("feedback.calculating")
+                  : t("catalogs.preview", { count: preview.data })}
+            </strong>
+            <span>{summarize(t, names, rule)}</span>
+          </div>
+        </>
+      )}
+      {error && <InlineAlert tone="danger">{error}</InlineAlert>}
+      <div className="cat-editor-actions">
+        <Button onClick={onClose}>{t("common.cancel")}</Button>
+        <Button
+          variant="primary"
+          disabled={!name.trim() || (smart && preview.isError)}
+          onClick={save}
+        >
+          {t("common.save")}
+        </Button>
+      </div>
+    </Card>
   );
 }

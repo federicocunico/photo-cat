@@ -12,7 +12,6 @@ export const feedback = {
       saved: "Salvataggio completato",
       merged: "Unione completata",
       failed: "Operazione non riuscita",
-      jobDone: "Operazione completata: {{name}}",
     },
     boot: {
       opening: "Apertura del catalogo…",
@@ -40,7 +39,6 @@ export const feedback = {
       saved: "Saved",
       merged: "Merge completed",
       failed: "Operation failed",
-      jobDone: "Operation completed: {{name}}",
     },
     boot: {
       opening: "Opening catalog…",

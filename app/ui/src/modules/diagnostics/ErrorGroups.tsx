@@ -1,5 +1,5 @@
-// Vista "per codice": migliaia di errori uguali diventano una riga ("DECODE_FAILED — 1.240 file"),
-// apribile con l'elenco paginato dei file e il motivo di ciascuno.
+// Riepilogo: migliaia di errori uguali diventano una riga ("Impossibile leggere l'immagine —
+// 1.240 file"), apribile con l'elenco paginato dei file e il motivo di ciascuno.
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -12,20 +12,9 @@ import {
   type ErrorQuery,
 } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
-
-/** File per pagina nell'elenco di un gruppo. */
-export const GROUP_PAGE = 50;
-
-const CAUSES = ["truncated", "corrupt", "unsupported_variant", "no_raw_preview", "too_large", "io"];
-
-/** Motivo leggibile di un errore di decodifica (chiave all'inizio del dettaglio), se presente. */
-export function useCauseText() {
-  const { t } = useTranslation();
-  return (detail: string | null) => {
-    const key = detail?.split(":")[0] ?? "";
-    return CAUSES.includes(key) ? t(`diag.causes.${key}`) : null;
-  };
-}
+import { Badge, Button } from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { GROUP_PAGE, useCauseText, useEntryLabels, useErrorText } from "./errors";
 
 const groupKey = (g: ErrorGroup) => `${g.jobId}|${g.phase}|${g.code}|${g.level}`;
 
@@ -51,33 +40,24 @@ function GroupFiles({ group }: { group: ErrorGroup }) {
   });
   const rows: ErrorEntry[] = files.data?.pages.flat() ?? [];
   return (
-    <div style={{ padding: "4px 12px 10px 28px" }}>
-      <ul
-        aria-label={t("diag.groupFiles")}
-        style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 12 }}
-      >
+    <div className="diag-group-files">
+      <ul aria-label={t("diag.groupFiles")}>
         {rows.map((r) => (
-          <li
-            key={r.id}
-            style={{ display: "flex", gap: 10, padding: "2px 0" }}
-            data-testid={`group-file-${r.id}`}
-          >
-            <span className="mono" style={{ wordBreak: "break-all", flex: 1 }}>
-              {r.path ?? "—"}
-            </span>
+          <li key={r.id} data-testid={`group-file-${r.id}`}>
+            <span className="mono diag-path">{r.path ?? "—"}</span>
             <span className="muted">{cause(r.detail) ?? r.detail ?? r.message}</span>
           </li>
         ))}
       </ul>
       {files.hasNextPage && (
-        <button
-          type="button"
-          className="btn btn-ghost"
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={files.isFetchingNextPage}
           onClick={() => files.fetchNextPage()}
         >
           {t("diag.moreFiles", { n: fmtInt(Math.max(0, group.count - rows.length)) })}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -85,6 +65,8 @@ function GroupFiles({ group }: { group: ErrorGroup }) {
 
 export function ErrorGroups({ query }: { query: ErrorQuery }) {
   const { t } = useTranslation();
+  const text = useErrorText();
+  const labels = useEntryLabels();
   const [open, setOpen] = useState<string | null>(null);
   const groups = useQuery({
     queryKey: ["error-groups", { ...query, text: null, limit: 200, offset: 0 }],
@@ -94,50 +76,33 @@ export function ErrorGroups({ query }: { query: ErrorQuery }) {
   const list = groups.data ?? [];
   if (list.length === 0) return null;
   return (
-    <section
-      aria-label={t("diag.byCode")}
-      style={{
-        background: "var(--pc-panel)",
-        border: "1px solid var(--pc-border)",
-        borderRadius: 8,
-        padding: "8px 0",
-      }}
-    >
-      <h2 className="section-title" style={{ margin: "0 12px 6px" }}>
+    <section aria-labelledby="diag-by-code" className="diag-groups">
+      <h3 id="diag-by-code" className="section-title">
         {t("diag.byCode")}
-      </h2>
+      </h3>
       {list.map((g) => {
         const key = groupKey(g);
         const expanded = open === key;
+        const message = text({ code: g.code, message: g.message }).replace(/\.$/, "");
         return (
           <div key={key}>
             <button
               type="button"
+              className="diag-group"
               aria-expanded={expanded}
               data-testid={`group-${g.code ?? "none"}-${g.phase ?? "none"}`}
               onClick={() => setOpen(expanded ? null : key)}
-              style={{
-                display: "flex",
-                width: "100%",
-                gap: 12,
-                alignItems: "baseline",
-                padding: "6px 12px",
-                border: 0,
-                background: expanded ? "var(--pc-raised)" : "transparent",
-                color: "inherit",
-                textAlign: "left",
-                cursor: "pointer",
-              }}
             >
-              <strong className="mono">
-                {t("diag.groupTitle", { code: g.code ?? "—", n: fmtInt(g.files || g.count) })}
-              </strong>
+              {expanded ? <Icon.ChevronDown size={14} /> : <Icon.ChevronRight size={14} />}
+              <strong>{t("diag.groupTitle", { message, n: fmtInt(g.files || g.count) })}</strong>
               <span className="muted">
-                {g.phase ? t(`jobs.phases.${g.phase}`, { defaultValue: g.phase }) : "—"}
+                {labels.phase(g.phase)}
                 {g.jobId != null && ` · ${t("diag.job")} ${g.jobId}`}
               </span>
-              <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
-                {g.level}
+              <span className="diag-group-level">
+                <Badge tone={g.level === "ERROR" ? "danger" : "warn"}>
+                  {labels.level(g.level)}
+                </Badge>
               </span>
             </button>
             {expanded && <GroupFiles group={g} />}

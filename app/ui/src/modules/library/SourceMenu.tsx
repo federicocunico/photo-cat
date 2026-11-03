@@ -50,11 +50,10 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
     ["sources.remove", () => setDialog("remove")],
   ];
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="source-menu">
       <BusyButton
         type="button"
-        className="btn btn-ghost"
-        style={{ padding: "0 6px", fontSize: 13 }}
+        className="btn btn-ghost source-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t("sources.menu", { name: label })}
@@ -67,32 +66,15 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
           role="menu"
           aria-label={t("sources.menu", { name: label })}
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "100%",
-            zIndex: 20,
-            minWidth: 210,
-            display: "flex",
-            flexDirection: "column",
-            padding: 4,
-            border: "1px solid var(--pc-border)",
-            borderRadius: 6,
-            background: "var(--pc-raised)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-          }}
+          className="source-menu-pop"
         >
           {items.map(([key, f]) => (
             <BusyButton
               key={key}
               type="button"
               role="menuitem"
-              className="btn btn-ghost"
-              style={{
-                justifyContent: "flex-start",
-                textAlign: "left",
-                color: key === "sources.remove" ? "var(--pc-danger)" : undefined,
-              }}
+              className="btn btn-ghost source-menu-item"
+              data-danger={key === "sources.remove" || undefined}
               onClick={act(f)}
             >
               {t(key)}
@@ -101,7 +83,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
         </div>
       )}
       {error && (
-        <span role="alert" style={{ fontSize: 12, color: "var(--pc-danger)" }}>
+        <span role="alert" className="source-menu-error">
           {error}
         </span>
       )}

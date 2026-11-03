@@ -39,8 +39,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
       ? (f: FacetValue) => (
           <BusyButton
             type="button"
-            className="btn btn-ghost"
-            style={{ padding: "0 4px", fontSize: 12 }}
+            className="btn btn-ghost facet-icon-btn"
             title={t("place.rename")}
             aria-label={t("place.renameOf", { name: f.value })}
             onClick={() => setRenaming(f)}
@@ -50,16 +49,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
         )
       : undefined;
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        padding: 10,
-        flex: 1,
-        minHeight: 0,
-      }}
-    >
+    <div className="facet-panel">
       <input
         className="field"
         type="search"
@@ -68,7 +58,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div className="facet-panel-toolbar">
         <select
           className="field"
           aria-label={t("library.facets.sort")}
@@ -85,8 +75,7 @@ export function FacetPanel({ facetKey }: { facetKey: FacetKey }) {
         </span>
         <BusyButton
           type="button"
-          className="btn btn-ghost"
-          style={{ marginLeft: "auto" }}
+          className="btn btn-ghost facet-panel-clear"
           disabled={selected.length === 0}
           onClick={() => setFilter(clearIn(facetKey, filter))}
         >
