@@ -8,18 +8,18 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./styles/global.css";
 import "./i18n";
-import { applyTheme, type ThemeName } from "./theme/tokens";
+import { applyTheme, type ThemePref } from "./theme/tokens";
 
 // Tema salvato già per la schermata di avvio (le preferenze complete arrivano dopo).
-function savedTheme(): ThemeName {
+function savedTheme(): ThemePref {
   try {
     const raw = localStorage.getItem("photo-cat.layout");
     const theme = raw ? (JSON.parse(raw) as { state?: { theme?: string } }).state?.theme : null;
-    if (theme === "light" || theme === "dark") return theme;
+    if (theme === "light" || theme === "dark" || theme === "system") return theme;
   } catch {
     // Preferenze illeggibili: si usa il tema del sistema.
   }
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return "system";
 }
 applyTheme(savedTheme());
 

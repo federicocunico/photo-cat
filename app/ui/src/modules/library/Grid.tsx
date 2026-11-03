@@ -227,7 +227,7 @@ function Thumb({
               fontWeight: 600,
             }}
           >
-            {group.expanded ? "−" : ""}
+            {group.expanded && <Icon.Minus size={12} />}
             {group.count}
           </span>
         )}
@@ -461,7 +461,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const onClick = (id: number) => (e: MouseEvent) => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (selection.mode === "filter" && ctrl) {
-      // "Tutti tranne…€¦": Ctrl+clic aggiunge o toglie un'eccezione.
+      // "Tutti tranne…": Ctrl+clic aggiunge o toglie un'eccezione.
       replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
       return;
     }

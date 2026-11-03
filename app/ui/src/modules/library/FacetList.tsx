@@ -1,5 +1,6 @@
 import { QueryView } from "../../components/feedback/QueryView";
 import { BusyButton } from "../../components/feedback/BusyButton";
+import { Icon } from "../../components/icons";
 // Lista di un filtro nella barra laterale: voci principali più quelle
 // selezionate, "Mostra tutti (N)" con ricerca sul posto e "Apri in finestra".
 import { useState, type ReactNode } from "react";
@@ -58,7 +59,7 @@ export function FacetList({
           aria-label={t("library.facets.openWindowOf", { name: title })}
           onClick={(e) => openFacetPanel(facetKey, e.currentTarget)}
         >
-          ⧉
+          <Icon.OpenExternal size={14} />
         </BusyButton>
       </div>
       {expanded ? (

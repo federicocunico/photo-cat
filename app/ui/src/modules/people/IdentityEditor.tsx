@@ -11,6 +11,7 @@ import {
 import { fmtDate } from "../../lib/format";
 import { FaceCrop } from "./FaceCrop";
 import { OpenInPeople } from "./OpenInPeople";
+import { Icon } from "../../components/icons";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
@@ -76,7 +77,7 @@ function RefFace({ id, onRemove }: { id: number; onRemove: () => void }) {
         onClick={onRemove}
         style={{ position: "absolute", top: 2, right: 2, minWidth: 22, minHeight: 22 }}
       >
-        ×
+        <Icon.Close size={14} />
       </button>
     </span>
   );

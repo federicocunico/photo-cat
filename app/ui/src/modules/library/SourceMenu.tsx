@@ -1,4 +1,5 @@
 import { BusyButton } from "../../components/feedback/BusyButton";
+import { Icon } from "../../components/icons";
 // Menu "…" di una sorgente nella barra laterale della Libreria: aggiornare,
 // aggiornare una cartella, rimuovere, aprire in Import e gestire i mancanti.
 import { useEffect, useRef, useState } from "react";
@@ -59,7 +60,7 @@ export function SourceMenu({ summary, label }: { summary: SourceSummary; label: 
         aria-label={t("sources.menu", { name: label })}
         onClick={() => setOpen(!open)}
       >
-        …
+        <Icon.More size={16} />
       </BusyButton>
       {open && (
         <div

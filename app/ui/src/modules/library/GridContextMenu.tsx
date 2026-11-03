@@ -16,6 +16,7 @@ import { PlaceField } from "./PlaceEditor";
 
 import { useLibrary } from "../../store/library";
 import { useCatalogAction } from "./useCatalogAction";
+import { Icon } from "../../components/icons";
 
 const item: CSSProperties = {
   display: "block",
@@ -140,7 +141,7 @@ export function GridContextMenu({
         style={item}
         onClick={() => setSub(!sub)}
       >
-        {t("externalApps.openWith")} ▸
+        {t("externalApps.openWith")} <Icon.ChevronRight size={14} />
       </BusyButton>
       {sub && (
         <div

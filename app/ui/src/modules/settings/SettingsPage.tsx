@@ -274,10 +274,14 @@ export function SettingsPage() {
                                 onChange={(e) =>
                                   setCfg({
                                     ...cfg,
-                                    ui: { ...cfg.ui, theme: e.target.value as "dark" | "light" },
+                                    ui: {
+                                      ...cfg.ui,
+                                      theme: e.target.value as "dark" | "light" | "system",
+                                    },
                                   })
                                 }
                               >
+                                <option value="system">{t("settings.system")}</option>
                                 <option value="dark">{t("settings.dark")}</option>
                                 <option value="light">{t("settings.light")}</option>
                               </select>

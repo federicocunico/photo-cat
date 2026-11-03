@@ -180,7 +180,9 @@ impl Default for LoggingConfig {
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Theme {
+    /// Segue il tema del sistema operativo: predefinito per le nuove installazioni.
     #[default]
+    System,
     Dark,
     Light,
 }

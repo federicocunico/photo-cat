@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { mirroredStorage } from "../lib/uiPrefs";
-import type { ThemeName } from "../theme/tokens";
+import type { ThemePref } from "../theme/tokens";
 import type { Language } from "../i18n";
 import type { PeopleSection } from "../lib/ipc";
 
@@ -41,7 +41,7 @@ interface LayoutState {
   rightOpen: boolean;
   leftWidth: number;
   rightWidth: number;
-  theme: ThemeName;
+  theme: ThemePref;
   language: Language;
   /** Filtro con cui aprire la Diagnostica (es. dal riepilogo di un job). */
   diagFilter: DiagFilter;
@@ -53,7 +53,7 @@ interface LayoutState {
   toggleRight: () => void;
   setLeftWidth: (w: number) => void;
   setRightWidth: (w: number) => void;
-  setTheme: (t: ThemeName) => void;
+  setTheme: (t: ThemePref) => void;
   setLanguage: (l: Language) => void;
   openDiagnostics: (f: DiagFilter) => void;
   openPeople: (target: PeopleTarget) => void;
@@ -69,7 +69,7 @@ type PersistedLayout = {
   rightOpen?: boolean;
   leftWidth?: number;
   rightWidth?: number;
-  theme?: ThemeName;
+  theme?: ThemePref;
   language?: Language;
 };
 
@@ -94,7 +94,8 @@ export const useLayout = create<LayoutState>()(
       rightOpen: true,
       leftWidth: 240,
       rightWidth: 300,
-      theme: "dark",
+      // Nuove installazioni: tema del sistema. Le preferenze salvate restano come sono.
+      theme: "system",
       language: "it",
       diagFilter: {},
       peopleTarget: null,

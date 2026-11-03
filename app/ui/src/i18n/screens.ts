@@ -76,6 +76,8 @@ export const screens = {
     },
     organize: {
       title: "Esporta e organizza",
+      levelUp: "Sposta su il livello {{n}}",
+      levelRemove: "Rimuovi il livello {{n}}",
       queued: "Job #{{id}} accodato.",
       jobs: "Vai ai job",
       scope: "Ambito",
@@ -151,6 +153,7 @@ export const screens = {
       purged: "Dati dei volti eliminati.",
       log: "Livello di log",
       theme: "Tema",
+      system: "Come il sistema",
       dark: "Scuro",
       light: "Chiaro",
       language: "Lingua",
@@ -193,6 +196,8 @@ export const screens = {
     },
     organize: {
       title: "Export & organize",
+      levelUp: "Move level {{n}} up",
+      levelRemove: "Remove level {{n}}",
       queued: "Job #{{id}} queued.",
       jobs: "Go to jobs",
       scope: "Scope",
@@ -267,6 +272,7 @@ export const screens = {
       purged: "Face data deleted.",
       log: "Log level",
       theme: "Theme",
+      system: "Match system",
       dark: "Dark",
       light: "Light",
       language: "Language",

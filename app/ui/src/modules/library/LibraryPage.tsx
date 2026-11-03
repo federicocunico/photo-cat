@@ -14,6 +14,7 @@ import { useTagHotkeys } from "../tags/useTagHotkeys";
 
 import { CatalogHeader } from "./CatalogHeader";
 import { CatalogFeedback } from "./catalogActions";
+import { Icon } from "../../components/icons";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
 
@@ -86,7 +87,7 @@ function Toolbar() {
             aria-label={t("library.removeFilter", { name: c.name })}
             onClick={() => setFilter(c.clear)}
           >
-            {c.name} <span aria-hidden="true">×</span>
+            {c.name} <Icon.Close size={12} />
           </BusyButton>
         ))}
         {chips.length > 1 && (

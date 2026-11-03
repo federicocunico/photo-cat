@@ -121,7 +121,7 @@ function FolderTree({
                       })}
                       onClick={() => setOpen(toggle(open, f.path))}
                     >
-                      {expanded ? "▾" : "▸"}
+                      {expanded ? <Icon.ChevronDown size={14} /> : <Icon.ChevronRight size={14} />}
                     </BusyButton>
                   ) : (
                     <span style={{ width: 20, flexShrink: 0 }} />
@@ -146,7 +146,7 @@ function FolderTree({
                     aria-label={t("sources.updateFolderOf", { name: f.name })}
                     onClick={async () => await updateFolder(source, f.path)}
                   >
-                    ↻
+                    <Icon.Refresh size={14} />
                   </BusyButton>
                 </div>
                 {expanded && <FolderTree source={source} parent={f.path} depth={depth + 1} />}
@@ -229,7 +229,11 @@ export function LibrarySidebar() {
                           )
                         }
                       >
-                        {expanded ? "▾" : "▸"}
+                        {expanded ? (
+                          <Icon.ChevronDown size={14} />
+                        ) : (
+                          <Icon.ChevronRight size={14} />
+                        )}
                       </button>
                       <Row
                         mono
@@ -316,7 +320,7 @@ export function LibrarySidebar() {
                           aria-label={t("place.renameOf", { name: f.value })}
                           onClick={() => setRenaming(f)}
                         >
-                          ✎
+                          <Icon.Edit size={14} />
                         </button>
                       )}
                     />

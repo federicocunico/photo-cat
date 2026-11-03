@@ -17,6 +17,7 @@ import {
 import { fmtInt } from "../../lib/format";
 import { clickSelect, selIds, useLibrary } from "../../store/library";
 import { collapseLoaded } from "../library/similarView";
+import { Icon } from "../../components/icons";
 
 const EMPTY: number[] = [];
 import { offsetText, parseShift, shiftText, timeOf, useSequence } from "../../store/sequence";
@@ -322,7 +323,7 @@ function Card({
               fontWeight: 600,
             }}
           >
-            {group.open ? "−" : ""}
+            {group.open && <Icon.Minus size={12} />}
             {group.count}
           </span>
         )}

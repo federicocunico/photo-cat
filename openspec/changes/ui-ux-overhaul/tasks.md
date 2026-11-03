@@ -2,17 +2,17 @@
 
 ## 0. Prerequisiti (vincolanti: senza questi non si inizia)
 
-- [ ] 0.1 Verificare che `loading-feedback` e `people-faces-workspace` siano integrate in `main` e archiviate, e che `catalog-exclusions` sia archiviata (`openspec list --json` senza change aperte oltre a questa; `openspec/changes/archive/` le contiene). Se una non c'è ancora, fermarsi.
-- [ ] 0.2 Fare il rebase di `feat/ui-ux-overhaul` su `main`, poi riallineare le delta:
+- [x] 0.1 Verificare che `loading-feedback` e `people-faces-workspace` siano integrate in `main` e archiviate, e che `catalog-exclusions` sia archiviata (`openspec list --json` senza change aperte oltre a questa; `openspec/changes/archive/` le contiene). Se una non c'è ancora, fermarsi.
+- [x] 0.2 Fare il rebase di `feat/ui-ux-overhaul` su `main`, poi riallineare le delta:
   - `specs/desktop-shell/spec.md`: "Indicatori globali", "Moduli di navigazione" e "Impostazioni" sul testo archiviato (`openspec show desktop-shell --type spec`), mantenendo tutti gli scenari esistenti;
   - `specs/external-apps/spec.md`, sul testo archiviato;
   - verificare con `openspec validate ui-ux-overhaul --strict`.
-- [ ] 0.3 Rileggere l'audit (`audit.md`) sul codice integrato: aggiornare righe e riferimenti, segnare i punti già risolti da `loading-feedback` e `people-faces-workspace`, aggiungere eventuali nuovi problemi.
-- [ ] 0.4 Decidere le domande aperte di `design.md` (dipendenze D3, visualizzatore dei RAW, nome Esporta, "Smart") e annotare la scelta in `design.md`.
+- [x] 0.3 Rileggere l'audit (`audit.md`) sul codice integrato: aggiornare righe e riferimenti, segnare i punti già risolti da `loading-feedback` e `people-faces-workspace`, aggiungere eventuali nuovi problemi.
+- [x] 0.4 Decidere le domande aperte di `design.md` (dipendenze D3, visualizzatore dei RAW, nome Esporta, "Smart") e annotare la scelta in `design.md`.
 
 ## 1. Fondamenta
 
-- [ ] 1.1 Token di spaziatura, raggio, tipografia, elevazione, movimento e `z` in `theme/tokens.ts`, scritti come `--pc-*`.
+- [x] 1.1 Token di spaziatura, raggio, tipografia, elevazione, movimento e `z` in `theme/tokens.ts`, scritti come `--pc-*`.
   - Tema `system`, che segue `prefers-color-scheme`.
   - Nuove coppie di contrasto 3:1 (bordo, icona, focus).
   - Verifica: `tokens.test.ts` per entrambi i temi.

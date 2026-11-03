@@ -11,6 +11,7 @@ import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { TAG_COLORS, tagColorVar } from "../../theme/tokens";
 import { activeSet, errorText, refreshTags, useTagOverview } from "./data";
+import { Icon } from "../../components/icons";
 
 type Pending =
   | { kind: "merge"; source: string; target: string; fromRename?: boolean }
@@ -455,7 +456,7 @@ function SetDetail({
                 aria-label={t("tags.removeFromSet", { name: x.name })}
                 onClick={async () => await run(() => commands.removeTagFromSet(set.id, x.name))}
               >
-                ×
+                <Icon.Close size={14} />
               </BusyButton>
             </span>
           </div>

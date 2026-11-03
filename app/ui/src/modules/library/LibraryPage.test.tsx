@@ -408,7 +408,7 @@ describe("cartelle, luogo e Apri con", () => {
     menu = screen.getByRole("menu", { name: "Azioni sulle foto" });
     expect(menu).toHaveTextContent("3 foto");
     expect(selIds(useLibrary.getState().selection)).toEqual([1, 2, 3]);
-    fireEvent.click(screen.getByRole("menuitem", { name: /Apri con ▸/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Apri con$/ }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Lightroom" }));
     await waitFor(() =>
       expect(commandsMock.openWith).toHaveBeenCalledWith(

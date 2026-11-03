@@ -13,6 +13,7 @@ import {
   type ResourceProfile,
 } from "../../lib/ipc";
 import { fmtBytes, fmtDateTime, fmtDec, fmtInt, mbToGb } from "../../lib/format";
+import { Icon } from "../../components/icons";
 
 const card = {
   background: "var(--pc-panel)",
@@ -416,8 +417,9 @@ export function ModelsPage() {
                     key={m.entry.id}
                     style={{ color: m.selfTest!.passed ? "var(--pc-ok)" : "var(--pc-danger)" }}
                   >
-                    {m.selfTest!.passed ? "✓" : "✕"} {m.entry.name}: {m.selfTest!.message} ·{" "}
-                    {fmtDec(m.selfTest!.avgMs ?? 0, 1)} ms · {fmtDateTime(m.selfTest!.at)}
+                    {m.selfTest!.passed ? <Icon.Check size={14} /> : <Icon.Close size={14} />}{" "}
+                    {m.entry.name}: {m.selfTest!.message} · {fmtDec(m.selfTest!.avgMs ?? 0, 1)} ms ·{" "}
+                    {fmtDateTime(m.selfTest!.at)}
                   </span>
                 ))}
               </div>
