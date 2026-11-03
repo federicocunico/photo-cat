@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { isTyping } from "../tags/useTagHotkeys";
+// Una finestra modale aperta (unione, conferme) sospende le scorciatoie della pagina.
+import { modalOpen } from "../../lib/keys";
 
 export type PeopleHotkeyActions = {
   /** ↑/↓: gruppo precedente / successivo nell'elenco. */
@@ -19,18 +21,6 @@ export type PeopleHotkeyActions = {
   /** Ctrl+Z: annulla l'ultima correzione. */
   undo: () => void;
 };
-
-/**
- * Una finestra modale aperta (unione, conferme) sospende le scorciatoie della pagina.
- * `.ui-dialog` è il `Dialog` condiviso (Radix non mette `aria-modal`).
- */
-function modalOpen(): boolean {
-  return (
-    document.querySelector(
-      '[role="dialog"][aria-modal="true"], [role="dialog"].ui-dialog, [role="alertdialog"]',
-    ) != null
-  );
-}
 
 /**
  * Spazio e Invio su un controllo interattivo (pulsante, casella, link, menu)

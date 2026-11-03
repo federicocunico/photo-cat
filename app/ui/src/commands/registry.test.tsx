@@ -103,3 +103,18 @@ describe("registro dei comandi", () => {
     expect(shortcutText({ key: "Escape" })).toBe("Escape");
   });
 });
+
+it("un Dialog condiviso aperto (Radix, senza aria-modal) sospende le scorciatoie", () => {
+  const run = vi.fn();
+  function Host() {
+    useCommands([{ id: "t.dlg", label: "x", group: "general", shortcut: { key: "j" }, run }]);
+    return (
+      <div role="dialog" className="ui-dialog" aria-label="Dialogo">
+        x
+      </div>
+    );
+  }
+  render(<Host />);
+  fireEvent.keyDown(window, { key: "j" });
+  expect(run).not.toHaveBeenCalled();
+});
