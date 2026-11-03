@@ -554,3 +554,14 @@ it("il titolo della pagina è quello della voce di navigazione", async () => {
   renderModule();
   expect(await screen.findByRole("heading", { level: 1, name: "Persone" })).toBeInTheDocument();
 });
+
+it("issue #23: le foto della persona si aprono in Libreria, tutte selezionate", async () => {
+  commandsMock.librarySelection.mockResolvedValue({ count: 168, maxId: 900 });
+  renderModule();
+  fireEvent.click(await screen.findByText(/Persona senza nome · 168 foto/i));
+  fireEvent.click(await screen.findByRole("button", { name: /Mostra le 168 foto in Libreria/ }));
+  await waitFor(() => expect(useLayout.getState().module).toBe("library"));
+  const lib = useLibrary.getState();
+  expect(lib.filter.personIds).toEqual([1]);
+  expect(lib.selection).toMatchObject({ mode: "filter", total: 168 });
+});

@@ -18,6 +18,9 @@ import { MergeDialog } from "./MergeDialog";
 import { Transfer } from "./Transfer";
 import { WhoIs } from "./WhoIs";
 import type { GroupListTarget } from "./GroupList";
+import { openPersonPhotos } from "./openPersonPhotos";
+import { notifyError } from "../../store/toasts";
+import { Icon } from "../../components/icons";
 import "./people.css";
 
 export type PersonCardHandle = {
@@ -214,6 +217,12 @@ export const PersonCard = forwardRef<
       )}
 
       <CoverPreview group={group} />
+      <Button
+        icon={<Icon.Library size={14} />}
+        onClick={() => openPersonPhotos(group.id).catch((e) => notifyError(e))}
+      >
+        {t("people.showPhotos", { count: group.photos })}
+      </Button>
       {selectedFaceIds.length === 1 && (
         <Button
           disabled={busy}
