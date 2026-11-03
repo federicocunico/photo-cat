@@ -449,7 +449,7 @@ export function SequenceExport() {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      return useLayout.getState().setModule("jobs");
+                      return useLayout.getState().openModule({ module: "jobs" });
                     }}
                   >
                     {t("seqExport.openJobs")}

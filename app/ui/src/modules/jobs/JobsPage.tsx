@@ -109,7 +109,7 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
 
 export function JobCard({ job }: { job: JobSnapshot }) {
   const { t } = useTranslation();
-  const openDiagnostics = useLayout((s) => s.openDiagnostics);
+  const openModule = useLayout((s) => s.openModule);
   const running = job.state === "running";
   const paused = job.state === "paused";
   const live = running || paused || job.state === "queued";
@@ -206,7 +206,9 @@ export function JobCard({ job }: { job: JobSnapshot }) {
           type="button"
           className="btn btn-ghost"
           style={{ alignSelf: "flex-start", color: "var(--pc-danger)", border: 0, padding: 0 }}
-          onClick={() => openDiagnostics({ jobId: job.id })}
+          onClick={() =>
+            openModule({ module: "settings", section: "diagnostics", target: { jobId: job.id } })
+          }
         >
           {t("jobs.failed", { count: job.failed })} · {t("jobs.showErrors")}
         </BusyButton>

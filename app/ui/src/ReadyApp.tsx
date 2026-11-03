@@ -4,12 +4,10 @@ import { StatusBar } from "./components/shell/StatusBar";
 import { setLanguage } from "./i18n";
 import { commands, events, isTauri, type CrashInfo, type UiRecovery } from "./lib/ipc";
 import { startLongTaskReporter } from "./lib/longTasks";
-import { DiagnosticsPage } from "./modules/diagnostics/DiagnosticsPage";
 import { ImportPage } from "./modules/import/ImportPage";
 import { JobsPage } from "./modules/jobs/JobsPage";
 import { LibraryPage } from "./modules/library/LibraryPage";
 import { LibraryStatus } from "./modules/library/LibraryStatus";
-import { ModelsPage } from "./modules/models/ModelsPage";
 import { PeopleModule } from "./modules/people/PeopleModule";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
@@ -19,7 +17,7 @@ import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
 import { ActiveSetStatus, TagsStatus } from "./modules/tags/TagStatus";
 import { Onboarding } from "./modules/onboarding/Onboarding";
 import { Placeholder } from "./modules/Placeholder";
-import { useLayout, type ModuleId } from "./store/layout";
+import { destinationFor, useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents, useTrimCaches } from "./store/live";
 import { useImportRefresh } from "./modules/import/sourceActions";
 import { ToastHost } from "./components/feedback/ToastHost";
@@ -33,8 +31,6 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <ImportPage />;
     case "jobs":
       return <JobsPage />;
-    case "models":
-      return <ModelsPage />;
     case "people":
       return <PeopleModule />;
     case "catalogs":
@@ -47,8 +43,6 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <OrganizePage />;
     case "settings":
       return <SettingsPage />;
-    case "diagnostics":
-      return <DiagnosticsPage />;
     default:
       return <Placeholder module={module} />;
   }
@@ -81,8 +75,9 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   }, []);
   useEffect(() => {
     // Solo sviluppo: VITE_START_MODULE=jobs apre direttamente un modulo.
-    const start = import.meta.env.VITE_START_MODULE as ModuleId | undefined;
-    if (import.meta.env.DEV && start) useLayout.getState().setModule(start);
+    const start = import.meta.env.VITE_START_MODULE as string | undefined;
+    const to = start ? destinationFor(start) : null;
+    if (import.meta.env.DEV && to) useLayout.getState().openModule(to);
   }, []);
   useEffect(() => {
     applyTheme(theme);

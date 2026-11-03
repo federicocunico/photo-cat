@@ -41,7 +41,7 @@ function openInLibrary(filter: { tags?: string[] }, ids?: number[]) {
   lib.resetFilter();
   if (filter.tags) lib.setFilter({ ...emptyFilter(), tags: filter.tags });
   if (ids) lib.setSelection(ids, ids[0] ?? null);
-  useLayout.getState().setModule("library");
+  useLayout.getState().openModule({ module: "library" });
 }
 
 function SetList({

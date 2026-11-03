@@ -18,7 +18,7 @@ export function OpenInPeople({
       type="button"
       className={className}
       style={style}
-      onClick={() => useLayout.getState().openPeople(target)}
+      onClick={() => useLayout.getState().openModule({ module: "people", target: target })}
     >
       {t("identities.openPeople")}
     </button>

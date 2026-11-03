@@ -16,9 +16,13 @@ export type ModuleId =
   | "import"
   | "jobs"
   | "organize"
-  | "models"
-  | "diagnostics"
   | "settings";
+
+/**
+ * Sezioni di Impostazioni raggiungibili direttamente (design D2, D9). Modelli AI e
+ * Diagnostica non sono più voci della navigazione ma sezioni di Impostazioni.
+ */
+export type SettingsSection = "general" | "models" | "diagnostics";
 
 export const PANEL_LIMITS = { left: [200, 420], right: [260, 480] } as const;
 
@@ -33,8 +37,17 @@ export interface DiagFilter {
 export type PeopleTarget =
   { person: number } | { face: number } | { media: number; person?: number | null };
 
+/** Dove portare l'utente: un modulo, ed eventualmente una sezione o un elemento. */
+export type Destination =
+  | { module: ModuleId }
+  | { module: "people"; target: PeopleTarget }
+  | { module: "settings"; section: Exclude<SettingsSection, "diagnostics"> }
+  | { module: "settings"; section: "diagnostics"; target?: DiagFilter };
+
 interface LayoutState {
   module: ModuleId;
+  /** Sezione attiva di Impostazioni. */
+  settingsSection: SettingsSection;
   /** Sezione attiva del modulo Persone (Da rivedere / Persone / Ignorati). */
   peopleSection: PeopleSection;
   /** Navigazione dei moduli a sole icone (Ctrl+B). */
@@ -49,7 +62,9 @@ interface LayoutState {
   diagFilter: DiagFilter;
   /** Destinazione consumata da PeopleModule (non persistita). */
   peopleTarget: PeopleTarget | null;
-  setModule: (m: ModuleId) => void;
+  /** Apre un modulo, una sezione di Impostazioni o un elemento (persona, filtro degli errori). */
+  openModule: (to: Destination) => void;
+  setSettingsSection: (s: SettingsSection) => void;
   setPeopleSection: (s: PeopleSection) => void;
   toggleNav: () => void;
   toggleLeft: () => void;
@@ -58,8 +73,6 @@ interface LayoutState {
   setRightWidth: (w: number) => void;
   setTheme: (t: ThemePref) => void;
   setLanguage: (l: Language) => void;
-  openDiagnostics: (f: DiagFilter) => void;
-  openPeople: (target: PeopleTarget) => void;
   clearPeopleTarget: () => void;
 }
 
@@ -67,6 +80,7 @@ const clamp = (v: number, [min, max]: readonly [number, number]) => Math.min(max
 
 type PersistedLayout = {
   module?: string;
+  settingsSection?: SettingsSection;
   peopleSection?: PeopleSection;
   navCompact?: boolean;
   leftOpen?: boolean;
@@ -77,22 +91,46 @@ type PersistedLayout = {
   language?: Language;
 };
 
-/** Migra preferenze: la voce Identità non esiste più → modulo Persone, sezione Persone. */
+/**
+ * Migra le preferenze salvate:
+ * - v0 → v1: la voce Identità non esiste più → modulo Persone, sezione Persone;
+ * - v1 → v2: Modelli AI e Diagnostica diventano sezioni di Impostazioni.
+ */
 export function migrateLayoutState(persisted: unknown): PersistedLayout {
-  const s = (persisted ?? {}) as PersistedLayout;
-  if (s.module === "identities") {
-    return { ...s, module: "people", peopleSection: "people" };
-  }
+  const s = { ...((persisted ?? {}) as PersistedLayout) };
+  if (s.module === "identities") Object.assign(s, { module: "people", peopleSection: "people" });
+  if (s.module === "models" || s.module === "diagnostics")
+    Object.assign(s, { module: "settings", settingsSection: s.module });
   return {
     ...s,
     peopleSection: s.peopleSection ?? "review",
+    settingsSection: s.settingsSection ?? "general",
   };
+}
+
+/** Destinazione per un nome di modulo libero (preferenze vecchie, variabili di sviluppo). */
+export function destinationFor(id: string): Destination | null {
+  if (id === "models" || id === "diagnostics") return { module: "settings", section: id };
+  if (id === "identities") return { module: "people" };
+  const known: ModuleId[] = [
+    "library",
+    "sequence",
+    "catalogs",
+    "tags",
+    "people",
+    "import",
+    "jobs",
+    "organize",
+    "settings",
+  ];
+  return known.includes(id as ModuleId) ? { module: id as ModuleId } : null;
 }
 
 export const useLayout = create<LayoutState>()(
   persist(
     (set) => ({
       module: "library",
+      settingsSection: "general",
       peopleSection: "review",
       navCompact: false,
       leftOpen: true,
@@ -104,7 +142,16 @@ export const useLayout = create<LayoutState>()(
       language: "it",
       diagFilter: {},
       peopleTarget: null,
-      setModule: (module) => set({ module }),
+      openModule: (to) => {
+        const next: Partial<LayoutState> = { module: to.module };
+        if ("section" in to) next.settingsSection = to.section;
+        if ("target" in to) {
+          if (to.module === "people") next.peopleTarget = to.target;
+          else next.diagFilter = to.target ?? {};
+        } else if ("section" in to && to.section === "diagnostics") next.diagFilter = {};
+        set(next);
+      },
+      setSettingsSection: (settingsSection) => set({ settingsSection }),
       setPeopleSection: (peopleSection) => set({ peopleSection }),
       toggleNav: () => set((s) => ({ navCompact: !s.navCompact })),
       toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
@@ -113,17 +160,16 @@ export const useLayout = create<LayoutState>()(
       setRightWidth: (w) => set({ rightWidth: clamp(w, PANEL_LIMITS.right) }),
       setTheme: (theme) => set({ theme }),
       setLanguage: (language) => set({ language }),
-      openDiagnostics: (diagFilter) => set({ diagFilter, module: "diagnostics" }),
-      openPeople: (peopleTarget) => set({ peopleTarget, module: "people" }),
       clearPeopleTarget: () => set({ peopleTarget: null }),
     }),
     {
       name: "photo-cat.layout",
-      version: 1,
+      version: 2,
       migrate: migrateLayoutState,
       storage: createJSONStorage(() => mirroredStorage),
       partialize: (s) => ({
         module: s.module,
+        settingsSection: s.settingsSection,
         peopleSection: s.peopleSection,
         navCompact: s.navCompact,
         leftOpen: s.leftOpen,

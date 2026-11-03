@@ -62,7 +62,7 @@ export function PeopleModule() {
   const setPeopleSection = useLayout((s) => s.setPeopleSection);
   const peopleTarget = useLayout((s) => s.peopleTarget);
   const clearPeopleTarget = useLayout((s) => s.clearPeopleTarget);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const setSelection = useLibrary((s) => s.setSelection);
   const [target, setTarget] = useState<GroupListTarget>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -403,7 +403,7 @@ export function PeopleModule() {
               const mediaId = arrival.mediaId;
               setArrival(null);
               setSelection([mediaId], mediaId);
-              setModule("library");
+              openModule({ module: "library" });
             }}
           >
             {t("people.backToPhoto")}

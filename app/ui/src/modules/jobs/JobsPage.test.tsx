@@ -114,7 +114,10 @@ describe("schermata Job", () => {
     expect(commandsMock.cancelJob).toHaveBeenCalledWith(7);
 
     fireEvent.click(within(card).getByRole("button", { name: /4 errori · Vedi errori/ }));
-    expect(useLayout.getState().module).toBe("diagnostics");
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
     expect(useLayout.getState().diagFilter).toEqual({ jobId: 7 });
   });
 

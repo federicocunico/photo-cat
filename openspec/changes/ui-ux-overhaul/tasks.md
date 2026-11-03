@@ -62,7 +62,7 @@
 ## 2. Shell e navigazione
 
 - [x] 2.1 `modules/registry.ts` a gruppi (Sfoglia, Organizza, Importa ed esporta, più le voci in fondo); `ModuleNav` con etichette di gruppo, badge (Persone da rivedere, Attività in corso), modalità compatta (Ctrl+B) e passaggio automatico sotto i 1.008 px. Verifica: `shell.test.tsx`.
-- [ ] 2.2 Modelli AI e Diagnostica come sezioni di Impostazioni:
+- [x] 2.2 Modelli AI e Diagnostica come sezioni di Impostazioni:
   - `openModule({ module, section, target })` al posto di `setModule` e `openDiagnostics`;
   - migrazione di `store/layout.ts` (`version` +1, `models` / `diagnostics` → `settings/<sezione>`, insieme a quella di Identità);
   - aggiornare tutti i collegamenti (barra di stato, avvisi di crash, Attività › "Vedi errori").

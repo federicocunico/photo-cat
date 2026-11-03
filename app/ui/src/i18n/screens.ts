@@ -138,6 +138,12 @@ export const screens = {
     },
     settings: {
       title: "Impostazioni",
+      sections: {
+        label: "Sezioni delle impostazioni",
+        general: "Generale",
+        models: "Modelli AI e sistema",
+        diagnostics: "Diagnostica",
+      },
       loading: "Caricamento impostazioni…",
       saved: "Impostazioni salvate.",
       profile: "Profilo risorse",
@@ -257,6 +263,12 @@ export const screens = {
     },
     settings: {
       title: "Settings",
+      sections: {
+        label: "Settings sections",
+        general: "General",
+        models: "AI models & system",
+        diagnostics: "Diagnostics",
+      },
       loading: "Loading settings…",
       saved: "Settings saved.",
       profile: "Resource profile",

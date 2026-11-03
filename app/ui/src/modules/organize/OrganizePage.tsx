@@ -111,7 +111,10 @@ export function OrganizePage() {
       {notice && (
         <p role="status">
           {notice}{" "}
-          <BusyButton className="btn" onClick={() => useLayout.getState().setModule("jobs")}>
+          <BusyButton
+            className="btn"
+            onClick={() => useLayout.getState().openModule({ module: "jobs" })}
+          >
             {t("organize.jobs")}
           </BusyButton>
         </p>

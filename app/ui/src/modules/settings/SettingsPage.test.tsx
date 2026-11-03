@@ -61,7 +61,7 @@ it("salva profilo, limite RAM, soglia, volti, tema, lingua e percorso dati", asy
   fireEvent.click(
     screen.getByLabelText("Riconoscimento volti", { exact: false, selector: "input" }),
   );
-  fireEvent.change(screen.getByLabelText("Tema", { exact: false }), {
+  fireEvent.change(screen.getByLabelText(/^Tema/), {
     target: { value: "light" },
   });
   fireEvent.change(screen.getByLabelText("Lingua", { exact: false }), {

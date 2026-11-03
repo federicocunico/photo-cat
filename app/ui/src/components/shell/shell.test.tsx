@@ -197,7 +197,10 @@ describe("indicatori globali", () => {
     });
     expect(screen.getByTestId("error-count")).toHaveTextContent("1250 errori nel log");
     fireEvent.click(screen.getByTestId("error-count"));
-    expect(useLayout.getState().module).toBe("diagnostics");
+    expect(useLayout.getState()).toMatchObject({
+      module: "settings",
+      settingsSection: "diagnostics",
+    });
     expect(useLayout.getState().diagFilter).toEqual({ level: "ERROR" });
   });
 });

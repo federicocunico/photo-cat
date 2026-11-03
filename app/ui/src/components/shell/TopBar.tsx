@@ -34,17 +34,17 @@ function GlobalSearch() {
   const { t } = useTranslation();
   const text = useLibrary((s) => s.filter.text ?? "");
   const setFilter = useLibrary((s) => s.setFilter);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const [value, setValue] = useState(text);
   useEffect(() => setValue(text), [text]);
   useEffect(() => {
     if (value === text) return;
     const h = setTimeout(() => {
       setFilter({ text: value.trim() ? value : null });
-      if (value.trim()) setModule("library");
+      if (value.trim()) openModule({ module: "library" });
     }, 250);
     return () => clearTimeout(h);
-  }, [value, text, setFilter, setModule]);
+  }, [value, text, setFilter, openModule]);
   return (
     <input
       type="search"
@@ -66,7 +66,7 @@ function GlobalSearch() {
 export function JobPill() {
   const { t } = useTranslation();
   const jobs = useLive((s) => s.jobs);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const job = activeJobs(jobs)[0];
   const percent = job ? Math.floor(job.overallPercent ?? 0) : 0;
   const phase = job ? currentPhase(job) : undefined;
@@ -77,7 +77,12 @@ export function JobPill() {
       ? `${phaseName} · ${t("jobs.indeterminate", { n: fmtInt(phase.done) })}`
       : t("shell.jobPill", { phase: phaseName, percent });
   return (
-    <button type="button" className="pill" onClick={() => setModule("jobs")} data-testid="job-pill">
+    <button
+      type="button"
+      className="pill"
+      onClick={() => openModule({ module: "jobs" })}
+      data-testid="job-pill"
+    >
       {job ? <Spinner size={14} /> : <Icon.Jobs size={14} />}
       <span>{label}</span>
       {job && (
@@ -92,7 +97,7 @@ export function JobPill() {
 export function RamChip() {
   const { t } = useTranslation();
   const res = useLive((s) => s.resources);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   if (!res) return null;
   const { system, governor } = res;
   const used = system.totalMb - system.availableMb;
@@ -107,7 +112,7 @@ export function RamChip() {
       type="button"
       className="pill mono"
       style={{ fontSize: 12 }}
-      onClick={() => setModule("jobs")}
+      onClick={() => openModule({ module: "jobs" })}
       title={t("shell.ramTitle", {
         app: system.processMb,
         budget: governor.budgetMb,

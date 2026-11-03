@@ -69,13 +69,13 @@ function useBadges(): Partial<Record<ModuleId, number>> {
 export function ModuleNav() {
   const { t } = useTranslation();
   const module = useLayout((s) => s.module);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const preferCompact = useLayout((s) => s.navCompact);
   const toggleNav = useLayout((s) => s.toggleNav);
   const narrow = useNarrowWindow();
   const compact = preferCompact || narrow;
   const badges = useBadges();
-  useNavHotkeys(setModule);
+  useNavHotkeys((module) => openModule({ module }));
 
   const badgeText = (id: ModuleId, n: number) =>
     t(id === "people" ? "nav.badgeReview" : "nav.badgeRunning", { count: n });
@@ -93,7 +93,7 @@ export function ModuleNav() {
         aria-label={name}
         aria-keyshortcuts={shortcut ? `Control+${shortcut}` : undefined}
         aria-describedby={count > 0 ? `nav-badge-${id}` : undefined}
-        onClick={() => setModule(id)}
+        onClick={() => openModule({ module: id })}
       >
         <I className="nav-icon" aria-hidden="true" />
         {!compact && <span className="nav-label">{name}</span>}

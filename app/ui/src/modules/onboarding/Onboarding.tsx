@@ -127,7 +127,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                   });
                   await commands.startImport(id, null);
                   await finish();
-                  useLayout.getState().setModule("jobs");
+                  useLayout.getState().openModule({ module: "jobs" });
                 })
               }
             >

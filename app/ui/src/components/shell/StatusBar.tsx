@@ -7,7 +7,7 @@ import { useLayout } from "../../store/layout";
 export function StatusBar({ children }: { children?: ReactNode }) {
   const { t } = useTranslation();
   const errorCount = useLive((s) => s.errorCount);
-  const openDiagnostics = useLayout((s) => s.openDiagnostics);
+  const openModule = useLayout((s) => s.openModule);
   return (
     <footer
       style={{
@@ -25,7 +25,9 @@ export function StatusBar({ children }: { children?: ReactNode }) {
       {children}
       <button
         type="button"
-        onClick={() => openDiagnostics({ level: "ERROR" })}
+        onClick={() =>
+          openModule({ module: "settings", section: "diagnostics", target: { level: "ERROR" } })
+        }
         data-testid="error-count"
         style={{
           marginLeft: "auto",

@@ -103,7 +103,7 @@ export function CatalogsPage() {
                   onClick={() => {
                     useLibrary.getState().resetFilter();
                     useLibrary.getState().setFilter({ catalogId: c.id });
-                    return useLayout.getState().setModule("library");
+                    return useLayout.getState().openModule({ module: "library" });
                   }}
                 >
                   {t("catalogs.open")}

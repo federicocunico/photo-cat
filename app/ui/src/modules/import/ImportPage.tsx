@@ -143,7 +143,7 @@ function SourcesList({ sources }: { sources: SourceSummary[] }) {
 function ScanSummary() {
   const { t } = useTranslation();
   const jobs = useLive((s) => s.jobs);
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const job = activeJobs(jobs).find((j) => j.kind === "import");
   if (!job) return null;
   const ph = (n: string) => job.phases.find((p) => p.name === n);
@@ -178,7 +178,7 @@ function ScanSummary() {
         type="button"
         className="btn btn-ghost"
         style={{ alignSelf: "flex-start" }}
-        onClick={() => setModule("jobs")}
+        onClick={() => openModule({ module: "jobs" })}
       >
         {t("import.openJob")}
       </BusyButton>
@@ -189,7 +189,7 @@ function ScanSummary() {
 export function ImportPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const setModule = useLayout((s) => s.setModule);
+  const openModule = useLayout((s) => s.openModule);
   const [path, setPath] = useState("");
   const [recursive, setRecursive] = useState(true);
   const [watch, setWatch] = useState(false);
@@ -220,7 +220,7 @@ export function ImportPage() {
       await commands.startImport(id, null);
       await qc.invalidateQueries({ queryKey: ["sources"] });
       setPath("");
-      setModule("jobs");
+      openModule({ module: "jobs" });
     } catch (e) {
       const err = e as { detail?: string; messageKey?: string };
       setError(err.detail ?? String(e));

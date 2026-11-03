@@ -91,3 +91,27 @@
   padding: 0 4px;
   line-height: 16px;
 }
+
+/* Impostazioni a sezioni (2.2; il layout completo arriva con 6.1). */
+.settings-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-page > .ui-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-page .ui-tab-list {
+  padding: 0 var(--pc-space-5);
+}
+.settings-page .ui-tab-panel[data-state="active"] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}

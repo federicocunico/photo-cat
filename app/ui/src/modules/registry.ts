@@ -48,9 +48,6 @@ export const NAV_GROUPS: Array<{
   {
     id: "bottom",
     modules: [
-      // Modelli AI e Diagnostica passano in Impostazioni con il task 2.2.
-      { id: "models", icon: Icon.Models },
-      { id: "diagnostics", icon: Icon.Diagnostics },
       { id: "jobs", icon: Icon.Jobs },
       { id: "settings", icon: Icon.Settings },
     ],
