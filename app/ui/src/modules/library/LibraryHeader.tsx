@@ -14,7 +14,7 @@ import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
 import { useCatalogFeedback } from "./catalogActions";
 
-export const SORTS: SortKey[] = [
+const SORTS: SortKey[] = [
   "captured_desc",
   "captured_asc",
   "name_asc",
