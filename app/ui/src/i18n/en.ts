@@ -422,6 +422,16 @@ export const en: Messages = {
       io: "Read error",
     },
   },
+  floating: {
+    options: "{{name}} options",
+    move: "Move",
+    resize: "Resize",
+    closeItem: "Close",
+    close: "Close {{name}}",
+    arrows: "Arrows",
+    moving: "Move with the arrow keys (Shift for longer steps). Enter or Esc to finish.",
+    resizing: "Resize with the arrow keys (Shift for longer steps). Enter or Esc to finish.",
+  },
   errors: {
     internal: "Internal application error.",
     io: "Disk read or write error.",

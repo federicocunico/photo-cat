@@ -1,0 +1,59 @@
+/* Pannelli flottanti: sopra il contenuto, sotto avvisi, menu e dialoghi (token `--pc-z-*`). */
+.floating-panel {
+  position: fixed;
+  z-index: calc(var(--pc-z-floating) + var(--floating-layer, 0));
+  display: flex;
+  flex-direction: column;
+  background: var(--pc-raised);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-lg);
+  box-shadow: var(--pc-elevation-floating);
+  overflow: hidden;
+}
+.floating-panel[data-key-mode] {
+  outline: 2px dashed var(--pc-focus);
+  outline-offset: 2px;
+}
+.floating-title {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  padding: 6px var(--pc-space-2) 6px var(--pc-space-3);
+  cursor: move;
+  border-bottom: 1px solid var(--pc-border);
+  user-select: none;
+  touch-action: none;
+}
+.floating-title strong {
+  flex: 1;
+  min-width: 0;
+  font: var(--pc-weight-medium) var(--pc-font-base) var(--pc-font-ui);
+}
+.floating-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+.floating-keys {
+  margin: 0;
+  padding: var(--pc-space-1) var(--pc-space-3);
+  font: var(--pc-font-sm) var(--pc-font-ui);
+  background: var(--pc-panel);
+  border-bottom: 1px solid var(--pc-border);
+}
+.floating-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.floating-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+}

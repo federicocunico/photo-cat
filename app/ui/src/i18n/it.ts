@@ -422,6 +422,16 @@ export const it = {
       io: "Errore di lettura",
     },
   },
+  floating: {
+    options: "Opzioni di {{name}}",
+    move: "Sposta",
+    resize: "Ridimensiona",
+    closeItem: "Chiudi",
+    close: "Chiudi {{name}}",
+    arrows: "Frecce",
+    moving: "Sposta con le frecce (Maiusc per passi più lunghi). Invio o Esc per finire.",
+    resizing: "Ridimensiona con le frecce (Maiusc per passi più lunghi). Invio o Esc per finire.",
+  },
   errors: {
     internal: "Errore interno dell'applicazione.",
     io: "Errore di lettura o scrittura su disco.",

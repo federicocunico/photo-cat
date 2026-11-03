@@ -182,7 +182,7 @@
   - errori come `InlineAlert` di errore;
   - fasi e livelli tradotti;
   - "Segnala un problema" in evidenza.
-- [ ] 7.8 **Pannelli flottanti**: spostamento e ridimensionamento da tastiera (scorciatoie nel menu del pannello), `z` dai token, etichetta di chiusura propria.
+- [x] 7.8 **Pannelli flottanti**: spostamento e ridimensionamento da tastiera (scorciatoie nel menu del pannello), `z` dai token, etichetta di chiusura propria.
 
 ## 8. Pulizia e verifica
 
