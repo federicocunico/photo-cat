@@ -66,6 +66,11 @@ mod native {
     fn with_install_hint(detail: String) -> String {
         if cfg!(windows) {
             detail
+        } else if cfg!(target_os = "macos") {
+            format!(
+                "{detail}. Per le foto HEIC installare libheif {MIN_SYSTEM_VERSION} o successiva \
+                 con Homebrew: brew install libheif"
+            )
         } else {
             format!(
                 "{detail}. Per le foto HEIC installare libheif {MIN_SYSTEM_VERSION} o successiva \

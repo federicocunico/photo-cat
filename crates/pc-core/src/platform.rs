@@ -1,7 +1,8 @@
 //! Nomi delle librerie native distribuite negli asset, per piattaforma.
 //!
 //! Gli asset del repository tengono un runtime per piattaforma in `runtime/<cartella>/`;
-//! la build distribuita li rimappa in `runtime/` (vedi `tauri.conf.json` e `tauri.linux.conf.json`).
+//! la build distribuita li rimappa in `runtime/` (vedi `tauri.conf.json`,
+//! `tauri.linux.conf.json` e `tauri.macos.conf.json`).
 
 /// Cartella degli asset nativi della piattaforma corrente (`None` se non distribuiti).
 pub fn asset_dir() -> Option<&'static str> {
@@ -9,6 +10,8 @@ pub fn asset_dir() -> Option<&'static str> {
         Some("win-x64")
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         Some("linux-x64")
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some("mac-arm64")
     } else {
         None
     }
@@ -41,10 +44,10 @@ mod tests {
             (asset_dir(), onnxruntime_file()),
             (Some("linux-x64"), "libonnxruntime.so")
         );
-        #[cfg(target_os = "macos")]
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         assert_eq!(
             (asset_dir(), onnxruntime_file()),
-            (None, "libonnxruntime.dylib")
+            (Some("mac-arm64"), "libonnxruntime.dylib")
         );
     }
 }

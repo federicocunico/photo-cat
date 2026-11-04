@@ -31,19 +31,21 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 - Windows: Microsoft Edge WebView2 Runtime (preinstallato su Windows 11) e Build Tools di Visual Studio (C++)
 - Linux (Debian/Ubuntu): `sudo apt install build-essential libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
   - per le foto HEIC: `libheif1` ≥ 1.20 e `libheif-plugin-libde265` (senza, gli HEIC vengono importati con i soli metadati)
-- macOS: Xcode Command Line Tools
+- macOS (Apple Silicon): Xcode Command Line Tools
+  - per le foto HEIC: `brew install libheif` (senza, gli HEIC vengono importati con i soli metadati)
 
 ## Sviluppo
 
-Scorciatoie (GNU Make: su Windows da cmd o Git Bash, su Linux dal terminale):
+Scorciatoie (GNU Make: su Windows da cmd o Git Bash, su Linux o macOS dal terminale):
 
 | Comando | Cosa fa |
 |---|---|
 | `make dev` (o `make run`) | avvio locale in debug: Vite + finestra Tauri con ricarica |
-| `make build` | test di build come la CI: setup NSIS in `target/release/bundle/nsis` su Windows, `.deb` e `.tar.gz` con SHA-256 in `target/release/dist` su Linux |
+| `make build` | test di build: setup NSIS in `target/release/bundle/nsis` su Windows; `.deb` e `.tar.gz` con SHA-256 in `target/release/dist` su Linux; `.dmg` con SHA-256 in `target/release/dist` su macOS Apple Silicon (solo locale, non in CI) |
 | `make test` | fmt, clippy, test Rust e UI (i test non girano in CI) |
 | `make test-linux` | da Windows o macOS, con Docker: ripete in un container Ubuntu 22.04 i passi della CI Linux (build UI, fmt, clippy, test Rust, `.deb` e `.tar.gz`) sullo stato corrente del repository, file nuovi compresi se in stage; `SKIP_PACKAGE=1` salta i pacchetti |
 | `make release` | crea e pubblica il tag `v<versione>` di `tauri.conf.json`: la GitHub Action pubblica la release con installer Windows, pacchetti Linux e SHA-256 |
+| `make publish-mac` | solo su macOS Apple Silicon: allega il DMG e lo SHA-256 di `target/release/dist` alla release GitHub `v<versione>` già esistente (se manca il DMG lo ricompila; `SKIP_BUILD=1` lo evita e fallisce). Serve `gh` autenticato |
 
 Per una nuova versione aggiornare prima `version` in `Cargo.toml` e in `app/src-tauri/tauri.conf.json` (devono coincidere: la pipeline lo verifica).
 
@@ -75,16 +77,29 @@ In entrambi i casi la decodifica HEIC usa la libheif di sistema (vedi Prerequisi
 
 Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
 
+## Installazione su macOS (Apple Silicon)
+
+La build locale (`make build` su un Mac arm64) produce in `target/release/dist/`:
+
+- `photo-cat_<versione>_aarch64.dmg` — si apre il disco e si trascina photo-cat in Applicazioni.
+- `photo-cat_<versione>_aarch64.dmg.sha256` — verifica con `shasum -a 256 -c photo-cat_<versione>_aarch64.dmg.sha256`.
+
+Per pubblicarli sulla release GitHub della stessa versione (dopo `make release` / CI Windows+Linux): `make publish-mac`. Non passa da CI.
+
+Il DMG usa una firma ad-hoc (non Developer ID / notarizzazione). Al primo avvio macOS chiede di autorizzare un’app di uno sviluppatore non identificato: tasto destro › Apri, oppure Impostazioni di sistema › Privacy e sicurezza › Apri comunque. Se compare «è danneggiata», è una build senza firma del bundle: rifare `make build` / `make publish-mac` con la versione corrente.
+
+La decodifica HEIC usa la libheif di sistema (vedi Prerequisiti). Il runtime ONNX per macOS arm64 è incluso; su Apple Silicon è selezionabile anche CoreML.
+
 ## Aggiornare e tornare a una versione precedente
 
 **Dove stanno i dati.** Libreria e preferenze sono nella cartella utente dell'app, separata dalla cartella del programma:
 
-| Contenuto | Windows | Linux |
-|---|---|---|
-| Cartella dati: `catalog.db`, `config.toml` (impostazioni, tema, lingua), miniature, modelli, log, `backups/` | `%APPDATA%\photocat\photo-cat\data` (o il percorso scelto nelle impostazioni) | `~/.local/share/photo-cat` |
-| Cartella dell'app: `app.db` (identità, set di tag), `ui-prefs.json` (layout, ordinamento, miniature, pannelli) | `%APPDATA%\photocat\photo-cat\config` | `~/.config/photo-cat` |
+| Contenuto | Windows | Linux | macOS |
+|---|---|---|---|
+| Cartella dati: `catalog.db`, `config.toml` (impostazioni, tema, lingua), miniature, modelli, log, `backups/` | `%APPDATA%\photocat\photo-cat\data` (o il percorso scelto nelle impostazioni) | `~/.local/share/photo-cat` | `~/Library/Application Support/com.photocat.photo-cat` |
+| Cartella dell'app: `app.db` (identità, set di tag), `ui-prefs.json` (layout, ordinamento, miniature, pannelli) | `%APPDATA%\photocat\photo-cat\config` | `~/.config/photo-cat` | `~/Library/Preferences/com.photocat.photo-cat` |
 
-**Installare sopra una versione esistente** (anche senza disinstallare) conserva tutto: l'installer sostituisce solo il programma. **Disinstallare e reinstallare** conserva comunque libreria, impostazioni e preferenze, anche spuntando "Elimina i dati dell'applicazione": quella casella cancella solo il profilo dell'interfaccia (`%LOCALAPPDATA%\com.photocat.app`), e al primo avvio le preferenze dell'interfaccia vengono ripristinate da `ui-prefs.json`. Per rimuovere davvero tutto, dopo la disinstallazione cancellare a mano la cartella `%APPDATA%\photocat` (Windows) oppure `~/.local/share/photo-cat` e `~/.config/photo-cat` (Linux).
+**Installare sopra una versione esistente** (anche senza disinstallare) conserva tutto: l'installer sostituisce solo il programma. **Disinstallare e reinstallare** conserva comunque libreria, impostazioni e preferenze, anche spuntando "Elimina i dati dell'applicazione": quella casella cancella solo il profilo dell'interfaccia (`%LOCALAPPDATA%\com.photocat.app`), e al primo avvio le preferenze dell'interfaccia vengono ripristinate da `ui-prefs.json`. Per rimuovere davvero tutto, dopo la disinstallazione cancellare a mano la cartella `%APPDATA%\photocat` (Windows), oppure `~/.local/share/photo-cat` e `~/.config/photo-cat` (Linux), oppure `~/Library/Application Support/com.photocat.photo-cat` e `~/Library/Preferences/com.photocat.photo-cat` (macOS).
 
 All'avvio la nuova versione aggiorna il catalogo (`catalog.db`) se è di una versione precedente. Prima di farlo ne salva una copia in `backups/` dentro la cartella dati (`catalog-v<schema>-<data>.db`), insieme a una copia della configurazione (`config-v<schema>-<data>.toml`). L'archivio dell'app (`app.db`, identità e set di tag) è nuovo dalla 0.2.0 e viene creato al primo avvio; le persone con nome del catalogo diventano identità.
 
@@ -110,7 +125,7 @@ npm --prefix app/ui test
 
 ## Modelli inclusi e verifica
 
-I modelli e il runtime ONNX per Windows e Linux sono inclusi in `assets/`, nell'installer e nei pacchetti;
+I modelli e il runtime ONNX per Windows, Linux e macOS Apple Silicon sono inclusi in `assets/`, nell'installer e nei pacchetti;
 fonti e licenze sono documentate in [assets/README.md](assets/README.md).
 All'avvio la verifica e l'eventuale ripristino/download avvengono in background.
 Impostazioni › **Modelli AI e sistema** permette di verificare, installare un file locale,
@@ -175,6 +190,7 @@ Identità e set di tag non stanno in `catalog.db` ma in un archivio dell'app che
 |---|---|
 | Windows | `%APPDATA%\photocat\photo-cat\config\app.db` |
 | Linux | `~/.config/photo-cat/app.db` |
+| macOS | `~/Library/Preferences/com.photocat.photo-cat/app.db` |
 | `PHOTO_CAT_DATA_DIR` impostata | `<radice>/app/app.db` (installazioni portabili e prove) |
 
 `app.db` contiene **dati biometrici**: i volti di riferimento delle identità (ritaglio allineato 112×112 ed embedding, mai le foto originali). Restano sul computer; il modulo Persone mostra dove si trova l'archivio, "Elimina tutti i dati dei volti" li cancella insieme ai volti della libreria (le identità restano con nome e alias) e l'esportazione delle identità permette di escluderli. Il pacchetto diagnostico riporta di `app.db` solo versione e conteggi.
@@ -209,7 +225,7 @@ Anche "Rimuovi dalla libreria" sulla selezione cancella le miniature non più us
 
 ## Luogo, cartelle, "Apri con" e soglie AI
 
-Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni › Generale › Percorso dati alternativo): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.
+Le impostazioni stanno in `config.toml`, nella cartella dati dell'app (Impostazioni › Generale › Percorso dati alternativo): Windows `%APPDATA%\photocat\photo-cat\data`, Linux `~/.local/share/photo-cat`, macOS `~/Library/Application Support/com.photocat.photo-cat`. Si modificano dalla schermata Impostazioni; gli esempi sotto servono per configurazioni preparate a mano.
 
 ### Correzione del luogo
 
