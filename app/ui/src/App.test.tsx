@@ -58,6 +58,7 @@ vi.mock("./modules/import/ImportPage", () => ({ ImportPage: () => <p>page:import
 vi.mock("./modules/jobs/JobsPage", () => ({ JobsPage: () => <p>page:jobs</p> }));
 vi.mock("./modules/models/ModelsPage", () => ({ ModelsPage: () => <p>page:models</p> }));
 vi.mock("./modules/organize/OrganizePage", () => ({ OrganizePage: () => <p>page:organize</p> }));
+vi.mock("./modules/ai/AiPage", () => ({ AiPage: () => <p>page:ai</p> }));
 vi.mock("./modules/settings/SettingsPage", () => ({ SettingsPage: () => <p>page:settings</p> }));
 vi.mock("./modules/diagnostics/DiagnosticsPage", () => ({
   DiagnosticsPage: () => <p>page:diagnostics</p>,
@@ -105,6 +106,7 @@ describe("moduli di navigazione", () => {
       "catalogs",
       "people",
       "tags",
+      "ai",
       "import",
       "organize",
       "jobs",
@@ -121,6 +123,7 @@ describe("moduli di navigazione", () => {
       catalogs: "Cataloghi",
       tags: "Tag",
       people: "Persone",
+      ai: "AI",
       import: "Importa",
       jobs: "Attività",
       organize: "Esporta",

@@ -78,7 +78,6 @@ export const selection = {
       },
       failed: "Operazione non riuscita su {{failed}} foto.",
       partial: "{{done}} riuscite · {{failed}} non riuscite.",
-      reanalyzeStarted: "Nuova analisi avviata: segui l'avanzamento in Attività.",
     },
   },
   en: {
@@ -159,7 +158,6 @@ export const selection = {
       },
       failed: "The operation failed on {{failed}} photos.",
       partial: "{{done}} succeeded · {{failed}} failed.",
-      reanalyzeStarted: "New analysis started: follow it in Activity.",
     },
   },
 };

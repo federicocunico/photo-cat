@@ -209,6 +209,38 @@ export const commands = {
 	similarPending: () => __TAURI_INVOKE<number>("similar_pending"),
 	/**  Accoda l'analisi dei gruppi (librerie esistenti: proposta, non automatica). */
 	startSimilarAnalysis: () => __TAURI_INVOKE<number>("start_similar_analysis"),
+	mapCells: (filter: LibraryFilter, bbox: GeoBbox, zoom: number, approx: boolean) => __TAURI_INVOKE<Cell[]>("map_cells", { filter, bbox, zoom, approx }),
+	mapCatalogs: (filter: LibraryFilter, bbox: GeoBbox, approx: boolean) => __TAURI_INVOKE<CatalogCount[]>("map_catalogs", { filter, bbox, approx }),
+	mapPlacesUnplaced: (filter: LibraryFilter) => __TAURI_INVOKE<PlaceCount[]>("map_places_unplaced", { filter }),
+	/**  Luoghi con posizione manuale (modifica e "Rimuovi posizione"). */
+	mapPlacesManual: (filter: LibraryFilter) => __TAURI_INVOKE<PlacePosition[]>("map_places_manual", { filter }),
+	/**  "Posiziona": posizione manuale del luogo. */
+	mapPlaceSet: (name: string, lat: number | null, lon: number | null) => __TAURI_INVOKE<null>("map_place_set", { name, lat, lon }),
+	/**  "Rimuovi posizione": toglie quella manuale e rimette l'eventuale risultato del gazetteer. */
+	mapPlaceClear: (name: string) => __TAURI_INVOKE<null>("map_place_clear", { name }),
+	/**  Quante etichette automatiche `grp = value` (con `score < maxScore` se dato) verrebbero rifiutate. */
+	aiRejectPreview: (grp: string, value: string, maxScore: number | null, target: Target) => __TAURI_INVOKE<number>("ai_reject_preview", { grp, value, maxScore, target }),
+	/**
+	 *  Rifiuta le etichette automatiche sul target (job `bulk`, annullabile con `undo_bulk`).
+	 *  Restituisce l'id del job come `start_bulk`.
+	 */
+	aiRejectLabels: (grp: string, value: string, maxScore: number | null, target: Target) => __TAURI_INVOKE<number>("ai_reject_labels", { grp, value, maxScore, target }),
+	/**  `true` se l'ultima operazione annullabile è un rifiuto di etichette automatiche. */
+	aiLastIsRejection: () => __TAURI_INVOKE<boolean>("ai_last_is_rejection"),
+	/**  Annulla l'ultima operazione solo se è un rifiuto di etichette automatiche. */
+	aiUndoRejection: () => __TAURI_INVOKE<string | null>("ai_undo_rejection"),
+	/**  Istogramma delle confidenze (20 classi se `bins` è assente). */
+	aiLabelHistogram: (filter: LibraryFilter, grp: string, value: string, bins: number | null) => __TAURI_INVOKE<Bin[]>("ai_label_histogram", { filter, grp, value, bins }),
+	/**  Foto totali e analizzate per mese di scatto. */
+	aiMonthCoverage: (filter: LibraryFilter) => __TAURI_INVOKE<MonthCount[]>("ai_month_coverage", { filter }),
+	/**  Statistiche dei gruppi di simili, con le foto ancora da elaborare. */
+	aiSimilarStats: (filter: LibraryFilter | null) => __TAURI_INVOKE<SimilarStats>("ai_similar_stats", { filter }),
+	/**  Panoramica AI: copertura per fase. */
+	aiOverview: () => __TAURI_INVOKE<AiOverview>("ai_overview"),
+	/**  Anteprima della rianalisi: conteggio per fase. */
+	aiReprocessPreview: (scope: ReprocessScope, stages: Stage[], force: boolean) => __TAURI_INVOKE<StageCount[]>("ai_reprocess_preview", { scope, stages, force }),
+	/**  Avvia la rianalisi delle fasi scelte sull'ambito; restituisce l'id del job. */
+	aiReprocess: (scope: ReprocessScope, stages: Stage[], force: boolean) => __TAURI_INVOKE<number>("ai_reprocess", { scope, stages, force }),
 	exportFields: () => __TAURI_INVOKE<string[]>("export_fields"),
 	startExport: (options: ExportOptions) => __TAURI_INVOKE<number>("start_export", { options }),
 	organizePreview: (options: OrganizeOptions) => __TAURI_INVOKE<Preview>("organize_preview", { options }),
@@ -285,6 +317,11 @@ export type AiConfig = {
 	thresholds?: AiThresholds,
 };
 
+/**  Copertura di ogni fase (chiavi correnti dei modelli + job attivi come "in coda"). */
+export type AiOverview = {
+	stages: StageCoverage[],
+};
+
 /**  Soglie dei modelli applicate ai risultati salvati (0..1). */
 export type AiThresholds = {
 	/**  Confidenza minima di una rilevazione di persona (YOLO). */
@@ -311,6 +348,22 @@ export type Alignment = {
 	deltaS: number,
 };
 
+export type AnalysisFilter = {
+	stage: Stage,
+	state: AnalysisFilterState,
+};
+
+export type AnalysisFilterState = "current" | "stale" | "never";
+
+/**  Stato dell'analisi AI di una foto, indipendente dalle etichette assegnate. */
+export type AnalysisState = 
+/**  Mai analizzata e nessun job di analisi attivo. */
+"unprocessed" | 
+/**  Non ancora analizzata, ma un job di analisi/import è in coda o in corso. */
+"queued" | 
+/**  Analizzata (anche se non è risultata alcuna etichetta). */
+"processed";
+
 export type AppError = {
 	code: ErrorCode,
 	message_key: string,
@@ -323,6 +376,13 @@ export type AppInfo = {
 	dataDir: string,
 	logsDir: string,
 	previousCrash: CrashInfo | null,
+};
+
+/**  Classe dell'istogramma: `[from, to)` (l'ultima include 1,0). */
+export type Bin = {
+	from: number | null,
+	to: number | null,
+	count: number,
 };
 
 export type BootStatus = {
@@ -350,7 +410,9 @@ exclusive?: string[] } | { action: "remove_tag"; name: string } |
 /**  "Sposta nel cestino": toglie le foto anche dai cataloghi manuali. */
 { action: "move_to_trash" } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
-{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" };
+{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" } | 
+/**  Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato). */
+{ action: "reject_auto_labels"; grp: string; value: string; max_score?: number | null };
 
 export type BulkOutcome = {
 	/**  Elementi effettivamente modificati. */
@@ -370,6 +432,12 @@ export type Catalog = {
 	 *  eliminabili né rinominabili; le loro foto sono nascoste dalle altre viste.
 	 */
 	system?: string | null,
+};
+
+export type CatalogCount = {
+	catalogId: number,
+	name: string,
+	count: number,
 };
 
 export type CatalogKind = "manual" | "smart";
@@ -403,6 +471,30 @@ export type CategoryRef = {
 	created: boolean,
 	/**  Job "Modifica selezione" che assegna la voce. */
 	job: number | null,
+};
+
+/**  Cella della griglia. */
+export type Cell = {
+	/**  Colonna e riga nella griglia dello zoom richiesto (celle adiacenti: ±1). */
+	cx: number,
+	cy: number,
+	/**
+	 *  Area esatta della cella, da usare nel filtro `geo_bbox` della Libreria (stesso
+	 *  conteggio della cella).
+	 */
+	bbox: GeoBbox,
+	count: number,
+	approxCount: number,
+	lat: number | null,
+	lon: number | null,
+	/**  Luogo più frequente nella cella. */
+	place: string | null,
+	/**  Il luogo prevalente ha una posizione manuale (`place_geo.source = 'manual'`). */
+	manual: boolean,
+	/**  Fino a 4 foto di anteprima. */
+	sampleIds: number[],
+	/**  Chiavi delle miniature, allineate a `sample_ids` (`None` = senza miniatura). */
+	sampleThumbs: (string | null)[],
 };
 
 /**  Un gruppo del riepilogo: quanti file e (se non troppi) quali. */
@@ -727,6 +819,21 @@ export type FolderNode = {
 
 export type Format = "csv" | "json";
 
+/**  Area geografica (inclusiva). `west > east` = attraversa l'antimeridiano. */
+export type GeoBbox = {
+	south: number | null,
+	west: number | null,
+	north: number | null,
+	east: number | null,
+};
+
+/**  Area geografica del filtro: `label` (luogo prevalente) serve solo per il chip. */
+export type GeoBboxFilter = {
+	/**  Include le foto con posizione approssimata (da `place_geo`). */
+	approx: boolean,
+	label?: string,
+} & GeoBbox;
+
 export type GovernorSnapshot = {
 	budgetMb: number,
 	capacityMb: number,
@@ -746,7 +853,7 @@ export type GridItem = {
 	height: number | null,
 	status: MediaStatus,
 	faces: number,
-	analyzed: boolean,
+	analysis: AnalysisState,
 	/**  Tag utente del file (per i chip colorati della griglia). */
 	tags: string[],
 	excludedAt: number | null,
@@ -903,6 +1010,13 @@ export type LabelFilter = {
 	values: string[],
 };
 
+export type LabelScoreFilter = {
+	grp: string,
+	value: string,
+	min: number | null,
+	max: number | null,
+};
+
 export type LabelView = {
 	group: string,
 	value: string,
@@ -943,6 +1057,14 @@ export type LibraryFilter = {
 	similarOnly?: boolean,
 	/**  Griglia raggruppata: un elemento per gruppo di foto simili (non cambia i conteggi). */
 	groupSimilar?: boolean,
+	/**  Stato di una fase di analisi (corrente, da aggiornare, mai analizzata). */
+	analysis?: AnalysisFilter | null,
+	/**  Confidenza di un'etichetta automatica in `[min, max)` (`max >= 1` incluso). */
+	labelScore?: LabelScoreFilter | null,
+	/**  Solo le foto dei gruppi di simili di questa classe di dimensione. */
+	similarSize?: SizeBucket | null,
+	/**  Solo le foto dentro quest'area geografica (coordinate effettive, come la mappa). */
+	geoBbox?: GeoBboxFilter | null,
 };
 
 export type LocateFaceRequest = { kind: "face"; face_id: number } | { kind: "media"; media_id: number; person_id: number | null };
@@ -1073,6 +1195,14 @@ export type ModelStatus = {
 	selfTest: SelfTestResult | null,
 };
 
+/**  Foto di un mese (`YYYY-MM`, `None` = senza data). */
+export type MonthCount = {
+	month: string | null,
+	total: number,
+	/**  Foto con la classificazione CLIP eseguita (`analysis_version.stage = 'clip'`, qualsiasi versione). */
+	analyzed: number,
+};
+
 export type NameHint = {
 	uid: string,
 	name: string,
@@ -1196,12 +1326,25 @@ export type PhaseSnapshot = {
 
 export type PhaseState = "pending" | "running" | "done";
 
+export type PlaceCount = {
+	name: string,
+	count: number,
+};
+
 /**  Luogo scelto dall'utente (nome libero o località del dataset geografico). */
 export type PlaceInput = {
 	name: string,
 	country?: string | null,
 	lat?: number | null,
 	lon?: number | null,
+};
+
+/**  Luogo con posizione manuale e foto del filtro collocate lì (senza GPS). */
+export type PlacePosition = {
+	name: string,
+	count: number,
+	lat: number | null,
+	lon: number | null,
 };
 
 /**  Luogo proposto durante la digitazione. */
@@ -1291,6 +1434,9 @@ export type RemovalSummary = {
 export type RenameOutcome = { outcome: "renamed" } | 
 /**  Esiste già un tag con quel nome: va confermata l'unione. */
 { outcome: "needsMerge"; target: string };
+
+/**  Ambito di una rianalisi: tutta la libreria, cataloghi o un target (selezione/filtro). */
+export type ReprocessScope = { kind: "library" } | { kind: "catalogs"; ids: number[] } | { kind: "target"; target: Target };
 
 /**
  *  Etichetta di una richiesta della UI: le richieste più vecchie dello stesso canale vengono
@@ -1432,6 +1578,32 @@ export type SimilarMember = {
 	thumb: string | null,
 };
 
+export type SimilarStats = {
+	groups: number,
+	groupedPhotos: number,
+	sizeBuckets: SizeStat[],
+	/**  Foto ancora da elaborare: la compila il chiamante (`pc_ai::similar::pending_count`). */
+	pending: number,
+};
+
+/**  Classe di dimensione dei gruppi di simili. */
+export type SizeBucket = 
+/**  2 foto. */
+"two" | 
+/**  3-5 foto. */
+"three_five" | 
+/**  6-10 foto. */
+"six_ten" | 
+/**  Più di 10 foto. */
+"over10";
+
+export type SizeStat = {
+	bucket: SizeBucket,
+	label: string,
+	groups: number,
+	photos: number,
+};
+
 export type SortKey = "captured_desc" | "captured_asc" | "name_asc" | "size_desc" | "added_desc" | "excluded_at";
 
 export type Source = {
@@ -1461,6 +1633,24 @@ export type SourceSummary = {
 	source: Source,
 	items: number,
 	missing: number,
+};
+
+export type Stage = "classification" | "persons" | "faces" | "similar" | "phash";
+
+/**  Foto che la fase rielaborerebbe; `available = false` se manca il modello. */
+export type StageCount = {
+	stage: Stage,
+	count: number,
+	available: boolean,
+};
+
+export type StageCoverage = {
+	stage: Stage,
+	current: number,
+	stale: number,
+	queued: number,
+	never: number,
+	total: number,
 };
 
 export type SystemInfo = {

@@ -3,6 +3,14 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { exclusions } from "./exclusions";
 import { similar } from "./similar";
+import { filterChips } from "./filterChips";
+import { ai } from "./ai";
+import { aiSimilar } from "./aiSimilar";
+import { aiCleanup } from "./aiCleanup";
+import { aiResults } from "./aiResults";
+import { aiMap } from "./aiMap";
+import { aiOverview } from "./aiOverview";
+import { aiReprocess } from "./aiReprocess";
 import { en } from "./en";
 import { it } from "./it";
 import { features } from "./features";
@@ -26,6 +34,14 @@ void i18n.use(initReactI18next).init({
         ...exclusions.it,
         ...feedback.it,
         ...similar.it,
+        ...filterChips.it,
+        ...ai.it,
+        ...aiSimilar.it,
+        ...aiCleanup.it,
+        ...aiResults.it,
+        ...aiMap.it,
+        ...aiOverview.it,
+        ...aiReprocess.it,
         ...features.it,
         ...screens.it,
         ...modules.it,
@@ -44,6 +60,14 @@ void i18n.use(initReactI18next).init({
         ...exclusions.en,
         ...feedback.en,
         ...similar.en,
+        ...filterChips.en,
+        ...ai.en,
+        ...aiSimilar.en,
+        ...aiCleanup.en,
+        ...aiResults.en,
+        ...aiMap.en,
+        ...aiOverview.en,
+        ...aiReprocess.en,
         ...features.en,
         ...screens.en,
         ...modules.en,

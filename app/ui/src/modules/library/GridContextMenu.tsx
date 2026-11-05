@@ -17,6 +17,7 @@ import { Button, Dialog, FormField, SearchPicker } from "../../components/ui";
 import { notifyError } from "../../store/toasts";
 
 import { useLibrary } from "../../store/library";
+import { openReprocessFor } from "../ai/reprocess/openReprocess";
 import { useCatalogAction } from "./useCatalogAction";
 import { Icon } from "../../components/icons";
 
@@ -323,7 +324,7 @@ export function GridContextMenu({
           type="button"
           role="menuitem"
           className="grid-menu-item"
-          onClick={act(() => void commands.reanalyze(target))}
+          onClick={act(() => openReprocessFor(target, count))}
         >
           {t("externalApps.reanalyze")}
         </BusyButton>

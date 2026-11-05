@@ -1,0 +1,239 @@
+/* Modulo AI: sotto-navigazione come in Impostazioni (ai-workspace D8). */
+.ai-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ai-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.ai-aside {
+  flex: 0 0 200px;
+  padding: var(--pc-space-3);
+  border-right: 1px solid var(--pc-border);
+  background: var(--pc-panel);
+  overflow: auto;
+}
+.ai-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ai-nav-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--pc-text);
+  font: inherit;
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border-radius: var(--pc-radius-sm);
+  cursor: pointer;
+}
+.ai-nav-item:hover {
+  background: var(--pc-raised);
+}
+.ai-nav-item[aria-current="page"] {
+  background: var(--pc-selection-bg);
+  font-weight: var(--pc-weight-medium);
+}
+.ai-nav-item:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: -2px;
+}
+.ai-main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--pc-space-4);
+}
+
+/* Sezione Simili */
+.ai-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-3);
+  margin: var(--pc-space-3) 0;
+}
+.ai-kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-sm);
+  background: var(--pc-panel);
+}
+.ai-kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ai-kpi-label {
+  color: var(--pc-text-secondary);
+  font-size: 12px;
+}
+.ai-similar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-3);
+  margin-bottom: var(--pc-space-3);
+}
+.ai-similar-empty {
+  padding: var(--pc-space-4) 0;
+}
+
+/* Sezione Risultati */
+.ai-results-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+  margin: var(--pc-space-3) 0;
+}
+.ai-results-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+  font-size: 0.85rem;
+}
+.ai-results-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+  margin: var(--pc-space-3) 0;
+}
+.ai-results-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--pc-space-3);
+  margin-top: var(--pc-space-4);
+}
+
+.ai-cleanup-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  margin: 16px 0;
+}
+.ai-cleanup-preview {
+  min-height: 1.5em;
+  margin: 0 0 12px;
+}
+
+.ai-reprocess-form {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+  margin: 16px 0;
+}
+.ai-reprocess-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.ai-reprocess-form legend {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 0;
+}
+.ai-reprocess-catalogs {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 4px 24px;
+}
+.ai-reprocess-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.ai-reprocess-table th,
+.ai-reprocess-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--pc-border);
+}
+.ai-reprocess-table .is-off {
+  opacity: 0.55;
+}
+
+/* Titoli delle sezioni, come in Impostazioni. */
+.ai-section {
+  max-width: 960px;
+}
+.ai-section > h2 {
+  margin: 0 0 var(--pc-space-2);
+  font-size: 16px;
+  font-weight: var(--pc-weight-medium);
+}
+.ai-section h3 {
+  margin: var(--pc-space-5) 0 var(--pc-space-2);
+  font-size: 13px;
+  font-weight: var(--pc-weight-medium);
+}
+
+/* Panoramica */
+.ai-overview-stages,
+.ai-overview-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ai-overview-stages {
+  gap: var(--pc-space-4);
+}
+.ai-overview-stage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pc-space-3);
+  margin-bottom: var(--pc-space-1);
+}
+.ai-overview-stage-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--pc-weight-medium);
+}
+.ai-overview-jobs {
+  gap: var(--pc-space-1);
+  margin-bottom: var(--pc-space-2);
+}
+.ai-overview-job {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pc-space-3);
+}
+.ai-overview-job > button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--pc-accent-text);
+  cursor: pointer;
+}
+.ai-overview-job > button:hover {
+  text-decoration: underline;
+}
+.ai-overview-job > button:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+  border-radius: var(--pc-radius-sm);
+}
+.ai-overview-resources {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--pc-space-1) var(--pc-space-4);
+  margin: 0;
+}
+.ai-overview-resources dd {
+  margin: 0;
+}

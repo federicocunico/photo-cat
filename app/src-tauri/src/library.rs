@@ -238,6 +238,8 @@ pub async fn library_page(
     limit: u32,
 ) -> AppResult<Page> {
     crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         Ok(state
             .store
             .read(|c| query::page_at(c, &filter, sort, at.as_ref(), limit))?)
@@ -277,6 +279,8 @@ pub async fn library_count(
     request: Option<RequestTag>,
 ) -> AppResult<Option<i64>> {
     crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         gated(state, request.as_ref(), |c| query::count(c, &filter))
     })
     .await
@@ -291,6 +295,8 @@ pub async fn library_grid_count(
     request: Option<RequestTag>,
 ) -> AppResult<Option<i64>> {
     crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         gated(state, request.as_ref(), |c| query::grid_count(c, &filter))
     })
     .await
@@ -304,6 +310,8 @@ pub async fn library_facets(
     request: Option<RequestTag>,
 ) -> AppResult<Option<Facets>> {
     crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         gated(state, request.as_ref(), |c| query::facets(c, &filter))
     })
     .await
@@ -321,6 +329,8 @@ pub async fn library_facet_values(
     offset: u32,
     limit: u32,
 ) -> AppResult<query::FacetPage> {
+    let mut filter = filter;
+    crate::stage_keys::fill_filter(&state, &mut filter);
     let db = state.store.clone();
     tauri::async_runtime::spawn_blocking(move || {
         db.read(|c| query::facet_values(c, &filter, &facet, search.as_deref(), sort, offset, limit))
@@ -339,6 +349,8 @@ pub async fn library_selection(
     filter: LibraryFilter,
 ) -> AppResult<query::SelectionBase> {
     crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         Ok(state.store.read(|c| query::selection_base(c, &filter))?)
     })
     .await

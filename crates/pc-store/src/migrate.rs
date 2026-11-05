@@ -17,6 +17,9 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v8.sql"),
     include_str!("schema_v9.sql"),
     include_str!("schema_v10.sql"),
+    include_str!("schema_v11.sql"),
+    include_str!("schema_v12.sql"),
+    include_str!("schema_v13.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -119,6 +122,82 @@ pub(crate) fn migrate_to(conn: &mut Connection, version: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrate_v13_adds_place_geo_and_location_index() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 12);
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        c.execute(
+            "INSERT INTO place_geo VALUES ('Lisbona', 38.7, -9.1, 'PT', 'gazetteer', 0)",
+            [],
+        )
+        .unwrap();
+        assert!(c
+            .execute(
+                "INSERT INTO place_geo VALUES ('X', 1, 1, NULL, 'altro', 0)",
+                []
+            )
+            .is_err());
+        let n: i64 = c
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'location_geo'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn migrate_v12_keeps_rows_and_adds_label_rejection() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 11);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at)
+             VALUES (1,'a.jpg','a.jpg','jpg',7,1,1,1);",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        c.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             INSERT INTO label_rejection VALUES (1,'subject','natura',0);",
+        )
+        .unwrap();
+        let n: i64 = c
+            .query_row("SELECT count(*) FROM media_item", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+        c.execute("DELETE FROM media_item WHERE id=1", []).unwrap();
+        let n: i64 = c
+            .query_row("SELECT count(*) FROM label_rejection", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "rifiuti rimossi con la foto");
+    }
+
+    #[test]
+    fn migrate_v11_adds_nullable_phash_keeping_rows() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 10);
+        assert_eq!(current_version(&c).unwrap(), 10);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at)
+             VALUES (1,'a.jpg','a.jpg','jpg',7,1,1,1);",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        let r: (String, i64, Option<i64>) = c
+            .query_row(
+                "SELECT path, size, phash FROM media_item WHERE id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(r, ("a.jpg".into(), 7, None));
+    }
 
     #[test]
     fn migrate_v6_adds_similar_groups_with_cascading_members() {

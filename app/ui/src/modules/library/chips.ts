@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import type { LibraryFilter } from "../../lib/ipc";
 import { fmtPeriod } from "../../lib/format";
 import { datePath } from "./facets";
@@ -9,6 +10,8 @@ export function activeChips(
   label?: (group: string, value: string) => string,
   /** Nome di una persona per il chip del filtro persone. */
   person?: (id: number) => string | undefined,
+  /** Nome di un gruppo di etichette per il chip della confidenza. */
+  group?: (group: string) => string,
 ) {
   const chips: Array<{ name: string; clear: Partial<LibraryFilter> }> = [];
   for (const l of f.labels ?? []) {
@@ -43,6 +46,35 @@ export function activeChips(
   const chosen = date.day ?? date.month ?? date.year;
   if (chosen) chips.push({ name: fmtPeriod(chosen), clear: { dateFrom: null, dateTo: null } });
   if (f.text) chips.push({ name: `“${f.text}”`, clear: { text: null } });
+  if (f.analysis)
+    chips.push({
+      name: t("filterChips.analysis", {
+        stage: t(`filterChips.stage.${f.analysis.stage}`),
+        state: t(`filterChips.state.${f.analysis.state}`),
+      }),
+      clear: { analysis: null },
+    });
+  if (f.labelScore) {
+    const n = (x: number | null) => (x ?? 0).toLocaleString(i18n.language, { maximumFractionDigits: 2 });
+    chips.push({
+      name: t("filterChips.score", {
+        group: group ? group(f.labelScore.grp) : f.labelScore.grp,
+        min: n(f.labelScore.min),
+        max: n(f.labelScore.max),
+      }),
+      clear: { labelScore: null },
+    });
+  }
+  if (f.similarSize)
+    chips.push({
+      name: t(`filterChips.similarSize.${f.similarSize}`),
+      clear: { similarSize: null },
+    });
+  if (f.geoBbox)
+    chips.push({
+      name: t("filterChips.area", { label: f.geoBbox.label }),
+      clear: { geoBbox: null },
+    });
   if (f.similarOnly) chips.push({ name: t("similar.chip"), clear: { similarOnly: false } });
   if (f.folder?.path) {
     const name = f.folder.path.split(/[\\/]/).filter(Boolean).pop() ?? f.folder.path;

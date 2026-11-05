@@ -13,6 +13,7 @@ use pc_ingest::thumb::{apply_orientation, decode_reduced, fit, Decoded};
 use pc_jobs::{JobPlan, PhaseSpec, RunSummary};
 use pc_models::Role;
 use pc_store::analysis;
+use pc_store::coverage::Stage;
 use pc_store::model::{MediaId, MediaStatus};
 use pc_store::{repo, Store};
 use std::sync::Arc;
@@ -315,12 +316,110 @@ pub fn import_stages(deps: &AiDeps, source_id: i64) -> StagePlan {
     plan
 }
 
-/// Elementi da analizzare: `ids` espliciti, una sorgente, o tutta la libreria.
-fn target_ids(store: &Store, params: &serde_json::Value) -> AppResult<Vec<MediaId>> {
-    if let Some(a) = params["ids"].as_array() {
-        return Ok(a.iter().filter_map(|v| v.as_i64()).collect());
+/// Parametri del job `analysis` (D3): `{ scope, stages?, force? }`, oppure i vecchi
+/// `{ids}` / `{sourceId}` / nessuno (= tutta la libreria).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AnalysisParams {
+    pub scope: Scope,
+    /// Fasi richieste; vuoto = fasi predefinite (tutte tranne le impronte).
+    pub stages: Vec<Stage>,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum Scope {
+    #[default]
+    Library,
+    Source(i64),
+    Catalogs(Vec<i64>),
+    Ids(Vec<i64>),
+}
+
+impl AnalysisParams {
+    pub fn parse(params: &serde_json::Value) -> AppResult<Self> {
+        let ints = |v: &serde_json::Value| -> Vec<i64> {
+            v.as_array()
+                .map(|a| a.iter().filter_map(|x| x.as_i64()).collect())
+                .unwrap_or_default()
+        };
+        let s = &params["scope"];
+        let scope = if s["catalogIds"].is_array() {
+            Scope::Catalogs(ints(&s["catalogIds"]))
+        } else if s["ids"].is_array() {
+            Scope::Ids(ints(&s["ids"]))
+        } else if let Some(id) = s["sourceId"].as_i64() {
+            Scope::Source(id)
+        } else if params["ids"].is_array() {
+            Scope::Ids(ints(&params["ids"]))
+        } else if let Some(id) = params["sourceId"].as_i64() {
+            Scope::Source(id)
+        } else {
+            Scope::Library
+        };
+        let mut stages = Vec::new();
+        for v in params["stages"].as_array().into_iter().flatten() {
+            let st = match v.as_str() {
+                Some("clip") => Stage::Classification,
+                Some("persons") => Stage::Persons,
+                Some("faces") => Stage::Faces,
+                Some("similar") => Stage::Similar,
+                Some("phash") => Stage::Phash,
+                other => {
+                    return Err(AppError::new(
+                        ErrorCode::InvalidInput,
+                        format!("fase di analisi sconosciuta: {other:?}"),
+                    ))
+                }
+            };
+            if !stages.contains(&st) {
+                stages.push(st);
+            }
+        }
+        Ok(Self {
+            scope,
+            stages,
+            force: params["force"].as_bool().unwrap_or(false),
+        })
     }
-    let source = params["sourceId"].as_i64();
+
+    /// Vero se la fase va eseguita (senza `stages`: tutte tranne le impronte).
+    pub fn wants(&self, st: Stage) -> bool {
+        if self.stages.is_empty() {
+            st != Stage::Phash
+        } else {
+            self.stages.contains(&st)
+        }
+    }
+
+    /// Fasi di cui `force` azzera i marcatori, tra quelle eseguibili.
+    pub fn forced_stages(&self, runnable: &[Stage]) -> Vec<Stage> {
+        if !self.force {
+            return Vec::new();
+        }
+        runnable
+            .iter()
+            .copied()
+            .filter(|s| self.wants(*s))
+            .collect()
+    }
+}
+
+/// Elementi da analizzare: `ids` espliciti, cataloghi (risolti ora), una sorgente, o tutta
+/// la libreria.
+pub fn target_ids(store: &Store, params: &serde_json::Value) -> AppResult<Vec<MediaId>> {
+    resolve_scope(store, &AnalysisParams::parse(params)?.scope)
+}
+
+pub fn resolve_scope(store: &Store, scope: &Scope) -> AppResult<Vec<MediaId>> {
+    let source = match scope {
+        Scope::Ids(ids) => return Ok(ids.clone()),
+        Scope::Catalogs(cats) => {
+            let cats = cats.clone();
+            return Ok(store.read(move |c| pc_store::reprocess::catalog_media_ids(c, &cats))?);
+        }
+        Scope::Source(id) => Some(*id),
+        Scope::Library => None,
+    };
     Ok(store.read(|c| {
         let mut st = c.prepare(
             "SELECT id FROM media_item WHERE status = 'ok' AND thumb IS NOT NULL AND (?1 IS NULL OR source_id = ?1) ORDER BY id",
@@ -376,16 +475,13 @@ pub fn load_oriented(
 }
 
 /// Fase `similar`: gruppi di foto simili dagli embedding CLIP e dalle miniature.
-/// Saltata senza modello CLIP o senza cache delle miniature.
+/// Senza modello CLIP usa solo le impronte percettive; saltata senza cache delle miniature.
 pub fn run_similar(
     deps: &AiDeps,
     control: &pc_jobs::JobControl,
     phase: &pc_jobs::PhaseCounters,
 ) -> AppResult<()> {
-    let (Some(thumbs), Ok(entry)) = (
-        &deps.thumbs,
-        deps.resources.entry(Role::ClassificationImage),
-    ) else {
+    let Some(thumbs) = &deps.thumbs else {
         phase.set_total(0);
         phase.finish();
         return Ok(());
@@ -396,7 +492,7 @@ pub fn run_similar(
         thumbs,
         &deps.resources.governor,
         control,
-        &model_key(entry),
+        crate::similar::resolve_model(&deps.resources).as_deref(),
         threshold,
         Some(phase),
     )?;
@@ -406,7 +502,7 @@ pub fn run_similar(
 /// Job "analisi" (parametri `{ "ids": [..] }`, `{ "sourceId": n }` o nessuno = tutta la libreria):
 /// salta gli elementi già analizzati con le versioni correnti di modello e tassonomia.
 pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
-    let params = params.clone();
+    let opts = AnalysisParams::parse(params)?;
     Ok(JobPlan {
         phases: vec![
             PhaseSpec::new(PHASE_CLIP, 4.0),
@@ -429,9 +525,31 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             };
-            let ids = target_ids(&deps.store, &params)?;
+            let ids = resolve_scope(&deps.store, &opts.scope)?;
+            // Impronte: con `force` si azzerano, poi il recupero dedicato parte a fine job.
+            if opts.wants(Stage::Phash) {
+                if opts.force {
+                    let ids = ids.clone();
+                    deps.store.write(move |c| {
+                        pc_store::reprocess::clear_markers(c, &ids, &[Stage::Phash])
+                    })?;
+                }
+                let probe = ids.clone();
+                if deps
+                    .store
+                    .read(move |c| pc_store::reprocess::any_without_phash(c, &probe))?
+                {
+                    *ctx.followup.lock() = Some((
+                        pc_ingest::phash_backfill::JOB_KIND.into(),
+                        serde_json::json!({}),
+                    ));
+                }
+            }
+            let wants_models = opts.wants(Stage::Classification)
+                || opts.wants(Stage::Persons)
+                || opts.wants(Stage::Faces);
             let runnable = deps.runnable_models();
-            if runnable.is_empty() && runnable.over_budget {
+            if wants_models && runnable.is_empty() && runnable.over_budget {
                 // Requisiti minimi: nessuna fase AI entra nel budget, il job termina senza analisi.
                 for p in [
                     PHASE_CLIP,
@@ -454,11 +572,33 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 faces,
                 ..
             } = runnable;
-            if clip.is_none() && persons.is_none() && faces.is_none() {
+            if wants_models && clip.is_none() && persons.is_none() && faces.is_none() {
                 return Err(AppError::new(
                     ErrorCode::ModelUnavailable,
                     "nessun modello AI verificato",
                 ));
+            }
+            // Solo le passate richieste.
+            let clip = clip.filter(|_| opts.wants(Stage::Classification));
+            let persons = persons.filter(|_| opts.wants(Stage::Persons));
+            let faces = faces.filter(|_| opts.wants(Stage::Faces));
+            if opts.force {
+                // `force`: azzera i marcatori delle sole fasi eseguite, per i soli id del job.
+                let mut runnable = Vec::new();
+                if clip.is_some() {
+                    runnable.push(Stage::Classification);
+                }
+                if persons.is_some() {
+                    runnable.push(Stage::Persons);
+                }
+                if faces.is_some() {
+                    runnable.push(Stage::Faces);
+                }
+                runnable.push(Stage::Similar);
+                let forced = opts.forced_stages(&runnable);
+                let ids = ids.clone();
+                deps.store
+                    .write(move |c| pc_store::reprocess::clear_markers(c, &ids, &forced))?;
             }
             let mut passes = Vec::new();
             let mut clip_ctx = None;
@@ -637,7 +777,12 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 },
                 |ev| tracing::debug!(?ev, "passata modello"),
             );
-            if res.is_ok() {
+            if res.is_ok() && !opts.wants(Stage::Faces) {
+                let p = ctx.progress.phase(PHASE_CLUSTER);
+                p.set_total(0);
+                p.finish();
+            }
+            if res.is_ok() && opts.wants(Stage::Faces) {
                 let p = ctx.progress.phase(PHASE_CLUSTER);
                 p.set_total(1);
                 p.start();
@@ -658,7 +803,15 @@ pub fn plan(deps: AiDeps, params: &serde_json::Value) -> AppResult<JobPlan> {
                 )?;
                 p.inc_done(1);
                 p.finish();
-                run_similar(&deps, &ctx.control, &ctx.progress.phase(PHASE_SIMILAR))?;
+            }
+            if res.is_ok() {
+                if opts.wants(Stage::Similar) {
+                    run_similar(&deps, &ctx.control, &ctx.progress.phase(PHASE_SIMILAR))?;
+                } else {
+                    let p = ctx.progress.phase(PHASE_SIMILAR);
+                    p.set_total(0);
+                    p.finish();
+                }
             }
             match res {
                 Ok(()) => Ok(RunSummary {

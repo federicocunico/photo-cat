@@ -28,7 +28,7 @@ const item = (id: number, over: Partial<GridItem> = {}): GridItem => ({
   height: 4000,
   status: "ok",
   faces: 0,
-  analyzed: true,
+  analysis: "processed",
   tags: [],
   similarGroup: null,
   similarCover: false,

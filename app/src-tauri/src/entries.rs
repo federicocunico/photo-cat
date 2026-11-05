@@ -19,6 +19,10 @@ pub async fn add_category(
     prompts: Vec<String>,
     assign_to: Option<pc_store::query::Target>,
 ) -> AppResult<CategoryRef> {
+    let mut assign_to = assign_to;
+    if let Some(t) = assign_to.as_mut() {
+        crate::stage_keys::fill_target(&state, t);
+    }
     let (db, jobs) = (state.store.clone(), state.jobs.clone());
     tauri::async_runtime::spawn_blocking(move || {
         let assign_to: Option<Vec<MediaId>> = match assign_to {

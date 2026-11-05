@@ -29,6 +29,7 @@ import { useOpenWith } from "./useOpenWith";
 import { useSelectItems } from "./useSelectItems";
 import { useSelectionPicker } from "../../store/palette";
 import { catalogLabel, systemCatalogId } from "../catalogs/systemCatalogs";
+import { openReprocessFor } from "../ai/reprocess/openReprocess";
 import { useBulkJob } from "./bulkJob";
 import { useMoveToTrash } from "./useMoveToTrash";
 
@@ -225,14 +226,7 @@ export function SelectionBar() {
     { label: t("selection.category"), onSelect: () => setCategoryOpen(true) },
     {
       label: t("selection.reanalyze"),
-      onSelect: async () => {
-        try {
-          await commands.reanalyze(target);
-          notify({ message: t("selection.reanalyzeStarted") });
-        } catch (error) {
-          notifyError(error);
-        }
-      },
+      onSelect: () => openReprocessFor(target, count),
     },
     {
       label: t("selection.organize"),

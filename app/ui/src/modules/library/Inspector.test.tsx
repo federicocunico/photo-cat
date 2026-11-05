@@ -45,7 +45,7 @@ beforeEach(() => {
       height: 4000,
       status: "ok",
       faces: 0,
-      analyzed: true,
+      analysis: "processed",
     },
     tech: null,
     dates: null,

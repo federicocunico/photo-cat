@@ -1,5 +1,6 @@
 //! Shell Tauri di photo-cat: avvio dei servizi, comandi IPC, eventi verso la UI.
 
+mod ai;
 mod boot;
 mod catalogs;
 mod commands;
@@ -11,6 +12,7 @@ mod entries;
 mod events;
 mod identities;
 mod library;
+mod map;
 mod models;
 mod open_with;
 mod organize;
@@ -20,6 +22,7 @@ mod recovery;
 mod sequence;
 mod settings;
 mod similar;
+mod stage_keys;
 mod state;
 mod tags;
 mod timeline;
@@ -205,6 +208,22 @@ pub fn bindings() -> Builder<tauri::Wry> {
             similar::similar_preview,
             similar::similar_pending,
             similar::start_similar_analysis,
+            map::map_cells,
+            map::map_catalogs,
+            map::map_places_unplaced,
+            map::map_places_manual,
+            map::map_place_set,
+            map::map_place_clear,
+            ai::ai_reject_preview,
+            ai::ai_reject_labels,
+            ai::ai_last_is_rejection,
+            ai::ai_undo_rejection,
+            ai::ai_label_histogram,
+            ai::ai_month_coverage,
+            ai::ai_similar_stats,
+            ai::ai_overview,
+            ai::ai_reprocess_preview,
+            ai::ai_reprocess,
             organize::export_fields,
             organize::start_export,
             organize::organize_preview,
@@ -472,6 +491,14 @@ fn initialize(
         pc_ingest::backfill::JOB_KIND,
         Arc::new(move |p| pc_ingest::backfill::plan(backfill_store.clone(), p)),
     );
+    let (ph_store, ph_thumbs, ph_deps) = (store.clone(), thumbs.clone(), ai_deps.clone());
+    jobs.register(
+        pc_ingest::phash_backfill::JOB_KIND,
+        Arc::new(move |p| {
+            let plan = pc_ingest::phash_backfill::plan(ph_store.clone(), ph_thumbs.clone(), p)?;
+            Ok(pc_ai::similar::with_similar_followup(ph_deps.clone(), plan))
+        }),
+    );
     let fq_store = store.clone();
     let fq_gov = governor.clone();
     let fq_crops = paths.face_crops();
@@ -522,13 +549,23 @@ fn initialize(
             let remover: pc_jobs::bulk::ThumbRemover = Arc::new(move |keys| {
                 cache.remove(keys);
             });
-            pc_jobs::bulk::plan_full(bulk_store.clone(), Some(r), Some(remover), p)
+            let plan = pc_jobs::bulk::plan_full(bulk_store.clone(), Some(r), Some(remover), p)?;
+            // Rinomina/impostazione dei luoghi: colloca i nuovi nomi a fine lavoro.
+            Ok(pc_ai::place_geo::with_place_geo_after(
+                bulk_deps.clone(),
+                plan,
+            ))
         }),
     );
     let similar_deps = ai_deps.clone();
     jobs.register(
         pc_ai::similar::JOB_KIND,
         Arc::new(move |p| pc_ai::similar::plan(similar_deps.clone(), p)),
+    );
+    let place_geo_deps = ai_deps.clone();
+    jobs.register(
+        pc_ai::place_geo::JOB_KIND,
+        Arc::new(move |p| pc_ai::place_geo::plan(place_geo_deps.clone(), p)),
     );
     let retune_deps = ai_deps.clone();
     jobs.register(
@@ -551,6 +588,7 @@ fn initialize(
         Arc::new(move |p| models_job::plan(models_deps.clone(), p)),
     );
     let cores = _sys.logical_cores;
+    let import_similar_deps = ai_deps.clone();
     let import_deps = ImportDeps {
         store: store.clone(),
         thumbs: thumbs.clone(),
@@ -560,9 +598,17 @@ fn initialize(
         io_workers: recommended_workers(budget.budget_mb, 32, cores).min(4),
         decode_workers: recommended_workers(budget.budget_mb, 160, cores),
     };
+    // Dopo l'import (senza analisi AI accodata) i gruppi partono dalle impronte percettive.
     jobs.register(
         import::JOB_KIND,
-        Arc::new(move |p| import::plan(import_deps.clone(), p)),
+        Arc::new(move |p| {
+            let plan = import::plan(import_deps.clone(), p)?;
+            let plan = pc_ai::place_geo::with_place_geo_after(import_similar_deps.clone(), plan);
+            Ok(pc_ai::similar::with_similar_followup(
+                import_similar_deps.clone(),
+                plan,
+            ))
+        }),
     );
     let relink_store = store.clone();
     jobs.register(
@@ -590,6 +636,22 @@ fn initialize(
             code = e.code.as_str(),
             detail = e.detail.as_str(),
             "accodamento time_backfill"
+        );
+    }
+    // Librerie importate prima dello schema v11: impronta percettiva dalle miniature.
+    if let Err(e) = pc_ingest::phash_backfill::queue_once(&store, &jobs) {
+        tracing::error!(
+            code = e.code.as_str(),
+            detail = e.detail.as_str(),
+            "accodamento phash_backfill"
+        );
+    }
+    // Luoghi da cartella o manuali: coordinate approssimate dal gazetteer (una volta).
+    if let Err(e) = pc_ai::place_geo::queue_once(&store, &jobs) {
+        tracing::error!(
+            code = e.code.as_str(),
+            detail = e.detail.as_str(),
+            "accodamento place_geo"
         );
     }
     // Librerie con volti analizzati prima dello schema v8: nitidezza e dimensione dei volti.

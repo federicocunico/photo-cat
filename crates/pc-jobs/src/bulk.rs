@@ -53,6 +53,13 @@ pub enum BulkAction {
         place: Option<bulk::PlaceInput>,
     },
     RemoveLibrary,
+    /// Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato).
+    RejectAutoLabels {
+        grp: String,
+        value: String,
+        #[serde(default)]
+        max_score: Option<f64>,
+    },
 }
 
 /// Calcolo del luogo automatico per "Ripristina luogo automatico".
@@ -115,6 +122,11 @@ impl BulkAction {
                 people::assign(c, &faces, *person)?;
                 ids.len()
             }
+            Self::RejectAutoLabels {
+                grp,
+                value,
+                max_score,
+            } => bulk::reject_auto_labels(c, grp, value, *max_score, ids)?.changed,
             Self::RemoveLibrary => {
                 let removed = pc_store::sources::remove_media(c, ids)?;
                 removed_thumbs.extend(removed.thumbs);
@@ -651,5 +663,46 @@ mod tests {
         })
         .unwrap();
         assert_eq!(std::fs::read(file).unwrap(), b"original");
+    }
+
+    #[test]
+    fn reject_auto_labels_over_several_chunks_is_one_undo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let ids = db
+            .write(|c| {
+                let ids = (0..450)
+                    .map(|i| media(c, &format!("r{i}.jpg")))
+                    .collect::<StoreResult<Vec<_>>>()?;
+                for (i, id) in ids.iter().enumerate() {
+                    let score = if i % 2 == 0 { 0.3 } else { 0.8 };
+                    c.execute(
+                        "INSERT INTO label(media_id, grp, value, score, origin, model_ver, taxonomy_ver) VALUES (?1, 'subject', 'natura', ?2, 'auto', 'm', 3)",
+                        rusqlite::params![id, score],
+                    )?;
+                }
+                Ok(ids)
+            })
+            .unwrap();
+        let jobs = manager(&db);
+        let s = run(
+            &jobs,
+            serde_json::json!({"ids": ids, "operation": {"action": "reject_auto_labels", "grp": "subject", "value": "natura", "max_score": 0.5}}),
+        );
+        assert_eq!(s.failed, 0);
+        let count = |c: &rusqlite::Connection, sql: &str| -> StoreResult<i64> {
+            Ok(c.query_row(sql, [], |r| r.get(0))?)
+        };
+        db.write(move |c| {
+            assert_eq!(count(c, "SELECT count(*) FROM label")?, 225);
+            assert_eq!(count(c, "SELECT count(*) FROM label_rejection")?, 225);
+            bulk::undo_last(c)?;
+            assert_eq!(count(c, "SELECT count(*) FROM label WHERE score = 0.3 AND model_ver = 'm' AND taxonomy_ver = 3")?, 225);
+            assert_eq!(count(c, "SELECT count(*) FROM label")?, 450);
+            assert_eq!(count(c, "SELECT count(*) FROM label_rejection")?, 0);
+            assert_eq!(count(c, "SELECT count(*) FROM undo_log")?, 0);
+            Ok(())
+        })
+        .unwrap();
     }
 }

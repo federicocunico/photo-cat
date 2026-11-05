@@ -850,3 +850,82 @@ fn remove_missing_removes_only_the_missing_files() {
     }
     assert_eq!(fingerprint(&e.root), before);
 }
+
+/// JPEG con motivo a strisce (verticali o orizzontali): impronte percettive molto diverse.
+fn striped(vertical: bool) -> Vec<u8> {
+    let img = image::RgbImage::from_fn(96, 64, |x, y| {
+        let t = if vertical { x } else { y };
+        let v = if (t / 6) % 2 == 0 { 20 } else { 235 };
+        image::Rgb([v, v, v])
+    });
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&img)
+        .unwrap();
+    out
+}
+
+fn phash_of(e: &Env, rel: &str) -> Option<i64> {
+    let id = e.id(rel);
+    e.store
+        .read(move |c| {
+            Ok(
+                c.query_row("SELECT phash FROM media_item WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })?,
+            )
+        })
+        .unwrap()
+}
+
+#[test]
+fn import_computes_the_perceptual_hash_and_retouching_changes_it() {
+    let e = env(&[("A/uno.jpg", 1), ("A/due.jpg", 2), ("A/ritocco.jpg", 3)]);
+    put(&e.root, "A/ritocco.jpg", &striped(true));
+    e.import();
+    assert_eq!(
+        e.sql::<i64>("SELECT count(*) FROM media_item WHERE phash IS NOT NULL"),
+        3,
+        "ogni foto ha l'impronta"
+    );
+    let before = phash_of(&e, "A/ritocco.jpg").unwrap();
+    // Contenuto visibilmente diverso: nuova impronta dopo l'aggiornamento.
+    std::thread::sleep(Duration::from_millis(20));
+    put(&e.root, "A/ritocco.jpg", &striped(false));
+    let s = e.import();
+    assert_eq!(s.modified.ids, vec![e.id("A/ritocco.jpg")]);
+    let after = phash_of(&e, "A/ritocco.jpg").unwrap();
+    assert_ne!(before, after);
+    assert!(
+        pc_ingest::phash::hamming(
+            pc_ingest::phash::from_sql(before),
+            pc_ingest::phash::from_sql(after)
+        ) > 10
+    );
+}
+
+#[test]
+fn cached_thumbnail_still_yields_the_hash_on_reimport() {
+    let e = env(&[("A/uno.jpg", 1)]);
+    e.import();
+    let first = phash_of(&e, "A/uno.jpg").unwrap();
+    // Impronta persa (es. libreria v10): la miniatura è in cache e la rilettura la ricalcola.
+    e.store
+        .write(|c| {
+            c.execute("UPDATE media_item SET phash = NULL", [])?;
+            Ok(())
+        })
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(20));
+    let p = path_of(&e.root, "A/uno.jpg");
+    let f = std::fs::OpenOptions::new().write(true).open(&p).unwrap();
+    f.set_modified(std::time::SystemTime::now()).unwrap();
+    drop(f);
+    e.import();
+    let again = phash_of(&e, "A/uno.jpg").unwrap();
+    let d = pc_ingest::phash::hamming(
+        pc_ingest::phash::from_sql(first),
+        pc_ingest::phash::from_sql(again),
+    );
+    assert!(d == 0, "distanza {d}");
+}

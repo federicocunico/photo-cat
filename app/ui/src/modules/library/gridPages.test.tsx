@@ -22,7 +22,7 @@ const item = (i: number): GridItem =>
     height: null,
     status: "ok",
     faces: 0,
-    analyzed: true,
+    analysis: "processed",
     tags: [],
     excludedAt: null,
     similarGroup: null,

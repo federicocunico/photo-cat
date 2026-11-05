@@ -70,7 +70,15 @@ const dynamic: Record<string, string[]> = {
     ...["import", "relink", "export", "organize", "sequence_export", "bulk", "analysis"].flatMap(
       (k) => [k, `${k}_of`],
     ),
-    ...["models", "similar", "face_quality", "retune", "time_backfill", "photo_quality"],
+    ...[
+      "models",
+      "similar",
+      "face_quality",
+      "retune",
+      "time_backfill",
+      "phash_backfill",
+      "photo_quality",
+    ],
   ],
   "tags.colors": ["blue", "teal", "yellow", "coral", "purple", "gray"],
   // Cataloghi (modules/catalogs/rules.ts e RuleEditor.tsx).
@@ -193,6 +201,7 @@ const dynamic: Record<string, string[]> = {
     "models",
     "diagnostics",
     "organize",
+    "ai",
     "settings",
     "navLabel",
   ],

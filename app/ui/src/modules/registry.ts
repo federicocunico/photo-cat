@@ -4,7 +4,7 @@ import type { ModuleId } from "../store/layout";
 
 type IconC = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
 
-export type NavGroupId = "browse" | "organize" | "transfer" | "bottom";
+export type NavGroupId = "browse" | "organize" | "ai" | "transfer" | "bottom";
 
 export type NavItem = {
   id: ModuleId;
@@ -15,7 +15,7 @@ export type NavItem = {
 };
 
 /**
- * Voci della navigazione per gruppo (design D2): Sfoglia, Organizza, Importa ed esporta,
+ * Voci della navigazione per gruppo (design D2): Sfoglia, Organizza, AI, Importa ed esporta,
  * poi in fondo Attività e Impostazioni. Per aggiungere un modulo basta una voce qui e una
  * pagina in App.
  */
@@ -39,6 +39,10 @@ export const NAV_GROUPS: Array<{
     ],
   },
   {
+    id: "ai",
+    modules: [{ id: "ai", icon: Icon.Ai }],
+  },
+  {
     id: "transfer",
     modules: [
       { id: "import", icon: Icon.Import },
@@ -54,7 +58,7 @@ export const NAV_GROUPS: Array<{
   },
 ];
 
-/** Tutte le voci, nell'ordine in cui compaiono, con la scorciatoia Ctrl+1…7. */
+/** Tutte le voci, nell'ordine in cui compaiono, con la scorciatoia Ctrl+1…8. */
 export const MODULES: NavItem[] = (() => {
   let n = 0;
   return NAV_GROUPS.flatMap((g) =>

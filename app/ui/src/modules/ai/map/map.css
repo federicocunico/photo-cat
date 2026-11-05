@@ -1,0 +1,22 @@
+/* Sezione AI > Mappa. */
+.ai-map { display: flex; flex-direction: column; gap: var(--pc-space-2); min-height: 0; height: 100%; }
+.ai-map-layout { flex: 1; min-height: 0; display: flex; gap: var(--pc-space-3); }
+.ai-map-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--pc-space-2); }
+.ai-map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--pc-space-3); font-size: 0.9rem; }
+.ai-map-stage { position: relative; flex: 1; min-height: 320px; border: 1px solid var(--pc-border); border-radius: var(--pc-radius-sm); overflow: hidden; }
+.ai-map-stage > [data-testid="world-map"] { position: absolute !important; inset: 0; }
+.ai-map-stage.is-hit > [data-testid="world-map"] { cursor: pointer !important; }
+.ai-map-stage.is-placing > [data-testid="world-map"] { cursor: crosshair !important; }
+.ai-map-tip { position: absolute; z-index: 2; pointer-events: none; padding: var(--pc-space-2); background: var(--pc-raised); border: 1px solid var(--pc-border); border-radius: var(--pc-radius-sm); font-size: 0.85rem; max-width: 240px; }
+.ai-map-panel { flex: 0 0 260px; display: flex; flex-direction: column; gap: var(--pc-space-3); overflow: auto; }
+.ai-map-panel h3 { margin: 0 0 var(--pc-space-1); font-size: 0.95rem; }
+.ai-map-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ai-map-row { display: flex; align-items: center; justify-content: space-between; gap: var(--pc-space-2); width: 100%; background: none; border: 0; color: var(--pc-text); font: inherit; text-align: left; padding: var(--pc-space-1) var(--pc-space-2); border-radius: var(--pc-radius-sm); }
+button.ai-map-row { cursor: pointer; }
+button.ai-map-row:hover { background: var(--pc-raised); }
+button.ai-map-row[aria-pressed="true"] { background: var(--pc-raised); font-weight: 600; }
+.ai-map-tip-thumbs { display: flex; gap: 2px; margin-bottom: var(--pc-space-1); }
+.ai-map-tip-thumbs img { width: 48px; height: 48px; object-fit: cover; border-radius: 2px; }
+.ai-map-actions { display: flex; gap: var(--pc-space-1); }
+.ai-map-stage > [data-testid="world-map"]:focus-visible { outline: 2px solid var(--pc-focus); outline-offset: -2px; }
+.ai-map-groups { max-height: 240px; overflow: auto; }

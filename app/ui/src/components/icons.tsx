@@ -104,6 +104,7 @@ export const Icon = {
   Alert: wrap(TriangleAlert),
   Info: wrap(Info),
   Smart: wrap(Sparkles),
+  Ai: wrap(Sparkles),
   Check: wrap(Check),
   // Comandi
   Search: wrap(Search),

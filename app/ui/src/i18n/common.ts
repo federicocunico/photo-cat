@@ -48,7 +48,7 @@ export const common = {
       report: "Segnala un problema",
     },
     nav: {
-      groups: { browse: "Sfoglia", organize: "Organizza", transfer: "Importa ed esporta" },
+      groups: { browse: "Sfoglia", organize: "Organizza", ai: "AI", transfer: "Importa ed esporta" },
       collapse: "Riduci la navigazione",
       expand: "Espandi la navigazione",
       badgeReview_one: "{{count}} persona da rivedere",
@@ -104,7 +104,7 @@ export const common = {
       report: "Report a problem",
     },
     nav: {
-      groups: { browse: "Browse", organize: "Organize", transfer: "Import & export" },
+      groups: { browse: "Browse", organize: "Organize", ai: "AI", transfer: "Import & export" },
       collapse: "Collapse navigation",
       expand: "Expand navigation",
       badgeReview_one: "{{count}} person to review",

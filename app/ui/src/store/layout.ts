@@ -16,6 +16,7 @@ export type ModuleId =
   | "import"
   | "jobs"
   | "organize"
+  | "ai"
   | "settings";
 
 /**
@@ -24,6 +25,9 @@ export type ModuleId =
  */
 export type SettingsSection =
   "general" | "library" | "ai" | "models" | "apps" | "diagnostics" | "advanced";
+
+/** Sezioni del modulo AI (ai-workspace D8). "map" arriva con una modifica successiva. */
+export type AiSection = "overview" | "reprocess" | "results" | "cleanup" | "similar" | "map";
 
 export const PANEL_LIMITS = { left: [200, 420], right: [260, 480] } as const;
 
@@ -42,6 +46,7 @@ export type PeopleTarget =
 export type Destination =
   | { module: ModuleId }
   | { module: "jobs"; target: number }
+  | { module: "ai"; section?: AiSection }
   | { module: "people"; target: PeopleTarget }
   | { module: "settings"; section: Exclude<SettingsSection, "diagnostics"> }
   | { module: "settings"; section: "diagnostics"; target?: DiagFilter };
@@ -50,6 +55,8 @@ interface LayoutState {
   module: ModuleId;
   /** Sezione attiva di Impostazioni. */
   settingsSection: SettingsSection;
+  /** Sezione attiva del modulo AI (ricordata tra le aperture). */
+  aiSection: AiSection;
   /** Sezione attiva del modulo Persone (Da rivedere / Persone / Ignorati). */
   peopleSection: PeopleSection;
   /** Navigazione dei moduli a sole icone (Ctrl+B). */
@@ -71,6 +78,7 @@ interface LayoutState {
   /** Apre un modulo, una sezione di Impostazioni o un elemento (persona, filtro degli errori). */
   openModule: (to: Destination) => void;
   setSettingsSection: (s: SettingsSection) => void;
+  setAiSection: (s: AiSection) => void;
   setPeopleSection: (s: PeopleSection) => void;
   toggleNav: () => void;
   toggleLeft: () => void;
@@ -93,6 +101,7 @@ const clamp = (v: number, [min, max]: readonly [number, number]) => Math.min(max
 type PersistedLayout = {
   module?: string;
   settingsSection?: SettingsSection;
+  aiSection?: AiSection;
   peopleSection?: PeopleSection;
   navCompact?: boolean;
   leftOpen?: boolean;
@@ -118,6 +127,7 @@ export function migrateLayoutState(persisted: unknown): PersistedLayout {
     ...s,
     peopleSection: s.peopleSection ?? "review",
     settingsSection: s.settingsSection ?? "general",
+    aiSection: s.aiSection ?? "overview",
   };
 }
 
@@ -134,6 +144,7 @@ export function destinationFor(id: string): Destination | null {
     "import",
     "jobs",
     "organize",
+    "ai",
     "settings",
   ];
   return known.includes(id as ModuleId) ? { module: id as ModuleId } : null;
@@ -144,6 +155,7 @@ export const useLayout = create<LayoutState>()(
     (set) => ({
       module: "library",
       settingsSection: "general",
+      aiSection: "overview",
       peopleSection: "review",
       navCompact: false,
       leftOpen: true,
@@ -160,7 +172,9 @@ export const useLayout = create<LayoutState>()(
       jobFocus: null,
       openModule: (to) => {
         const next: Partial<LayoutState> = { module: to.module };
-        if ("section" in to) next.settingsSection = to.section;
+        if (to.module === "ai") {
+          if ("section" in to && to.section) next.aiSection = to.section;
+        } else if ("section" in to) next.settingsSection = to.section as SettingsSection;
         if ("target" in to) {
           if (to.module === "people") next.peopleTarget = to.target;
           else if (to.module === "jobs") next.jobFocus = to.target;
@@ -169,6 +183,7 @@ export const useLayout = create<LayoutState>()(
         set(next);
       },
       setSettingsSection: (settingsSection) => set({ settingsSection }),
+      setAiSection: (aiSection) => set({ aiSection }),
       setPeopleSection: (peopleSection) => set({ peopleSection }),
       toggleNav: () => set((s) => ({ navCompact: !s.navCompact })),
       toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
@@ -203,6 +218,7 @@ export const useLayout = create<LayoutState>()(
       partialize: (s) => ({
         module: s.module,
         settingsSection: s.settingsSection,
+        aiSection: s.aiSection,
         peopleSection: s.peopleSection,
         navCompact: s.navCompact,
         leftOpen: s.leftOpen,

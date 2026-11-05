@@ -9,14 +9,14 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 
 **Primo avvio.** Tre passi, ognuno saltabile con "Lo faccio dopo": lingua e tema, la prima cartella di foto (scelta o trascinata; i file non vengono spostati né modificati), le funzioni AI con un riepilogo del computer in parole e il download dei modelli in background. Alla fine si apre la Libreria, dove le foto compaiono man mano che l'importazione procede, insieme alla lista **Primi passi** (importare una cartella, scaricare i modelli, dare un nome a una persona, creare un catalogo, usare un set di tag), che si spunta da sola anche se l'azione si fa da un'altra parte. Aiuto › "Rivedi l'introduzione" la ripropone senza cambiare nulla finché non si conferma un passo.
 
-**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag) e **Importa ed esporta** (Importa, Esporta), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
+**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag), **AI** e **Importa ed esporta** (Importa, Esporta), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
 
 **Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera):
 
 | Tasto | Azione |
 |---|---|
 | Ctrl+K | palette dei comandi: moduli, azioni, persone, tag, cataloghi, luoghi |
-| Ctrl+1…7 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
+| Ctrl+1…8 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
 | Ctrl+B | riduce o espande la navigazione |
 | Ctrl+Z | annulla l'ultima operazione annullabile |
 | ? | foglio delle scorciatoie |
@@ -317,7 +317,13 @@ args = ["--library", ":memory:", "{file}"]
 
 ## Foto simili
 
-L'analisi raggruppa le foto quasi identiche (raffiche, scatti ripetuti, piccole variazioni della stessa inquadratura). Per ogni foto cerca le candidate più vicine nell'embedding CLIP, quelle dello stesso dispositivo scattate entro 10 secondi e le copie esatte, poi conferma la somiglianza confrontando le miniature (SSIM). Tutto avviene in locale e nessuna funzione dei gruppi cancella o modifica file sul disco.
+L'analisi raggruppa le foto quasi identiche (raffiche, scatti ripetuti, piccole variazioni della stessa inquadratura). Per ogni foto cerca le candidate in quattro modi:
+- un'**impronta percettiva** di 64 bit, calcolata all'import dalla miniatura e confrontata con la distanza di Hamming;
+- le foto dello stesso dispositivo (o della stessa cartella) scattate entro 10 secondi;
+- i vicini nell'embedding CLIP, se i modelli AI sono installati;
+- le copie esatte.
+
+Poi conferma la somiglianza confrontando le miniature (SSIM). I gruppi si formano anche senza modelli AI. Tutto avviene in locale e nessuna funzione dei gruppi cancella o modifica file sul disco.
 
 - **Raggruppa foto simili** (barra della griglia, anche nei cataloghi): ogni gruppo diventa una sola miniatura, la foto principale, con il numero di foto; il numero apre il gruppo sul posto. Conteggi, filtri e "Seleziona tutto" restano sulle singole foto; un clic su un gruppo chiuso seleziona tutte le sue foto presenti nei risultati.
 - **Foto principale**: proposta in base a nitidezza ed esposizione; dall'Inspector (sezione **Foto simili**) si sceglie un'altra foto, e la scelta resta anche dopo nuove analisi.
@@ -325,7 +331,22 @@ L'analisi raggruppa le foto quasi identiche (raffiche, scatti ripetuti, piccole 
 - **Aiuto alla scelta**: *Solo foto con simili* (barra della griglia) e *Seleziona tutte tranne la principale* (barra delle azioni), da combinare con "Escludi dal catalogo", i tag o "Rimuovi dalla libreria".
 - **Soglia** in Impostazioni › Riconoscimento AI o › Avanzate (*Somiglianza dei gruppi di foto simili*, predefinita 0,80): l'anteprima indica quanti gruppi si formerebbero, e con "Applica" i gruppi vengono ricalcolati senza rianalizzare le foto.
 
-L'analisi dei gruppi fa parte dell'analisi AI ed è incrementale: dopo un import vengono confrontate solo le foto nuove. Per una libreria analizzata prima di questa funzione, Impostazioni › Riconoscimento AI propone **Analizza i gruppi**.
+L'analisi dei gruppi è incrementale e parte da sola dopo ogni import: vengono confrontate solo le foto nuove. Per le foto importate con una versione precedente, all'avvio un'attività una tantum calcola le impronte dalle miniature in cache e poi ricalcola i gruppi, mantenendo le correzioni dell'utente.
+
+## Modulo AI
+
+Il modulo **AI** (Ctrl+6) controlla lo stato delle analisi; soglie e modelli restano in Impostazioni.
+
+- **Panoramica**: per ogni fase (classificazione, persone, volti, gruppi di simili, impronte) quante foto sono analizzate, da aggiornare, in coda o mai analizzate. Si aggiorna durante le attività e ogni conteggio apre la Libreria filtrata.
+- **Rianalisi**: tutta la libreria, uno o più cataloghi, la selezione o i risultati filtrati della Libreria. Si scelgono le fasi e la modalità (solo mancanti, oppure "forza"), con un'anteprima delle foto da elaborare. Le correzioni manuali restano sempre valide.
+- **Risultati**: distribuzione delle voci, istogramma delle confidenze con la soglia corrente e copertura per mese. Barre e intervalli portano alla Libreria o alla Pulizia.
+- **Pulizia**: toglie un'etichetta automatica da un insieme di foto, anche solo sotto una confidenza. L'etichetta tolta non viene riassegnata dalle analisi successive, e l'operazione si può annullare.
+- **Simili**: gruppi, foto in attesa, dimensioni dei gruppi e avvio dell'analisi.
+- **Mappa**: mappa del mondo offline, senza richieste di rete, con le foto raggruppate per zona.
+  - Le posizioni precise vengono dal GPS; quelle approssimate dai luoghi delle cartelle, collocati con il dizionario geografico offline.
+  - Il clic su un gruppo apre in Libreria esattamente quelle foto.
+  - Si può limitare la mappa a un catalogo.
+  - I luoghi senza coordinate si posizionano a mano con un clic.
 
 ## Librerie grandi
 

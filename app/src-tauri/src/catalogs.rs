@@ -88,6 +88,8 @@ pub async fn start_bulk(
     confirmed: bool,
 ) -> AppResult<i64> {
     crate::state::blocking(app, move |_app, state| {
+        let mut target = target;
+        crate::stage_keys::fill_target(state, &mut target);
         let operation = crate::tags::with_set_rules(&state.app_store, operation)?;
         state.jobs.submit(
             pc_jobs::bulk::JOB_KIND,
@@ -103,6 +105,8 @@ pub async fn trash_impact(
     target: pc_store::query::Target,
 ) -> AppResult<Vec<pc_store::sources::CatalogLoss>> {
     crate::state::blocking(app, move |_app, state| {
+        let mut target = target;
+        crate::stage_keys::fill_target(state, &mut target);
         Ok(state.store.read(|c| bulk::trash_impact(c, &target))?)
     })
     .await

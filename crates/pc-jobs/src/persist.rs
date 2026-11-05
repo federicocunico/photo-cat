@@ -204,6 +204,25 @@ pub fn phases(store: &Store, id: i64) -> StoreResult<Vec<PhaseRow>> {
     })
 }
 
+/// Esiste un job di uno di questi `kinds` in uno di questi `states` (nomi di `JobState::as_str`).
+pub fn any_in_state(store: &Store, kinds: &[&str], states: &[&str]) -> StoreResult<bool> {
+    let (kinds, states): (Vec<String>, Vec<String>) = (
+        kinds.iter().map(|s| s.to_string()).collect(),
+        states.iter().map(|s| s.to_string()).collect(),
+    );
+    store.read(move |c| {
+        let mut st = c.prepare("SELECT 1 FROM job WHERE kind = ?1 AND state = ?2 LIMIT 1")?;
+        for k in &kinds {
+            for s in &states {
+                if st.exists(params![k, s])? {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    })
+}
+
 /// All'avvio: i job rimasti attivi (chiusura inattesa) diventano "interrotti".
 pub fn mark_interrupted(store: &Store) -> StoreResult<Vec<JobRow>> {
     let ids: Vec<i64> = store.write(|c| {

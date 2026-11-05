@@ -24,6 +24,7 @@ export const JOB_KINDS = [
   "face_quality",
   "retune",
   "time_backfill",
+  "phash_backfill",
   "photo_quality",
 ] as const;
 

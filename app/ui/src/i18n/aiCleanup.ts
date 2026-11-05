@@ -1,0 +1,61 @@
+// Testi della sezione Pulizia del modulo AI (ai-workspace 3.6).
+export const aiCleanup = {
+  it: {
+    aiCleanup: {
+      intro:
+        "Togli un'etichetta automatica dalle foto di un ambito. Le etichette manuali non vengono toccate.",
+      group: "Gruppo",
+      value: "Voce",
+      pickGroup: "Scegli un gruppo",
+      pickValue: "Scegli una voce",
+      scope: "Ambito",
+      scopeLibrary: "Libreria intera",
+      scopeCatalog: "Catalogo: {{name}}",
+      onlyBelow: "Solo sotto confidenza",
+      maxScore: "Confidenza massima",
+      maxScoreHint: "Da 0 a 1: restano le foto con confidenza pari o superiore.",
+      previewing: "Calcolo delle foto interessate…",
+      previewError: "Impossibile calcolare l'anteprima.",
+      preview_one: "{{count}} foto perderà l'etichetta «{{label}}»",
+      preview_other: "{{count}} foto perderanno l'etichetta «{{label}}»",
+      previewNone: "Nessuna foto ha l'etichetta «{{label}}» in questo ambito.",
+      submit: "Togli l'etichetta…",
+      confirmTitle: "Togliere «{{label}}»?",
+      confirmMessage:
+        "L'etichetta «{{label}}» verrà tolta da {{count}} foto e le analisi future non la riassegneranno a queste foto. Le etichette manuali restano. Puoi annullare subito dopo con «Annulla operazione».",
+      confirmLabel: "Togli l'etichetta",
+      done: "Etichetta «{{label}}» tolta da {{count}} foto",
+      failed: "Pulizia non riuscita.",
+      nothingToRemove: "Nessuna etichetta da togliere",
+    },
+  },
+  en: {
+    aiCleanup: {
+      intro:
+        "Remove an automatic label from the photos in a scope. Manual labels are never touched.",
+      group: "Group",
+      value: "Label",
+      pickGroup: "Choose a group",
+      pickValue: "Choose a label",
+      scope: "Scope",
+      scopeLibrary: "Entire library",
+      scopeCatalog: "Catalog: {{name}}",
+      onlyBelow: "Only below confidence",
+      maxScore: "Maximum confidence",
+      maxScoreHint: "From 0 to 1: photos at or above this confidence are kept.",
+      previewing: "Counting affected photos…",
+      previewError: "Could not compute the preview.",
+      preview_one: "{{count}} photo will lose the label \"{{label}}\"",
+      preview_other: "{{count}} photos will lose the label \"{{label}}\"",
+      previewNone: "No photo has the label \"{{label}}\" in this scope.",
+      submit: "Remove label…",
+      confirmTitle: "Remove \"{{label}}\"?",
+      confirmMessage:
+        "The label \"{{label}}\" will be removed from {{count}} photos and future analyses will not reassign it to them. Manual labels stay. You can undo right away with \"Undo operation\".",
+      confirmLabel: "Remove label",
+      done: "Label \"{{label}}\" removed from {{count}} photos",
+      failed: "Cleanup failed.",
+      nothingToRemove: "No labels to remove",
+    },
+  },
+};

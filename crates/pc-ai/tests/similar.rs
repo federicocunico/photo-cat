@@ -114,7 +114,7 @@ impl Lib {
             &self.thumbs,
             &MemoryGovernor::new(2048),
             &JobControl::new(),
-            MODEL,
+            Some(MODEL),
             threshold,
             None,
         )
@@ -189,7 +189,7 @@ fn sharpest_photo_is_proposed_and_user_choice_survives_reanalysis() {
     lib.store.write(move |c| db::set_cover(c, gid, 1)).unwrap();
     // Nuova analisi (parametri invariati) e ricalcolo dei gruppi.
     lib.run(0.70);
-    regroup(&lib.store, 0.70, &params_key(MODEL)).unwrap();
+    regroup(&lib.store, 0.70, &params_key(Some(MODEL))).unwrap();
     let v = lib.store.read(|c| db::group_view(c, 1)).unwrap().unwrap();
     assert_eq!(v.cover, Some(1), "scelta dell'utente");
 }
@@ -217,7 +217,7 @@ fn corrections_are_respected_by_later_analyses() {
     }
     lib.run(0.80);
     assert_eq!(lib.group_of(1).unwrap().len(), 5);
-    let key = params_key(MODEL);
+    let key = params_key(Some(MODEL));
     // Foto tolta da un gruppo.
     lib.store.write(|c| db::remove_from_group(c, 5)).unwrap();
     regroup(&lib.store, 0.80, &key).unwrap();
@@ -313,16 +313,16 @@ fn interrupted_analysis_resumes_with_the_remaining_photos() {
         &lib.thumbs,
         &MemoryGovernor::new(2048),
         &control,
-        MODEL,
+        Some(MODEL),
         0.8,
         Some(&phase),
     );
     watcher.join().unwrap();
     assert!(res.is_err(), "interrotta");
-    let key = params_key(MODEL);
+    let key = params_key(Some(MODEL));
     let left = lib
         .store
-        .read(move |c| db::pending(c, MODEL, &key))
+        .read(move |c| db::pending(c, Some(MODEL), &key, &params_key(None)))
         .unwrap()
         .len() as i64;
     assert!(left < n && left > 0, "rimaste {left}");
@@ -361,7 +361,7 @@ fn stricter_threshold_regroups_from_saved_edges_without_thumbnails() {
     let edges = lib.store.read(db::edges).unwrap();
     let strict = edges.iter().map(|e| e.2).fold(0.0f32, f32::max) - 0.001;
     let preview = preview_count(&lib.store, strict).unwrap();
-    regroup(&lib.store, strict, &params_key(MODEL)).unwrap();
+    regroup(&lib.store, strict, &params_key(Some(MODEL))).unwrap();
     let after = compute_groups(&lib.store, strict).unwrap();
     assert_eq!(after.len(), preview, "anteprima = esito");
     let saved = lib.store.read(db::group_count).unwrap() as usize;
@@ -415,4 +415,42 @@ fn hundred_thousand_embeddings_within_the_governor_budget() {
         "memoria dell'indice restituita"
     );
     assert!(elapsed < Duration::from_secs(180), "{elapsed:?}");
+}
+
+#[test]
+fn photo_processed_before_its_embedding_is_reprocessed_when_it_gets_one() {
+    let lib = Lib::new();
+    lib.add(1, &burst_frame(2, 0), embedding(3, 0.0), None, None);
+    lib.add(2, &burst_frame(2, 1), embedding(3, 0.01), None, None);
+    // La 2 non ha ancora l'embedding; impronte a 20 bit: né candidato globale né scartato.
+    lib.store
+        .write(|c| {
+            c.execute("DELETE FROM embedding WHERE media_id = 2", [])?;
+            c.execute("UPDATE media_item SET phash = 0 WHERE id = 1", [])?;
+            c.execute("UPDATE media_item SET phash = 1048575 WHERE id = 2", [])?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(lib.run(0.8).processed, 2);
+    assert_eq!(
+        lib.group_of(1),
+        None,
+        "senza embedding nessun vicino semantico"
+    );
+    // Arriva l'embedding (analisi successiva): la 2 torna da elaborare e trova la 1.
+    let blob: Vec<u8> = embedding(3, 0.01)
+        .iter()
+        .flat_map(|f| f.to_le_bytes())
+        .collect();
+    lib.store
+        .write(move |c| {
+            c.execute(
+                "INSERT INTO embedding(media_id, model_ver, vector) VALUES (2, ?1, ?2)",
+                params![MODEL, blob],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(lib.run(0.8).processed, 1);
+    assert_eq!(lib.group_of(1), Some(vec![1, 2]));
 }

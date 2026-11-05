@@ -267,7 +267,7 @@ describe("navigazione dei moduli", () => {
     useLayout.setState({ navCompact: false });
   });
 
-  it("Gruppi della navigazione: Sfoglia, Organizza, Importa ed esporta, poi Attività e Impostazioni", () => {
+  it("Gruppi della navigazione: Sfoglia, Organizza, AI, Importa ed esporta, poi Attività e Impostazioni", () => {
     renderNav();
     const group = (name: string) =>
       within(screen.getByRole("group", { name }))
@@ -275,6 +275,7 @@ describe("navigazione dei moduli", () => {
         .map((b) => b.textContent);
     expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
     expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
+    expect(group("AI")).toEqual(["AI"]);
     expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta"]);
     const nav = screen.getByRole("navigation", { name: "Moduli" });
     const all = within(nav).getAllByRole("button");
@@ -292,6 +293,18 @@ describe("navigazione dei moduli", () => {
     fireEvent.keyDown(input, { key: "1", ctrlKey: true });
     expect(useLayout.getState().module).toBe("catalogs");
     input.remove();
+  });
+
+  it("Scorciatoie: Ctrl+6 apre AI, Ctrl+7 Importa, Ctrl+8 Esporta", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "6", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("ai");
+    fireEvent.keyDown(window, { key: "7", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("import");
+    fireEvent.keyDown(window, { key: "8", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("organize");
+    fireEvent.keyDown(window, { key: "3", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("catalogs");
   });
 
   it("Navigazione a icone: Ctrl+B mostra solo le icone, con il nome per il lettore di schermo", () => {

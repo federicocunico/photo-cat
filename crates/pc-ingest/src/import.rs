@@ -8,6 +8,7 @@
 use crate::formats::{support, Support};
 use crate::hash::{content_hash, quick_hash};
 use crate::metadata::{read_exif, read_tech, resolve_dates, ExifMeta};
+use crate::phash;
 use crate::scan::{FoundFile, ScanRules};
 use crate::thumb::{apply_orientation, decode_reduced_with, fit, Decoded, ThumbCache, THUMB_SIZE};
 use parking_lot::Mutex;
@@ -45,6 +46,8 @@ pub struct ImportItem {
     pub exif: Option<ExifMeta>,
     pub dates: Option<MediaDates>,
     pub thumb_key: Option<String>,
+    /// Impronta percettiva della miniatura (None se non calcolabile).
+    pub phash: Option<u64>,
     /// Immagine ridotta e orientata (con permesso di memoria), per gli stadi AI.
     pub decoded: Option<Decoded>,
     /// Risultati degli stadi aggiuntivi, scritti dallo stadio finale.
@@ -176,6 +179,20 @@ fn stage_metadata(
 /// Memoria stimata di un worker di decodifica (concorrenza dinamica della fase miniature).
 pub const DECODE_WORKER_MB: u64 = 160;
 
+/// Impronta percettiva di una miniatura già in cache. Un errore non blocca il file:
+/// l'impronta resta vuota (il job `phash_backfill` è accodato una sola volta per
+/// libreria: la ricalcola solo un import successivo che cambi il file).
+fn phash_of_cached(deps: &ImportDeps, key: &str, ctx: &StageCtx, path: &Path) -> Option<u64> {
+    let p = deps.thumbs.path_of(key)?;
+    match image::open(&p) {
+        Ok(img) => Some(phash::phash(&img)),
+        Err(e) => {
+            tracing::debug!(job_id = ctx.job_id, path = %path.display(), detail = %e, "impronta percettiva non calcolata");
+            None
+        }
+    }
+}
+
 /// Fase miniature: un'unica decodifica ridotta alimenta miniatura e (se servono) gli stadi AI.
 fn stage_thumbnail(
     deps: &ImportDeps,
@@ -190,6 +207,7 @@ fn stage_thumbnail(
     };
     let have_thumb = deps.thumbs.contains(&key);
     if have_thumb && !keep_decoded {
+        item.phash = phash_of_cached(deps, &key, ctx, &item.found.path);
         item.thumb_key = Some(key);
         return StageOutcome::Continue;
     }
@@ -265,6 +283,8 @@ fn stage_thumbnail(
         }
         track.lock().written_thumbs.push(key.clone());
     }
+    // Sempre dalla miniatura in cache (come il backfill): impronte identiche a parità di file.
+    item.phash = phash_of_cached(deps, &key, ctx, &item.found.path);
     item.thumb_key = Some(key);
     if keep_decoded {
         let image = fit(&oriented, ANALYSIS_SIZE);
@@ -327,6 +347,7 @@ fn stage_write(
     let exif = item.exif.take();
     let dates = item.dates.take();
     let thumb = item.thumb_key.take();
+    let phash = item.phash.take().map(phash::to_sql);
     let extra = std::mem::take(&mut item.extra);
     let res = store.submit(move |c| {
         let id = match moved_from {
@@ -374,6 +395,12 @@ fn stage_write(
         }
         if let Some(k) = &thumb {
             repo::media::set_thumb(c, id, k)?;
+        }
+        // NULL solo se il contenuto è cambiato: non deve restare l'impronta vecchia. A parità
+        // di contenuto, un'impronta non calcolata (decodifica fallita, annullamento) non
+        // cancella quella valida già salvata.
+        if phash.is_some() || content_changed {
+            repo::media::set_phash(c, id, phash)?;
         }
         for x in &extra {
             x.write(c, id)?;
@@ -531,6 +558,7 @@ fn run(deps: ImportDeps, scope: Scope, rules: ScanRules, ctx: JobContext) -> App
                         exif: None,
                         dates: None,
                         thumb_key: None,
+                        phash: None,
                         decoded: None,
                         extra: Vec::new(),
                     })

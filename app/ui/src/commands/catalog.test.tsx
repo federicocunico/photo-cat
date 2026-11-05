@@ -62,8 +62,8 @@ describe("foglio delle scorciatoie", () => {
     const keys = entries(i18n.t).map((e) => e.keys);
     const covered = (text: string) =>
       keys.some((k) => k.split(/, | /).includes(text) || k === text) ||
-      // Ctrl+1…7 e 1–9: un'unica voce per il gruppo di tasti.
-      (/^Ctrl\+[1-7]$/.test(text) && keys.includes("Ctrl+1…7")) ||
+      // Ctrl+1…8 e 1–9: un'unica voce per il gruppo di tasti.
+      (/^Ctrl\+[1-8]$/.test(text) && keys.includes("Ctrl+1…8")) ||
       (/^[1-9]$/.test(text) && keys.some((k) => k.includes("1–9"))) ||
       (text === "0" && keys.some((k) => k === "0" || k.includes(", 0")));
     const missing = useCommandStore

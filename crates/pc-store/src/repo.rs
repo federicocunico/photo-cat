@@ -224,6 +224,15 @@ pub mod media {
         Ok(())
     }
 
+    /// Impronta percettiva (bit pattern in INTEGER); `None` la azzera.
+    pub fn set_phash(c: &Connection, id: MediaId, phash: Option<i64>) -> StoreResult<()> {
+        c.execute(
+            "UPDATE media_item SET phash=?2 WHERE id=?1",
+            params![id, phash],
+        )?;
+        Ok(())
+    }
+
     /// Ricollega un elemento a un nuovo percorso conservandone catalogazioni e cataloghi.
     pub fn relink(
         c: &Connection,

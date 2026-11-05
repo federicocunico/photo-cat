@@ -98,7 +98,7 @@ const item = (id: number): GridItem => ({
   height: 4000,
   status: id === 3 ? "missing" : "ok",
   faces: id === 2 ? 3 : 0,
-  analyzed: id % 3 === 0,
+  analysis: id % 3 === 0 ? "processed" : "queued",
   tags: id === 1 ? ["Tramonti"] : [],
   similarGroup: null,
   similarCover: false,

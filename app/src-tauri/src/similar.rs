@@ -88,6 +88,8 @@ pub async fn similar_group_members(
     sort: SortKey,
 ) -> AppResult<Page> {
     blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         Ok(state.store.read(|c| {
             let members = similar::group_members(c, group)?;
             let f = LibraryFilter {
@@ -111,6 +113,8 @@ pub async fn similar_group_members(
 #[specta::specta]
 pub async fn similar_non_covers(app: AppHandle, filter: LibraryFilter) -> AppResult<Vec<MediaId>> {
     blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
         Ok(state.store.read(|c| similar::non_covers(c, &filter))?)
     })
     .await
@@ -131,19 +135,7 @@ pub async fn similar_preview(app: AppHandle, threshold: f32) -> AppResult<u32> {
 #[specta::specta]
 pub async fn similar_pending(app: AppHandle) -> AppResult<u32> {
     blocking(app, move |_app, state| {
-        let Ok(entry) = state
-            .ai_deps
-            .resources
-            .entry(pc_models::Role::ClassificationImage)
-        else {
-            return Ok(0);
-        };
-        let model = pc_ai::stages::model_key(entry);
-        let key = pc_ai::similar::params_key(&model);
-        Ok(state
-            .store
-            .read(move |c| similar::pending(c, &model, &key))?
-            .len() as u32)
+        Ok(pc_ai::similar::pending_count(&state.ai_deps)? as u32)
     })
     .await
 }

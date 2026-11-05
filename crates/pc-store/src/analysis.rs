@@ -22,6 +22,39 @@ pub fn version(
     Ok(())
 }
 
+/// Vero se l'utente ha rifiutato l'etichetta (media, gruppo, valore).
+const REJECTED_SQL: &str =
+    "SELECT EXISTS(SELECT 1 FROM label_rejection WHERE media_id=?1 AND grp=?2 AND value=?3)";
+
+/// Registra il rifiuto di un'etichetta automatica: le rianalisi non la
+/// riaggiungono. Idempotente.
+pub fn reject(c: &Connection, id: i64, group: &str, value: &str) -> StoreResult<()> {
+    c.execute(
+        "INSERT OR IGNORE INTO label_rejection(media_id,grp,value,created_at)
+         VALUES (?1,?2,?3,CAST(strftime('%s','now') AS INTEGER))",
+        params![id, group, value],
+    )?;
+    Ok(())
+}
+
+/// Annulla il rifiuto di un'etichetta (assegnazione manuale dello stesso valore).
+pub fn unreject(c: &Connection, id: i64, group: &str, value: &str) -> StoreResult<()> {
+    c.execute(
+        "DELETE FROM label_rejection WHERE media_id=?1 AND grp=?2 AND value=?3",
+        params![id, group, value],
+    )?;
+    Ok(())
+}
+
+/// Valori rifiutati di un media in un gruppo.
+pub fn rejected_values(c: &Connection, id: i64, group: &str) -> StoreResult<Vec<String>> {
+    let mut q = c.prepare_cached(
+        "SELECT value FROM label_rejection WHERE media_id=?1 AND grp=?2 ORDER BY value",
+    )?;
+    let rows = q.query_map(params![id, group], |r| r.get(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 pub fn classification(
     c: &Connection,
     id: i64,
@@ -41,6 +74,7 @@ pub fn classification(
             "risultati di classificazione non validi".into(),
         ));
     }
+    let mut rejected = c.prepare_cached(REJECTED_SQL)?;
     for group in groups {
         let manual: bool = c.query_row(
             "SELECT EXISTS(SELECT 1 FROM label WHERE media_id=?1 AND grp=?2 AND origin='manual')",
@@ -55,6 +89,9 @@ pub fn classification(
             params![id, group],
         )?;
         for l in labels.iter().filter(|l| &l.group == group) {
+            if rejected.query_row(params![id, l.group, l.value], |r| r.get::<_, bool>(0))? {
+                continue;
+            }
             c.execute("INSERT INTO label(media_id,grp,value,score,origin,model_ver,taxonomy_ver) VALUES (?1,?2,?3,?4,'auto',?5,?6)",params![id,l.group,l.value,l.score,model,taxonomy])?;
         }
     }
@@ -238,6 +275,7 @@ pub fn relabel(
     let mut manual = c.prepare_cached(
         "SELECT EXISTS(SELECT 1 FROM label WHERE media_id=?1 AND grp=?2 AND origin='manual')",
     )?;
+    let mut rejected = c.prepare_cached(REJECTED_SQL)?;
     for group in groups {
         if manual.query_row(params![id, group], |r| r.get::<_, bool>(0))? {
             continue;
@@ -245,7 +283,12 @@ pub fn relabel(
         let old: Vec<String> = q
             .query_map(params![id, group], |r| r.get(0))?
             .collect::<Result<_, _>>()?;
-        let mut new: Vec<&AutoLabel> = labels.iter().filter(|l| &l.group == group).collect();
+        let mut new: Vec<&AutoLabel> = Vec::new();
+        for l in labels.iter().filter(|l| &l.group == group) {
+            if !rejected.query_row(params![id, group, l.value], |r| r.get::<_, bool>(0))? {
+                new.push(l);
+            }
+        }
         new.sort_by(|a, b| a.value.cmp(&b.value));
         let same = old.len() == new.len() && old.iter().zip(&new).all(|(o, n)| *o == n.value);
         if same {
@@ -365,6 +408,81 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    fn rejection_db() -> Connection {
+        let mut c = Connection::open_in_memory().unwrap();
+        crate::migrate::migrate(&mut c, None).unwrap();
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'a.jpg','a.jpg','jpg',1,1,1,1)",[]).unwrap();
+        c
+    }
+
+    fn subject(v: &str, score: f64) -> AutoLabel {
+        AutoLabel {
+            group: "subject".into(),
+            value: v.into(),
+            score,
+        }
+    }
+
+    fn subject_values(c: &Connection) -> Vec<String> {
+        let mut q = c
+            .prepare("SELECT value FROM label WHERE media_id=1 AND grp='subject' ORDER BY value")
+            .unwrap();
+        q.query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn forced_reanalysis_does_not_readd_rejected_label() {
+        let c = rejection_db();
+        let groups = vec!["subject".to_string()];
+        let labels = vec![subject("natura", 0.9), subject("ritratto", 0.8)];
+        classification(&c, 1, &groups, &labels, &[0.0; 512], "v1", 1).unwrap();
+        // L'utente rifiuta "natura": l'etichetta sparisce e non torna.
+        c.execute("DELETE FROM label WHERE value='natura'", [])
+            .unwrap();
+        reject(&c, 1, "subject", "natura").unwrap();
+        reject(&c, 1, "subject", "natura").unwrap();
+        classification(&c, 1, &groups, &labels, &[0.0; 512], "v2", 2).unwrap();
+        assert_eq!(subject_values(&c), vec!["ritratto"]);
+        assert_eq!(rejected_values(&c, 1, "subject").unwrap(), vec!["natura"]);
+        unreject(&c, 1, "subject", "natura").unwrap();
+        classification(&c, 1, &groups, &labels, &[0.0; 512], "v3", 3).unwrap();
+        assert_eq!(subject_values(&c), vec!["natura", "ritratto"]);
+    }
+
+    #[test]
+    fn relabel_with_lower_threshold_skips_rejected_label() {
+        let c = rejection_db();
+        let groups = vec!["subject".to_string()];
+        let first = [subject("ritratto", 0.8)];
+        classification(&c, 1, &groups, &first, &[0.0; 512], "v1", 1).unwrap();
+        reject(&c, 1, "subject", "natura").unwrap();
+        let lowered = vec![subject("natura", 0.3), subject("ritratto", 0.8)];
+        // Il solo valore nuovo è rifiutato: nessuna modifica.
+        assert!(!relabel(&c, 1, &groups, &lowered, "v1", 2, true).unwrap());
+        assert_eq!(subject_values(&c), vec!["ritratto"]);
+        // Un altro valore nuovo viene aggiunto, quello rifiutato no.
+        let more = vec![
+            subject("natura", 0.3),
+            subject("ritratto", 0.8),
+            subject("citta", 0.4),
+        ];
+        assert!(relabel(&c, 1, &groups, &more, "v1", 2, true).unwrap());
+        assert_eq!(subject_values(&c), vec!["citta", "ritratto"]);
+    }
+
+    #[test]
+    fn manual_assignment_removes_rejection() {
+        let c = rejection_db();
+        reject(&c, 1, "subject", "natura").unwrap();
+        reject(&c, 1, "subject", "ritratto").unwrap();
+        crate::bulk::set_label(&c, "subject", Some("natura"), &[1]).unwrap();
+        assert_eq!(rejected_values(&c, 1, "subject").unwrap(), vec!["ritratto"]);
+        assert_eq!(subject_values(&c), vec!["natura"]);
     }
 
     #[test]

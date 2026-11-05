@@ -60,6 +60,12 @@ pub enum UndoAction {
         ids: Vec<MediaId>,
         previous: Vec<LabelRow>,
     },
+    /// Etichette automatiche rifiutate: l'annullamento le reinserisce e toglie i rifiuti.
+    AutoLabelsRejected {
+        group: String,
+        value: String,
+        rows: Vec<LabelRow>,
+    },
     /// Tag rinominato: si torna al nome precedente.
     TagRenamed {
         tag_id: i64,
@@ -995,6 +1001,7 @@ pub fn set_label(
         del.execute(params![id, group])?;
         if let Some(v) = value {
             ins.execute(params![id, group, v])?;
+            crate::analysis::unreject(c, *id, group, v)?;
         }
     }
     refresh_all(c, ids)?;
@@ -1020,6 +1027,90 @@ pub fn label_usage(c: &Connection, group: &str, value: &str) -> StoreResult<i64>
         params![group, value],
         |r| r.get(0),
     )?)
+}
+
+/// Righe `label` automatiche di `(group, value)` tra `ids`, con `score < max_score` se dato.
+fn auto_rows(
+    c: &Connection,
+    group: &str,
+    value: &str,
+    max_score: Option<f64>,
+    ids: &[MediaId],
+) -> StoreResult<Vec<LabelRow>> {
+    let mut st = c.prepare_cached(
+        "SELECT media_id, value, score, origin, model_ver, taxonomy_ver FROM label
+         WHERE grp = ?1 AND value = ?2 AND origin = 'auto' AND (?3 IS NULL OR score < ?3)
+           AND media_id IN (SELECT value FROM json_each(?4))",
+    )?;
+    let rows = st
+        .query_map(
+            params![group, value, max_score, serde_json::to_string(ids)?],
+            |r| {
+                Ok(LabelRow {
+                    media_id: r.get(0)?,
+                    value: r.get(1)?,
+                    score: r.get(2)?,
+                    origin: r.get(3)?,
+                    model_ver: r.get(4)?,
+                    taxonomy_ver: r.get(5)?,
+                })
+            },
+        )?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Quante etichette automatiche `(group, value)` rimuoverebbe [`reject_auto_labels`] sul target.
+pub fn reject_preview(
+    c: &Connection,
+    group: &str,
+    value: &str,
+    max_score: Option<f64>,
+    target: &crate::query::Target,
+) -> StoreResult<i64> {
+    let mut n = 0i64;
+    target.for_each_chunk(c, 5000, |ids| {
+        n += auto_rows(c, group, value, max_score, ids)?.len() as i64;
+        Ok(())
+    })?;
+    Ok(n)
+}
+
+/// Rifiuta l'etichetta automatica `(group, value)` sulle foto `ids` (solo `score < max_score`
+/// se dato): cancella la riga, registra il rifiuto, ripristinabile con "Annulla".
+/// Le etichette manuali non si toccano.
+pub fn reject_auto_labels(
+    c: &Connection,
+    group: &str,
+    value: &str,
+    max_score: Option<f64>,
+    ids: &[MediaId],
+) -> StoreResult<BulkOutcome> {
+    let rows = auto_rows(c, group, value, max_score, ids)?;
+    let mut del = c.prepare_cached(
+        "DELETE FROM label WHERE media_id = ?1 AND grp = ?2 AND value = ?3 AND origin = 'auto'",
+    )?;
+    for r in &rows {
+        del.execute(params![r.media_id, group, value])?;
+        crate::analysis::reject(c, r.media_id, group, value)?;
+        fts::refresh(c, r.media_id)?;
+    }
+    let changed = rows.len();
+    if changed > 0 {
+        record_undo(
+            c,
+            &format!("Rifiuta etichetta {group} = {value}"),
+            &UndoAction::AutoLabelsRejected {
+                group: group.into(),
+                value: value.into(),
+                rows,
+            },
+        )?;
+    }
+    Ok(BulkOutcome {
+        changed,
+        requested: ids.len(),
+    })
 }
 
 /// Voce eliminata dalla tassonomia conservata nel JSON `settings_kv[key]`.
@@ -1142,6 +1233,41 @@ pub fn undo_last_people(c: &Connection) -> StoreResult<Option<String>> {
     match payload {
         Some(p) if serde_json::from_str::<UndoAction>(&p)?.is_people() => undo_last(c),
         _ => Ok(None),
+    }
+}
+
+/// `true` se l'ultima operazione annullabile è un rifiuto di etichette automatiche (o un
+/// gruppo composto solo da rifiuti, come registrato dal job a blocchi).
+pub fn last_is_label_rejection(c: &Connection) -> StoreResult<bool> {
+    let payload: Option<String> = c
+        .query_row(
+            "SELECT payload FROM undo_log ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(p) = payload else {
+        return Ok(false);
+    };
+    Ok(match serde_json::from_str::<UndoAction>(&p)? {
+        UndoAction::AutoLabelsRejected { .. } => true,
+        UndoAction::Group { actions } => {
+            !actions.is_empty()
+                && actions
+                    .iter()
+                    .all(|a| matches!(a, UndoAction::AutoLabelsRejected { .. }))
+        }
+        _ => false,
+    })
+}
+
+/// Annulla l'ultima operazione solo se è un rifiuto di etichette automatiche: una pulizia
+/// senza modifiche non registra nulla e non deve annullare un'operazione precedente.
+pub fn undo_last_label_rejection(c: &Connection) -> StoreResult<Option<String>> {
+    if last_is_label_rejection(c)? {
+        undo_last(c)
+    } else {
+        Ok(None)
     }
 }
 
@@ -1308,6 +1434,24 @@ fn undo_action(
             }
             refresh_all(c, &ids)?;
         }
+        UndoAction::AutoLabelsRejected { group, value, rows } => {
+            let mut ins = c.prepare_cached(
+                "INSERT OR IGNORE INTO label(media_id, grp, value, score, origin, model_ver, taxonomy_ver) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )?;
+            for r in &rows {
+                ins.execute(params![
+                    r.media_id,
+                    group,
+                    value,
+                    r.score,
+                    r.origin,
+                    r.model_ver,
+                    r.taxonomy_ver
+                ])?;
+                crate::analysis::unreject(c, r.media_id, &group, &value)?;
+                fts::refresh(c, r.media_id)?;
+            }
+        }
         UndoAction::PersonIgnored {
             id,
             prev_ignored_at,
@@ -1441,6 +1585,56 @@ mod tests {
         add_tag(&c, "mare", &ids, &[]).unwrap(); // aggiunge solo agli altri 3
         undo_last(&c).unwrap();
         assert_eq!(tagged(&c, "mare"), 2);
+    }
+
+    fn auto_label_count(c: &Connection) -> i64 {
+        c.query_row(
+            "SELECT count(*) FROM label WHERE grp = 'subject' AND value = 'paesaggio' AND origin = 'auto'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn label_rejection_undo_ignores_unrelated_entry_when_nothing_changed() {
+        let (c, ids) = db_with(4);
+        add_tag(&c, "mare", &ids, &[]).unwrap();
+        let out = with_undo_group(&c, "Pulizia", || {
+            reject_auto_labels(&c, "subject", "paesaggio", None, &ids[..2])?;
+            reject_auto_labels(&c, "subject", "paesaggio", None, &ids[2..])
+        })
+        .unwrap();
+        assert_eq!(out.changed, 0);
+        assert!(!last_is_label_rejection(&c).unwrap());
+        assert_eq!(undo_last_label_rejection(&c).unwrap(), None);
+        assert_eq!(tagged(&c, "mare"), 4);
+    }
+
+    #[test]
+    fn label_rejection_undo_reverts_multi_chunk_group() {
+        let (c, ids) = db_with(4);
+        for id in &ids {
+            c.execute(
+                "INSERT INTO label(media_id, grp, value, score, origin, model_ver) VALUES (?1, 'subject', 'paesaggio', 0.3, 'auto', 'clip-1')",
+                [id],
+            )
+            .unwrap();
+        }
+        add_tag(&c, "mare", &ids, &[]).unwrap();
+        with_undo_group(&c, "Pulizia", || {
+            reject_auto_labels(&c, "subject", "paesaggio", None, &ids[..2])?;
+            reject_auto_labels(&c, "subject", "paesaggio", None, &ids[2..])
+        })
+        .unwrap();
+        assert_eq!(auto_label_count(&c), 0);
+        assert!(last_is_label_rejection(&c).unwrap());
+        assert!(undo_last_label_rejection(&c).unwrap().is_some());
+        assert_eq!(auto_label_count(&c), 4);
+        assert_eq!(tagged(&c, "mare"), 4);
+        // Ora l'ultima voce è il tag: non va annullata da qui.
+        assert_eq!(undo_last_label_rejection(&c).unwrap(), None);
+        assert_eq!(tagged(&c, "mare"), 4);
     }
 
     #[test]

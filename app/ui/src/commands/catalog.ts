@@ -19,7 +19,7 @@ export function entries(t: TFunction): Entry[] {
     e("general", "palette", "Ctrl+K"),
     e("general", "undo", "Ctrl+Z"),
     e("general", "sheet", "?"),
-    e("navigation", "modules", "Ctrl+1…7"),
+    e("navigation", "modules", "Ctrl+1…8"),
     e("navigation", "settings", "Ctrl+,"),
     e("navigation", "nav", "Ctrl+B"),
     e("library", "inspector", "Ctrl+I"),

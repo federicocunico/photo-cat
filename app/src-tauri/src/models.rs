@@ -213,6 +213,8 @@ pub fn set_resource_profile(state: State<'_, AppState>, profile: ResourceProfile
 pub async fn reanalyze(app: tauri::AppHandle, target: pc_store::query::Target) -> AppResult<i64> {
     crate::state::blocking(app, move |_app, state| {
         // Il target si risolve qui: l'interfaccia non riceve mai l'elenco completo degli id.
+        let mut target = target;
+        crate::stage_keys::fill_target(state, &mut target);
         let ids = state.store.read(|c| target.resolve(c))?;
         if ids.is_empty() {
             return Err(AppError::invalid_input("nessun elemento da rianalizzare"));

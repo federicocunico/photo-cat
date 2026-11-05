@@ -568,3 +568,228 @@ fn grouped_first_page_on_100k_photos_within_one_second() {
     assert_eq!(groups.len(), 600);
     assert_eq!(s.read(|c| query::grid_count(c, &f)).unwrap(), 20_000);
 }
+
+#[test]
+fn analysis_state_follows_processing_not_labels() {
+    use pc_store::query::AnalysisState::*;
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        for i in 1..=3 {
+            c.execute(
+                "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at) VALUES (?1, ?2, ?2, 'jpg', 1, 0, ?1, ?1)",
+                params![i, format!("IMG_{i}.JPG")],
+            )?;
+        }
+        // 1: analizzata ma senza alcuna etichetta.
+        c.execute("INSERT INTO analysis_version(media_id, stage, model_ver, taxonomy_ver) VALUES (1, 'clip', 'm', 1)", [])?;
+        Ok(())
+    })
+    .unwrap();
+    let states = |s: &Store| -> Vec<_> {
+        s.read(|c| query::page(c, &LibraryFilter::default(), SortKey::NameAsc, None, 10))
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.analysis)
+            .collect()
+    };
+    // Nessun job: la foto analizzata è "processed", le altre "unprocessed".
+    assert_eq!(states(&s), vec![Processed, Unprocessed, Unprocessed]);
+    s.write(|c| {
+        c.execute(
+            "INSERT INTO job(id, kind, state, created_at) VALUES (1, 'analysis', 'queued', 0)",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(states(&s), vec![Processed, Queued, Queued]);
+}
+
+/// 6 foto: 1-2 classificate (modello corrente), 3 con modello vecchio, 4-6 mai analizzate;
+/// 1 e 2 hanno la stessa etichetta "natura" (0.30 e 0.50); 4-5 formano un gruppo di 2, 1-2-3 uno di 3.
+fn seed_filters(s: &Store) {
+    s.write(|c| {
+        for i in 1..=6 {
+            c.execute(
+                "INSERT INTO media_item(id, path, name, ext, size, mtime, added_at, updated_at, thumb) VALUES (?1, ?2, ?2, 'jpg', 1, 0, ?1, ?1, 't')",
+                params![i, format!("IMG_{i}.JPG")],
+            )?;
+        }
+        c.execute("INSERT INTO analysis_version(media_id, stage, model_ver, taxonomy_ver) VALUES (1,'clip','m2',3),(2,'clip','m2',3),(3,'clip','m1',2)", [])?;
+        c.execute("INSERT INTO label(media_id, grp, value, score, origin) VALUES (1,'subject','natura',0.30,'auto'),(2,'subject','natura',0.50,'auto'),(3,'subject','natura',0.50,'manual')", [])?;
+        c.execute("INSERT INTO similar_group(id, params, updated_at) VALUES (1,'p',0),(2,'p',0)", [])?;
+        c.execute("INSERT INTO similar_member(media_id, group_id, score) VALUES (1,1,1),(2,1,1),(3,1,1),(4,2,1),(5,2,1)", [])?;
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Pagina, conteggio e "Seleziona tutto" devono concordare sugli stessi id.
+fn ids_of(s: &Store, f: &LibraryFilter) -> Vec<i64> {
+    let page = s
+        .read(|c| query::page(c, f, SortKey::NameAsc, None, 100))
+        .unwrap();
+    let ids: Vec<i64> = page.items.iter().map(|i| i.id).collect();
+    assert_eq!(s.read(|c| query::count(c, f)).unwrap(), ids.len() as i64);
+    assert_eq!(
+        s.read(|c| query::selection_base(c, f)).unwrap().count,
+        ids.len() as i64
+    );
+    ids
+}
+
+#[test]
+fn analysis_filter_never_stale_current() {
+    use pc_store::coverage::{Stage, StageKeys};
+    use pc_store::query::{AnalysisFilter, AnalysisFilterState::*};
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    seed_filters(&s);
+    let f = |state, keys: bool| LibraryFilter {
+        analysis: Some(AnalysisFilter {
+            stage: Stage::Classification,
+            state,
+        }),
+        stage_keys: keys.then(|| StageKeys {
+            classification: Some(("m2".into(), 3)),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert_eq!(ids_of(&s, &f(Never, false)), vec![4, 5, 6]);
+    assert_eq!(ids_of(&s, &f(Current, true)), vec![1, 2]);
+    assert_eq!(ids_of(&s, &f(Stale, true)), vec![3]);
+    // Senza chiavi nessuna foto è corrente: le elaborate risultano da aggiornare.
+    assert!(ids_of(&s, &f(Current, false)).is_empty());
+    assert_eq!(ids_of(&s, &f(Stale, false)), vec![1, 2, 3]);
+}
+
+#[test]
+fn label_score_and_similar_size_filters() {
+    use pc_store::insights::SizeBucket;
+    use pc_store::query::LabelScoreFilter;
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    seed_filters(&s);
+    let score = |min, max| LibraryFilter {
+        label_score: Some(LabelScoreFilter {
+            grp: "subject".into(),
+            value: "natura".into(),
+            min,
+            max,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(ids_of(&s, &score(0.25, 0.35)), vec![1]);
+    // max esclusivo, tranne da 1.0 in su; le etichette manuali non contano.
+    assert!(ids_of(&s, &score(0.0, 0.30)).is_empty());
+    assert_eq!(ids_of(&s, &score(0.5, 1.0)), vec![2]);
+    let size = |b| LibraryFilter {
+        similar_size: Some(b),
+        ..Default::default()
+    };
+    assert_eq!(ids_of(&s, &size(SizeBucket::Two)), vec![4, 5]);
+    assert_eq!(ids_of(&s, &size(SizeBucket::ThreeFive)), vec![1, 2, 3]);
+    assert!(ids_of(&s, &size(SizeBucket::Over10)).is_empty());
+}
+
+#[test]
+fn analysis_state_of_a_job_with_specific_ids() {
+    use pc_store::query::AnalysisState::*;
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    seed_filters(&s);
+    let states = |s: &Store| -> Vec<_> {
+        s.read(|c| query::page(c, &LibraryFilter::default(), SortKey::NameAsc, None, 10))
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.analysis)
+            .collect()
+    };
+    s.write(|c| {
+        c.execute(
+            "INSERT INTO job(id, kind, state, params, created_at) VALUES (1, 'analysis', 'running', '{\"ids\":[4,6]}', 0)",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        states(&s),
+        vec![Processed, Processed, Processed, Queued, Unprocessed, Queued]
+    );
+}
+
+/// Il badge "in coda" segue la stessa mappatura della Panoramica: una rianalisi
+/// che non include la classificazione non mette in coda; un catalogo manuale mette
+/// in coda solo i suoi elementi; uno smart vale come tutta la libreria.
+#[test]
+fn analysis_state_of_scoped_reprocess_jobs() {
+    use pc_store::query::AnalysisState::*;
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    seed_filters(&s);
+    let states = |s: &Store| -> Vec<_> {
+        s.read(|c| query::page(c, &LibraryFilter::default(), SortKey::NameAsc, None, 10))
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.analysis)
+            .collect()
+    };
+    let job = |s: &Store, params: &str| {
+        let params = params.to_string();
+        s.write(move |c| {
+            c.execute("DELETE FROM job", [])?;
+            c.execute(
+                "INSERT INTO job(id, kind, state, params, created_at) VALUES (1, 'analysis', 'queued', ?1, 0)",
+                [params],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    };
+    s.write(|c| {
+        c.execute("INSERT INTO catalog(id, name, kind, created_at) VALUES (50, 'Vacanze', 'manual', 0), (51, 'Smart', 'smart', 0)", [])?;
+        c.execute("INSERT INTO catalog_item(catalog_id, media_id) VALUES (50, 5)", [])?;
+        Ok(())
+    })
+    .unwrap();
+    job(&s, r#"{"scope":"library","stages":["faces"]}"#);
+    assert_eq!(
+        states(&s),
+        vec![
+            Processed,
+            Processed,
+            Processed,
+            Unprocessed,
+            Unprocessed,
+            Unprocessed
+        ]
+    );
+    job(&s, r#"{"scope":"library","stages":["clip","faces"]}"#);
+    assert_eq!(
+        states(&s),
+        vec![Processed, Processed, Processed, Queued, Queued, Queued]
+    );
+    job(&s, r#"{"scope":{"catalogIds":[50]},"stages":["clip"]}"#);
+    assert_eq!(
+        states(&s),
+        vec![
+            Processed,
+            Processed,
+            Processed,
+            Unprocessed,
+            Queued,
+            Unprocessed
+        ]
+    );
+    job(&s, r#"{"scope":{"catalogIds":[50,51]}}"#);
+    assert_eq!(
+        states(&s),
+        vec![Processed, Processed, Processed, Queued, Queued, Queued]
+    );
+}

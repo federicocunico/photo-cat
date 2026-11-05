@@ -8,6 +8,8 @@ pub mod heif;
 pub mod import;
 pub mod manage;
 pub mod metadata;
+pub mod phash;
+pub mod phash_backfill;
 pub mod raf;
 pub mod relink;
 pub mod scan;

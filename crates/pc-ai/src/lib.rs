@@ -14,6 +14,7 @@ pub mod geo;
 pub mod models_job;
 pub mod persons;
 pub mod photo_quality;
+pub mod place_geo;
 pub mod quality;
 pub mod retune;
 pub mod schedule;

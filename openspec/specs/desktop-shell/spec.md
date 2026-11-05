@@ -32,13 +32,14 @@ L'interfaccia SHALL presentare una barra superiore, una navigazione dei moduli, 
 L'applicazione SHALL organizzare la navigazione in gruppi con un'etichetta:
 - **Sfoglia**: Libreria, Sequenza;
 - **Organizza**: Cataloghi, Persone, Tag;
+- **AI**: AI;
 - **Importa ed esporta**: Importa, Esporta.
 
 In fondo alla navigazione SHALL stare **Attività** e **Impostazioni**.
 
-Modelli AI e Diagnostica SHALL essere sezioni di Impostazioni e non voci di primo livello. SHALL restare raggiungibili direttamente da Attività, dalla barra di stato, dagli avvisi e dalla palette dei comandi. Persone e identità SHALL essere gestite in un unico modulo Persone.
+Modelli AI e Diagnostica SHALL essere sezioni di Impostazioni e non voci di primo livello. SHALL restare raggiungibili direttamente da Attività, dalla barra di stato, dagli avvisi e dalla palette dei comandi. Persone e identità SHALL essere gestite in un unico modulo Persone. Il modulo AI riguarda lo stato e il controllo delle analisi; le soglie e i modelli restano in Impostazioni.
 
-Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+7 nell'ordine dei gruppi). Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni o un'attività, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
+Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+8 nell'ordine dei gruppi). Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni, una sezione del modulo AI o un'attività, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
 
 Un modulo salvato come attivo nelle preferenze che non è più una voce di primo livello SHALL aprire la sezione corrispondente.
 
@@ -48,11 +49,15 @@ Un modulo salvato come attivo nelle preferenze che non è più una voce di primo
 
 #### Scenario: Gruppi della navigazione
 - **WHEN** l'utente apre l'app
-- **THEN** la navigazione mostra i gruppi Sfoglia, Organizza e Importa ed esporta con le loro voci, e in fondo Attività e Impostazioni
+- **THEN** la navigazione mostra i gruppi Sfoglia, Organizza, AI e Importa ed esporta con le loro voci, e in fondo Attività e Impostazioni
 
 #### Scenario: Scorciatoia di modulo
 - **WHEN** l'utente preme Ctrl+3
 - **THEN** si apre il modulo Cataloghi
+
+#### Scenario: Scorciatoia del modulo AI
+- **WHEN** l'utente preme Ctrl+6
+- **THEN** si apre il modulo AI
 
 #### Scenario: Identità nel modulo Persone
 - **WHEN** l'utente cerca nella navigazione il modulo Identità

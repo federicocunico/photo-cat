@@ -1,0 +1,166 @@
+.pc-chart {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  color: var(--pc-text);
+  font-family: var(--pc-font-ui);
+  font-size: 12px;
+}
+.pc-chart svg {
+  display: block;
+  overflow: visible;
+}
+.pc-chart text {
+  fill: var(--pc-text-secondary);
+  font-size: 12px;
+  font-family: var(--pc-font-ui);
+}
+.pc-chart .pc-chart-value {
+  fill: var(--pc-text);
+}
+.pc-chart .pc-chart-grid {
+  stroke: var(--pc-border);
+  stroke-width: 1;
+}
+.pc-chart .pc-chart-axis {
+  stroke: var(--pc-border-strong);
+  stroke-width: 1;
+}
+.pc-chart-mark {
+  cursor: pointer;
+  outline: none;
+  transition: opacity var(--pc-motion-fast, 120ms) ease;
+}
+.pc-chart-mark:hover .pc-chart-fill,
+.pc-chart-mark:focus-visible .pc-chart-fill {
+  filter: brightness(1.15);
+}
+.pc-chart-mark:focus-visible .pc-chart-ring {
+  stroke: var(--pc-focus);
+  stroke-width: 2;
+}
+.pc-chart-ring {
+  fill: transparent;
+  stroke: none;
+}
+.pc-chart-hit {
+  fill: transparent;
+}
+.pc-chart-fill {
+  fill: var(--pc-accent);
+}
+.pc-chart-fill-soft {
+  fill: var(--pc-border-strong);
+  opacity: 0.45;
+}
+.pc-chart-fill-selected {
+  fill: var(--pc-accent-text);
+}
+.pc-chart-sel {
+  fill: var(--pc-accent);
+  opacity: 0.22;
+  pointer-events: none;
+}
+.pc-chart-threshold {
+  stroke: var(--pc-warn);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+.pc-chart .pc-chart-tone-current {
+  fill: var(--pc-ok);
+  background: var(--pc-ok);
+}
+.pc-chart .pc-chart-tone-stale {
+  fill: var(--pc-warn);
+  background: var(--pc-warn);
+}
+.pc-chart .pc-chart-tone-queued {
+  fill: var(--pc-accent);
+  background: var(--pc-accent);
+}
+.pc-chart .pc-chart-tone-never {
+  fill: var(--pc-border-strong);
+  background: var(--pc-border-strong);
+}
+.pc-chart .pc-chart-tone-extra {
+  fill: var(--pc-danger);
+  background: var(--pc-danger);
+}
+.pc-chart-histogram:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}
+.pc-chart-tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  background: var(--pc-raised);
+  color: var(--pc-text);
+  border: 1px solid var(--pc-border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.pc-chart-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--pc-text-secondary);
+}
+.pc-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pc-chart-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  color: var(--pc-text);
+  font: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.pc-chart-legend button:focus-visible {
+  outline: 2px solid var(--pc-focus);
+}
+.pc-chart-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.pc-chart-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-chart-mark {
+    transition: none;
+  }
+}
+.pc-chart-legend-static li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  color: var(--pc-text-secondary);
+}
+.pc-chart-swatch-fill {
+  background: var(--pc-accent);
+}
+.pc-chart-swatch-soft {
+  background: var(--pc-border-strong);
+  opacity: 0.45;
+}

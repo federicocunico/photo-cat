@@ -9,6 +9,7 @@ import { JobsPage } from "./modules/jobs/JobsPage";
 import { LibraryPage } from "./modules/library/LibraryPage";
 import { LibraryStatus } from "./modules/library/LibraryStatus";
 import { PeopleModule } from "./modules/people/PeopleModule";
+import { AiPage } from "./modules/ai/AiPage";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
@@ -43,6 +44,8 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <SequencePage />;
     case "organize":
       return <OrganizePage />;
+    case "ai":
+      return <AiPage />;
     case "settings":
       return <SettingsPage />;
     default:

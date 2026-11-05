@@ -148,14 +148,23 @@ function Thumb({
           <span
             className="thumb-badge thumb-badge-status"
             style={{
-              color: item.status === "missing" ? "#F2A38F" : item.analyzed ? "#4FC3B0" : "#E0B252",
+              color:
+                item.status === "missing"
+                  ? "#F2A38F"
+                  : item.analysis === "processed"
+                    ? "#4FC3B0"
+                    : item.analysis === "queued"
+                      ? "#E0B252"
+                      : "#9AA0A6",
             }}
           >
             {item.status === "missing"
               ? t("library.missingBadge")
-              : item.analyzed
+              : item.analysis === "processed"
                 ? t("library.aiBadge")
-                : t("library.queuedBadge")}
+                : item.analysis === "queued"
+                  ? t("library.queuedBadge")
+                  : t("library.unprocessedBadge")}
           </span>
           <ThumbTags tags={item.tags} color={tagColor} />
           {cover && (

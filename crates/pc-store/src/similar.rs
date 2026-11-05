@@ -12,6 +12,10 @@ use std::collections::{HashMap, HashSet};
 /// Pavimento degli archi conservati: sotto non serve, nessuna soglia ammessa scende così in basso.
 pub const EDGE_FLOOR: f32 = 0.6;
 
+/// Massimo di candidati-raffica per foto: una cartella copiata in blocco ha centinaia di
+/// scatti entro la finestra; si tengono i più vicini nel tempo.
+pub const BURST_MAX: usize = 32;
+
 /// Archi confermati `(a, b, ssim)` con `a < b`.
 pub fn edges(c: &Connection) -> StoreResult<Vec<(MediaId, MediaId, f32)>> {
     let mut q = c.prepare_cached("SELECT a, b, ssim FROM similar_edge")?;
@@ -60,25 +64,36 @@ pub fn mark_done(
     Ok(())
 }
 
-/// Foto da elaborare: con embedding `model` e miniatura, non ancora fatte con `params_key`.
-pub fn pending(c: &Connection, model: &str, params_key: &str) -> StoreResult<Vec<MediaId>> {
+/// Foto da elaborare: con miniatura, con impronta percettiva o con embedding `model` (se c'è
+/// un modello), non ancora fatte con `params_key`. Una foto senza embedding `model` è fatta
+/// anche con `phash_key` (chiave senza modello): torna in pending quando riceve l'embedding.
+pub fn pending(
+    c: &Connection,
+    model: Option<&str>,
+    params_key: &str,
+    phash_key: &str,
+) -> StoreResult<Vec<MediaId>> {
     let mut q = c.prepare_cached(
-        "SELECT m.id FROM media_item m JOIN embedding e ON e.media_id = m.id AND e.model_ver = ?1
+        "SELECT m.id FROM media_item m
          LEFT JOIN similar_done d ON d.media_id = m.id
          WHERE m.status = 'ok' AND m.thumb IS NOT NULL AND (d.params IS NULL OR d.params <> ?2)
+           AND (EXISTS (SELECT 1 FROM embedding e WHERE e.media_id = m.id AND e.model_ver = ?1)
+             OR (m.phash IS NOT NULL AND (d.params IS NULL OR d.params <> ?3)))
          ORDER BY m.id",
     )?;
     let rows = q
-        .query_map(params![model, params_key], |r| r.get(0))?
+        .query_map(params![model, params_key, phash_key], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
     Ok(rows)
 }
 
-/// Dati per i candidati: chiave della miniatura, impronta, dispositivo e istante.
+/// Dati per i candidati: percorso, chiave della miniatura, impronte, dispositivo e istante.
 #[derive(Debug, Clone, Default)]
 pub struct MediaFacts {
+    pub path: String,
     pub thumb: Option<String>,
     pub content_hash: Option<String>,
+    pub phash: Option<u64>,
     pub device: Option<String>,
     pub instant_utc: Option<i64>,
 }
@@ -86,15 +101,17 @@ pub struct MediaFacts {
 pub fn facts(c: &Connection, ids: &[MediaId]) -> StoreResult<HashMap<MediaId, MediaFacts>> {
     let mut out = HashMap::new();
     let mut q = c.prepare_cached(
-        "SELECT m.id, m.thumb, m.content_hash, d.device, d.instant_utc
+        "SELECT m.id, m.thumb, m.content_hash, d.device, d.instant_utc, m.phash, m.path
          FROM media_item m LEFT JOIN media_dates d ON d.media_id = m.id WHERE m.id = ?1",
     )?;
     for id in ids {
         if let Some(f) = q
             .query_row([id], |r| {
                 Ok(MediaFacts {
+                    path: r.get(6)?,
                     thumb: r.get(1)?,
                     content_hash: r.get(2)?,
+                    phash: r.get::<_, Option<i64>>(5)?.map(|v| v as u64),
                     device: r.get(3)?,
                     instant_utc: r.get(4)?,
                 })
@@ -107,26 +124,83 @@ pub fn facts(c: &Connection, ids: &[MediaId]) -> StoreResult<HashMap<MediaId, Me
     Ok(out)
 }
 
-/// Foto dello stesso dispositivo entro `window_ms` dall'istante (raffiche), esclusa `id`.
+/// Cartella che contiene il file (percorso senza l'ultimo componente).
+fn parent_dir(path: &str) -> &str {
+    path.rfind(['\\', '/']).map_or("", |i| &path[..i])
+}
+
+/// Foto entro `window_ms` dall'istante (raffiche), esclusa `id`: dello stesso dispositivo o,
+/// con dispositivo ignoto, della stessa cartella e anch'esse senza dispositivo (relazione
+/// simmetrica, indipendente dall'ordine di elaborazione; confronto senza maiuscole su Windows).
 pub fn burst_neighbours(
     c: &Connection,
     id: MediaId,
-    device: &str,
+    device: Option<&str>,
+    path: &str,
     instant: i64,
     window_ms: i64,
 ) -> StoreResult<Vec<MediaId>> {
     let mut q = c.prepare_cached(
-        "SELECT d.media_id FROM media_dates d JOIN media_item m ON m.id = d.media_id
-         WHERE d.device = ?1 AND d.instant_utc BETWEEN ?2 AND ?3 AND d.media_id <> ?4
-           AND m.status = 'ok' AND m.thumb IS NOT NULL",
+        "SELECT d.media_id, m.path FROM media_dates d JOIN media_item m ON m.id = d.media_id
+         WHERE d.instant_utc BETWEEN ?1 AND ?2 AND d.media_id <> ?3
+           AND (d.device = ?4 OR (?4 IS NULL AND d.device IS NULL))
+           AND m.status = 'ok' AND m.thumb IS NOT NULL
+         ORDER BY abs(d.instant_utc - ?5), d.media_id
+         LIMIT ?6",
     )?;
+    // Senza dispositivo il filtro per cartella è in Rust: il limite si applica dopo (qui nessuno).
+    let sql_limit = if device.is_some() {
+        BURST_MAX as i64
+    } else {
+        -1
+    };
     let rows = q
         .query_map(
-            params![device, instant - window_ms, instant + window_ms, id],
-            |r| r.get(0),
+            params![
+                instant - window_ms,
+                instant + window_ms,
+                id,
+                device,
+                instant,
+                sql_limit
+            ],
+            |r| Ok((r.get::<_, MediaId>(0)?, r.get::<_, String>(1)?)),
         )?
-        .collect::<Result<_, _>>()?;
-    Ok(rows)
+        .collect::<Result<Vec<_>, _>>()?;
+    if device.is_some() {
+        return Ok(rows.into_iter().map(|r| r.0).collect());
+    }
+    let dir = parent_dir(path);
+    let same = |p: &str| {
+        let other = parent_dir(p);
+        if cfg!(windows) {
+            other.eq_ignore_ascii_case(dir)
+        } else {
+            other == dir
+        }
+    };
+    Ok(rows
+        .into_iter()
+        .filter(|(_, p)| same(p))
+        .take(BURST_MAX)
+        .map(|r| r.0)
+        .collect())
+}
+
+/// Impronte percettive di tutte le foto utilizzabili, ordinate per id (ricerca globale).
+pub fn phashes(c: &Connection) -> StoreResult<(Vec<MediaId>, Vec<u64>)> {
+    let mut q = c.prepare_cached(
+        "SELECT id, phash FROM media_item
+         WHERE phash IS NOT NULL AND status = 'ok' AND thumb IS NOT NULL ORDER BY id",
+    )?;
+    let mut ids = Vec::new();
+    let mut hashes = Vec::new();
+    for r in q.query_map([], |r| Ok((r.get::<_, MediaId>(0)?, r.get::<_, i64>(1)?)))? {
+        let (id, h) = r?;
+        ids.push(id);
+        hashes.push(h as u64);
+    }
+    Ok((ids, hashes))
 }
 
 /// Copie esatte (stessa impronta del contenuto), esclusa `id`.
@@ -563,6 +637,116 @@ mod tests {
             .unwrap();
         }
         c
+    }
+
+    #[test]
+    fn photo_with_only_a_phash_is_pending_without_a_model_and_a_new_key_repends() {
+        let c = db(4);
+        c.execute(
+            "UPDATE media_item SET status = 'ok', thumb = 'aaaaaaaa'",
+            [],
+        )
+        .unwrap();
+        // 1: sola impronta; 2: solo embedding; 3: nessuno dei due; 4: impronta, senza miniatura.
+        c.execute("UPDATE media_item SET phash = -5 WHERE id IN (1, 4)", [])
+            .unwrap();
+        c.execute("UPDATE media_item SET thumb = NULL WHERE id = 4", [])
+            .unwrap();
+        c.execute(
+            "INSERT INTO embedding(media_id, model_ver, vector) VALUES (2, 'm', x'00000000')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(pending(&c, None, "k1", "k1").unwrap(), vec![1]);
+        assert_eq!(pending(&c, Some("m"), "k1m", "k1").unwrap(), vec![1, 2]);
+        assert_eq!(facts(&c, &[1]).unwrap()[&1].phash, Some((-5i64) as u64));
+        mark_done(&c, 1, "k1", 1.0, 1.0).unwrap();
+        assert!(pending(&c, None, "k1", "k1").unwrap().is_empty());
+        assert_eq!(
+            pending(&c, None, "k2", "k2").unwrap(),
+            vec![1],
+            "chiave nuova"
+        );
+        // Con il modello: la 1 (fatta senza embedding) resta fatta finché non lo riceve.
+        assert_eq!(pending(&c, Some("m"), "k1m", "k1").unwrap(), vec![2]);
+        c.execute(
+            "INSERT INTO embedding(media_id, model_ver, vector) VALUES (1, 'm', x'00000000')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(pending(&c, Some("m"), "k1m", "k1").unwrap(), vec![1, 2]);
+    }
+
+    #[test]
+    fn burst_neighbours_are_capped_to_the_nearest_in_time() {
+        let c = db(101);
+        c.execute(
+            "UPDATE media_item SET status = 'ok', thumb = 'aaaaaaaa'",
+            [],
+        )
+        .unwrap();
+        for id in 1..=101i64 {
+            c.execute(
+                "UPDATE media_item SET path = ?2 WHERE id = ?1",
+                params![id, format!(r"D:\Foto\A\{id}.jpg")],
+            )
+            .unwrap();
+            // La 1 è al centro; le altre a distanza crescente (tutte entro la finestra).
+            c.execute(
+                "INSERT INTO media_dates(media_id, device, instant_utc) VALUES (?1, NULL, ?2)",
+                params![id, 100_000 + (id - 1) * 50],
+            )
+            .unwrap();
+        }
+        let n = burst_neighbours(&c, 1, None, r"D:\Foto\A\1.jpg", 100_000, 10_000).unwrap();
+        assert_eq!(n.len(), BURST_MAX);
+        assert_eq!(
+            n,
+            (2..=(BURST_MAX as i64 + 1)).collect::<Vec<_>>(),
+            "i più vicini prima"
+        );
+    }
+
+    #[test]
+    fn burst_neighbours_fall_back_to_the_same_folder_without_a_device() {
+        let c = db(6);
+        c.execute(
+            "UPDATE media_item SET status = 'ok', thumb = 'aaaaaaaa'",
+            [],
+        )
+        .unwrap();
+        for (id, path, dev, t) in [
+            (1, "D:\\Foto\\A\\1.jpg", None, 1_000),
+            (2, "D:\\Foto\\A\\2.jpg", None, 4_000),
+            (3, "D:\\Foto\\B\\3.jpg", None, 4_000),
+            (4, "D:\\Foto\\A\\4.jpg", None, 40_000),
+            (5, "D:\\Foto\\B\\5.jpg", Some("X"), 1_500),
+            (6, "d:/foto/a/6.jpg", Some("Y"), 2_000),
+        ] {
+            c.execute(
+                "UPDATE media_item SET path = ?2 WHERE id = ?1",
+                params![id, path],
+            )
+            .unwrap();
+            c.execute(
+                "INSERT INTO media_dates(media_id, device, instant_utc) VALUES (?1, ?2, ?3)",
+                params![id, dev, t],
+            )
+            .unwrap();
+        }
+        let n = burst_neighbours(&c, 1, None, "D:\\Foto\\A\\1.jpg", 1_000, 10_000).unwrap();
+        assert_eq!(
+            n,
+            vec![2],
+            "stessa cartella, senza dispositivo, entro la finestra"
+        );
+        let n = burst_neighbours(&c, 6, Some("Y"), "d:/foto/a/6.jpg", 2_000, 10_000).unwrap();
+        assert!(
+            n.is_empty(),
+            "simmetrico: la 6 non vede le foto senza dispositivo"
+        );
+        let n = burst_neighbours(&c, 5, Some("X"), "D:\\Foto\\B\\5.jpg", 1_500, 10_000).unwrap();
+        assert!(n.is_empty(), "con dispositivo conta solo il dispositivo");
     }
 
     #[test]

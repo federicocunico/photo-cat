@@ -145,7 +145,7 @@ function Chips() {
   });
   const person = (id: number) => people.data?.find((p) => p.id === id)?.name ?? undefined;
   // Il catalogo aperto è già nel percorso: niente chip doppio.
-  const chips = activeChips({ ...filter, catalogId: null }, t as never, names.label, person);
+  const chips = activeChips({ ...filter, catalogId: null }, t as never, names.label, person, names.group);
   if (chips.length === 0) return null;
   return (
     <div className="lib-chips">

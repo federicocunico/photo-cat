@@ -368,3 +368,25 @@ Rilasciare foto trascinate sul catalogo "Cestino" della barra laterale SHALL equ
 #### Scenario: Trascinamento sul Cestino
 - **WHEN** l'utente trascina 2 foto che non sono in nessun catalogo manuale sul Cestino
 - **THEN** le 2 foto vanno nel Cestino con un avviso con "Annulla operazione"
+
+### Requirement: Filtro per stato dell'analisi
+La Libreria SHALL poter filtrare le foto per stato di una fase di analisi (classificazione, persone, volti, gruppi di simili, impronte): analizzate con la versione corrente, da aggiornare o mai analizzate. Il filtro SHALL comparire tra i filtri attivi con un nome leggibile e SHALL essere rimovibile come gli altri. Conteggi e "Seleziona tutto" SHALL rispettarlo.
+
+#### Scenario: Foto mai classificate
+- **WHEN** è attivo il filtro "Classificazione: mai analizzate"
+- **THEN** la griglia mostra solo le foto senza classificazione e "Seleziona tutto" seleziona esattamente quelle foto
+
+#### Scenario: Combinazione con un catalogo
+- **WHEN** l'utente apre il catalogo "Vacanze" con il filtro "Volti: da aggiornare"
+- **THEN** la griglia mostra solo le foto del catalogo analizzate per i volti con una versione precedente
+
+### Requirement: Filtro per area geografica
+La Libreria SHALL poter filtrare le foto per area geografica (rettangolo di latitudine e longitudine), includendo le foto con coordinate GPS nell'area e, se richiesto, le foto con un luogo approssimato collocato nell'area. Il filtro SHALL comparire tra i filtri attivi con il luogo prevalente come nome e SHALL essere rimovibile come gli altri.
+
+#### Scenario: Filtro dalla mappa
+- **WHEN** l'utente apre dalla mappa il gruppo di Firenze
+- **THEN** tra i filtri attivi compare "Area: Firenze" e la griglia mostra solo le foto di quell'area
+
+#### Scenario: Rimozione del filtro
+- **WHEN** l'utente rimuove il filtro "Area: Firenze"
+- **THEN** la griglia torna a mostrare tutte le foto dell'ambito precedente

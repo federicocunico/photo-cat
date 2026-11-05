@@ -34,7 +34,7 @@ function useNarrowWindow() {
   return narrow;
 }
 
-/** Comandi della navigazione: Ctrl+1…7 per le voci dei gruppi, Ctrl+, Impostazioni, Ctrl+B. */
+/** Comandi della navigazione: Ctrl+1…8 per le voci dei gruppi, Ctrl+, Impostazioni, Ctrl+B. */
 function useNavCommands() {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
@@ -50,6 +50,13 @@ function useNavCommands() {
           ? { key: ",", mod: true }
           : undefined,
       run: () => openModule({ module: m.id }),
+    })),
+    ...(["overview", "reprocess", "cleanup", "map"] as const).map((section): Command => ({
+      id: `nav.ai.${section}`,
+      label: section === "map" ? t("aiMap.command") : t(`ai.commands.${section}`),
+      group: "navigation",
+      keywords: t("modules.ai"),
+      run: () => openModule({ module: "ai", section }),
     })),
     {
       id: "nav.toggle",

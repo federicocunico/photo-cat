@@ -1,6 +1,7 @@
 //! Query della libreria: filtri combinati, ricerca testuale, cataloghi
 //! (manuali e smart), facet e paginazione keyset.
 
+use crate::coverage::{self, Stage, StageKeys};
 use crate::model::{CatalogKind, MediaId, MediaStatus};
 use crate::rules::{self, SqlFragment};
 use crate::{repo, StoreError, StoreResult};
@@ -59,6 +60,59 @@ pub struct LibraryFilter {
     pub similar_only: bool,
     /// Griglia raggruppata: un elemento per gruppo di foto simili (non cambia i conteggi).
     pub group_similar: bool,
+    /// Stato di una fase di analisi (corrente, da aggiornare, mai analizzata).
+    pub analysis: Option<AnalysisFilter>,
+    /// Confidenza di un'etichetta automatica in `[min, max)` (`max >= 1` incluso).
+    pub label_score: Option<LabelScoreFilter>,
+    /// Solo le foto dei gruppi di simili di questa classe di dimensione.
+    pub similar_size: Option<crate::insights::SizeBucket>,
+    /// Solo le foto dentro quest'area geografica (coordinate effettive, come la mappa).
+    pub geo_bbox: Option<GeoBboxFilter>,
+    /// Chiavi correnti delle fasi, riempite dal livello app prima della query (non è
+    /// un campo della UI). Senza chiavi nessuna foto risulta "corrente".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "specta", specta(skip))]
+    pub stage_keys: Option<StageKeys>,
+}
+
+/// Area geografica del filtro: `label` (luogo prevalente) serve solo per il chip.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct GeoBboxFilter {
+    #[serde(flatten)]
+    pub bbox: crate::geo_map::GeoBbox,
+    /// Include le foto con posizione approssimata (da `place_geo`).
+    pub approx: bool,
+    #[serde(default)]
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum AnalysisFilterState {
+    Current,
+    Stale,
+    Never,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AnalysisFilter {
+    pub stage: Stage,
+    pub state: AnalysisFilterState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct LabelScoreFilter {
+    pub grp: String,
+    pub value: String,
+    pub min: f64,
+    pub max: f64,
 }
 
 /// Filtro per cartella sul percorso dei file.
@@ -219,6 +273,29 @@ pub struct Cursor {
     pub id: MediaId,
 }
 
+/// Stato dell'analisi AI di una foto, indipendente dalle etichette assegnate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum AnalysisState {
+    /// Mai analizzata e nessun job di analisi attivo.
+    Unprocessed,
+    /// Non ancora analizzata, ma un job di analisi/import è in coda o in corso.
+    Queued,
+    /// Analizzata (anche se non è risultata alcuna etichetta).
+    Processed,
+}
+
+impl AnalysisState {
+    fn from_code(code: i64) -> Self {
+        match code {
+            2 => Self::Processed,
+            1 => Self::Queued,
+            _ => Self::Unprocessed,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -232,7 +309,7 @@ pub struct GridItem {
     pub height: Option<u32>,
     pub status: MediaStatus,
     pub faces: i64,
-    pub analyzed: bool,
+    pub analysis: AnalysisState,
     /// Tag utente del file (per i chip colorati della griglia).
     pub tags: Vec<String>,
     pub excluded_at: Option<i64>,
@@ -271,6 +348,30 @@ pub enum PageAt {
 
 /// Esclude le foto che appartengono a un catalogo di sistema.
 pub const HIDDEN_BY_SYSTEM: &str = "m.id NOT IN (SELECT ci.media_id FROM catalog_item ci      JOIN catalog cs ON cs.id = ci.catalog_id WHERE cs.system IS NOT NULL)";
+
+/// La foto `m` è bersaglio di un job di classificazione attivo (stessa mappatura di
+/// `active_targets` nell'app): `analysis` che include la fase `clip` (senza `stages`:
+/// tutte) con `ids` / `scope.ids` / `scope.catalogIds` / `sourceId` (nessuno = tutta la
+/// libreria; un catalogo smart vale come libreria, le regole non sono valutabili qui)
+/// oppure `import` della sua sorgente.
+const QUEUED_BY_JOB: &str = "EXISTS (SELECT 1 FROM job j WHERE j.state IN ('queued', 'running', 'paused') AND (
+        (j.kind = 'analysis'
+         AND (json_type(j.params, '$.stages') IS NOT 'array' OR json_array_length(j.params, '$.stages') = 0
+              OR EXISTS (SELECT 1 FROM json_each(j.params, '$.stages') WHERE value = 'clip'))
+         AND (
+            (json_extract(j.params, '$.ids') IS NULL AND json_extract(j.params, '$.scope.ids') IS NULL
+             AND json_extract(j.params, '$.scope.catalogIds') IS NULL
+             AND json_extract(j.params, '$.sourceId') IS NULL AND json_extract(j.params, '$.scope.sourceId') IS NULL)
+            OR m.id IN (SELECT value FROM json_each(j.params, '$.ids'))
+            OR m.id IN (SELECT value FROM json_each(j.params, '$.scope.ids'))
+            OR m.source_id = json_extract(j.params, '$.sourceId')
+            OR m.source_id = json_extract(j.params, '$.scope.sourceId')
+            OR EXISTS (SELECT 1 FROM json_each(j.params, '$.scope.catalogIds') x JOIN catalog cq ON cq.id = x.value
+                       WHERE cq.kind <> 'manual')
+            OR m.id IN (SELECT ci.media_id FROM catalog_item ci
+                        WHERE ci.catalog_id IN (SELECT value FROM json_each(j.params, '$.scope.catalogIds')))))
+        OR (j.kind = 'import' AND (json_extract(j.params, '$.sourceId') IS NULL
+            OR m.source_id = json_extract(j.params, '$.sourceId')))))";
 
 const FROM: &str = "FROM media_item m
     LEFT JOIN media_dates d ON d.media_id = m.id
@@ -357,6 +458,47 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
                 .into(),
         ),
         None => {}
+    }
+    if let Some(a) = f.analysis {
+        let keys = f.stage_keys.clone().unwrap_or_default();
+        // I parametri dei predicati sono posizionali `?N`: li numero dopo gli argomenti già presenti.
+        let base = args.len();
+        // Solo le foto analizzabili, come `coverage` e l'anteprima della rianalisi: così il
+        // conteggio della Libreria è uguale a quello della Panoramica.
+        parts.push("m.status = 'ok' AND m.thumb IS NOT NULL".into());
+        let pred = match a.state {
+            AnalysisFilterState::Current => coverage::current(a.stage, &keys, base),
+            AnalysisFilterState::Stale => coverage::stale(a.stage, &keys, base),
+            AnalysisFilterState::Never => coverage::never(a.stage),
+        };
+        parts.push(pred.sql);
+        args.extend(pred.params);
+    }
+    if let Some(b) = f.similar_size {
+        let (lo, hi) = b.range();
+        parts.push("m.id IN (SELECT sm.media_id FROM similar_member sm WHERE sm.group_id IN (SELECT group_id FROM similar_member GROUP BY group_id HAVING count(*) BETWEEN ? AND ?))".into());
+        args.push(Value::Integer(lo));
+        args.push(Value::Integer(hi));
+    }
+    if let Some(g) = &f.geo_bbox {
+        // Sottoquery con le sole coordinate effettive (location + place_geo).
+        let mut inner = Vec::new();
+        let clause = crate::geo_map::bbox_clause(&g.bbox, g.approx, &mut inner);
+        parts.push(format!(
+            "m.id IN (SELECT l.media_id {} WHERE {clause})",
+            crate::geo_map::EFF_LOC_FROM
+        ));
+        args.extend(inner);
+    }
+    if let Some(ls) = &f.label_score {
+        let top = if ls.max >= 1.0 { "<=" } else { "<" };
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.grp = ? AND l.value = ? AND l.origin = 'auto' AND l.score >= ? AND l.score {top} ?)"
+        ));
+        args.push(Value::Text(ls.grp.clone()));
+        args.push(Value::Text(ls.value.clone()));
+        args.push(Value::Real(ls.min));
+        args.push(Value::Real(ls.max));
     }
     if let Some(folder) = f.folder.as_ref().filter(|d| !d.path.trim().is_empty()) {
         let (sep, prefix) = folder_prefix(&folder.path);
@@ -500,10 +642,13 @@ pub fn page_at(
         _ => 0,
     };
     let limit = limit.clamp(1, 2000);
+    let processed = coverage::processed(Stage::Classification).sql;
     let sql = format!(
         "{with}SELECT m.id, m.name, m.path, m.thumb, d.captured_at, t.width, t.height, m.status,
                 (SELECT count(*) FROM face fc LEFT JOIN person p ON p.id = fc.person_id WHERE fc.media_id = m.id AND p.ignored_at IS NULL),
-                EXISTS (SELECT 1 FROM label l WHERE l.media_id = m.id AND l.origin = 'auto'),
+                CASE WHEN {processed} THEN 2
+                     WHEN {QUEUED_BY_JOB} THEN 1
+                     ELSE 0 END,
                 {key},
                 (SELECT group_concat(tg.name, char(31)) FROM media_tag mt JOIN tag tg ON tg.id = mt.tag_id
                  WHERE mt.media_id = m.id), {excluded_column},
@@ -531,7 +676,7 @@ pub fn page_at(
                 height: r.get(6)?,
                 status: MediaStatus::parse(&r.get::<_, String>(7)?),
                 faces: r.get(8)?,
-                analyzed: r.get(9)?,
+                analysis: AnalysisState::from_code(r.get(9)?),
                 tags: split_tags(r.get(11)?),
                 excluded_at: r.get(12)?,
                 similar_group: r.get(13)?,
