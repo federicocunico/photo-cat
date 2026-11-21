@@ -52,6 +52,14 @@ pub enum BulkAction {
     SetPlace {
         place: Option<bulk::PlaceInput>,
     },
+    /// Valutazione da 1 a 5; `None` (o 0) la toglie.
+    SetRating {
+        rating: Option<u8>,
+    },
+    /// Caratteristica di colore; `None` la toglie.
+    SetColorTrait {
+        color_trait: Option<pc_store::model::ColorTrait>,
+    },
     RemoveLibrary,
     /// Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato).
     RejectAutoLabels {
@@ -89,6 +97,10 @@ impl BulkAction {
                         None => &none,
                     };
                 bulk::set_place(c, ids, place.as_ref(), resolve)?.changed
+            }
+            Self::SetRating { rating } => bulk::set_rating(c, ids, *rating)?.changed,
+            Self::SetColorTrait { color_trait } => {
+                bulk::set_color_trait(c, ids, *color_trait)?.changed
             }
             Self::AddTag { name, exclusive } => bulk::add_tag(c, name, ids, exclusive)?.changed,
             Self::RemoveTag { name } => bulk::remove_tag(c, name, ids)?.changed,
@@ -617,6 +629,122 @@ mod tests {
             500,
             "solo le foto presenti al momento della selezione"
         );
+    }
+
+    fn ratings(db: &Store, ids: &[i64]) -> Vec<(i64, i64, Option<String>)> {
+        let ids = ids.to_vec();
+        db.read(move |c| {
+            ids.iter()
+                .map(|id| {
+                    Ok(c.query_row(
+                        "SELECT id, rating, color_trait FROM media_item WHERE id = ?1",
+                        [id],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?)
+                })
+                .collect()
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn rating_and_color_out_of_range_are_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 3);
+        let err = db.write(|c| bulk::set_rating(c, &[1, 2], Some(6)));
+        assert!(matches!(err, Err(pc_store::StoreError::Invalid(_))));
+        assert_eq!(ratings(&db, &[1, 2]), [(1, 0, None), (2, 0, None)]);
+        // Un colore sconosciuto non si deserializza nemmeno.
+        let op = serde_json::json!({"action":"set_color_trait","color_trait":"rosso"});
+        assert!(serde_json::from_value::<BulkAction>(op).is_err());
+        let op = serde_json::json!({"action":"set_rating","rating":300});
+        assert!(serde_json::from_value::<BulkAction>(op).is_err());
+    }
+
+    #[test]
+    fn undo_restores_each_previous_rating_and_color_by_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 3);
+        db.write(|c| {
+            bulk::set_rating(c, &[1], Some(2))?;
+            bulk::set_rating(c, &[2], Some(5))?;
+            bulk::set_color_trait(c, &[1], Some(pc_store::model::ColorTrait::Bw))?;
+            Ok(())
+        })
+        .unwrap();
+        db.write(|c| {
+            bulk::set_rating(c, &[1, 2, 3], Some(4))?;
+            bulk::set_color_trait(c, &[1, 2, 3], Some(pc_store::model::ColorTrait::Sepia))?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(ratings(&db, &[1, 2, 3])
+            .iter()
+            .all(|r| r.1 == 4 && r.2.as_deref() == Some("sepia")));
+        db.write(bulk::undo_last).unwrap();
+        db.write(bulk::undo_last).unwrap();
+        assert_eq!(
+            ratings(&db, &[1, 2, 3]),
+            [(1, 2, Some("bw".into())), (2, 5, None), (3, 0, None)]
+        );
+        // Togliere valutazione e colore, poi annullare.
+        db.write(|c| {
+            bulk::set_rating(c, &[1], None)?;
+            bulk::set_color_trait(c, &[1], None)?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(ratings(&db, &[1]), [(1, 0, None)]);
+        db.write(bulk::undo_last).unwrap();
+        db.write(bulk::undo_last).unwrap();
+        assert_eq!(ratings(&db, &[1]), [(1, 2, Some("bw".into()))]);
+    }
+
+    #[test]
+    fn rating_on_100k_ids_runs_as_one_undoable_job() {
+        use pc_store::query::{self, LibraryFilter};
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 100_000);
+        let jobs = JobManager::new(
+            db.clone(),
+            pc_governor::MemoryGovernor::new(256),
+            1,
+            Arc::new(Sink),
+        );
+        let st = db.clone();
+        jobs.register(JOB_KIND, Arc::new(move |p| plan(st.clone(), p)));
+        let base = db
+            .read(|c| query::selection_base(c, &LibraryFilter::default()))
+            .unwrap();
+        let target = Target::Filter {
+            filter: LibraryFilter::default(),
+            max_id: base.max_id,
+            except: vec![5],
+        };
+        assert!(db.read(|c| target.count(c)).unwrap() > JOB_THRESHOLD as i64);
+        let s = run_to_end(
+            &jobs,
+            serde_json::json!({"target": target, "operation": {"action": "set_rating", "rating": 4}}),
+        );
+        assert_eq!(s.state, crate::JobState::Completed, "{s:?}");
+        let rated = |db: &Store| -> i64 {
+            db.read(|c| {
+                Ok(c.query_row(
+                    "SELECT count(*) FROM media_item WHERE rating = 4",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap()
+        };
+        assert_eq!(rated(&db), 99_999);
+        assert_eq!(ratings(&db, &[5]), [(5, 0, None)]);
+        // Un solo annullamento per tutto il job.
+        db.write(bulk::undo_last).unwrap();
+        assert_eq!(rated(&db), 0);
     }
 
     #[test]

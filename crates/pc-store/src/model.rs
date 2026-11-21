@@ -185,6 +185,37 @@ pub struct ExifInfo {
     pub raw: Option<serde_json::Value>,
 }
 
+/// Caratteristica di colore di una foto (bianco e nero, a colori, sbiadita, seppia).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum ColorTrait {
+    Bw,
+    Color,
+    Faded,
+    Sepia,
+}
+
+impl ColorTrait {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Bw => "bw",
+            Self::Color => "color",
+            Self::Faded => "faded",
+            Self::Sepia => "sepia",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "bw" => Some(Self::Bw),
+            "color" => Some(Self::Color),
+            "faded" => Some(Self::Faded),
+            "sepia" => Some(Self::Sepia),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]

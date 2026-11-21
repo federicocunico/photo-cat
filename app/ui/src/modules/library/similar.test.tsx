@@ -20,6 +20,7 @@ vi.mock("@tauri-apps/api/core", () => ({ convertFileSrc: (k: string) => `thumb:/
 const item = (id: number, over: Partial<GridItem> = {}): GridItem => ({
   id,
   excludedAt: null,
+  rating: 0,
   name: `IMG_${id}.JPG`,
   path: `D:\\Foto\\IMG_${id}.JPG`,
   thumb: null,

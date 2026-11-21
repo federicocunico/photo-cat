@@ -90,6 +90,7 @@ const list = (values: { value: string; count: number }[], total = values.length)
 const item = (id: number): GridItem => ({
   id,
   excludedAt: null,
+  rating: 0,
   name: `IMG_${String(id).padStart(4, "0")}.JPG`,
   path: `D:\\Foto\\IMG_${id}.JPG`,
   thumb: id % 2 ? `abcdef${id}0000` : null,

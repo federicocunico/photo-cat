@@ -11,7 +11,7 @@
   - `error_log.archived_at`, con indice parziale.
 
   Test di migrazione: le righe esistenti sono conservate e i default sono neutri.
-- [ ] 1.2 Bulk e annulla per valutazione e colore (`UndoAction::{SetRating, SetColorTrait}`), comandi Tauri e binding. Test Rust:
+- [x] 1.2 Bulk e annulla per valutazione e colore (`UndoAction::{SetRating, SetColorTrait}`), comandi Tauri e binding. Test Rust:
   - valori fuori intervallo rifiutati;
   - l'annulla ripristina il valore per id;
   - 100.000 id sopra la soglia passano come job.

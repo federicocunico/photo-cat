@@ -319,6 +319,8 @@ pub struct GridItem {
     pub similar_cover: bool,
     /// Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta).
     pub similar_count: Option<i64>,
+    /// Valutazione da 0 (non indicata) a 5.
+    pub rating: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -654,7 +656,7 @@ pub fn page_at(
                  WHERE mt.media_id = m.id), {excluded_column},
                 (SELECT group_id FROM similar_member WHERE media_id = m.id),
                 EXISTS (SELECT 1 FROM similar_group g WHERE g.cover_media_id = m.id),
-                {count_column}
+                {count_column}, m.rating
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ? OFFSET ?",
         w.sql
     );
@@ -682,6 +684,7 @@ pub fn page_at(
                 similar_group: r.get(13)?,
                 similar_cover: r.get(14)?,
                 similar_count: r.get(15)?,
+                rating: r.get(16)?,
             })
         })?
         .collect::<Result<_, _>>()?;

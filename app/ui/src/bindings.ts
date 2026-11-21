@@ -410,7 +410,11 @@ exclusive?: string[] } | { action: "remove_tag"; name: string } |
 /**  "Sposta nel cestino": toglie le foto anche dai cataloghi manuali. */
 { action: "move_to_trash" } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
-{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" } | 
+{ action: "set_place"; place: PlaceInput | null } | 
+/**  Valutazione da 1 a 5; `None` (o 0) la toglie. */
+{ action: "set_rating"; rating: number | null } | 
+/**  Caratteristica di colore; `None` la toglie. */
+{ action: "set_color_trait"; color_trait: ColorTrait | null } | { action: "remove_library" } | 
 /**  Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato). */
 { action: "reject_auto_labels"; grp: string; value: string; max_score?: number | null };
 
@@ -510,6 +514,9 @@ export type ClockPreview = {
 	before: string | null,
 	after: string | null,
 };
+
+/**  Caratteristica di colore di una foto (bianco e nero, a colori, sbiadita, seppia). */
+export type ColorTrait = "bw" | "color" | "faded" | "sepia";
 
 export type Config = {
 	resources?: ResourcesConfig,
@@ -863,6 +870,8 @@ export type GridItem = {
 	similarCover: boolean,
 	/**  Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta). */
 	similarCount: number | null,
+	/**  Valutazione da 0 (non indicata) a 5. */
+	rating: number,
 };
 
 export type Group = {
@@ -1121,6 +1130,9 @@ export type MediaDates = {
 
 export type MediaDetail = {
 	item: MediaItem,
+	/**  Valutazione da 0 (non indicata) a 5. */
+	rating: number,
+	colorTrait: ColorTrait | null,
 	tech: TechInfo | null,
 	dates: MediaDates | null,
 	exif: ExifInfo | null,

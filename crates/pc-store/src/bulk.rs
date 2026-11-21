@@ -1,7 +1,7 @@
 //! Modifiche in blocco a tag, cataloghi e catalogazioni, con registrazione
 //! dell'operazione inversa in `undo_log` per "Annulla".
 
-use crate::model::{Location, LocationSource, MediaId};
+use crate::model::{ColorTrait, Location, LocationSource, MediaId};
 use crate::repo::{catalog, fts, tag};
 use crate::{now_ms, StoreError, StoreResult};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -102,6 +102,14 @@ pub enum UndoAction {
     Placement {
         media_id: MediaId,
         previous: Option<(i64, Option<i32>)>,
+    },
+    /// Valutazioni precedenti (0 = non indicata) per id.
+    SetRating {
+        previous: Vec<(MediaId, u8)>,
+    },
+    /// Caratteristiche di colore precedenti (`None` = non indicata) per id.
+    SetColorTrait {
+        previous: Vec<(MediaId, Option<ColorTrait>)>,
     },
     /// Luoghi precedenti (riga completa o assenza) di un gruppo di file.
     LocationReplaced {
@@ -306,6 +314,64 @@ pub fn set_place(
         None => "Ripristina luogo automatico".to_string(),
     };
     record_undo(c, &description, &UndoAction::LocationReplaced { previous })?;
+    Ok(BulkOutcome {
+        changed: ids.len(),
+        requested: ids.len(),
+    })
+}
+
+/// Imposta la valutazione (1-5 stelle; 0 o `None` = non indicata). Annullabile.
+pub fn set_rating(c: &Connection, ids: &[MediaId], rating: Option<u8>) -> StoreResult<BulkOutcome> {
+    let value = rating.unwrap_or(0);
+    if value > 5 {
+        return Err(StoreError::Invalid(format!(
+            "valutazione non valida: {value} (da 0 a 5)"
+        )));
+    }
+    let mut previous = Vec::with_capacity(ids.len());
+    let mut read = c.prepare_cached("SELECT rating FROM media_item WHERE id = ?1")?;
+    let mut write = c.prepare_cached("UPDATE media_item SET rating = ?2 WHERE id = ?1")?;
+    for id in ids {
+        if let Some(old) = read.query_row([id], |r| r.get::<_, u8>(0)).optional()? {
+            previous.push((*id, old));
+            write.execute(params![id, value])?;
+        }
+    }
+    let description = if value == 0 {
+        "Rimuovi valutazione".to_string()
+    } else {
+        format!("Imposta valutazione {value}")
+    };
+    record_undo(c, &description, &UndoAction::SetRating { previous })?;
+    Ok(BulkOutcome {
+        changed: ids.len(),
+        requested: ids.len(),
+    })
+}
+
+/// Imposta la caratteristica di colore (`None` = non indicata). Annullabile.
+pub fn set_color_trait(
+    c: &Connection,
+    ids: &[MediaId],
+    value: Option<ColorTrait>,
+) -> StoreResult<BulkOutcome> {
+    let mut previous = Vec::with_capacity(ids.len());
+    let mut read = c.prepare_cached("SELECT color_trait FROM media_item WHERE id = ?1")?;
+    let mut write = c.prepare_cached("UPDATE media_item SET color_trait = ?2 WHERE id = ?1")?;
+    for id in ids {
+        if let Some(old) = read
+            .query_row([id], |r| r.get::<_, Option<String>>(0))
+            .optional()?
+        {
+            previous.push((*id, old.as_deref().and_then(ColorTrait::parse)));
+            write.execute(params![id, value.map(ColorTrait::as_str)])?;
+        }
+    }
+    let description = match value {
+        Some(t) => format!("Imposta colore {}", t.as_str()),
+        None => "Rimuovi caratteristica di colore".to_string(),
+    };
+    record_undo(c, &description, &UndoAction::SetColorTrait { previous })?;
     Ok(BulkOutcome {
         changed: ids.len(),
         requested: ids.len(),
@@ -1323,6 +1389,19 @@ fn undo_action(
         }
         UndoAction::Placement { media_id, previous } => {
             crate::timeline::set_placement(c, media_id, previous, &crate::timeline::system_offset)?;
+        }
+        UndoAction::SetRating { previous } => {
+            let mut up = c.prepare_cached("UPDATE media_item SET rating = ?2 WHERE id = ?1")?;
+            for (id, rating) in &previous {
+                up.execute(params![id, rating])?;
+            }
+        }
+        UndoAction::SetColorTrait { previous } => {
+            let mut up =
+                c.prepare_cached("UPDATE media_item SET color_trait = ?2 WHERE id = ?1")?;
+            for (id, t) in &previous {
+                up.execute(params![id, t.map(ColorTrait::as_str)])?;
+            }
         }
         UndoAction::LocationReplaced { previous } => {
             for (id, l) in &previous {

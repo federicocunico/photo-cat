@@ -34,6 +34,9 @@ pub struct MediaFaceView {
 #[serde(rename_all = "camelCase")]
 pub struct MediaDetail {
     pub item: MediaItem,
+    /// Valutazione da 0 (non indicata) a 5.
+    pub rating: u8,
+    pub color_trait: Option<crate::model::ColorTrait>,
     pub tech: Option<TechInfo>,
     pub dates: Option<MediaDates>,
     pub exif: Option<ExifInfo>,
@@ -77,7 +80,16 @@ pub fn media_detail(c: &Connection, id: MediaId) -> StoreResult<MediaDetail> {
         .query_map(params![id], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
     let faces = crate::people::media_faces(c, id)?;
+    let (rating, color_trait): (u8, Option<String>) = c.query_row(
+        "SELECT rating, color_trait FROM media_item WHERE id = ?1",
+        [id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
     Ok(MediaDetail {
+        rating,
+        color_trait: color_trait
+            .as_deref()
+            .and_then(crate::model::ColorTrait::parse),
         tech: meta::tech(c, id)?,
         dates: meta::dates(c, id)?,
         exif: meta::exif(c, id)?.map(|mut e| {
