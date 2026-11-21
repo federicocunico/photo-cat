@@ -23,6 +23,7 @@ import { common } from "./common";
 import { selection } from "./selection";
 import { commandStrings } from "./commands";
 import { guide } from "./guide";
+import { faceMenu } from "./faceMenu";
 
 export type Language = "it" | "en";
 
@@ -52,6 +53,7 @@ void i18n.use(initReactI18next).init({
         ...selection.it,
         ...commandStrings.it,
         ...guide.it,
+        ...faceMenu.it,
       },
     },
     en: {
@@ -78,6 +80,7 @@ void i18n.use(initReactI18next).init({
         ...selection.en,
         ...commandStrings.en,
         ...guide.en,
+        ...faceMenu.en,
       },
     },
   },

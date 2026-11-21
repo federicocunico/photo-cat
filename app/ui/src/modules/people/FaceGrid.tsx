@@ -9,16 +9,30 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, isTauri, type Correction, type FaceScope, type GroupRow } from "../../lib/ipc";
+import {
+  commands,
+  isTauri,
+  type Correction,
+  type FaceScope,
+  type FaceView,
+  type GroupRow,
+} from "../../lib/ipc";
 import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
-import { Button, ConfirmDialog, InlineAlert } from "../../components/ui";
+import {
+  Button,
+  ConfirmDialog,
+  ContextMenu,
+  InlineAlert,
+  type MenuItem,
+} from "../../components/ui";
 import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
 import "./people.css";
 import { FaceCrop } from "./FaceCrop";
@@ -26,6 +40,8 @@ import { MergeDialog } from "./MergeDialog";
 import { discardReasonLabel } from "./discardReason";
 import { Spinner } from "../../components/feedback/Spinner";
 import type { GroupListTarget } from "./GroupList";
+import { FaceViewer } from "./FaceViewer";
+import { distinctByMedia, useFacePhotoActions } from "./useFacePhotoActions";
 
 const PAGE = 80;
 const GAP = 10;
@@ -85,6 +101,10 @@ export const FaceGrid = forwardRef<
   const moveSelectRef = useRef<HTMLSelectElement>(null);
   const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
   const scrolledFor = useRef<number | null>(null);
+  const photoActions = useFacePhotoActions();
+  // Volto su cui si è aperto il menu contestuale e visore aperto (volti e posizione).
+  const [menuFace, setMenuFace] = useState<number | null>(null);
+  const [viewer, setViewer] = useState<{ faces: FaceView[]; index: number } | null>(null);
 
   useEffect(() => {
     setSelected([]);
@@ -124,6 +144,12 @@ export const FaceGrid = forwardRef<
 
   // «Riassegna a…»: tutte le persone con un nome, comprese le identità che in questa
   // libreria non hanno ancora volti (la persona viene creata alla riassegnazione).
+  const config = useQuery({
+    queryKey: ["config"],
+    queryFn: commands.getConfig,
+    enabled: isTauri(),
+  });
+
   const moveTargets = useQuery({
     queryKey: ["people-move-targets"],
     queryFn: async () => {
@@ -297,6 +323,92 @@ export const FaceGrid = forwardRef<
   }));
 
   const groupId = target?.kind === "group" ? target.id : null;
+
+  /** Il menu agisce sulla selezione se contiene il volto cliccato, altrimenti su quel solo volto. */
+  const menuTargets = (): FaceView[] => {
+    const f = items.find((i) => i.id === menuFace);
+    if (!f) return [];
+    return selected.includes(f.id) ? items.filter((i) => selected.includes(i.id)) : [f];
+  };
+  const menuItems = (): MenuItem[] => {
+    const faces = menuTargets();
+    if (!faces.length) return [{ kind: "label", label: t("people.emptyFaces") }];
+    const ids = faces.map((f) => f.id);
+    const photos = distinctByMedia(faces);
+    const first = faces.find((f) => f.id === menuFace) ?? faces[0];
+    const out: MenuItem[] = [
+      {
+        label: t("faceMenu.openPhoto"),
+        onSelect: () => setViewer({ faces: photos, index: Math.max(0, photos.indexOf(first)) }),
+      },
+      { label: t("faceMenu.showInLibrary"), onSelect: () => void photoActions.library(first) },
+      {
+        kind: "submenu",
+        label: t("externalApps.openWith"),
+        items: [
+          ...(config.data?.external_apps ?? []).map((a): MenuItem => ({
+            label: a.name,
+            onSelect: () => void photoActions.open(faces, { kind: "app", id: a.id ?? "" }),
+          })),
+          {
+            label: t("externalApps.system"),
+            onSelect: () => void photoActions.open(faces, { kind: "system" }),
+          },
+        ],
+      },
+      {
+        label: t("externalApps.reveal"),
+        onSelect: () => void photoActions.open(faces, { kind: "reveal" }),
+      },
+      { kind: "separator" },
+    ];
+    if (groupId != null)
+      out.push(
+        {
+          label: withCount(t("people.reject"), ids.length),
+          onSelect: () =>
+            correct(
+              ids.map((face): Correction => ({ action: "reject", person: groupId, face })),
+              t("people.rejectedDone", { count: ids.length }),
+            ),
+        },
+        {
+          label: t("people.newGroup"),
+          onSelect: () =>
+            correct(
+              [{ action: "separate", person: groupId, faces: ids }],
+              t("people.separatedDone", { count: ids.length }),
+            ),
+        },
+      );
+    if (discardedOnly)
+      out.push({
+        label: t("people.recover"),
+        onSelect: () =>
+          correct(
+            [{ action: "recover", faces: ids }],
+            t("people.recoveredDone", { count: ids.length }),
+          ),
+      });
+    out.push({
+      label: withCount(t("people.remove"), ids.length),
+      danger: true,
+      onSelect: () => {
+        setSelected(ids);
+        setRemoveOpen(true);
+      },
+    });
+    return out;
+  };
+  const openViewerAt = (id: number) => {
+    const index = items.findIndex((i) => i.id === id);
+    if (index >= 0) setViewer({ faces: items, index });
+  };
+  const onTileKey = (id: number) => (e: KeyboardEvent) => {
+    if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    e.preventDefault();
+    openViewerAt(id);
+  };
   const title =
     target?.kind === "singles"
       ? t("people.singlesLabel", { count: singlesCount })
@@ -542,6 +654,37 @@ export const FaceGrid = forwardRef<
         </div>
       )}
 
+      {photoActions.missing.length > 0 && (
+        <div className="people-alert">
+          <InlineAlert
+            tone="warn"
+            title={t("faceMenu.missingTitle")}
+            onDismiss={photoActions.clearMissing}
+          >
+            {t("faceMenu.missing", {
+              count: photoActions.missing.length,
+              paths: photoActions.missing.join(", "),
+            })}
+          </InlineAlert>
+        </div>
+      )}
+      {photoActions.error && (
+        <div className="people-alert">
+          <InlineAlert tone="danger" title={t("people.failed")} onDismiss={photoActions.clearError}>
+            {photoActions.error}
+          </InlineAlert>
+        </div>
+      )}
+
+      {viewer && (
+        <FaceViewer
+          faces={viewer.faces}
+          index={viewer.index}
+          onIndex={(index) => setViewer({ ...viewer, index })}
+          onClose={() => setViewer(null)}
+        />
+      )}
+
       <ConfirmDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
@@ -569,132 +712,155 @@ export const FaceGrid = forwardRef<
         />
       )}
 
-      <div
-        ref={scrollRef}
-        data-testid="face-grid-scroll"
-        role="group"
-        aria-label={t("people.facesGrid")}
-        className="people-grid-scroll"
-        onPointerDown={(e) => {
-          if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey)) return;
-          const r = e.currentTarget.getBoundingClientRect();
-          drag.current = {
-            x: e.clientX - r.left,
-            y: e.clientY - r.top + e.currentTarget.scrollTop,
-            initial: e.ctrlKey || e.metaKey ? selected : [],
-          };
-          e.currentTarget.setPointerCapture?.(e.pointerId);
-          e.preventDefault();
-        }}
-        onPointerMove={(e) => {
-          const d = drag.current;
-          if (!d) return;
-          const el = e.currentTarget;
-          const r = el.getBoundingClientRect();
-          if (e.clientY > r.bottom - 30) el.scrollTop += 16;
-          else if (e.clientY < r.top + 30) el.scrollTop -= 16;
-          const x = e.clientX - r.left;
-          const y = e.clientY - r.top + el.scrollTop;
-          const b = {
-            x: Math.min(x, d.x),
-            y: Math.min(y, d.y),
-            w: Math.abs(x - d.x),
-            h: Math.abs(y - d.y),
-          };
-          setBox(b);
-          setSelection([
-            ...new Set([
-              ...d.initial,
-              ...rectangleSelect(order, b, {
-                cols,
-                cell,
-                rowHeight,
-                gap: GAP,
-                pad: PAD,
-              }),
-            ]),
-          ]);
-        }}
-        onPointerUp={() => {
-          drag.current = null;
-          setBox(null);
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-          setBox(null);
-        }}
-      >
-        <QueryView
-          query={faces}
-          isEmpty={() => items.length === 0}
-          skeleton={<Skeleton kind="thumbnail" count={8} />}
-          error={t("people.failed")}
-          empty={
-            <p className="muted people-empty-pad">
-              {discardedOnly ? t("people.emptyDiscarded") : t("people.emptyFaces")}
-            </p>
-          }
+      <ContextMenu label={t("faceMenu.label")} items={menuItems()}>
+        <div
+          ref={scrollRef}
+          data-testid="face-grid-scroll"
+          onContextMenu={(e) => {
+            const tile = (e.target as HTMLElement).closest<HTMLElement>("[data-face-tile]");
+            if (!tile) {
+              // Fuori da un volto non c'è nulla su cui agire: niente menu.
+              e.preventDefault();
+              return;
+            }
+            setMenuFace(Number(tile.dataset.faceId));
+          }}
+          role="group"
+          aria-label={t("people.facesGrid")}
+          className="people-grid-scroll"
+          onPointerDown={(e) => {
+            if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey))
+              return;
+            const r = e.currentTarget.getBoundingClientRect();
+            drag.current = {
+              x: e.clientX - r.left,
+              y: e.clientY - r.top + e.currentTarget.scrollTop,
+              initial: e.ctrlKey || e.metaKey ? selected : [],
+            };
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+            e.preventDefault();
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            const el = e.currentTarget;
+            const r = el.getBoundingClientRect();
+            if (e.clientY > r.bottom - 30) el.scrollTop += 16;
+            else if (e.clientY < r.top + 30) el.scrollTop -= 16;
+            const x = e.clientX - r.left;
+            const y = e.clientY - r.top + el.scrollTop;
+            const b = {
+              x: Math.min(x, d.x),
+              y: Math.min(y, d.y),
+              w: Math.abs(x - d.x),
+              h: Math.abs(y - d.y),
+            };
+            setBox(b);
+            setSelection([
+              ...new Set([
+                ...d.initial,
+                ...rectangleSelect(order, b, {
+                  cols,
+                  cell,
+                  rowHeight,
+                  gap: GAP,
+                  pad: PAD,
+                }),
+              ]),
+            ]);
+          }}
+          onPointerUp={() => {
+            drag.current = null;
+            setBox(null);
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            setBox(null);
+          }}
         >
-          {() => (
-            <>
-              <div className="people-virt-pad" style={{ height: virt.getTotalSize() + PAD * 2 }}>
-                {box && (
-                  <div
-                    aria-hidden
-                    className="people-marquee"
-                    style={{
-                      left: box.x,
-                      top: box.y,
-                      width: box.w,
-                      height: box.h,
-                    }}
-                  />
-                )}
-                {vitems.map((row) => (
-                  <div key={row.key} className="people-virt-cells" style={{ top: row.start + PAD }}>
-                    {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
-                      const sel = selected.includes(face.id);
-                      const lit = highlight?.faceId === face.id;
-                      const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
-                      return (
-                        <button
-                          key={face.id}
-                          type="button"
-                          data-testid={`face-${face.id}`}
-                          data-face-tile
-                          data-highlighted={lit || undefined}
-                          aria-pressed={sel}
-                          title={tip}
-                          onClick={onFaceClick(face.id)}
-                          className="people-face-tile"
-                          style={{
-                            width: cell,
-                            border: `2px solid ${
-                              lit ? "var(--pc-warn)" : sel ? "var(--pc-accent)" : "var(--pc-raised)"
-                            }`,
-                            opacity: face.discardReason ? 0.72 : 1,
-                          }}
-                        >
-                          <FaceCrop face={face} size={cell - 4} />
-                          {tip && <span className="visually-hidden">{tip}</span>}
-                          <span className="people-face-meta">
-                            <span className="mono">
-                              {face.year != null ? String(face.year) : ""}
+          <QueryView
+            query={faces}
+            isEmpty={() => items.length === 0}
+            skeleton={<Skeleton kind="thumbnail" count={8} />}
+            error={t("people.failed")}
+            empty={
+              <p className="muted people-empty-pad">
+                {discardedOnly ? t("people.emptyDiscarded") : t("people.emptyFaces")}
+              </p>
+            }
+          >
+            {() => (
+              <>
+                <div className="people-virt-pad" style={{ height: virt.getTotalSize() + PAD * 2 }}>
+                  {box && (
+                    <div
+                      aria-hidden
+                      className="people-marquee"
+                      style={{
+                        left: box.x,
+                        top: box.y,
+                        width: box.w,
+                        height: box.h,
+                      }}
+                    />
+                  )}
+                  {vitems.map((row) => (
+                    <div
+                      key={row.key}
+                      className="people-virt-cells"
+                      style={{ top: row.start + PAD }}
+                    >
+                      {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
+                        const sel = selected.includes(face.id);
+                        const lit = highlight?.faceId === face.id;
+                        const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
+                        return (
+                          <button
+                            key={face.id}
+                            type="button"
+                            data-testid={`face-${face.id}`}
+                            data-face-tile
+                            data-face-id={face.id}
+                            onDoubleClick={() => openViewerAt(face.id)}
+                            onKeyDown={onTileKey(face.id)}
+                            data-highlighted={lit || undefined}
+                            aria-pressed={sel}
+                            title={tip}
+                            onClick={onFaceClick(face.id)}
+                            className="people-face-tile"
+                            style={{
+                              width: cell,
+                              border: `2px solid ${
+                                lit
+                                  ? "var(--pc-warn)"
+                                  : sel
+                                    ? "var(--pc-accent)"
+                                    : "var(--pc-raised)"
+                              }`,
+                              opacity: face.discardReason ? 0.72 : 1,
+                            }}
+                          >
+                            <FaceCrop face={face} size={cell - 4} />
+                            {tip && <span className="visually-hidden">{tip}</span>}
+                            <span className="people-face-meta">
+                              <span className="mono">
+                                {face.year != null ? String(face.year) : ""}
+                              </span>
+                              {face.qualityScore != null && (
+                                <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
+                              )}
                             </span>
-                            {face.qualityScore != null && (
-                              <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </QueryView>
-      </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </QueryView>
+        </div>
+      </ContextMenu>
 
       <div className="muted people-grid-foot">
         <span>{t("people.facesSortHint")}</span>
