@@ -127,6 +127,11 @@ export const commands = {
 	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
 	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
 	/**
+	/**
+	 *  Foto distinte dei volti selezionati per filtro (presenti e mancanti), per "Apri con" e
+	 *  "Mostra nella cartella" anche sui volti non caricati.
+	 */
+	faceSelectionMedia: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<FaceSelectionMedia>("face_selection_media", { scope, maxId, except }),
 	 *  Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
 	 *  operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
 	 */
@@ -815,6 +820,18 @@ export type FaceView = {
 	id: number,
 	mediaId: number,
 	bbox: [(number | null), (number | null), (number | null), (number | null)],
+/**
+ *  Foto distinte dei volti selezionati "per filtro" (stesso insieme di `face_selection_ids`),
+ *  divise tra presenti sul disco e mancanti: servono a "Apri con" e "Mostra nella cartella"
+ *  anche sui volti non ancora caricati nella griglia.
+ */
+export type FaceSelectionMedia = {
+	/**  Id delle foto presenti, nell'ordine del primo volto di ciascuna. */
+	present: number[],
+	/**  Percorsi delle foto segnate come mancanti. */
+	missing: string[],
+};
+
 	quality: number | null,
 	qualityScore: number | null,
 	sharpness: number | null,

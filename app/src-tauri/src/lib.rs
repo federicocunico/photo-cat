@@ -148,6 +148,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             people::face_selection,
             people::face_selection_ids,
             people::locate_face,
+            people::face_selection_media,
             people::face_count,
             people::person_faces,
             people::correct_person,

@@ -18,7 +18,10 @@ export function LibraryStatus() {
             ? t("feedback.error")
             : t("library.count", { n: fmtInt(count.data) })}
       </span>
-      <span data-testid="status-selected">{t("library.selected", { n: fmtInt(selected) })}</span>
+      {/* aria-live: il nuovo conteggio (Ctrl+A, Inverti, Esc) è annunciato dai lettori di schermo. */}
+      <span data-testid="status-selected" aria-live="polite" aria-atomic="true">
+        {t("library.selected", { n: fmtInt(selected) })}
+      </span>
     </>
   );
 }

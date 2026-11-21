@@ -42,6 +42,14 @@ export function useActiveGrid(grid: ActiveGrid, enabled = true) {
   }, [enabled]);
 }
 
+/**
+ * Visore o menu aperto sopra la griglia: le scorciatoie di selezione non agiscono su una griglia
+ * che l'utente non vede. Le finestre modali sono già escluse dal registro (`modalOpen`); la
+ * palette dei comandi no, perché da lì le voci si eseguono anche con la palette aperta.
+ */
+const overlayOpen = () =>
+  document.querySelector('.viewer[role="dialog"], [data-radix-popper-content-wrapper]') != null;
+
 /** Da montare una volta nella shell. */
 export function useGridShortcuts() {
   const { t } = useTranslation();
@@ -51,7 +59,7 @@ export function useGridShortcuts() {
       label: t("selection.selectAll"),
       group: "selection",
       shortcut: { key: "a", mod: true },
-      when: () => activeGrid() != null,
+      when: () => activeGrid() != null && !overlayOpen(),
       run: () => activeGrid()?.selectAll(),
     },
     {
@@ -59,7 +67,7 @@ export function useGridShortcuts() {
       label: t("selection.invert"),
       group: "selection",
       shortcut: { key: "i", mod: true, shift: true },
-      when: () => activeGrid() != null,
+      when: () => activeGrid() != null && !overlayOpen(),
       run: () => activeGrid()?.invert(),
     },
     {
@@ -67,10 +75,8 @@ export function useGridShortcuts() {
       label: t("commands.clearSelection"),
       group: "selection",
       shortcut: { key: "Escape" },
-      // Un menu o un selettore aperto si chiude prima con il suo Esc.
-      when: () =>
-        (activeGrid()?.count() ?? 0) > 0 &&
-        !document.querySelector("[data-radix-popper-content-wrapper]"),
+      // Un menu, un selettore o il visore aperto si chiude prima con il suo Esc.
+      when: () => (activeGrid()?.count() ?? 0) > 0 && !overlayOpen(),
       run: () => activeGrid()?.clear(),
     },
   ]);

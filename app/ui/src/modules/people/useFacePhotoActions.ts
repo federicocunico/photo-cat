@@ -2,7 +2,13 @@
 // sui media distinti di una selezione di volti (design D5).
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { commands, type FaceView, type MediaDetail, type OpenTarget } from "../../lib/ipc";
+import {
+  commands,
+  type FaceSelectionMedia,
+  type FaceView,
+  type MediaDetail,
+  type OpenTarget,
+} from "../../lib/ipc";
 import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { useOpenWith } from "../library/useOpenWith";
@@ -49,10 +55,17 @@ export function useFacePhotoActions() {
     if (ids.length) await openWith.open(ids, target);
   };
 
+  /** Come `open`, su foto già risolte dal backend (selezione per filtro oltre i volti caricati). */
+  const openResolved = async (media: FaceSelectionMedia, target: OpenTarget) => {
+    setMissing(media.missing);
+    if (media.present.length) await openWith.open(media.present, target);
+  };
+
   const library = async (face: FaceView) => showInLibrary(await detailOf(face.mediaId));
 
   return {
     open,
+    openResolved,
     library,
     detailOf,
     missing,

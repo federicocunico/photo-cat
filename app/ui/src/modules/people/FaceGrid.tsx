@@ -21,6 +21,7 @@ import {
   type FaceSort,
   type FaceView,
   type GroupRow,
+  type OpenTarget,
 } from "../../lib/ipc";
 import { FACE_SORTS, usePeoplePrefs } from "../../store/peoplePrefs";
 import { buildFaceRows, orderYears, rectangleSelectRows } from "./faceLayout";
@@ -103,9 +104,7 @@ export const FaceGrid = forwardRef<
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moveSelectRef = useRef<HTMLSelectElement>(null);
-  const drag = useRef<{ x: number; y: number; initial: Selection<FaceScope> | null } | null>(
-    null,
-  );
+  const drag = useRef<{ x: number; y: number; initial: Selection<FaceScope> | null } | null>(null);
   const scrolledFor = useRef<number | null>(null);
   const photoActions = useFacePhotoActions();
   // Volto su cui si è aperto il menu contestuale e visore aperto (volti e posizione).
@@ -402,6 +401,14 @@ export const FaceGrid = forwardRef<
     const count = inSel ? selectedCount : 1;
     const photos = distinctByMedia(faces);
     const first = faces.find((f) => f.id === menuFace) ?? faces[0];
+    // Selezione per filtro: le foto si risolvono nel backend, anche per i volti non caricati.
+    const openTargets = (target: OpenTarget) =>
+      inSel && selection.mode === "filter"
+        ? commands
+            .faceSelectionMedia(selection.filter, selection.maxId, [...selection.except])
+            .then((m) => photoActions.openResolved(m, target))
+            .catch((e) => setError((e as { detail?: string }).detail ?? String(e)))
+        : photoActions.open(faces, target);
     const out: MenuItem[] = [
       {
         label: t("faceMenu.openPhoto"),
@@ -414,17 +421,17 @@ export const FaceGrid = forwardRef<
         items: [
           ...(config.data?.external_apps ?? []).map((a): MenuItem => ({
             label: a.name,
-            onSelect: () => void photoActions.open(faces, { kind: "app", id: a.id ?? "" }),
+            onSelect: () => void openTargets({ kind: "app", id: a.id ?? "" }),
           })),
           {
             label: t("externalApps.system"),
-            onSelect: () => void photoActions.open(faces, { kind: "system" }),
+            onSelect: () => void openTargets({ kind: "system" }),
           },
         ],
       },
       {
         label: t("externalApps.reveal"),
-        onSelect: () => void photoActions.open(faces, { kind: "reveal" }),
+        onSelect: () => void openTargets({ kind: "reveal" }),
       },
       { kind: "separator" },
     ];
@@ -563,9 +570,10 @@ export const FaceGrid = forwardRef<
               : t("people.working")}
           </span>
         ) : (
-          selectedCount > 0 && (
-            <span className="muted">{t("people.selected", { count: selectedCount })}</span>
-          )
+          // Sempre presente: il cambio di conteggio (Ctrl+A, Inverti, Esc) viene annunciato.
+          <span aria-live="polite" aria-atomic="true" className="muted">
+            {selectedCount > 0 ? t("people.selected", { count: selectedCount }) : null}
+          </span>
         )}
         {/* "Riassegna a…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
             una select chiusa); i volti si spostano solo con il pulsante "Riassegna". */}
@@ -856,20 +864,20 @@ export const FaceGrid = forwardRef<
             };
             setBox(b);
             const hit = faceRows
-                  ? rectangleSelectRows(order, b, faceRows, {
-                      cell,
-                      rowHeight,
-                      headHeight: HEAD,
-                      gap: GAP,
-                      pad: PAD,
-                    })
-                  : rectangleSelect(order, b, {
-                      cols,
-                      cell,
-                      rowHeight,
-                      gap: GAP,
-                      pad: PAD,
-                    });
+              ? rectangleSelectRows(order, b, faceRows, {
+                  cell,
+                  rowHeight,
+                  headHeight: HEAD,
+                  gap: GAP,
+                  pad: PAD,
+                })
+              : rectangleSelect(order, b, {
+                  cols,
+                  cell,
+                  rowHeight,
+                  gap: GAP,
+                  pad: PAD,
+                });
             sel.replace(d.initial ? selSet(d.initial, hit, true) : idsSelection<FaceScope>(hit));
           }}
           onPointerUp={() => {

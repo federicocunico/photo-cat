@@ -113,7 +113,11 @@ describe("FaceGrid Seleziona tutto", () => {
     fireEvent.change(move, { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
     await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalled());
-    expect(commandsMock.faceSelectionIds).toHaveBeenCalledWith({ kind: "group", group: 1 }, 400, []);
+    expect(commandsMock.faceSelectionIds).toHaveBeenCalledWith(
+      { kind: "group", group: 1 },
+      400,
+      [],
+    );
     const arg = (commandsMock.correctPerson.mock.calls as unknown as [unknown][])[0]![0] as {
       action: string;
       faces: number[];
@@ -136,6 +140,30 @@ describe("FaceGrid Seleziona tutto", () => {
     await screen.findByText("1 selezionati");
     expect(screen.getByTestId("face-3").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("face-1").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("Mostra nella cartella su «tutti» apre le foto di tutti i volti, anche non caricati", async () => {
+    commandsMock.faceSelectionMedia.mockResolvedValue({
+      present: [1, 2, 300],
+      missing: ["D:/x/assente.jpg"],
+    });
+    commandsMock.openWith.mockResolvedValue({ opened: 3, needsConfirmation: false });
+    renderGrid();
+    await screen.findByTestId("face-1");
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await screen.findByText("400 selezionati");
+    fireEvent.click(screen.getByTestId("face-5"), { ctrlKey: true });
+    await screen.findByText("399 selezionati");
+    fireEvent.contextMenu(screen.getByTestId("face-2"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Mostra nella cartella/ }));
+    await waitFor(() => expect(commandsMock.openWith).toHaveBeenCalled());
+    expect(commandsMock.faceSelectionMedia).toHaveBeenCalledWith(
+      { kind: "group", group: 1 },
+      400,
+      [5],
+    );
+    expect(commandsMock.openWith).toHaveBeenCalledWith([1, 2, 300], { kind: "reveal" }, false);
+    expect(await screen.findByText(/assente.jpg/)).toBeTruthy();
   });
 
   it("Esc svuota la selezione", async () => {

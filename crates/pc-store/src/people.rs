@@ -1295,6 +1295,46 @@ pub fn face_selection_ids(
     Ok(rows)
 }
 
+/// Foto distinte dei volti selezionati "per filtro" (stesso insieme di `face_selection_ids`),
+/// divise tra presenti sul disco e mancanti: servono a "Apri con" e "Mostra nella cartella"
+/// anche sui volti non ancora caricati nella griglia.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FaceSelectionMedia {
+    /// Id delle foto presenti, nell'ordine del primo volto di ciascuna.
+    pub present: Vec<i64>,
+    /// Percorsi delle foto segnate come mancanti.
+    pub missing: Vec<String>,
+}
+
+pub fn face_selection_media(
+    c: &Connection,
+    scope: &FaceScope,
+    max_id: i64,
+    except: &[i64],
+    m: &FaceMatch,
+) -> StoreResult<FaceSelectionMedia> {
+    let (filter, bind) = scope_filter(scope, m);
+    let mut st = c.prepare(&format!(
+        "SELECT mi.id, mi.path, mi.status = 'missing' FROM \
+           (SELECT f.media_id AS media_id, MIN(f.id) AS first FROM face f \
+            WHERE {filter} AND f.id <= ?2 AND f.id NOT IN (SELECT value FROM json_each(?3)) \
+            GROUP BY f.media_id) s \
+         JOIN media_item mi ON mi.id = s.media_id ORDER BY s.first"
+    ))?;
+    let mut out = FaceSelectionMedia::default();
+    let mut rows = st.query(params![bind, max_id, serde_json::to_string(except)?])?;
+    while let Some(r) = rows.next()? {
+        if r.get::<_, bool>(2)? {
+            out.missing.push(r.get(1)?);
+        } else {
+            out.present.push(r.get(0)?);
+        }
+    }
+    Ok(out)
+}
+
 /// Posizione di un volto (o del volto scelto su una foto) nell'ordinamento
 /// predefinito della relativa vista Persone, così la UI apre la pagina giusta.
 pub fn locate_face(

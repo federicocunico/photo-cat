@@ -42,6 +42,7 @@ import type {
   FacePage,
   FaceScope,
   SelectionBase,
+  FaceSelectionMedia,
   FaceSort,
   FaceYear,
   FaceCursor,
@@ -192,6 +193,9 @@ export const commandsMock = {
     (scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>
   >(async () => []),
   locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
+  faceSelectionMedia: vi.fn<
+    (scope: FaceScope, maxId: number, except: number[]) => Promise<FaceSelectionMedia>
+  >(async () => ({ present: [], missing: [] })),
   personFaces: vi.fn(async () => []),
   correctPerson: vi.fn(async () => null),
   purgeFaces: vi.fn(async () => null),

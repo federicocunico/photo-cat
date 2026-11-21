@@ -1523,6 +1523,46 @@ fn face_selection_applies_exceptions_and_ignores_later_faces() {
 }
 
 #[test]
+fn face_selection_media_dedupes_photos_and_splits_missing() {
+    // 6 volti su 4 foto: le foto 1 e 2 hanno due volti ciascuna.
+    let c = lib_with(4);
+    let g = people::create_person(&c, None).unwrap();
+    let good = |x: f32| {
+        let mut f = face(x, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        f
+    };
+    for (media, n) in [(1_i64, 2), (2, 2), (3, 1), (4, 1)] {
+        let detected: Vec<_> = (0..n).map(|k| good(0.1 + 0.4 * k as f32)).collect();
+        people::save_faces(&c, media, &detected, "sface", "det+sface", 0.363).unwrap();
+    }
+    let mut faces = Vec::new();
+    for media in 1..=4_i64 {
+        for r in people::records(&c, Some(media)).unwrap() {
+            faces.push(r.id);
+        }
+    }
+    people::assign(&c, &faces, g).unwrap();
+    assert_eq!(faces.len(), 6);
+    c.execute("UPDATE media_item SET status = 'missing' WHERE id = 3", [])
+        .unwrap();
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    assert_eq!(base.count, 6);
+    let sel = people::face_selection_media(&c, &scope, base.max_id, &[], &m).unwrap();
+    assert_eq!(sel.present, vec![1, 2, 4]);
+    assert_eq!(sel.missing, vec!["t3.jpg".to_string()]);
+    // Le eccezioni tolgono la foto 4 (unico volto) ma non la 1 (resta un volto).
+    let f4 = people::records(&c, Some(4)).unwrap()[0].id;
+    let f1 = people::records(&c, Some(1)).unwrap()[0].id;
+    let sel = people::face_selection_media(&c, &scope, base.max_id, &[f4, f1], &m).unwrap();
+    assert_eq!(sel.present, vec![1, 2]);
+}
+
+#[test]
 fn face_selection_follows_singles_and_discarded_scopes() {
     let c = lib_with(3);
     let m = people::default_face_match();

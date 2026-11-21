@@ -1041,7 +1041,9 @@ export function SequenceStatus() {
           sessions: stats.sessions,
         })}
       </span>
-      <span>{t("sequence.selected", { count: selected })}</span>
+      <span aria-live="polite" aria-atomic="true">
+        {t("sequence.selected", { count: selected })}
+      </span>
       <span className="status-keys" aria-label={t("sequence.keysLabel")}>
         {(
           [

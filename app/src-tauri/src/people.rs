@@ -153,6 +153,25 @@ pub async fn face_selection_ids(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Foto distinte dei volti selezionati per filtro (presenti e mancanti), per "Apri con" e
+/// "Mostra nella cartella" anche sui volti non caricati.
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection_media(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+    max_id: i64,
+    except: Vec<i64>,
+) -> AppResult<people::FaceSelectionMedia> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_media(c, &scope, max_id, &except, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 /// Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo).
 #[tauri::command]
 #[specta::specta]

@@ -73,6 +73,29 @@ describe("scorciatoie di selezione della shell", () => {
     dlg.remove();
   });
 
+  it("con il visore aperto Ctrl+A e Ctrl+Maiusc+I non toccano la griglia sotto", () => {
+    const grid = mk();
+    render(<Host grid={grid} />);
+    // Il visore è un dialogo Radix senza aria-modal: il registro non lo vede come modale.
+    const viewer = document.createElement("div");
+    viewer.setAttribute("role", "dialog");
+    viewer.className = "viewer";
+    document.body.appendChild(viewer);
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "I", ctrlKey: true, shiftKey: true });
+    expect(grid.selectAll).not.toHaveBeenCalled();
+    expect(grid.invert).not.toHaveBeenCalled();
+    viewer.remove();
+    // Un pannello flottante non modale non blocca le scorciatoie.
+    const panel = document.createElement("div");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "false");
+    document.body.appendChild(panel);
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    expect(grid.selectAll).toHaveBeenCalledTimes(1);
+    panel.remove();
+  });
+
   it("Esc non fa nulla senza selezione e senza griglia attiva", () => {
     const grid = mk(0);
     const { unmount } = render(<Host grid={grid} />);
