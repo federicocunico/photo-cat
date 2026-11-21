@@ -35,6 +35,9 @@ pub const MAX_EDGE: u32 = 8192;
 pub const LARGE_EDGE: u32 = 2048;
 /// Qualità JPEG delle anteprime in cache.
 const JPEG_QUALITY: u8 = 90;
+/// Filtro di riduzione: buon compromesso tra nitidezza e velocità.
+const RESIZE_ALG: fast_image_resize::ResizeAlg =
+    fast_image_resize::ResizeAlg::Convolution(fast_image_resize::FilterType::CatmullRom);
 /// Cambia quando cambia il modo di generare le anteprime: invalida tutta la cache.
 const CACHE_VERSION: &str = "raw-review-preview-v1";
 /// Memoria concessa alle decodifiche in parallelo (MB).
@@ -285,14 +288,14 @@ fn orientation_of<R: std::io::BufRead + std::io::Seek>(reader: &mut R) -> u32 {
         .unwrap_or(1)
 }
 
-/// Decodifica ridotta di `source`, già orientata, con lato lungo almeno `max_edge` se
-/// l'originale lo consente. `baked`: sorgente già orientata (anteprima in cache).
-fn decode_oriented(
+/// Decodifica ridotta di `source` (non ancora orientata) con lato lungo almeno `max_edge`, più
+/// l'orientamento EXIF da applicare. `baked`: sorgente già orientata (anteprima in cache).
+fn decode_raw(
     source: &Path,
     max_edge: u32,
     gov: &MemoryGovernor,
     baked: bool,
-) -> AppResult<image::RgbImage> {
+) -> AppResult<(image::RgbImage, u32)> {
     let ext = extension_of(source);
     let (rgb, orientation) = if ext == "raf" {
         // Scatto RAF: l'anteprima è il JPEG incorporato.
@@ -315,7 +318,7 @@ fn decode_oriented(
         };
         (decode_plain(source, &ext, max_edge, gov)?, orientation)
     };
-    Ok(apply_orientation(rgb, Some(orientation)))
+    Ok((rgb, orientation))
 }
 
 #[cfg(not(feature = "simd-jpeg"))]
@@ -376,6 +379,40 @@ fn decode_plain(
         .ok_or_else(|| fail("buffer non valido".into()))
 }
 
+/// Tempi delle fasi di una generazione (per il benchmark).
+#[derive(Debug, Default, Clone, Copy)]
+struct Phases {
+    decode: std::time::Duration,
+    resize: std::time::Duration,
+    encode: std::time::Duration,
+}
+
+/// Riduce `rgb` a un lato lungo di `max_edge` con fast_image_resize (SIMD, parallelo).
+fn shrink(rgb: image::RgbImage, max_edge: u32) -> AppResult<image::RgbImage> {
+    use fast_image_resize as fir;
+    let (w, h) = rgb.dimensions();
+    let long = w.max(h);
+    if long <= max_edge {
+        return Ok(rgb);
+    }
+    let ratio = f64::from(max_edge) / f64::from(long);
+    let nw = ((f64::from(w) * ratio).round() as u32).max(1);
+    let nh = ((f64::from(h) * ratio).round() as u32).max(1);
+    let fail = |e: String| AppError::new(ErrorCode::Internal, format!("ridimensionamento: {e}"));
+    let src = fir::images::Image::from_vec_u8(w, h, rgb.into_raw(), fir::PixelType::U8x3)
+        .map_err(|e| fail(e.to_string()))?;
+    let mut dst = fir::images::Image::new(nw, nh, fir::PixelType::U8x3);
+    fir::Resizer::new()
+        .resize(
+            &src,
+            &mut dst,
+            Some(&fir::ResizeOptions::new().resize_alg(RESIZE_ALG)),
+        )
+        .map_err(|e| fail(e.to_string()))?;
+    image::RgbImage::from_raw(nw, nh, dst.into_vec())
+        .ok_or_else(|| fail("buffer non valido".into()))
+}
+
 /// Genera l'anteprima in `dest` (scrittura su file temporaneo e rinomina). Restituisce le
 /// dimensioni finali.
 fn build_preview(
@@ -385,35 +422,47 @@ fn build_preview(
     gov: &MemoryGovernor,
     baked: bool,
 ) -> AppResult<(u32, u32)> {
-    let rgb = decode_oriented(source, max_edge, gov, baked)?;
-    let (w, h) = rgb.dimensions();
-    let long = w.max(h);
-    let rgb = if long > max_edge {
-        let ratio = f64::from(max_edge) / f64::from(long);
-        let nw = ((f64::from(w) * ratio).round() as u32).max(1);
-        let nh = ((f64::from(h) * ratio).round() as u32).max(1);
-        image::imageops::resize(&rgb, nw, nh, image::imageops::FilterType::Lanczos3)
-    } else {
-        rgb
-    };
+    build_preview_timed(source, dest, max_edge, gov, baked).map(|(size, _)| size)
+}
+
+fn build_preview_timed(
+    source: &Path,
+    dest: &Path,
+    max_edge: u32,
+    gov: &MemoryGovernor,
+    baked: bool,
+) -> AppResult<((u32, u32), Phases)> {
+    let mut phases = Phases::default();
+    let t = std::time::Instant::now();
+    let (rgb, orientation) = decode_raw(source, max_edge, gov, baked)?;
+    phases.decode = t.elapsed();
+    let t = std::time::Instant::now();
+    // Prima si riduce, poi si ruota: l'orientamento costa meno su meno pixel.
+    let rgb = apply_orientation(shrink(rgb, max_edge)?, Some(orientation));
+    phases.resize = t.elapsed();
+    let t = std::time::Instant::now();
     let (ow, oh) = rgb.dimensions();
     let tmp = dest.with_extension(format!("{}.tmp", std::process::id()));
-    let mut file = fs::File::create(&tmp)?;
-    let encoded = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, JPEG_QUALITY)
+    let mut out = std::io::BufWriter::new(fs::File::create(&tmp)?);
+    let encoded = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY)
         .encode_image(&rgb);
-    drop(file);
-    if let Err(e) = encoded {
-        let _ = fs::remove_file(&tmp);
-        return Err(AppError::new(
+    let flushed = std::io::Write::flush(&mut out);
+    drop(out);
+    let done = match encoded {
+        Err(e) => Err(AppError::new(
             ErrorCode::Io,
             format!("scrittura anteprima: {e}"),
-        ));
-    }
-    if let Err(e) = fs::rename(&tmp, dest) {
+        )),
+        Ok(()) => flushed
+            .map_err(AppError::from)
+            .and_then(|()| fs::rename(&tmp, dest).map_err(AppError::from)),
+    };
+    if let Err(e) = done {
         let _ = fs::remove_file(&tmp);
-        return Err(e.into());
+        return Err(e);
     }
-    Ok((ow, oh))
+    phases.encode = t.elapsed();
+    Ok(((ow, oh), phases))
 }
 
 #[cfg(test)]
@@ -609,26 +658,69 @@ mod tests {
         assert_eq!((thumb.width, thumb.height), (257, 384));
     }
 
+    /// JPEG "fotografico" 6000x4000 a qualità 95: gradienti, dettagli a media frequenza e
+    /// rumore lieve (molto meno entropico del rumore puro).
+    fn realistic_jpeg(w: u32, h: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            let (fx, fy) = (f64::from(x) / f64::from(w), f64::from(y) / f64::from(h));
+            let base = 128.0 + 70.0 * (fx * 3.1).sin() * (fy * 2.3).cos();
+            let detail = 18.0 * (f64::from(x) * 0.045).sin() * (f64::from(y) * 0.037).cos()
+                + 9.0 * (f64::from(x + 2 * y) * 0.11).sin();
+            let n =
+                f64::from(((x.wrapping_mul(2654435761) ^ y.wrapping_mul(40503)) >> 29) as u8) - 3.5;
+            let v = base + detail + n;
+            image::Rgb([
+                (v + 30.0 * fx).clamp(0.0, 255.0) as u8,
+                (v - 10.0 * fy).clamp(0.0, 255.0) as u8,
+                (v + 20.0 * (1.0 - fx)).clamp(0.0, 255.0) as u8,
+            ])
+        });
+        let mut out = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 95)
+            .encode_image(&img)
+            .unwrap();
+        out
+    }
+
     #[test]
-    #[ignore = "benchmark manuale: FUJIVIEW_BENCH_IMAGE opzionale, altrimenti JPEG sintetico 6000x4000"]
+    #[ignore = "benchmark manuale: FUJIVIEW_BENCH_IMAGE opzionale, altrimenti JPEG realistico 6000x4000 q95"]
     fn benchmark_real_preview_pipeline() {
         let t = tempfile::tempdir().unwrap();
         let source = match std::env::var("FUJIVIEW_BENCH_IMAGE") {
             Ok(p) => PathBuf::from(p),
-            Err(_) => write_jpeg(t.path(), "bench.jpg", 6000, 4000, Some(6)),
+            Err(_) => {
+                let p = t.path().join("bench.jpg");
+                fs::write(&p, realistic_jpeg(6000, 4000)).unwrap();
+                p
+            }
         };
-        let c = cache(t.path(), DEFAULT_CACHE_LIMIT_BYTES);
-        for edge in [LARGE_EDGE, 384, 4096] {
+        eprintln!("sorgente: {} byte", fs::metadata(&source).unwrap().len());
+        let gov = MemoryGovernor::new(DECODE_BUDGET_MB);
+        // Una passata di riscaldamento (pagine del file, thread pool).
+        let warm = t.path().join("warm.jpg");
+        build_preview(&source, &warm, 1024, &gov, false).unwrap();
+        for (i, edge) in [LARGE_EDGE, 384, 4096].into_iter().enumerate() {
+            let dest = t.path().join(format!("b{i}.jpg"));
             let started = Instant::now();
-            let r = c.get(&source, edge).unwrap();
+            let (size, p) = build_preview_timed(&source, &dest, edge, &gov, false).unwrap();
             eprintln!(
-                "edge={edge} dimensions=({}, {}) cached={} elapsed={:?}",
-                r.width,
-                r.height,
-                r.cached,
-                started.elapsed()
+                "edge={edge} {size:?} totale={:?} decodifica={:?} resize+orienta={:?} encode={:?}",
+                started.elapsed(),
+                p.decode,
+                p.resize,
+                p.encode
             );
         }
+        let c = cache(t.path(), DEFAULT_CACHE_LIMIT_BYTES);
+        c.get(&source, LARGE_EDGE).unwrap();
+        let started = Instant::now();
+        let thumb = c.get(&source, 384).unwrap();
+        eprintln!(
+            "miniatura 384 dal 2K in cache: {:?} ({}x{})",
+            started.elapsed(),
+            thumb.width,
+            thumb.height
+        );
         let started = Instant::now();
         let r = c.get(&source, LARGE_EDGE).unwrap();
         eprintln!(
