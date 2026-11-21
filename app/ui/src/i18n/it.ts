@@ -246,6 +246,11 @@ export const it = {
       clearAll: "Deseleziona tutto",
       loading: "Caricamento…",
       noMatch: "Nessuna voce corrisponde",
+      ratings: "Valutazione",
+      colors: "Colore",
+      ratingOp: "Confronto della valutazione",
+      ratingOps: { at_least: "almeno", equal: "uguale a", at_most: "al massimo" },
+      noMonth: "Anno senza mese",
     },
     inspector: {
       none: "Seleziona una foto per vederne i dettagli.",

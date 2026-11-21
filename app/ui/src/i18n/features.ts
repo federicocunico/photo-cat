@@ -73,6 +73,8 @@ export const features = {
         name: "Nome del file",
         status: "Stato del file",
         catalog: "Catalogo",
+        rating: "Valutazione",
+        color_trait: "Colore",
         other: "Altro campo",
       },
       cmp: {
@@ -85,6 +87,7 @@ export const features = {
         contains: "contiene",
         in: "è uno tra",
       },
+      cmpEqual: "uguale a",
       status: { ok: "Disponibile", missing: "Mancante" },
       units: { people_one: "persona", people_other: "persone", px: "px", mb: "MB" },
       summary: {
@@ -312,6 +315,8 @@ export const features = {
         name: "File name",
         status: "File status",
         catalog: "Catalog",
+        rating: "Rating",
+        color_trait: "Colour",
         other: "Other field",
       },
       cmp: {
@@ -324,6 +329,7 @@ export const features = {
         contains: "contains",
         in: "is one of",
       },
+      cmpEqual: "equal to",
       status: { ok: "Available", missing: "Missing" },
       units: { people_one: "person", people_other: "people", px: "px", mb: "MB" },
       summary: {

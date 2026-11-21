@@ -22,6 +22,7 @@ import { SourceMenu } from "./SourceMenu";
 import { updateFolder } from "../import/sourceActions";
 import { FacetList } from "./FacetList";
 import { DateFacet } from "./DateFacet";
+import { RatingFacet } from "./RatingFacet";
 import { catalogLabel } from "../catalogs/systemCatalogs";
 import { OpenInPeople } from "../people/OpenInPeople";
 import { useDropTarget, type DragPayload } from "../../components/dnd/photoDrag";
@@ -455,6 +456,12 @@ export function LibrarySidebar() {
                 )}
                 {data.tags.total > 0 && (
                   <FacetList query={facetQuery} facetKey={{ kind: "tag" }} list={data.tags} />
+                )}
+                {data.ratings && data.ratings.total > 0 && (
+                  <RatingFacet query={facetQuery} list={data.ratings} />
+                )}
+                {data.colors && data.colors.total > 0 && (
+                  <FacetList query={facetQuery} facetKey={{ kind: "color" }} list={data.colors} />
                 )}
                 {data.people.total > 0 && (
                   <div className="sidebar-people">

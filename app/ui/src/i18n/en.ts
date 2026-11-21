@@ -245,6 +245,11 @@ export const en: Messages = {
       clearAll: "Clear selection",
       loading: "Loading…",
       noMatch: "No entry matches",
+      ratings: "Rating",
+      colors: "Colour",
+      ratingOp: "Rating comparison",
+      ratingOps: { at_least: "at least", equal: "equal to", at_most: "at most" },
+      noMonth: "Year without month",
     },
     inspector: {
       none: "Select a photo to see its details.",

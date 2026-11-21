@@ -44,7 +44,22 @@ export function activeChips(
     chips.push({ name: `#${x}`, clear: { tags: (f.tags ?? []).filter((y) => y !== x) } });
   const date = datePath(f);
   const chosen = date.day ?? date.month ?? date.year;
-  if (chosen) chips.push({ name: fmtPeriod(chosen), clear: { dateFrom: null, dateTo: null } });
+  if (chosen && f.dateNoMonth && date.year)
+    chips.push({
+      name: t("filterChips.noMonth", { year: date.year }),
+      clear: { dateFrom: null, dateTo: null, dateNoMonth: false },
+    });
+  else if (chosen) chips.push({ name: fmtPeriod(chosen), clear: { dateFrom: null, dateTo: null } });
+  if (f.rating)
+    chips.push({
+      name: t(`filterChips.rating.${f.rating.op}`, { count: f.rating.value }),
+      clear: { rating: null },
+    });
+  for (const c of f.colorTrait ?? [])
+    chips.push({
+      name: t("filterChips.color", { name: t(`library.inspector.colorTraits.${c ?? "none"}`) }),
+      clear: { colorTrait: (f.colorTrait ?? []).filter((x) => x !== c) },
+    });
   if (f.text) chips.push({ name: `“${f.text}”`, clear: { text: null } });
   if (f.analysis)
     chips.push({
@@ -55,7 +70,8 @@ export function activeChips(
       clear: { analysis: null },
     });
   if (f.labelScore) {
-    const n = (x: number | null) => (x ?? 0).toLocaleString(i18n.language, { maximumFractionDigits: 2 });
+    const n = (x: number | null) =>
+      (x ?? 0).toLocaleString(i18n.language, { maximumFractionDigits: 2 });
     chips.push({
       name: t("filterChips.score", {
         group: group ? group(f.labelScore.grp) : f.labelScore.grp,
