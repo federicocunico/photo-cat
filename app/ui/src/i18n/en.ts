@@ -14,6 +14,7 @@ export const en: Messages = {
     import: "Import",
     jobs: "Activity",
     organize: "Export",
+    "raw-review": "RAW variants (Fujifilm X-T5)",
     ai: "AI",
     models: "AI models",
     diagnostics: "Diagnostics",

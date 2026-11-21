@@ -16,7 +16,7 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 | Tasto | Azione |
 |---|---|
 | Ctrl+K | palette dei comandi: moduli, azioni, persone, tag, cataloghi, luoghi |
-| Ctrl+1…8 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
+| Ctrl+1…9 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
 | Ctrl+B | riduce o espande la navigazione |
 | Ctrl+Z | annulla l'ultima operazione annullabile |
 | ? | foglio delle scorciatoie |

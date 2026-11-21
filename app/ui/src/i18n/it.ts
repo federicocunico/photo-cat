@@ -13,6 +13,7 @@ export const it = {
     import: "Importa",
     jobs: "Attività",
     organize: "Esporta",
+    "raw-review": "Varianti RAW (Fujifilm X-T5)",
     ai: "AI",
     models: "Modelli AI",
     diagnostics: "Diagnostica",

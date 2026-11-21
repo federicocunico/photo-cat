@@ -62,6 +62,22 @@ describe("palette dei comandi", () => {
     expect(usePalette.getState().open).toBe(false);
   });
 
+  it("Varianti RAW dalla palette: «apri cartella» e «Vai a» aprono il modulo", async () => {
+    renderShell();
+    const { user } = await openAndType("varianti");
+    expect(
+      await screen.findByRole("option", { name: /Varianti RAW: apri cartella…/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", {
+        name: (n) => n.startsWith("Vai a Varianti RAW (Fujifilm X-T5)") && n.includes("Ctrl+9"),
+      }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(useLayout.getState().module).toBe("raw-review");
+    expect(usePalette.getState().open).toBe(false);
+  });
+
   it("i comandi mostrano la scorciatoia; usati di recente compaiono a palette vuota", async () => {
     renderShell();
     const { user } = await openAndType("catalog");

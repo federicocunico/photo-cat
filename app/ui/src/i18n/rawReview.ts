@@ -97,6 +97,12 @@ const valuesEn: Record<MetaValueKey, string> = {
 
 export const rawReview = {
   it: {
+    rawReviewPage: {
+      subtitle:
+        "Confronta le varianti di simulazione pellicola dei RAW della Fujifilm X-T5 e scegli la migliore.",
+      emptyTitle: "Nessuna cartella aperta",
+      emptyHint: "Scegli una cartella di RAW Fujifilm per iniziare la revisione.",
+    },
     rawReviewMeta: {
       sections: {
         shot: "Scatto",
@@ -142,6 +148,12 @@ export const rawReview = {
     },
   },
   en: {
+    rawReviewPage: {
+      subtitle:
+        "Compare the film simulation variants of Fujifilm X-T5 RAW files and pick the best one.",
+      emptyTitle: "No folder open",
+      emptyHint: "Choose a folder of Fujifilm RAW files to start the review.",
+    },
     rawReviewMeta: {
       sections: {
         shot: "Shot",

@@ -47,6 +47,7 @@ export const NAV_GROUPS: Array<{
     modules: [
       { id: "import", icon: Icon.Import },
       { id: "organize", icon: Icon.Export },
+      { id: "raw-review", icon: Icon.RawReview },
     ],
   },
   {
@@ -58,7 +59,7 @@ export const NAV_GROUPS: Array<{
   },
 ];
 
-/** Tutte le voci, nell'ordine in cui compaiono, con la scorciatoia Ctrl+1…8. */
+/** Tutte le voci, nell'ordine in cui compaiono, con la scorciatoia Ctrl+1…9. */
 export const MODULES: NavItem[] = (() => {
   let n = 0;
   return NAV_GROUPS.flatMap((g) =>

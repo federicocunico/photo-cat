@@ -58,6 +58,9 @@ vi.mock("./modules/import/ImportPage", () => ({ ImportPage: () => <p>page:import
 vi.mock("./modules/jobs/JobsPage", () => ({ JobsPage: () => <p>page:jobs</p> }));
 vi.mock("./modules/models/ModelsPage", () => ({ ModelsPage: () => <p>page:models</p> }));
 vi.mock("./modules/organize/OrganizePage", () => ({ OrganizePage: () => <p>page:organize</p> }));
+vi.mock("./modules/raw-review/RawReviewPage", () => ({
+  RawReviewPage: () => <p>page:raw-review</p>,
+}));
 vi.mock("./modules/ai/AiPage", () => ({ AiPage: () => <p>page:ai</p> }));
 vi.mock("./modules/settings/SettingsPage", () => ({ SettingsPage: () => <p>page:settings</p> }));
 vi.mock("./modules/diagnostics/DiagnosticsPage", () => ({
@@ -109,6 +112,7 @@ describe("moduli di navigazione", () => {
       "ai",
       "import",
       "organize",
+      "raw-review",
       "jobs",
       "settings",
     ]);
@@ -127,6 +131,7 @@ describe("moduli di navigazione", () => {
       import: "Importa",
       jobs: "Attività",
       organize: "Esporta",
+      "raw-review": "Varianti RAW (Fujifilm X-T5)",
       settings: "Impostazioni",
     };
     // Le voci dei moduli più il comando che riduce la navigazione.

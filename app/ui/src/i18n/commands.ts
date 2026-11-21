@@ -52,6 +52,7 @@ export const commandStrings = {
     },
     commands: {
       goTo: "Vai a {{name}}",
+      rawReviewOpen: "Varianti RAW: apri cartella…",
       toggleNav: "Riduci o espandi la navigazione",
       toggleInspector: "Mostra o nascondi l'ispettore",
       toggleSidePanels: "Mostra o nascondi i pannelli laterali",
@@ -128,6 +129,7 @@ export const commandStrings = {
     },
     commands: {
       goTo: "Go to {{name}}",
+      rawReviewOpen: "RAW variants: open folder…",
       toggleNav: "Collapse or expand navigation",
       toggleInspector: "Show or hide the inspector",
       toggleSidePanels: "Show or hide side panels",

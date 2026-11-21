@@ -16,6 +16,7 @@ export type ModuleId =
   | "import"
   | "jobs"
   | "organize"
+  | "raw-review"
   | "ai"
   | "settings";
 
@@ -44,12 +45,16 @@ export interface DiagFilter {
 export type PeopleTarget =
   { person: number } | { face: number } | { media: number; person?: number | null };
 
+/** Sessione di revisione RAW da aprire: id di una sessione salvata e/o cartella di scatti. */
+export type RawReviewTarget = { sessionId?: string; root?: string };
+
 /** Dove portare l'utente: un modulo, ed eventualmente una sezione o un elemento. */
 export type Destination =
   | { module: ModuleId }
   | { module: "jobs"; target: number }
   | { module: "ai"; section?: AiSection }
   | { module: "people"; target: PeopleTarget }
+  | ({ module: "raw-review" } & RawReviewTarget)
   | { module: "settings"; section: Exclude<SettingsSection, "diagnostics"> }
   | { module: "settings"; section: "diagnostics"; target?: DiagFilter };
 
@@ -75,6 +80,8 @@ interface LayoutState {
   diagFilter: DiagFilter;
   /** Destinazione consumata da PeopleModule (non persistita). */
   peopleTarget: PeopleTarget | null;
+  /** Sessione da aprire in Varianti RAW, consumata dal modulo (non persistita). */
+  rawReviewTarget: RawReviewTarget | null;
   /** Attività da mostrare all'apertura di Attività (non persistita). */
   jobFocus: number | null;
   /** Apre un modulo, una sezione di Impostazioni o un elemento (persona, filtro degli errori). */
@@ -93,6 +100,7 @@ interface LayoutState {
   setTheme: (t: ThemePref) => void;
   setLanguage: (l: Language) => void;
   clearPeopleTarget: () => void;
+  clearRawReviewTarget: () => void;
 }
 
 /** Pannelli com'erano prima di Tab, per ripristinarli al Tab successivo. */
@@ -146,6 +154,7 @@ export function destinationFor(id: string): Destination | null {
     "import",
     "jobs",
     "organize",
+    "raw-review",
     "ai",
     "settings",
   ];
@@ -171,12 +180,17 @@ export const useLayout = create<LayoutState>()(
       language: "it",
       diagFilter: {},
       peopleTarget: null,
+      rawReviewTarget: null,
       jobFocus: null,
       openModule: (to) => {
         const next: Partial<LayoutState> = { module: to.module };
         if (to.module === "ai") {
           if ("section" in to && to.section) next.aiSection = to.section;
         } else if ("section" in to) next.settingsSection = to.section as SettingsSection;
+        if (to.module === "raw-review") {
+          const { sessionId, root } = to as RawReviewTarget;
+          next.rawReviewTarget = sessionId || root ? { sessionId, root } : null;
+        }
         if ("target" in to) {
           if (to.module === "people") next.peopleTarget = to.target;
           else if (to.module === "jobs") next.jobFocus = to.target;
@@ -211,6 +225,7 @@ export const useLayout = create<LayoutState>()(
       setTheme: (theme) => set({ theme }),
       setLanguage: (language) => set({ language }),
       clearPeopleTarget: () => set({ peopleTarget: null }),
+      clearRawReviewTarget: () => set({ rawReviewTarget: null }),
     }),
     {
       name: "photo-cat.layout",

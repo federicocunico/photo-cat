@@ -12,6 +12,7 @@ import { PeopleModule } from "./modules/people/PeopleModule";
 import { AiPage } from "./modules/ai/AiPage";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
+import { RawReviewPage } from "./modules/raw-review/RawReviewPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
 import { TagsPage } from "./modules/tags/TagsPage";
 import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
@@ -44,6 +45,8 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <SequencePage />;
     case "organize":
       return <OrganizePage />;
+    case "raw-review":
+      return <RawReviewPage />;
     case "ai":
       return <AiPage />;
     case "settings":
