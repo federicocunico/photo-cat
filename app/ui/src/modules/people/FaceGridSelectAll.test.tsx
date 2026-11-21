@@ -127,6 +127,21 @@ describe("FaceGrid Seleziona tutto", () => {
     expect(arg.faces).toEqual(ALL);
   });
 
+  it("Non è questa persona su «tutti» invia una sola correzione con i 400 id", async () => {
+    renderGrid();
+    await screen.findByTestId("face-1");
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await screen.findByText("400 selezionati");
+    fireEvent.click(screen.getByRole("button", { name: /Non è questa persona/i }));
+    await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalled());
+    expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
+    expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+      action: "reject",
+      person: 1,
+      faces: ALL,
+    });
+  });
+
   it("Ctrl+clic su un volto lo toglie dal «tutti» e Inverti scambia l'insieme", async () => {
     renderGrid();
     await screen.findByTestId("face-1");

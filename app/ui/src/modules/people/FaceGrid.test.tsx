@@ -167,12 +167,7 @@ describe("FaceGrid selezione e azioni", () => {
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "reject",
         person: 1,
-        face: 1,
-      });
-      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
-        action: "reject",
-        person: 1,
-        face: 2,
+        faces: [1, 2],
       });
     });
 
@@ -190,10 +185,10 @@ describe("FaceGrid selezione e azioni", () => {
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByRole("button", { name: /Rimuovi volto/i }));
     const dialog = await screen.findByRole("alertdialog", { name: /Rimuovere il volto/i });
-    expect(commandsMock.correctPerson).not.toHaveBeenCalledWith({ action: "remove", face: 1 });
+    expect(commandsMock.correctPerson).not.toHaveBeenCalledWith({ action: "remove", faces: [1] });
     fireEvent.click(within(dialog).getByRole("button", { name: /^Rimuovi volto$/i }));
     await waitFor(() =>
-      expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "remove", face: 1 }),
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "remove", faces: [1] }),
     );
   });
 

@@ -2686,20 +2686,36 @@ pub fn separate(c: &Connection, ids: &[i64], from: i64) -> StoreResult<i64> {
     Ok(target)
 }
 pub fn reject(c: &Connection, face: i64, person: i64) -> StoreResult<()> {
-    let f = records(c, None)?
-        .into_iter()
-        .find(|f| f.id == face)
-        .ok_or_else(|| StoreError::NotFound("volto".into()))?;
-    let mut rejected = f.rejected;
-    if !rejected.contains(&person) {
-        rejected.push(person);
+    reject_faces(c, &[face], person)
+}
+/// Rifiuta più volti per la persona con un solo ricalcolo dei centroidi.
+/// Un volto inesistente annulla l'intera operazione (i chiamanti la eseguono in transazione).
+pub fn reject_faces(c: &Connection, faces: &[i64], person: i64) -> StoreResult<()> {
+    if faces.is_empty() {
+        return Ok(());
     }
-    c.execute(
-        "UPDATE face SET rejected=?2,person_id=NULL,assigned_by=NULL WHERE id=?1",
-        params![face, serde_json::to_string(&rejected)?],
-    )?;
+    let wanted: HashSet<i64> = faces.iter().copied().collect();
+    let found: Vec<FaceRecord> = records(c, None)?
+        .into_iter()
+        .filter(|f| wanted.contains(&f.id))
+        .collect();
+    if found.len() != wanted.len() {
+        return Err(StoreError::NotFound("volto".into()));
+    }
+    let mut media = HashSet::new();
+    for f in found {
+        let mut rejected = f.rejected;
+        if !rejected.contains(&person) {
+            rejected.push(person);
+        }
+        c.execute(
+            "UPDATE face SET rejected=?2,person_id=NULL,assigned_by=NULL WHERE id=?1",
+            params![f.id, serde_json::to_string(&rejected)?],
+        )?;
+        media.insert(f.media_id);
+    }
     refresh_centroids(c)?;
-    repo::fts::refresh(c, f.media_id)
+    refresh_media(c, &media)
 }
 /// Unione senza ricalcolo di centroidi e media: restituisce i media da aggiornare.
 fn merge_rows(c: &Connection, from: i64, to: i64) -> StoreResult<HashSet<i64>> {
@@ -2790,17 +2806,32 @@ pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
     refresh_media(c, &media)
 }
 pub fn remove_face(c: &Connection, id: i64) -> StoreResult<()> {
-    let f = records(c, None)?
+    remove_faces(c, &[id])
+}
+/// Rimuove più volti (con esclusione del riquadro) con un solo ricalcolo dei centroidi.
+pub fn remove_faces(c: &Connection, ids: &[i64]) -> StoreResult<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let wanted: HashSet<i64> = ids.iter().copied().collect();
+    let found: Vec<FaceRecord> = records(c, None)?
         .into_iter()
-        .find(|f| f.id == id)
-        .ok_or_else(|| StoreError::NotFound("volto".into()))?;
-    c.execute(
-        "INSERT INTO face_exclusion(media_id,bbox) VALUES (?1,?2)",
-        params![f.media_id, serde_json::to_string(&f.bbox)?],
-    )?;
-    c.execute("DELETE FROM face WHERE id=?1", [id])?;
+        .filter(|f| wanted.contains(&f.id))
+        .collect();
+    if found.len() != wanted.len() {
+        return Err(StoreError::NotFound("volto".into()));
+    }
+    let mut media = HashSet::new();
+    for f in found {
+        c.execute(
+            "INSERT INTO face_exclusion(media_id,bbox) VALUES (?1,?2)",
+            params![f.media_id, serde_json::to_string(&f.bbox)?],
+        )?;
+        c.execute("DELETE FROM face WHERE id=?1", [f.id])?;
+        media.insert(f.media_id);
+    }
     refresh_centroids(c)?;
-    repo::fts::refresh(c, f.media_id)
+    refresh_media(c, &media)
 }
 /// "Elimina tutti i dati dei volti": volti e persone della libreria e volti di
 /// riferimento delle identità in `app.db` (le identità restano).

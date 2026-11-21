@@ -1595,3 +1595,61 @@ fn face_selection_follows_singles_and_discarded_scopes() {
         1
     );
 }
+
+fn many_faces(n: usize) -> (Connection, Vec<i64>, i64) {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'synthetic.jpg','synthetic.jpg','jpg',1,1,1,1)",[]).unwrap();
+    let found: Vec<_> = (0..n).map(|i| face(0.01 * i as f32, i % 100)).collect();
+    people::save_faces(&c, 1, &found, "sface1", "det1+sface1", 0.363).unwrap();
+    let ids: Vec<i64> = people::records(&c, Some(1))
+        .unwrap()
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    let person = people::create_person(&c, None).unwrap();
+    people::assign(&c, &ids, person).unwrap();
+    (c, ids, person)
+}
+
+#[test]
+fn reject_faces_in_one_call_with_a_single_undo_entry() {
+    let (c, ids, person) = many_faces(30);
+    let states = people::face_states(&c, &ids).unwrap();
+    people::reject_faces(&c, &ids, person).unwrap();
+    pc_store::bulk::record_undo(
+        &c,
+        "Non è questa persona",
+        &pc_store::bulk::UndoAction::FacesRestored {
+            states,
+            created: None,
+        },
+    )
+    .unwrap();
+    let after = people::records(&c, None).unwrap();
+    assert!(after
+        .iter()
+        .all(|f| f.person_id.is_none() && f.rejected.contains(&person)));
+    let entries: i64 = c
+        .query_row("SELECT count(*) FROM undo_log", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(entries, 1);
+    pc_store::bulk::undo_last(&c).unwrap();
+    let back = people::records(&c, None).unwrap();
+    assert_eq!(back.len(), 30);
+    assert!(back
+        .iter()
+        .all(|f| f.person_id == Some(person) && !f.rejected.contains(&person)));
+}
+
+#[test]
+fn remove_faces_in_one_call_and_unknown_face_is_an_error() {
+    let (c, ids, _) = many_faces(30);
+    assert!(people::remove_faces(&c, &[ids[0], 9_999_999]).is_err());
+    people::remove_faces(&c, &ids[..20]).unwrap();
+    assert_eq!(people::records(&c, None).unwrap().len(), 10);
+    let n: i64 = c
+        .query_row("SELECT count(*) FROM face_exclusion", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 20);
+}

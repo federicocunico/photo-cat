@@ -17,8 +17,8 @@ pub enum Correction {
     Merge { from: i64, to: i64 },
     Separate { person: i64, faces: Vec<i64> },
     Assign { person: i64, faces: Vec<i64> },
-    Reject { person: i64, face: i64 },
-    Remove { face: i64 },
+    Reject { person: i64, faces: Vec<i64> },
+    Remove { faces: Vec<i64> },
     MergeMany { from: Vec<i64>, to: i64 },
     Move { faces: Vec<i64>, to: i64 },
     NotSame { a: i64, b: i64 },
@@ -267,9 +267,9 @@ pub async fn correct_person(
                 Correction::Assign { person, faces } => {
                     move_with_undo(c, &faces, person, |c| people::assign(c, &faces, person))?
                 }
-                Correction::Reject { person, face } => {
-                    let states = people::face_states(c, &[face])?;
-                    people::reject(c, face, person)?;
+                Correction::Reject { person, faces } => {
+                    let states = people::face_states(c, &faces)?;
+                    people::reject_faces(c, &faces, person)?;
                     bulk::record_undo(
                         c,
                         "Non è questa persona",
@@ -279,7 +279,7 @@ pub async fn correct_person(
                         },
                     )?;
                 }
-                Correction::Remove { face } => people::remove_face(c, face)?,
+                Correction::Remove { faces } => people::remove_faces(c, &faces)?,
                 Correction::MergeMany { from, to } => {
                     let from: Vec<i64> = from.into_iter().filter(|id| *id != to).collect();
                     if from.is_empty() {

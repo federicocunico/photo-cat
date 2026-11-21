@@ -596,7 +596,7 @@ export type Config = {
 	external_apps?: ExternalApp[],
 };
 
-export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number } | { action: "assign_identity"; identity: string; faces: number[] };
+export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; faces: number[] } | { action: "remove"; faces: number[] } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number } | { action: "assign_identity"; identity: string; faces: number[] };
 
 export type CrashInfo = {
 	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */

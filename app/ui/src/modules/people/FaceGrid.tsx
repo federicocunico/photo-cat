@@ -338,7 +338,7 @@ export const FaceGrid = forwardRef<
 
   const reject = (gid: number, explicit?: number[]) =>
     correct(
-      (ids) => ids.map((face): Correction => ({ action: "reject", person: gid, face })),
+      (ids) => [{ action: "reject", person: gid, faces: ids }],
       (n) => t("people.rejectedDone", { count: n }),
       explicit,
     );
@@ -797,7 +797,7 @@ export const FaceGrid = forwardRef<
         message={t("people.removeBody")}
         confirmLabel={t("people.removeButton", { count: selectedCount })}
         onConfirm={() =>
-          correct((ids) => ids.map((face): Correction => ({ action: "remove", face })))
+          correct((ids) => [{ action: "remove", faces: ids }])
         }
       />
 

@@ -308,13 +308,15 @@ describe("Correzioni su librerie grandi (issue #31, #28, #30)", () => {
     fireEvent.click(screen.getByTestId("face-2"), { ctrlKey: true });
     const reject = screen.getByRole("button", { name: "Non è questa persona (2)" });
     fireEvent.click(reject);
-    // Avanzamento visibile durante l'operazione (issue #28).
-    expect(await screen.findByText("Elaborazione: 0 di 2 volti…")).toBeInTheDocument();
-    await act(async () => finish());
-    expect(await screen.findByText("Elaborazione: 1 di 2 volti…")).toBeInTheDocument();
+    await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1));
+    expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+      action: "reject",
+      person: 12,
+      faces: [1, 2],
+    });
     await act(async () => finish());
     await waitFor(() => expect(screen.queryByText(/Elaborazione/)).not.toBeInTheDocument());
-    expect(commandsMock.correctPerson).toHaveBeenCalledTimes(2);
+    expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Rimuovi volto" })).toBeInTheDocument();
   });
 });
