@@ -152,6 +152,34 @@ impl DateSource {
     }
 }
 
+/// Precisione di una data di scatto impostata a mano.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum DatePrecision {
+    Day,
+    Month,
+    Year,
+}
+
+impl DatePrecision {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Day => "day",
+            Self::Month => "month",
+            Self::Year => "year",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "day" => Some(Self::Day),
+            "month" => Some(Self::Month),
+            "year" => Some(Self::Year),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -166,6 +194,12 @@ pub struct MediaDates {
     /// Dispositivo normalizzato (marca + modello).
     #[serde(default)]
     pub device: Option<String>,
+    /// Data impostata a mano (`AAAA-MM-GG HH:MM:SS`, primo istante del periodo).
+    /// Quando c'è, `captured_source` è `manual` e `captured_at` resta quella del file.
+    #[serde(default)]
+    pub manual_at: Option<String>,
+    #[serde(default)]
+    pub manual_precision: Option<DatePrecision>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

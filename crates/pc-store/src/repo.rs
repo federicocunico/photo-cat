@@ -332,16 +332,27 @@ pub mod meta {
 
     pub fn dates(c: &Connection, id: MediaId) -> StoreResult<Option<MediaDates>> {
         Ok(c.query_row(
-            "SELECT captured_at, captured_source, modified_at, declared_offset_min, device FROM media_dates WHERE media_id=?1",
+            "SELECT captured_at, captured_source, modified_at, declared_offset_min, device, manual_at, manual_precision FROM media_dates WHERE media_id=?1",
             [id],
             |r| {
                 let src: Option<String> = r.get(1)?;
+                let manual_at: Option<String> = r.get(5)?;
+                let precision: Option<String> = r.get(6)?;
+                let captured_source = if manual_at.is_some() {
+                    Some(DateSource::Manual)
+                } else {
+                    src.as_deref().and_then(DateSource::parse)
+                };
                 Ok(MediaDates {
                     captured_at: r.get(0)?,
-                    captured_source: src.as_deref().and_then(DateSource::parse),
+                    captured_source,
                     modified_at: r.get(2)?,
                     declared_offset_min: r.get(3)?,
                     device: r.get(4)?,
+                    manual_at,
+                    manual_precision: precision
+                        .as_deref()
+                        .and_then(crate::model::DatePrecision::parse),
                 })
             },
         )

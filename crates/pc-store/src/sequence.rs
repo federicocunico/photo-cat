@@ -112,6 +112,7 @@ fn scope_where(c: &Connection, scope: &SequenceScope) -> StoreResult<(String, Ve
 /// Foto datate (o collocate) dell'ambito.
 const DATED: &str = "d.instant_utc IS NOT NULL
     AND (d.captured_source IS NULL OR d.captured_source <> 'file_system'
+         OR d.manual_at IS NOT NULL
          OR d.media_id IN (SELECT media_id FROM media_time_placement))";
 
 /// Sottoquery con l'indice di sessione di ogni foto (pause oltre `gap_ms`).
@@ -258,6 +259,7 @@ pub fn undated(c: &Connection, scope: &SequenceScope) -> StoreResult<Vec<Undated
          FROM media_item m JOIN media_dates d ON d.media_id = m.id
          LEFT JOIN media_tech t ON t.media_id = m.id
          WHERE (d.captured_source = 'file_system' OR d.captured_at IS NULL)
+           AND d.manual_at IS NULL
            AND m.id NOT IN (SELECT media_id FROM media_time_placement)
            AND {scope_sql}
          ORDER BY m.name COLLATE NOCASE, m.id"

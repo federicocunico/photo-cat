@@ -60,6 +60,14 @@ pub enum BulkAction {
     SetColorTrait {
         color_trait: Option<pc_store::model::ColorTrait>,
     },
+    /// Data di scatto manuale (`value`: `AAAA`, `AAAA-MM`, `AAAA-MM-GG [HH:MM[:SS]]`
+    /// secondo `precision`).
+    SetManualDate {
+        value: String,
+        precision: pc_store::model::DatePrecision,
+    },
+    /// Ripristina la data letta dal file.
+    ClearManualDate,
     RemoveLibrary,
     /// Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato).
     RejectAutoLabels {
@@ -99,6 +107,10 @@ impl BulkAction {
                 bulk::set_place(c, ids, place.as_ref(), resolve)?.changed
             }
             Self::SetRating { rating } => bulk::set_rating(c, ids, *rating)?.changed,
+            Self::SetManualDate { value, precision } => {
+                bulk::set_manual_date(c, ids, value, *precision)?.changed
+            }
+            Self::ClearManualDate => bulk::clear_manual_date(c, ids)?.changed,
             Self::SetColorTrait { color_trait } => {
                 bulk::set_color_trait(c, ids, *color_trait)?.changed
             }
@@ -700,6 +712,44 @@ mod tests {
         db.write(bulk::undo_last).unwrap();
         db.write(bulk::undo_last).unwrap();
         assert_eq!(ratings(&db, &[1]), [(1, 2, Some("bw".into()))]);
+    }
+
+    #[test]
+    fn manual_date_actions_parse_apply_and_undo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        seed(&db, 1, 2);
+        let set: BulkAction = serde_json::from_value(
+            serde_json::json!({"action":"set_manual_date","value":"1984-06","precision":"month"}),
+        )
+        .unwrap();
+        let clear: BulkAction =
+            serde_json::from_value(serde_json::json!({"action":"clear_manual_date"})).unwrap();
+        let manual = |db: &Store| -> Vec<Option<String>> {
+            db.read(|c| {
+                Ok((1..=2)
+                    .map(|id| {
+                        c.query_row(
+                            "SELECT manual_at FROM media_dates WHERE media_id = ?1",
+                            [id],
+                            |r| r.get(0),
+                        )
+                        .unwrap_or(None)
+                    })
+                    .collect())
+            })
+            .unwrap()
+        };
+        db.write(move |c| set.apply(c, &[1, 2], None, &mut Vec::new()))
+            .unwrap();
+        assert!(manual(&db)
+            .iter()
+            .all(|m| m.as_deref() == Some("1984-06-01 00:00:00")));
+        db.write(move |c| clear.apply(c, &[1], None, &mut Vec::new()))
+            .unwrap();
+        assert_eq!(manual(&db)[0], None);
+        db.write(bulk::undo_last).unwrap();
+        assert!(manual(&db)[0].is_some());
     }
 
     #[test]
