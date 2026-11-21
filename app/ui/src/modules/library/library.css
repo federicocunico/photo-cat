@@ -702,3 +702,15 @@ body[data-photo-drag] {
   font-size: 12px;
   color: var(--pc-danger, #d9534f);
 }
+
+.inspector-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+}
+
+.inspector-date-fields {
+  display: flex;
+  gap: var(--pc-space-2);
+}

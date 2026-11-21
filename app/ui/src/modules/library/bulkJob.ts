@@ -26,6 +26,10 @@ const UNDOABLE = new Set<BulkAction["action"]>([
   "restore_to_catalog",
   "set_label",
   "set_place",
+  "set_rating",
+  "set_color_trait",
+  "set_manual_date",
+  "clear_manual_date",
 ]);
 
 export const isUndoable = (op: BulkAction) => UNDOABLE.has(op.action);

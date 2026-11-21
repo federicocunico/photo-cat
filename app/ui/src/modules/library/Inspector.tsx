@@ -29,6 +29,7 @@ import { CategoryPicker } from "./CategoryPicker";
 import { OpenInPeople } from "../people/OpenInPeople";
 import { useCatalogAction } from "./useCatalogAction";
 import { useBulkJob } from "./bulkJob";
+import { CapturedRow, ColorTraitRow, RatingRow } from "./InspectorQuality";
 
 /** Oltre questo numero di foto non si caricano i dettagli per i valori comuni. */
 const COMMON_LIMIT = 200;
@@ -288,7 +289,11 @@ function SingleInspector({ d }: { d: MediaDetail }) {
 
       <Section id="data" title={t("library.inspector.sections.data")}>
         <Grid2>
-          <Field label={t("library.inspector.captured")} value={fmtCaptured(d.dates?.capturedAt)} />
+          <CapturedRow
+            apply={edit.apply}
+            dates={d.dates}
+            captured={fmtCaptured(d.dates?.capturedAt)}
+          />
           <Field
             label={t("library.inspector.dateSource")}
             value={
@@ -297,6 +302,8 @@ function SingleInspector({ d }: { d: MediaDetail }) {
                 : null
             }
           />
+          <RatingRow apply={edit.apply} rating={d.rating} />
+          <ColorTraitRow apply={edit.apply} colorTrait={d.colorTrait} />
           <PlaceRow
             edit={edit}
             name={d.location?.name ?? null}
@@ -457,6 +464,14 @@ function MultiInspector() {
       <h2 className="inspector-name">{t("library.inspector.multiple", { count })}</h2>
       <Section id="data" title={t("library.inspector.sections.data")}>
         <Grid2>
+          <RatingRow
+            apply={edit.apply}
+            rating={known ? common(loaded.map((d) => d.rating)) : undefined}
+          />
+          <ColorTraitRow
+            apply={edit.apply}
+            colorTrait={known ? common(loaded.map((d) => d.colorTrait)) : undefined}
+          />
           <PlaceRow
             edit={edit}
             name={place ?? null}
