@@ -67,6 +67,7 @@ export function toQuery(f: DiagFilter): ErrorQuery {
     jobId: f.jobId ?? null,
     code: null,
     text: f.text?.trim() ? f.text.trim() : null,
+    archived: f.archived ? true : null,
     limit: 500,
     offset: 0,
   };
