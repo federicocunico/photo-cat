@@ -59,7 +59,7 @@
 
 ## 6. Verifica
 
-- [ ] 6.1 `cargo test` del workspace, typecheck, lint e test UI, poi `make test-linux` con i nuovi file in stage. Correggere ogni errore.
+- [x] 6.1 `cargo test` del workspace, typecheck, lint e test UI, poi `make test-linux` con i nuovi file in stage. Correggere ogni errore.
 - [ ] 6.2 Prova manuale nell'app (skill `run`) su una libreria con scansioni:
   - data "solo anno";
   - Persone ordinate per anno;
