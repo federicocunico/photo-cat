@@ -2122,7 +2122,7 @@ export type TemplateError = {
 	text: string,
 };
 
-export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | "empty";
+export type TemplateErrorKind = "unknown_token" | "unavailable_token" | "invalid_char" | "unclosed" | "empty";
 
 export type Theme = 
 /**  Segue il tema del sistema operativo: predefinito per le nuove installazioni. */

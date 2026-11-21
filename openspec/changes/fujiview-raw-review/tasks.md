@@ -55,7 +55,7 @@
 
 ## 4. Export in un nuovo catalogo
 
-- [ ] 4.1 Token `{preset}` e contesto ridotto nel motore dei nomi di `pc-organize::sequence::naming`; il token viene rifiutato fuori dalla revisione. Test Rust:
+- [x] 4.1 Token `{preset}` e contesto ridotto nel motore dei nomi di `pc-organize::sequence::naming`; il token viene rifiutato fuori dalla revisione. Test Rust:
   - numerazione per data di scatto ("Dolomiti_0001…");
   - suffisso per i nomi uguali;
   - modello non valido segnalato.
