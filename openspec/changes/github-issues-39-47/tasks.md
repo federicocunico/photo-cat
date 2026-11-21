@@ -47,14 +47,14 @@
   - foto mancante mostra un avviso;
   - il ritorno alla stessa posizione della griglia.
 - [x] 4.2 `FaceSort::CapturedAsc`, query `group_face_years` e ordinamento per `instant_utc`, con i volti senza data in fondo (D4). Test Rust: cursore stabile a pagine, date manuali rispettate, conteggi per anno.
-- [ ] 4.3 Selettore di ordinamento nella griglia, intestazioni per anno con conteggi, "Senza data" e preferenza salvata in `ui_prefs`. Test vitest: scelta ricordata e selezione conservata al cambio di ordinamento.
+- [x] 4.3 Selettore di ordinamento nella griglia, intestazioni per anno con conteggi, "Senza data" e preferenza salvata in `ui_prefs`. Test vitest: scelta ricordata e selezione conservata al cambio di ordinamento.
 
 ## 5. Import, errori e monitoraggio (#44, #45, #46)
 
 - [x] 5.1 Import: `missing_since` valorizzato quando un file diventa mancante, `import.ack.<source>` e comando `acknowledgeSourceWarnings` (D6). Test Rust: "5 mancanti" ignorati, poi 2 nuovi mancanti contano 2; il riepilogo sostituito non porta errori vecchi.
-- [ ] 5.2 Pagina Import: avvisi limitati all'ultimo aggiornamento, pulsante "Ignora", menu Ricollega/Rimuovi finché ci sono mancanti. Test vitest degli scenari di `media-ingestion`.
-- [ ] 5.3 Errori archiviati (D7): `archive_errors` e `unarchive_errors`, `ErrorQuery.archived`, `errorCount` che conta solo le voci non archiviate. In Diagnostica: azioni "Archivia" su voce, gruppo e filtro, filtro "Archiviati" e "Ripristina". Test Rust e vitest: indicatore globale a zero, nuovo errore conteggiato, log intatto.
-- [ ] 5.4 Monitoraggio (D8): etichetta "Aggiorna automaticamente", tooltip, voce della guida, stato per sorgente (attivo · ultimo alle HH:MM / non raggiungibile) e `last_auto_update_at`. Test vitest del tooltip e degli stati; test Rust dello stato "non raggiungibile".
+- [x] 5.2 Pagina Import: avvisi limitati all'ultimo aggiornamento, pulsante "Ignora", menu Ricollega/Rimuovi finché ci sono mancanti. Test vitest degli scenari di `media-ingestion`.
+- [x] 5.3 Errori archiviati (D7): `archive_errors` e `unarchive_errors`, `ErrorQuery.archived`, `errorCount` che conta solo le voci non archiviate. In Diagnostica: azioni "Archivia" su voce, gruppo e filtro, filtro "Archiviati" e "Ripristina". Test Rust e vitest: indicatore globale a zero, nuovo errore conteggiato, log intatto.
+- [x] 5.4 Monitoraggio (D8): etichetta "Aggiorna automaticamente", tooltip, voce della guida, stato per sorgente (attivo · ultimo alle HH:MM / non raggiungibile) e `last_auto_update_at`. Test vitest del tooltip e degli stati; test Rust dello stato "non raggiungibile".
 - [ ] 5.5 Revisione Opus delle parti 2, 4 e 5: aderenza alle spec delle issue e testi in italiano chiari per un utente non tecnico.
 
 ## 6. Verifica

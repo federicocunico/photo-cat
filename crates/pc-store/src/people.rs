@@ -1243,11 +1243,16 @@ fn scope_filter(scope: &FaceScope, m: &FaceMatch) -> (String, Option<i64>) {
             format!("f.person_id = ?1 AND NOT {discarded}"),
             Some(*group),
         ),
-        FaceScope::Singles => (format!("f.person_id IS NULL AND NOT {discarded}"), None),
+        // `?1 IS NULL` tiene il parametro presente anche negli ambiti senza gruppo,
+        // così le query che legano sempre `?1` hanno il numero giusto di parametri.
+        FaceScope::Singles => (
+            format!("?1 IS NULL AND f.person_id IS NULL AND NOT {discarded}"),
+            None,
+        ),
         FaceScope::Discarded { group: Some(g) } => {
             (format!("f.person_id = ?1 AND {discarded}"), Some(*g))
         }
-        FaceScope::Discarded { group: None } => (discarded, None),
+        FaceScope::Discarded { group: None } => (format!("?1 IS NULL AND {discarded}"), None),
     }
 }
 
