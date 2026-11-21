@@ -9,7 +9,7 @@ import { Icon } from "../../components/icons";
 import { IconButton, Tooltip } from "../../components/ui";
 import { commands } from "../../lib/ipc";
 import type { ImageMetadata, ReviewShotView } from "../../lib/ipc";
-import { notify } from "../../store/toasts";
+import { canChoose } from "./choose";
 import { metaLabel, metaValue, recipeSummary } from "./metaText";
 import { panelGrid } from "./project";
 import { presetLabel } from "./presetLabel";
@@ -31,6 +31,9 @@ type Props = {
   panels: readonly string[];
   winnerPreset: string | null;
   metadata: Record<string, ImageMetadata>;
+  /** Posizione del pannello a fuoco per la tastiera (Invio sceglie, le frecce lo spostano). */
+  focusedIndex?: number;
+  onFocusPanel?: (index: number) => void;
   onChoose: (preset: string) => void;
   onHide: (preset: string) => void;
 };
@@ -41,6 +44,8 @@ export function ComparePanels({
   panels,
   winnerPreset,
   metadata,
+  focusedIndex = -1,
+  onFocusPanel,
   onChoose,
   onHide,
 }: Props) {
@@ -65,17 +70,7 @@ export function ComparePanels({
   usePrefetch(sessionId, shot.key, panels);
 
   const choose = (preset: string) => {
-    const variant = shot.variants.find((v) => v.preset === preset);
-    if (!variant) return;
-    if (!variant.selectable) {
-      notify({
-        key: "raw-review-not-selectable",
-        tone: "info",
-        message: t("rawReviewCompare.rawNotChoosable"),
-      });
-      return;
-    }
-    onChoose(preset);
+    if (canChoose(shot, preset, t)) onChoose(preset);
   };
 
   return (
@@ -99,9 +94,13 @@ export function ComparePanels({
           viewport={viewport}
           onViewport={setViewport}
           winner={winnerPreset === preset}
+          focused={position === focusedIndex}
           metadata={metadata[preset]}
           canHide={panels.length > 1}
-          onChoose={() => choose(preset)}
+          onChoose={() => {
+            onFocusPanel?.(position);
+            choose(preset);
+          }}
           onHide={() => onHide(preset)}
         />
       ))}
@@ -176,6 +175,7 @@ type PanelProps = {
   viewport: Viewport;
   onViewport: (update: (view: Viewport) => Viewport) => void;
   winner: boolean;
+  focused: boolean;
   metadata: ImageMetadata | undefined;
   canHide: boolean;
   onChoose: () => void;
@@ -190,6 +190,7 @@ function Panel({
   viewport,
   onViewport,
   winner,
+  focused,
   metadata,
   canHide,
   onChoose,
@@ -249,7 +250,10 @@ function Panel({
 
   return (
     <section
-      className={`rr-panel${winner ? " is-winner" : ""}${variant ? "" : " is-missing"}`}
+      className={`rr-panel${winner ? " is-winner" : ""}${focused ? " is-focused" : ""}${
+        variant ? "" : " is-missing"
+      }`}
+      data-focused={focused ? "true" : undefined}
       aria-label={name}
     >
       <header className="rr-panel-head">

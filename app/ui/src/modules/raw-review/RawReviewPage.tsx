@@ -23,6 +23,7 @@ import {
   movePreset,
   saveOpenReview,
   selectShot,
+  setRating,
   showAllPresets,
   toggleVisible,
   useRawReview,
@@ -30,7 +31,11 @@ import {
 import { notifyError } from "../../store/toasts";
 import { ComparePanels } from "./ComparePanels";
 import { InfoSidebar } from "./InfoSidebar";
+import { RatingRow } from "../library/InspectorQuality";
+import { focusedPanel } from "./panelFocus";
 import { chooseProject } from "./pickers";
+import { ShotList } from "./ShotList";
+import { useRawReviewShortcuts } from "./useRawReviewShortcuts";
 import { forgetMetadata, useShotMetadata } from "./useShotMetadata";
 import "./raw-review.css";
 
@@ -113,7 +118,8 @@ export function RawReviewPage() {
   };
 
   // Lasciando il modulo la sessione resta aperta nello store (Ctrl+9 la ritrova): si salvano
-  // solo le scelte, così nulla va perso cambiando modulo.
+  // le scelte, anche quelle ancora nell'attesa del salvataggio automatico, così nulla va perso
+  // cambiando modulo.
   useEffect(() => () => void saveOpenReview(), []);
 
   const close = async () => {
@@ -232,6 +238,17 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
   ).length;
   const total = opened.shots.length;
 
+  // Pannello a fuoco per Invio e frecce: quello scelto, altrimenti la variante migliore o il primo.
+  // Un altro scatto riparte da capo.
+  const [panelChoice, setPanelChoice] = useState<{ shot: string | undefined; index: number | null }>(
+    { shot: shot?.key, index: null },
+  );
+  const chosenPanel = panelChoice.shot === shot?.key ? panelChoice.index : null;
+  const focused = focusedPanel(panels, chosenPanel, decision?.winnerPreset ?? null);
+  const focusPanel = (index: number) => setPanelChoice({ shot: shot?.key, index });
+
+  useRawReviewShortcuts({ shot, panels, focused, onFocus: focusPanel }, true);
+
   return (
     <div className="rr-review">
       <div className="rr-bar">
@@ -255,6 +272,13 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
         </Button>
       </div>
       <div className="rr-workspace">
+        <ShotList
+          sessionId={opened.sessionId}
+          shots={opened.shots}
+          decisions={opened.session.decisions}
+          current={shotIndex}
+          onOpen={selectShot}
+        />
         <div className="rr-main">
           {shot ? (
             <ComparePanels
@@ -262,6 +286,8 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
               shot={shot}
               panels={panels}
               winnerPreset={decision?.winnerPreset ?? null}
+              focusedIndex={focused}
+              onFocusPanel={focusPanel}
               metadata={metadata}
               onChoose={(preset) => void chooseWinner(shot.key, preset)}
               onHide={(preset) => void toggleVisible(preset)}
@@ -289,6 +315,16 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
               disabled={shotIndex >= total - 1}
               onClick={() => selectShot(shotIndex + 1)}
             />
+            {shot && (
+              <div className="rr-rating">
+                <RatingRow
+                  rating={decision?.rating ?? 0}
+                  apply={async (operation) => {
+                    if (operation.action === "set_rating") void setRating(shot.key, operation.rating ?? 0);
+                  }}
+                />
+              </div>
+            )}
             <span className="muted">{t("rawReviewCompare.decided", { count: decided })}</span>
             <span className="muted rr-footer-hint">{t("rawReviewCompare.hint")}</span>
           </nav>

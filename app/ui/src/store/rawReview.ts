@@ -25,8 +25,12 @@ interface RawReviewState {
   clear: () => void;
   setShotIndex: (index: number) => void;
   applyDecision: (decision: ShotDecision) => void;
+  /** Cambia solo alcuni campi della decisione di uno scatto (aggiornamenti ottimistici). */
+  patchDecision: (shotKey: string, patch: Partial<Omit<ShotDecision, "key">>) => void;
   applyPanels: (panels: PanelState) => void;
 }
+
+const EMPTY_DECISION = { rating: 0, winnerPreset: null, reviewed: false } as const;
 
 export const useRawReview = create<RawReviewState>()((set) => ({
   opened: null,
@@ -47,6 +51,28 @@ export const useRawReview = create<RawReviewState>()((set) => ({
               session: {
                 ...s.opened.session,
                 decisions: { ...s.opened.session.decisions, [decision.key]: decision },
+              },
+            },
+          }
+        : s,
+    ),
+  patchDecision: (shotKey, patch) =>
+    set((s) =>
+      s.opened
+        ? {
+            opened: {
+              ...s.opened,
+              session: {
+                ...s.opened.session,
+                decisions: {
+                  ...s.opened.session.decisions,
+                  [shotKey]: {
+                    ...EMPTY_DECISION,
+                    ...s.opened.session.decisions?.[shotKey],
+                    ...patch,
+                    key: shotKey,
+                  },
+                },
               },
             },
           }
@@ -82,8 +108,49 @@ export function candidatesOf(opened: OpenedReview): string[] {
   return panelCandidates(opened.layout, opened.presets, opened.guidePreset);
 }
 
-/** Salva la sessione aperta nei dati dell'app: da chiamare prima di lasciare il modulo. */
+/** Attesa dopo l'ultima modifica prima del salvataggio automatico. */
+export const AUTOSAVE_DELAY_MS = 500;
+
+// Le modifiche partono verso il backend una alla volta, nell'ordine in cui l'utente le fa: una
+// risposta in ritardo non può sovrascrivere una modifica più recente, e il salvataggio su disco
+// parte sempre dopo l'ultima modifica.
+let tail: Promise<unknown> = Promise.resolve();
+let inFlight = 0;
+function track<T>(run: Promise<T>): Promise<T> {
+  inFlight += 1;
+  const done = run.catch(() => undefined).then(() => {
+    inFlight -= 1;
+  });
+  tail = Promise.all([tail, done]);
+  return run;
+}
+function serial<T>(task: () => Promise<T>): Promise<T> {
+  return track(tail.then(task, task));
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function cancelAutosave() {
+  if (saveTimer !== null) clearTimeout(saveTimer);
+  saveTimer = null;
+}
+
+/** Chiede il salvataggio automatico dopo una pausa nelle modifiche (scelta, stelle, pannelli, scatto). */
+export function scheduleSave(): void {
+  cancelAutosave();
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void saveOpenReview();
+  }, AUTOSAVE_DELAY_MS);
+}
+
+/**
+ * Salva subito la sessione aperta nei dati dell'app, dopo le modifiche ancora in volo: da
+ * chiamare prima di lasciare il modulo. Annulla il salvataggio automatico in attesa.
+ */
 export async function saveOpenReview(): Promise<void> {
+  cancelAutosave();
+  // Senza modifiche in volo si salva subito (anche allo smontaggio); altrimenti si aspetta.
+  if (inFlight > 0) await tail;
   const id = useRawReview.getState().opened?.sessionId;
   if (!id) return;
   try {
@@ -105,22 +172,66 @@ export function selectShot(index: number): void {
   const next = Math.min(opened.shots.length - 1, Math.max(0, index));
   if (next === shotIndex) return;
   setShotIndex(next);
-  void commands.rawReviewSetLastShot(opened.sessionId, opened.shots[next].key).catch(() => {});
+  const { sessionId } = opened;
+  const key = opened.shots[next].key;
+  void track(Promise.resolve(commands.rawReviewSetLastShot(sessionId, key))).catch(() => {});
+  scheduleSave();
 }
 
-/** Sceglie la variante migliore dello scatto indicato (e lo segna come rivisto). */
-export async function chooseWinner(shotKey: string, preset: string): Promise<void> {
-  const { opened, applyDecision } = useRawReview.getState();
-  if (!opened) return;
-  try {
-    let decision = await commands.rawReviewSetWinner(opened.sessionId, shotKey, preset);
-    if (!decision.reviewed) {
-      decision = await commands.rawReviewSetReviewed(opened.sessionId, shotKey, true);
+/**
+ * Sceglie la variante migliore dello scatto indicato (e lo segna come rivisto). La scelta si
+ * vede subito; se il backend la rifiuta torna quella di prima. Non cambia lo scatto mostrato.
+ */
+export function chooseWinner(shotKey: string, preset: string): Promise<void> {
+  const { opened, patchDecision } = useRawReview.getState();
+  if (!opened) return Promise.resolve();
+  const { sessionId } = opened;
+  const before = opened.session.decisions?.[shotKey];
+  patchDecision(shotKey, { winnerPreset: preset, reviewed: true });
+  scheduleSave();
+  return serial(async () => {
+    try {
+      let decision = await commands.rawReviewSetWinner(sessionId, shotKey, preset);
+      if (!decision.reviewed) {
+        decision = await commands.rawReviewSetReviewed(sessionId, shotKey, true);
+      }
+      // Solo scelta e revisione: la valutazione può essere cambiata nel frattempo.
+      useRawReview.getState().patchDecision(shotKey, {
+        winnerPreset: decision.winnerPreset,
+        reviewed: decision.reviewed,
+      });
+    } catch (e) {
+      useRawReview.getState().patchDecision(shotKey, {
+        winnerPreset: before?.winnerPreset ?? null,
+        reviewed: before?.reviewed ?? false,
+      });
+      notifyError(e);
     }
-    applyDecision(decision);
-  } catch (e) {
-    notifyError(e);
-  }
+  });
+}
+
+/** Assegna da 0 a 5 stelle allo scatto indicato, con aggiornamento subito visibile. */
+export function setRating(shotKey: string, rating: number): Promise<void> {
+  const { opened, patchDecision } = useRawReview.getState();
+  if (!opened) return Promise.resolve();
+  const { sessionId } = opened;
+  const value = Math.min(5, Math.max(0, Math.round(rating)));
+  const before = opened.session.decisions?.[shotKey];
+  // Valutare segna lo scatto come rivisto (come in FujiView).
+  patchDecision(shotKey, { rating: value, reviewed: true });
+  scheduleSave();
+  return serial(async () => {
+    try {
+      const decision = await commands.rawReviewSetRating(sessionId, shotKey, value);
+      if (!decision?.reviewed) await commands.rawReviewSetReviewed(sessionId, shotKey, true);
+    } catch (e) {
+      patchDecision(shotKey, {
+        rating: before?.rating ?? 0,
+        reviewed: before?.reviewed ?? false,
+      });
+      notifyError(e);
+    }
+  });
 }
 
 type PanelEdit = (state: PanelState) => PanelState;
@@ -136,12 +247,15 @@ async function editPanels(
   const next = edit(before);
   if (next === before) return;
   applyPanels(next);
-  try {
-    applyPanels(await send(opened.sessionId));
-  } catch (e) {
-    applyPanels(before);
-    notifyError(e);
-  }
+  scheduleSave();
+  await serial(async () => {
+    try {
+      applyPanels(await send(opened.sessionId));
+    } catch (e) {
+      applyPanels(before);
+      notifyError(e);
+    }
+  });
 }
 
 export function toggleVisible(preset: string): Promise<void> {

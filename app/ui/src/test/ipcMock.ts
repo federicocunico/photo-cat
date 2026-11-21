@@ -53,6 +53,7 @@ import type {
   ShotDecision,
   PanelState,
   ReviewImageKey,
+  ThumbnailKey,
   PrefetchReport,
   ImageMetadata,
 } from "../bindings";
@@ -330,6 +331,11 @@ export const commandsMock = {
   rawReviewSetReviewed:
     vi.fn<(id: string, shot: string, reviewed: boolean) => Promise<ShotDecision>>(),
   rawReviewSetLastShot: vi.fn(async () => null),
+  rawReviewSetRating:
+    vi.fn<(id: string, shot: string, rating: number) => Promise<ShotDecision>>(),
+  rawReviewThumbnails: vi.fn<(id: string, shots: string[]) => Promise<ThumbnailKey[]>>(
+    async () => [],
+  ),
   rawReviewTogglePreset: vi.fn<(id: string, preset: string) => Promise<PanelState>>(),
   rawReviewMovePreset: vi.fn<(id: string, preset: string, to: number) => Promise<PanelState>>(),
   rawReviewShowAllPresets: vi.fn<(id: string) => Promise<PanelState>>(),
