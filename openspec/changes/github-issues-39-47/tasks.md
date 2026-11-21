@@ -15,13 +15,13 @@
   - valori fuori intervallo rifiutati;
   - l'annulla ripristina il valore per id;
   - 100.000 id sopra la soglia passano come job.
-- [ ] 1.3 Data manuale (D3): `set_manual_date(ids, value, precision)`, `clear_manual_date(ids)`, ricalcolo di `instant_utc` che ignora `shift_s` e annulla. Test Rust per gli scenari di `capture-timeline`:
+- [x] 1.3 Data manuale (D3): `set_manual_date(ids, value, precision)`, `clear_manual_date(ids)`, ricalcolo di `instant_utc` che ignora `shift_s` e annulla. Test Rust per gli scenari di `capture-timeline`:
   - "giugno 1984";
   - solo anno ordinato al 1° gennaio;
   - ripristino;
   - uscita dalle foto senza data;
   - scostamento di gruppo che non tocca la data manuale.
-- [ ] 1.4 Filtri e regole smart (`LibraryFilter.rating`, `color_trait`) in `compile_filter`, facet con conteggi, nodo "Anno senza mese" nel filtro per data. Test Rust su "almeno 4", "Non indicato", combinazione con un altro filtro e catalogo smart aggiornato dopo un bulk.
+- [x] 1.4 Filtri e regole smart (`LibraryFilter.rating`, `color_trait`) in `compile_filter`, facet con conteggi, nodo "Anno senza mese" nel filtro per data. Test Rust su "almeno 4", "Non indicato", combinazione con un altro filtro e catalogo smart aggiornato dopo un bulk.
 - [ ] 1.5 Revisione Opus della parte 1: correttezza dell'istante reale con date manuali, costo delle query sui nuovi indici, completezza dell'annulla.
 
 ## 2. Valutazione, colore e data nell'interfaccia (#41, #43)

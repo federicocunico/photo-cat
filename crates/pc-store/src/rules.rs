@@ -104,6 +104,9 @@ enum Kind {
     Exists,
 }
 
+/// Valori del campo `color_trait`; `none` = "Non indicato".
+const COLOR_RULE_VALUES: [&str; 5] = ["bw", "color", "faded", "sepia", "none"];
+
 fn field_kind(field: &str) -> StoreResult<Kind> {
     if let Some(grp) = field.strip_prefix("label.") {
         return if !grp.is_empty() && grp.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
@@ -114,8 +117,10 @@ fn field_kind(field: &str) -> StoreResult<Kind> {
     }
     Ok(match field {
         "person" | "tag" | "catalog" => Kind::Exists,
-        "format" | "place" | "captured_at" | "status" | "text" | "name" => Kind::Text,
-        "year" | "people_count" | "width" | "height" | "size" | "source" => Kind::Number,
+        "format" | "place" | "captured_at" | "status" | "text" | "name" | "color_trait" => {
+            Kind::Text
+        }
+        "year" | "rating" | "people_count" | "width" | "height" | "size" | "source" => Kind::Number,
         other => return Err(StoreError::Invalid(format!("campo sconosciuto: {other}"))),
     })
 }
@@ -139,6 +144,24 @@ fn check_value(kind: Kind, cmp: Cmp, v: &serde_json::Value, field: &str) -> Stor
         (Kind::Exists, _) => bad(),
         (Kind::Text, Cmp::Contains) if v.is_string() => Ok(()),
         (Kind::Text, _) if field == "text" => bad(),
+        (Kind::Text, Cmp::Contains | Cmp::Lt | Cmp::Lte | Cmp::Gt | Cmp::Gte)
+            if field == "color_trait" =>
+        {
+            bad()
+        }
+        (Kind::Text, _) if field == "color_trait" => {
+            if v.as_str().is_some_and(|s| COLOR_RULE_VALUES.contains(&s)) {
+                Ok(())
+            } else {
+                bad()
+            }
+        }
+        (Kind::Number, _) if field == "rating" && !matches!(cmp, Cmp::In | Cmp::Contains) => {
+            match v.as_i64() {
+                Some(0..=5) => Ok(()),
+                _ => bad(),
+            }
+        }
         (Kind::Number, Cmp::Contains) => bad(),
         (_, _) if scalar_ok(v) => Ok(()),
         _ => bad(),
@@ -338,6 +361,8 @@ fn compile_cond(
             return Ok(());
         }
         "format" => "m.ext",
+        "color_trait" => "COALESCE(m.color_trait, 'none')",
+        "rating" => "m.rating",
         "name" => "m.name",
         "status" => "m.status",
         "place" => "(SELECT lo.name FROM location lo WHERE lo.media_id = m.id)",

@@ -24,7 +24,7 @@ export const facetId = (key: FacetKey) =>
 export function facetFromId(id: string): FacetKey | null {
   if (id.startsWith("facet:label:")) return { kind: "label", group: id.slice(12) };
   const kind = id.slice(6);
-  return ["place", "year", "format", "tag"].includes(kind) && id.startsWith("facet:")
+  return ["place", "year", "format", "tag", "rating", "color"].includes(kind) && id.startsWith("facet:")
     ? ({ kind } as FacetKey)
     : null;
 }
@@ -99,6 +99,9 @@ export function selectedOf(key: FacetKey, f: LibraryFilter): string[] {
       return f.formats ?? [];
     case "tag":
       return f.tags ?? [];
+    case "rating":
+    case "color":
+      return []; // interfaccia nel task 2.3
   }
 }
 
@@ -118,6 +121,9 @@ export function toggleIn(key: FacetKey, f: LibraryFilter, v: string): Partial<Li
       return { formats: toggle(f.formats ?? [], v) };
     case "tag":
       return { tags: toggle(f.tags ?? [], v) };
+    case "rating":
+    case "color":
+      return {}; // interfaccia nel task 2.3
   }
 }
 
@@ -134,6 +140,10 @@ export function clearIn(key: FacetKey, f: LibraryFilter): Partial<LibraryFilter>
       return { formats: [] };
     case "tag":
       return { tags: [] };
+    case "rating":
+      return { rating: null };
+    case "color":
+      return { colorTrait: [] };
   }
 }
 
@@ -150,6 +160,8 @@ export function useFacetNames(key: FacetKey) {
             year: "library.facets.years",
             format: "library.facets.formats",
             tag: "library.facets.tags",
+            rating: "library.facets.ratings",
+            color: "library.facets.colors",
           }[key.kind],
         );
   const render = (v: string) =>

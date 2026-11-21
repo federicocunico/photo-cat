@@ -414,7 +414,14 @@ exclusive?: string[] } | { action: "remove_tag"; name: string } |
 /**  Valutazione da 1 a 5; `None` (o 0) la toglie. */
 { action: "set_rating"; rating: number | null } | 
 /**  Caratteristica di colore; `None` la toglie. */
-{ action: "set_color_trait"; color_trait: ColorTrait | null } | { action: "remove_library" } | 
+{ action: "set_color_trait"; color_trait: ColorTrait | null } | 
+/**
+ *  Data di scatto manuale (`value`: `AAAA`, `AAAA-MM`, `AAAA-MM-GG [HH:MM[:SS]]`
+ *  secondo `precision`).
+ */
+{ action: "set_manual_date"; value: string; precision: DatePrecision } | 
+/**  Ripristina la data letta dal file. */
+{ action: "clear_manual_date" } | { action: "remove_library" } | 
 /**  Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato). */
 { action: "reject_auto_labels"; grp: string; value: string; max_score?: number | null };
 
@@ -561,6 +568,9 @@ export type Cursor = {
 	key: Value,
 	id: number,
 };
+
+/**  Precisione di una data di scatto impostata a mano. */
+export type DatePrecision = "day" | "month" | "year";
 
 export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
 
@@ -765,7 +775,7 @@ export type FaceView = {
 };
 
 /**  Una lista di filtro. */
-export type FacetKey = { kind: "label"; group: string } | { kind: "place" } | { kind: "year" } | { kind: "format" } | { kind: "tag" };
+export type FacetKey = { kind: "label"; group: string } | { kind: "place" } | { kind: "year" } | { kind: "format" } | { kind: "tag" } | { kind: "rating" } | { kind: "color" };
 
 /**
  *  Valori di una lista di filtro: i principali (più quelli selezionati) e il
@@ -806,6 +816,10 @@ export type Facets = {
 	formats: FacetList,
 	people: FacetList,
 	tags: FacetList,
+	/**  Valori `"0"`..`"5"` (esatti, non cumulativi), sempre tutti presenti. */
+	ratings: FacetList,
+	/**  Valori `bw`, `color`, `faded`, `sepia`, `none` ("Non indicato"), sempre tutti presenti. */
+	colors: FacetList,
 };
 
 /**  Filtro per cartella sul percorso dei file. */
@@ -1051,6 +1065,12 @@ export type LibraryFilter = {
 	dateFrom?: string | null,
 	dateTo?: string | null,
 	formats?: string[],
+	/**  Valutazione minima, esatta o massima. */
+	rating?: RatingFilter | null,
+	/**  Caratteristiche di colore (OR); `None` = "Non indicato". */
+	colorTrait?: (ColorTrait | null)[],
+	/**  Con un anno scelto: solo le foto con data manuale "solo anno" ("Anno senza mese"). */
+	dateNoMonth?: boolean,
 	/**  Tutti i tag indicati devono essere presenti. */
 	tags?: string[],
 	text?: string | null,
@@ -1126,6 +1146,12 @@ export type MediaDates = {
 	declaredOffsetMin?: number | null,
 	/**  Dispositivo normalizzato (marca + modello). */
 	device?: string | null,
+	/**
+	 *  Data impostata a mano (`AAAA-MM-GG HH:MM:SS`, primo istante del periodo).
+	 *  Quando c'è, `captured_source` è `manual` e `captured_at` resta quella del file.
+	 */
+	manualAt?: string | null,
+	manualPrecision?: DatePrecision | null,
 };
 
 export type MediaDetail = {
@@ -1399,6 +1425,13 @@ export type Preview = {
 };
 
 export type Provider = "cpu" | "direct_ml" | "cuda" | "core_ml";
+
+export type RatingFilter = {
+	op: RatingOp,
+	value: number,
+};
+
+export type RatingOp = "at_least" | "equal" | "at_most";
 
 export type RefFaceView = {
 	id: number,
