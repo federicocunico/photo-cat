@@ -71,6 +71,7 @@ pub struct Session {
     pub variants_output_dir: Option<String>,
     pub presets: Vec<String>,
     #[serde(default, deserialize_with = "empty_as_none")]
+    #[cfg_attr(feature = "specta", specta(type = Option<String>))]
     pub guide_preset: Option<String>,
     pub panel_presets: Vec<String>,
     #[serde(default)]
@@ -89,20 +90,38 @@ fn empty_as_none<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String
     Ok(value.filter(|text| !text.is_empty()))
 }
 
-/// Preset in ordine di pannello: la guida per prima, poi gli altri.
-fn ordered_presets(index: &ReviewIndex) -> Vec<String> {
-    let guide = index.guide_preset.as_deref();
-    guide
-        .map(str::to_string)
-        .into_iter()
-        .chain(
-            index
-                .presets
-                .iter()
-                .filter(|preset| Some(preset.as_str()) != guide)
-                .cloned(),
-        )
-        .collect()
+/// Pannelli possibili, nell'ordine predefinito: la guida, gli altri preset e, nelle
+/// cartelle con RAF, l'"Anteprima RAW" ([`RAW_PREVIEW_PRESET`]) per ultima. Gli
+/// identificatori sono quelli di [`crate::scan::Variant::preset`] e del protocollo
+/// `review://`: la pseudo-variante è un pannello come gli altri (si nasconde e si
+/// riordina), ma non è mai in `presets` e non si sceglie come migliore.
+fn panel_candidates(
+    layout: Option<&Layout>,
+    presets: &[String],
+    guide: Option<&str>,
+) -> Vec<String> {
+    let mut out: Vec<String> = guide.map(str::to_string).into_iter().collect();
+    out.extend(
+        presets
+            .iter()
+            .filter(|preset| Some(preset.as_str()) != guide)
+            .cloned(),
+    );
+    if matches!(
+        layout,
+        Some(Layout::RafOnly | Layout::RafWithVariants { .. })
+    ) {
+        out.push(RAW_PREVIEW_PRESET.to_string());
+    }
+    out
+}
+
+fn index_candidates(index: &ReviewIndex) -> Vec<String> {
+    panel_candidates(
+        Some(&index.layout),
+        &index.presets,
+        index.guide_preset.as_deref(),
+    )
 }
 
 impl Session {
@@ -119,7 +138,7 @@ impl Session {
             .map(|n| n.to_string_lossy().into_owned())
             .filter(|n| !n.is_empty())
             .unwrap_or_else(|| "Nuova sessione".to_string());
-        let mut panels = ordered_presets(index);
+        let mut panels = index_candidates(index);
         panels.truncate(MAX_PANELS);
         Self {
             schema_version: SCHEMA_VERSION,
@@ -170,31 +189,39 @@ impl Session {
     /// Aggiunge scatti e preset nuovi senza perdere le scelte (porting di
     /// `mergeProject`). I preset nascosti restano nascosti, quelli nuovi si
     /// mostrano; l'ordine dei pannelli salvato è mantenuto.
+    ///
+    /// Come in FujiView, scelte, valutazioni e preset nascosti non si perdono
+    /// se un preset manca dall'indice: la cartella delle varianti può essere su
+    /// un disco scollegato, e alla riapertura successiva tutto torna com'era.
+    /// Chi usa la scelta (export) verifica che la variante esista.
     pub fn merge(&mut self, index: &ReviewIndex) {
         for shot in &index.shots {
             self.decisions
                 .entry(shot.key.clone())
                 .or_insert_with(|| ShotDecision::empty(&shot.key));
         }
-        let mut hidden: Vec<String> = self
-            .hidden_presets
-            .iter()
-            .filter(|p| index.presets.contains(p))
-            .cloned()
-            .collect();
-        if hidden.len() >= index.presets.len() {
-            hidden.retain(|p| Some(p) != index.guide_preset.as_ref());
+        let candidates = index_candidates(index);
+        let mut hidden: Vec<String> = Vec::new();
+        for preset in &self.hidden_presets {
+            if !hidden.contains(preset) {
+                hidden.push(preset.clone());
+            }
+        }
+        // Almeno un pannello resta visibile: la guida (o il primo disponibile).
+        if !candidates.is_empty() && candidates.iter().all(|c| hidden.contains(c)) {
+            hidden.retain(|p| p != &candidates[0]);
         }
         let mut panels: Vec<String> = Vec::new();
         for preset in &self.panel_presets {
-            if index.presets.contains(preset)
-                && !hidden.contains(preset)
-                && !panels.contains(preset)
-            {
+            if candidates.contains(preset) && !hidden.contains(preset) && !panels.contains(preset) {
                 panels.push(preset.clone());
             }
         }
-        for preset in ordered_presets(index) {
+        // Da sola anteprima RAW alle prime varianti: si parte dall'ordine predefinito.
+        if panels.iter().all(|p| p == RAW_PREVIEW_PRESET) {
+            panels.clear();
+        }
+        for preset in candidates {
             if !panels.contains(&preset) && !hidden.contains(&preset) {
                 panels.push(preset);
             }
@@ -210,16 +237,6 @@ impl Session {
         self.guide_preset = index.guide_preset.clone();
         self.panel_presets = panels;
         self.hidden_presets = hidden;
-        // Una scelta su un preset sparito non è più valida.
-        for decision in self.decisions.values_mut() {
-            if decision
-                .winner_preset
-                .as_ref()
-                .is_some_and(|p| !index.presets.contains(p))
-            {
-                decision.winner_preset = None;
-            }
-        }
         self.schema_version = SCHEMA_VERSION;
         self.touch();
     }
@@ -282,6 +299,16 @@ impl Session {
         self.touch();
     }
 
+    /// Pannelli disponibili nell'ordine predefinito (preset e, con i RAF,
+    /// l'anteprima RAW).
+    pub fn panel_candidates(&self) -> Vec<String> {
+        panel_candidates(
+            self.layout.as_ref(),
+            &self.presets,
+            self.guide_preset.as_deref(),
+        )
+    }
+
     /// Mostra o nasconde il pannello di un preset (porting di
     /// `togglePresetVisibility`). L'ultimo pannello visibile non si nasconde e
     /// i pannelli sono al massimo [`MAX_PANELS`]. Ritorna `true` se è cambiato.
@@ -295,7 +322,9 @@ impl Session {
             self.hidden_presets.retain(|p| p != preset);
             self.hidden_presets.push(preset.to_string());
         } else {
-            if self.panel_presets.len() >= MAX_PANELS || !self.presets.iter().any(|p| p == preset) {
+            if self.panel_presets.len() >= MAX_PANELS
+                || !self.panel_candidates().iter().any(|p| p == preset)
+            {
                 return false;
             }
             self.panel_presets.push(preset.to_string());
@@ -308,10 +337,9 @@ impl Session {
     /// Mostra di nuovo tutti i preset (fino a [`MAX_PANELS`]).
     pub fn show_all_presets(&mut self) {
         let extra: Vec<String> = self
-            .presets
-            .iter()
+            .panel_candidates()
+            .into_iter()
             .filter(|p| !self.panel_presets.contains(p))
-            .cloned()
             .collect();
         self.panel_presets.extend(extra);
         self.panel_presets.truncate(MAX_PANELS);
@@ -393,29 +421,42 @@ pub fn write_json_atomic<T: Serialize>(target: &Path, value: &T) -> AppResult<()
     let temp = target.with_file_name(temp_name);
     let backup = backup_path(target);
     let bytes = serde_json::to_vec_pretty(value)?;
-    fs::write(&temp, bytes)?;
+    {
+        // Su disco prima dello scambio: dopo un crash il file nuovo è intero o assente.
+        let mut file = fs::File::create(&temp)?;
+        std::io::Write::write_all(&mut file, &bytes)?;
+        file.sync_all()?;
+    }
     if !target.exists() {
-        return rename_retry(&temp, target).map_err(Into::into);
+        return retry(|| fs::rename(&temp, target)).map_err(Into::into);
     }
     if backup.exists() {
-        fs::remove_file(&backup)?;
+        retry(|| fs::remove_file(&backup))?;
     }
-    rename_retry(target, &backup)?;
-    if let Err(error) = rename_retry(&temp, target) {
-        let _ = rename_retry(&backup, target);
+    retry(|| fs::rename(target, &backup))?;
+    if let Err(error) = retry(|| fs::rename(&temp, target)) {
+        let _ = retry(|| fs::rename(&backup, target));
         return Err(error.into());
     }
     Ok(())
 }
 
-/// Rinomina con qualche nuovo tentativo: su Windows antivirus e indicizzatore
-/// possono tenere il file aperto per un istante (errore di condivisione).
-fn rename_retry(from: &Path, to: &Path) -> std::io::Result<()> {
+/// Errore passeggero di Windows: antivirus, indicizzatore o anteprima di Esplora
+/// risorse tengono il file aperto per un istante (accesso negato, violazione di
+/// condivisione o di blocco). Altrove nessun errore è considerato passeggero.
+fn is_transient(error: &std::io::Error) -> bool {
+    cfg!(windows)
+        && (error.kind() == std::io::ErrorKind::PermissionDenied
+            || matches!(error.raw_os_error(), Some(5 | 32 | 33)))
+}
+
+/// Ripete l'operazione sui soli errori passeggeri (fino a circa 0,7 s in tutto).
+fn retry(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::Result<()> {
     let mut attempt = 0;
     loop {
-        match fs::rename(from, to) {
+        match op() {
             Ok(()) => return Ok(()),
-            Err(_) if attempt < 8 => {
+            Err(error) if attempt < 8 && is_transient(&error) => {
                 attempt += 1;
                 std::thread::sleep(std::time::Duration::from_millis(20 * attempt));
             }
@@ -454,10 +495,16 @@ pub fn read_fujiview_file(path: &Path) -> AppResult<Session> {
     Session::from_json(&fs::read(path)?)
 }
 
-/// Apre la sessione della cartella: carica quella salvata (o ne crea una),
-/// la fonde con l'indice e la salva.
+/// Apre la sessione della cartella già scansionata: carica quella salvata (o
+/// ne crea una), la fonde con l'indice e la salva. Per aprire una cartella
+/// dalla UI si usa [`open_folder`], che sceglie anche la cartella delle varianti.
 pub fn open(data_dir: &Path, index: &ReviewIndex) -> AppResult<Session> {
-    let session = match load(data_dir, &index.root)? {
+    let saved = load(data_dir, &index.root)?;
+    finish_open(data_dir, index, saved)
+}
+
+fn finish_open(data_dir: &Path, index: &ReviewIndex, saved: Option<Session>) -> AppResult<Session> {
+    let session = match saved {
         Some(mut saved) => {
             saved.merge(index);
             saved
@@ -466,6 +513,55 @@ pub fn open(data_dir: &Path, index: &ReviewIndex) -> AppResult<Session> {
     };
     save(data_dir, &session)?;
     Ok(session)
+}
+
+/// Cartella aperta per la revisione: indice e sessione già fusi e salvati.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedFolder {
+    pub index: ReviewIndex,
+    pub session: Session,
+}
+
+/// Apre `root` per la revisione (comando `raw_review_open`):
+///
+/// 1. la sessione di partenza è `imported` (un `.fujiview`) se c'è, altrimenti
+///    quella salvata per la cartella;
+/// 2. la scansione usa la sua cartella di output delle varianti
+///    (`variants_output_dir`), con il ripiego su `<root>/FujiView varianti`;
+/// 3. sessione e indice si fondono (scatti e preset nuovi, scelte invariate) e
+///    la sessione si salva nei dati dell'app.
+///
+/// Una cartella senza foto è un errore spiegato e non crea alcuna sessione. Per
+/// servire le anteprime, l'indice restituito va poi registrato nel protocollo
+/// `review://` (`ReviewState::register`, o `refresh` dopo uno sviluppo).
+pub fn open_folder(
+    data_dir: &Path,
+    root: &Path,
+    imported: Option<Session>,
+) -> AppResult<OpenedFolder> {
+    let saved = match imported {
+        Some(session) => Some(session),
+        None => load(data_dir, &root.to_string_lossy())?,
+    };
+    let output_dir = saved
+        .as_ref()
+        .and_then(|s| s.variants_output_dir.as_deref())
+        .map(PathBuf::from);
+    let index = crate::scan::scan(root, output_dir.as_deref())?;
+    let session = finish_open(data_dir, &index, saved)?;
+    Ok(OpenedFolder { index, session })
+}
+
+/// Apre un progetto FujiView (`.fujiview`): riprende la sua cartella di origine
+/// con scelte, valutazioni e preset nascosti del file, che prevalgono sulla
+/// sessione eventualmente già salvata per la stessa cartella. Il file non viene
+/// modificato: da qui in poi la sessione vive nei dati dell'app.
+pub fn open_fujiview(data_dir: &Path, file: &Path) -> AppResult<OpenedFolder> {
+    let imported = read_fujiview_file(file)?;
+    let root = PathBuf::from(&imported.source_root);
+    open_folder(data_dir, &root, Some(imported))
 }
 
 /// Salva la sessione e aggiorna l'indice delle recenti.
@@ -791,6 +887,187 @@ mod tests {
         // L'ultimo pannello visibile non si nasconde.
         let mut one = Session::create(&index("/r", &["C1"], 1));
         assert!(!one.toggle_preset_visibility("C1"));
+    }
+
+    fn touch(path: &Path) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, b"x").unwrap();
+    }
+
+    /// Cartella di RAF con le varianti C1 e C2 generate.
+    fn raf_folder(shots: usize) -> tempfile::TempDir {
+        let photos = tempfile::tempdir().unwrap();
+        for i in 1..=shots {
+            touch(&photos.path().join(format!("DSCF{i:04}.RAF")));
+            for preset in ["C1 Kodachrome", "C2 Velvia"] {
+                touch(
+                    &photos
+                        .path()
+                        .join(crate::scan::VARIANTS_DIR_NAME)
+                        .join(preset)
+                        .join(format!("DSCF{i:04}.jpg")),
+                );
+            }
+        }
+        photos
+    }
+
+    #[test]
+    fn open_folder_usa_le_stesse_chiavi_e_preset_della_scansione() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = raf_folder(3);
+        let opened = open_folder(data.path(), photos.path(), None).unwrap();
+        let (index, mut session) = (opened.index, opened.session);
+        // Chiavi degli scatti e identificatori dei preset coincidono con l'indice.
+        let keys: Vec<&String> = index.shots.iter().map(|s| &s.key).collect();
+        assert_eq!(session.decisions.keys().collect::<Vec<_>>(), keys);
+        assert_eq!(session.presets, index.presets);
+        for preset in &session.panel_presets {
+            assert!(index.shots[0].variants.iter().any(|v| &v.preset == preset));
+        }
+        assert_eq!(
+            session.panel_presets,
+            ["C1 Kodachrome", "C2 Velvia", RAW_PREVIEW_PRESET]
+        );
+        session.set_winner("dscf0002", Some("C2 Velvia")).unwrap();
+        assert!(session
+            .set_winner("dscf0002", Some(RAW_PREVIEW_PRESET))
+            .is_err());
+        assert!(session.toggle_preset_visibility(RAW_PREVIEW_PRESET));
+        save(data.path(), &session).unwrap();
+
+        let again = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        assert_eq!(
+            again.decisions["dscf0002"].winner_preset.as_deref(),
+            Some("C2 Velvia")
+        );
+        assert_eq!(again.panel_presets, ["C1 Kodachrome", "C2 Velvia"]);
+        assert_eq!(again.hidden_presets, [RAW_PREVIEW_PRESET]);
+        assert!(matches!(again.layout, Some(Layout::RafWithVariants { .. })));
+    }
+
+    #[test]
+    fn solo_raf_poi_sviluppo_parte_dall_ordine_predefinito() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        touch(&photos.path().join("DSCF0001.RAF"));
+        let first = open_folder(data.path(), photos.path(), None).unwrap();
+        assert_eq!(first.session.panel_presets, [RAW_PREVIEW_PRESET]);
+        // L'unico pannello non si nasconde.
+        let mut session = first.session;
+        assert!(!session.toggle_preset_visibility(RAW_PREVIEW_PRESET));
+        session.set_rating("dscf0001", 4).unwrap();
+        save(data.path(), &session).unwrap();
+        // Lo sviluppo genera C1: i pannelli seguono l'ordine predefinito.
+        touch(
+            &photos
+                .path()
+                .join(crate::scan::VARIANTS_DIR_NAME)
+                .join("C1/DSCF0001.jpg"),
+        );
+        let after = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        assert_eq!(after.panel_presets, ["C1", RAW_PREVIEW_PRESET]);
+        assert_eq!(after.decisions["dscf0001"].rating, 4);
+    }
+
+    #[test]
+    fn scelte_conservate_se_la_cartella_delle_varianti_manca() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = raf_folder(2);
+        let mut session = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        session
+            .set_winner("dscf0001", Some("C1 Kodachrome"))
+            .unwrap();
+        session.toggle_preset_visibility("C2 Velvia");
+        save(data.path(), &session).unwrap();
+        // Varianti spostate altrove (o disco scollegato): restano solo i RAF.
+        let variants = photos.path().join(crate::scan::VARIANTS_DIR_NAME);
+        let moved = photos.path().join("spostate");
+        fs::rename(&variants, &moved).unwrap();
+        let without = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        assert_eq!(without.layout, Some(Layout::RafOnly));
+        assert_eq!(
+            without.decisions["dscf0001"].winner_preset.as_deref(),
+            Some("C1 Kodachrome")
+        );
+        assert_eq!(without.hidden_presets, ["C2 Velvia"]);
+        // Le varianti tornano: tutto come prima.
+        fs::rename(&moved, &variants).unwrap();
+        let back = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        assert_eq!(
+            back.decisions["dscf0001"].winner_preset.as_deref(),
+            Some("C1 Kodachrome")
+        );
+        assert_eq!(back.panel_presets, ["C1 Kodachrome", RAW_PREVIEW_PRESET]);
+    }
+
+    #[test]
+    fn cartella_di_output_scelta_dall_utente() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        touch(&photos.path().join("DSCF0001.RAF"));
+        touch(&output.path().join("C3/DSCF0001.jpg"));
+        let mut session = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        session.variants_output_dir = Some(output.path().to_string_lossy().into_owned());
+        save(data.path(), &session).unwrap();
+        let opened = open_folder(data.path(), photos.path(), None).unwrap();
+        assert_eq!(opened.index.presets, ["C3"]);
+        assert_eq!(
+            opened.session.variants_output_dir.as_deref().map(Path::new),
+            Some(output.path())
+        );
+    }
+
+    #[test]
+    fn apre_un_progetto_fujiview_senza_modificarlo() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        for preset in ["C1", "C2"] {
+            for n in ["dscf0001", "dscf0002"] {
+                touch(&photos.path().join(preset).join(format!("{n}.jpg")));
+            }
+        }
+        let root = photos.path().to_string_lossy().replace('\\', "\\\\");
+        let project = FUJIVIEW_V1.replace("D:\\\\Foto\\\\Roma", &root);
+        let file = data.path().join("roma.fujiview");
+        fs::write(&file, &project).unwrap();
+        let opened = open_fujiview(data.path(), &file).unwrap();
+        assert_eq!(
+            opened.session.decisions["dscf0001"]
+                .winner_preset
+                .as_deref(),
+            Some("C2")
+        );
+        assert_eq!(opened.session.decisions["dscf0001"].rating, 3);
+        assert_eq!(fs::read_to_string(&file).unwrap(), project);
+        // Da qui la sessione è quella della cartella nei dati dell'app.
+        let again = open_folder(data.path(), photos.path(), None)
+            .unwrap()
+            .session;
+        assert_eq!(again.decisions["dscf0001"].rating, 3);
+    }
+
+    #[test]
+    fn cartella_senza_foto_non_crea_una_sessione() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        touch(&photos.path().join("nota.txt"));
+        let err = open_folder(data.path(), photos.path(), None).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+        assert!(!data.path().join("raw-review").exists());
     }
 
     #[test]

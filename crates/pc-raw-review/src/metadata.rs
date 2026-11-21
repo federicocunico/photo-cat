@@ -11,10 +11,18 @@
 //! FujiView scriveva le etichette in italiano. Qui `MetaSection::title` e
 //! `MetaRow::label` sono **chiavi stabili** (per esempio `shot`, `exposureTime`,
 //! `filmSimulation`) che la UI traduce con i18n; i valori sono già formattati.
-//! Limite noto: i valori sono numeri e sigle neutri (`1/250 s`, `f/2,8`, `+4`,
-//! `DR200`), ma i valori enumerati restano in italiano (per esempio `Manuale`,
-//! `Luce diurna`, `Debole`, `Scattato`) e i decimali usano la virgola. Anche
-//! `Recipe::summary` è una riga già composta.
+//!
+//! I valori enumerati da tradurre (modi di esposizione, bilanciamento del
+//! bianco, effetti, "Monocromatico"...) portano anche una [`MetaValueKey`]
+//! (`MetaRow::value_key`, `Recipe::film_key`, `Recipe::white_balance_key`):
+//! la UI li traduce con `rawReviewMeta.values.<chiave>` e, se la chiave manca,
+//! mostra `value`, che resta il testo italiano di FujiView. Numeri, sigle e
+//! nomi propri (`1/250 s`, `+4`, `DR200`, `Classic Chrome`) non hanno chiave.
+//! `Recipe::summary` è la riga italiana già composta: la UI la ricompone da
+//! `film`, `dynamic_range` e `white_balance` con le loro chiavi.
+//!
+//! Limite noto: i decimali usano la virgola (`f/2,8`, `0,5 s`), come in FujiView
+//! (i suoi test lo fissano).
 //!
 //! # RAF
 //!
@@ -39,9 +47,68 @@ use std::{
 pub struct MetaRow {
     /// Chiave stabile da tradurre (per esempio `exposureTime`).
     pub label: String,
-    /// Valore già formattato.
+    /// Valore già formattato (testo italiano per i valori enumerati).
     pub value: String,
+    /// Chiave di traduzione del valore, solo per i valori enumerati da tradurre.
+    pub value_key: Option<MetaValueKey>,
 }
+
+/// Valori enumerati traducibili dalla UI (`rawReviewMeta.values.<chiave>`).
+///
+/// Il nome serializzato è la chiave i18n. L'elenco è chiuso: nei binding
+/// TypeScript diventa `MetaValueKey`, e il typecheck controlla che ogni chiave
+/// abbia la traduzione in italiano e in inglese.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub enum MetaValueKey {
+    ProgramManual,
+    ProgramNormal,
+    ProgramAperture,
+    ProgramShutter,
+    MeteringAverage,
+    MeteringCenterWeighted,
+    MeteringSpot,
+    MeteringMultiSpot,
+    MeteringMultiSegment,
+    MeteringPartial,
+    FlashFired,
+    FlashNotFired,
+    ShutterMechanical,
+    ShutterElectronic,
+    ShutterElectronicLong,
+    ShutterElectronicFront,
+    FocusAuto,
+    FocusManual,
+    FilmMonochrome,
+    FilmMonochromeR,
+    FilmMonochromeYe,
+    FilmMonochromeG,
+    FilmSepia,
+    WbAuto,
+    WbAutoWhite,
+    WbAutoAmbience,
+    WbDaylight,
+    WbShade,
+    WbFluorescent1,
+    WbFluorescent2,
+    WbFluorescent3,
+    WbIncandescent,
+    WbFlash,
+    WbUnderwater,
+    WbCustom,
+    WbKelvin,
+    EffectOff,
+    EffectWeak,
+    EffectStrong,
+    GrainWeakSmall,
+    GrainWeakLarge,
+    GrainStrongSmall,
+    GrainStrongLarge,
+}
+
+/// Valore enumerato: chiave di traduzione e testo italiano di FujiView.
+type Entry = (MetaValueKey, &'static str);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -69,10 +136,15 @@ pub struct Recipe {
     pub summary: String,
     /// Simulazione pellicola, per l'intestazione del pannello.
     pub film: Option<String>,
+    /// Chiave di traduzione di `film` (solo monocromatico e seppia: gli altri
+    /// sono nomi propri).
+    pub film_key: Option<MetaValueKey>,
     /// Gamma dinamica (`DR200`).
     pub dynamic_range: Option<String>,
     /// Bilanciamento del bianco.
     pub white_balance: Option<String>,
+    /// Chiave di traduzione di `white_balance`.
+    pub white_balance_key: Option<MetaValueKey>,
     pub rows: Vec<MetaRow>,
 }
 
@@ -90,6 +162,18 @@ fn row(rows: &mut Vec<MetaRow>, label: &str, value: Option<String>) {
         rows.push(MetaRow {
             label: label.into(),
             value,
+            value_key: None,
+        });
+    }
+}
+
+/// Riga con un valore enumerato: testo italiano più chiave di traduzione.
+fn enum_row(rows: &mut Vec<MetaRow>, label: &str, entry: Option<Entry>) {
+    if let Some((key, text)) = entry {
+        rows.push(MetaRow {
+            label: label.into(),
+            value: text.into(),
+            value_key: Some(key),
         });
     }
 }
@@ -177,34 +261,33 @@ pub fn read_metadata(path: &Path) -> AppResult<ImageMetadata> {
             srational(exif, exif::Tag::ExposureBiasValue).map(format_bias),
         );
         row(&mut shot, "focalLength", focal_length(exif));
-        row(
+        enum_row(
             &mut shot,
             "exposureProgram",
             uint(exif, exif::Tag::ExposureProgram).and_then(exposure_program),
         );
-        row(
+        enum_row(
             &mut shot,
             "meteringMode",
             uint(exif, exif::Tag::MeteringMode).and_then(metering_mode),
         );
-        row(
+        enum_row(
             &mut shot,
             "flash",
             uint(exif, exif::Tag::Flash).map(|v| {
                 if v & 1 == 1 {
-                    "Scattato"
+                    (MetaValueKey::FlashFired, "Scattato")
                 } else {
-                    "Non scattato"
+                    (MetaValueKey::FlashNotFired, "Non scattato")
                 }
-                .into()
             }),
         );
-        row(
+        enum_row(
             &mut shot,
             "shutterType",
             maker.get(0x1050).and_then(shutter_type),
         );
-        row(
+        enum_row(
             &mut shot,
             "focusMode",
             maker.get(0x1021).and_then(focus_mode),
@@ -232,6 +315,7 @@ pub fn read_metadata(path: &Path) -> AppResult<ImageMetadata> {
             let mut place = vec![MetaRow {
                 label: "coordinates".into(),
                 value: format!("{:.6}, {:.6}", point.latitude, point.longitude),
+                value_key: None,
             }];
             row(
                 &mut place,
@@ -435,56 +519,48 @@ fn gps_point(exif: &exif::Exif) -> Option<GpsPoint> {
     })
 }
 
-fn exposure_program(v: u32) -> Option<String> {
-    Some(
-        match v {
-            1 => "Manuale",
-            2 => "Programma",
-            3 => "Priorità diaframma",
-            4 => "Priorità tempi",
-            _ => return None,
-        }
-        .into(),
-    )
+fn exposure_program(v: u32) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        1 => (K::ProgramManual, "Manuale"),
+        2 => (K::ProgramNormal, "Programma"),
+        3 => (K::ProgramAperture, "Priorità diaframma"),
+        4 => (K::ProgramShutter, "Priorità tempi"),
+        _ => return None,
+    })
 }
 
-fn metering_mode(v: u32) -> Option<String> {
-    Some(
-        match v {
-            1 => "Media",
-            2 => "Media ponderata al centro",
-            3 => "Spot",
-            4 => "Multi-spot",
-            5 => "Multi-zona",
-            6 => "Parziale",
-            _ => return None,
-        }
-        .into(),
-    )
+fn metering_mode(v: u32) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        1 => (K::MeteringAverage, "Media"),
+        2 => (K::MeteringCenterWeighted, "Media ponderata al centro"),
+        3 => (K::MeteringSpot, "Spot"),
+        4 => (K::MeteringMultiSpot, "Multi-spot"),
+        5 => (K::MeteringMultiSegment, "Multi-zona"),
+        6 => (K::MeteringPartial, "Parziale"),
+        _ => return None,
+    })
 }
 
-fn shutter_type(v: i64) -> Option<String> {
-    Some(
-        match v {
-            0 => "Meccanico",
-            1 => "Elettronico",
-            2 => "Elettronico (posa lunga)",
-            3 => "Prima tendina elettronica",
-            _ => return None,
-        }
-        .into(),
-    )
+fn shutter_type(v: i64) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        0 => (K::ShutterMechanical, "Meccanico"),
+        1 => (K::ShutterElectronic, "Elettronico"),
+        2 => (K::ShutterElectronicLong, "Elettronico (posa lunga)"),
+        3 => (K::ShutterElectronicFront, "Prima tendina elettronica"),
+        _ => return None,
+    })
 }
 
-fn focus_mode(v: i64) -> Option<String> {
-    Some(
-        match v {
-            0 => "Automatica",
-            1 => "Manuale",
-            _ => return None,
-        }
-        .into(),
-    )
+fn focus_mode(v: i64) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        0 => (K::FocusAuto, "Automatica"),
+        1 => (K::FocusManual, "Manuale"),
+        _ => return None,
+    })
 }
 
 // ---------- Fujifilm MakerNote ----------
@@ -537,18 +613,26 @@ impl MakerNote {
     }
 
     pub fn recipe(&self) -> Option<Recipe> {
-        let film = film_name(self.get(0x1401), self.get(0x1003));
+        let (film, film_key) = film_entry(self.get(0x1401), self.get(0x1003))
+            .map_or((None, None), |(text, key)| (Some(text), key));
         let mono = self.get(0x1401).is_none()
             && self.get(0x1003).is_some_and(|s| s >= 0x300 && s != 0x8000);
         let dr = self
             .get(0x1403)
             .filter(|v| *v > 0)
             .map(|v| format!("DR{v}"));
-        let wb = self.get(0x1002).and_then(white_balance);
+        let wb_entry = self.get(0x1002).and_then(white_balance_entry);
+        let wb = wb_entry.map(|(_, text)| text.to_string());
         let mut rows = Vec::new();
-        row(&mut rows, "filmSimulation", film.clone());
+        if let Some(text) = &film {
+            rows.push(MetaRow {
+                label: "filmSimulation".into(),
+                value: text.clone(),
+                value_key: film_key,
+            });
+        }
         row(&mut rows, "dynamicRange", dr.clone());
-        row(&mut rows, "whiteBalance", wb.clone());
+        enum_row(&mut rows, "whiteBalance", wb_entry);
         row(&mut rows, "highlights", self.get(0x1041).map(tone));
         row(&mut rows, "shadows", self.get(0x1040).map(tone));
         if !mono {
@@ -565,13 +649,13 @@ impl MakerNote {
             "clarity",
             self.get(0x100F).map(|v| signed(v as f64 / 1000.0)),
         );
-        row(
+        enum_row(
             &mut rows,
             "grain",
             grain(self.get(0x1047), self.get(0x104C)),
         );
-        row(&mut rows, "colorChrome", self.get(0x1048).and_then(effect));
-        row(
+        enum_row(&mut rows, "colorChrome", self.get(0x1048).and_then(effect));
+        enum_row(
             &mut rows,
             "colorChromeFxBlue",
             self.get(0x104E).and_then(effect),
@@ -588,8 +672,10 @@ impl MakerNote {
         Some(Recipe {
             summary,
             film,
+            film_key,
             dynamic_range: dr,
             white_balance: wb,
+            white_balance_key: wb_entry.map(|(key, _)| key),
             rows,
         })
     }
@@ -598,6 +684,16 @@ impl MakerNote {
 /// FilmMode (0x1401) for colour; monochrome has no FilmMode and is encoded in
 /// Saturation (0x1003).
 pub fn film_name(film_mode: Option<i64>, saturation: Option<i64>) -> Option<String> {
+    film_entry(film_mode, saturation).map(|(text, _)| text)
+}
+
+/// Nome della simulazione e, per monocromatico e seppia, la chiave di
+/// traduzione (gli altri sono nomi propri, uguali in ogni lingua).
+fn film_entry(
+    film_mode: Option<i64>,
+    saturation: Option<i64>,
+) -> Option<(String, Option<MetaValueKey>)> {
+    use MetaValueKey as K;
     let name = match film_mode {
         Some(mode) => match mode {
             0x000 => "Provia",
@@ -611,44 +707,49 @@ pub fn film_name(film_mode: Option<i64>, saturation: Option<i64>) -> Option<Stri
             0x900 => "Eterna Bleach Bypass",
             0xA00 => "Nostalgic Neg.",
             0xB00 => "Reala Ace",
-            _ => return Some(format!("Simulazione 0x{mode:X}")),
+            _ => return Some((format!("Simulazione 0x{mode:X}"), None)),
         },
-        None => match saturation? {
-            0x300 => "Monocromatico",
-            0x301 => "Monocromatico + R",
-            0x302 => "Monocromatico + Ye",
-            0x303 => "Monocromatico + G",
-            0x310 => "Seppia",
-            0x500 => "Acros",
-            0x501 => "Acros + R",
-            0x502 => "Acros + Ye",
-            0x503 => "Acros + G",
-            _ => return None,
-        },
+        None => {
+            let (name, key) = match saturation? {
+                0x300 => ("Monocromatico", Some(K::FilmMonochrome)),
+                0x301 => ("Monocromatico + R", Some(K::FilmMonochromeR)),
+                0x302 => ("Monocromatico + Ye", Some(K::FilmMonochromeYe)),
+                0x303 => ("Monocromatico + G", Some(K::FilmMonochromeG)),
+                0x310 => ("Seppia", Some(K::FilmSepia)),
+                0x500 => ("Acros", None),
+                0x501 => ("Acros + R", None),
+                0x502 => ("Acros + Ye", None),
+                0x503 => ("Acros + G", None),
+                _ => return None,
+            };
+            return Some((name.into(), key));
+        }
     };
-    Some(name.into())
+    Some((name.into(), None))
 }
 
 pub fn white_balance(v: i64) -> Option<String> {
-    Some(
-        match v {
-            0x000 => "Auto",
-            0x001 => "Auto (priorità bianco)",
-            0x002 => "Auto (priorità ambiente)",
-            0x100 => "Luce diurna",
-            0x200 => "Ombra",
-            0x300 => "Fluorescente 1",
-            0x301 => "Fluorescente 2",
-            0x302 => "Fluorescente 3",
-            0x400 => "Incandescenza",
-            0x500 => "Flash",
-            0x600 => "Subacqueo",
-            0xF00..=0xF0F => "Personalizzato",
-            0xFF0 => "Temperatura colore (K)",
-            _ => return None,
-        }
-        .into(),
-    )
+    white_balance_entry(v).map(|(_, text)| text.into())
+}
+
+fn white_balance_entry(v: i64) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        0x000 => (K::WbAuto, "Auto"),
+        0x001 => (K::WbAutoWhite, "Auto (priorità bianco)"),
+        0x002 => (K::WbAutoAmbience, "Auto (priorità ambiente)"),
+        0x100 => (K::WbDaylight, "Luce diurna"),
+        0x200 => (K::WbShade, "Ombra"),
+        0x300 => (K::WbFluorescent1, "Fluorescente 1"),
+        0x301 => (K::WbFluorescent2, "Fluorescente 2"),
+        0x302 => (K::WbFluorescent3, "Fluorescente 3"),
+        0x400 => (K::WbIncandescent, "Incandescenza"),
+        0x500 => (K::WbFlash, "Flash"),
+        0x600 => (K::WbUnderwater, "Subacqueo"),
+        0xF00..=0xF0F => (K::WbCustom, "Personalizzato"),
+        0xFF0 => (K::WbKelvin, "Temperatura colore (K)"),
+        _ => return None,
+    })
 }
 
 fn signed(v: f64) -> String {
@@ -722,29 +823,28 @@ pub fn noise_reduction(v: i64) -> Option<String> {
     )
 }
 
-fn effect(v: i64) -> Option<String> {
-    Some(
-        match v {
-            0 => "Off",
-            32 => "Debole",
-            64 => "Forte",
-            _ => return None,
-        }
-        .into(),
-    )
+fn effect(v: i64) -> Option<Entry> {
+    use MetaValueKey as K;
+    Some(match v {
+        0 => (K::EffectOff, "Off"),
+        32 => (K::EffectWeak, "Debole"),
+        64 => (K::EffectStrong, "Forte"),
+        _ => return None,
+    })
 }
 
-fn grain(roughness: Option<i64>, size: Option<i64>) -> Option<String> {
+/// Grana: intensità (0x1047) e dimensione (0x104C), per esempio "Debole · piccola".
+fn grain(roughness: Option<i64>, size: Option<i64>) -> Option<Entry> {
+    use MetaValueKey as K;
     let strength = effect(roughness?)?;
-    if strength == "Off" {
-        return Some(strength);
-    }
-    let size = match size {
-        Some(16) => " · piccola",
-        Some(32) => " · grande",
-        _ => "",
-    };
-    Some(format!("{strength}{size}"))
+    Some(match (strength.0, size) {
+        (K::EffectWeak, Some(16)) => (K::GrainWeakSmall, "Debole · piccola"),
+        (K::EffectWeak, Some(32)) => (K::GrainWeakLarge, "Debole · grande"),
+        (K::EffectStrong, Some(16)) => (K::GrainStrongSmall, "Forte · piccola"),
+        (K::EffectStrong, Some(32)) => (K::GrainStrongLarge, "Forte · grande"),
+        // Off, oppure dimensione assente o sconosciuta: solo l'intensità.
+        _ => strength,
+    })
 }
 
 #[cfg(test)]
@@ -765,7 +865,14 @@ mod tests {
         mn
     }
 
-    /// Valori della proprietà D192 della fotocamera (tabella dei banchi, task 3.x).
+    /// Valori della proprietà D192 (FilmSimulation) della fotocamera.
+    ///
+    /// TODO(task 5.1): copia locale di `camera::banks::film_simulation_name` di
+    /// FujiView (a798987, `src-tauri/src/camera/banks.rs`), qui non ancora
+    /// portato perché `banks` dipende da `camera::profile` e `camera::ptp`. Con
+    /// il porting di `camera/` sostituire la chiamata qui sotto con
+    /// `crate::camera::banks::film_simulation_name(film as i32)`, come nel test
+    /// originale, e togliere questa funzione.
     fn film_simulation_prop_name(value: i64) -> Option<&'static str> {
         Some(match value {
             1 => "Provia",
@@ -816,6 +923,90 @@ mod tests {
         assert_eq!(value("shadows").as_deref(), Some("−2"));
         assert_eq!(value("grain").as_deref(), Some("Debole · piccola"));
         assert!(MakerNote::parse(b"NOTFUJI").is_none());
+    }
+
+    #[test]
+    fn enumerated_values_carry_a_translation_key() {
+        let mn = makernote(&[
+            (0x1003, 3, 0x310), // seppia (monocromatico: niente FilmMode)
+            (0x1002, 3, 0x100),
+            (0x1047, 4, 64),
+            (0x104C, 4, 32),
+            (0x1048, 4, 0),
+            (0x1001, 3, 0x84),
+        ]);
+        let recipe = MakerNote::parse(&mn).unwrap().recipe().unwrap();
+        // Il testo italiano resta come fallback (e come in FujiView).
+        assert_eq!(recipe.summary, "Seppia · Luce diurna");
+        assert_eq!(recipe.film_key, Some(MetaValueKey::FilmSepia));
+        assert_eq!(recipe.white_balance_key, Some(MetaValueKey::WbDaylight));
+        let key = |label: &str| {
+            let r = recipe.rows.iter().find(|r| r.label == label).unwrap();
+            (r.value.as_str(), r.value_key)
+        };
+        assert_eq!(
+            key("filmSimulation"),
+            ("Seppia", Some(MetaValueKey::FilmSepia))
+        );
+        assert_eq!(
+            key("grain"),
+            ("Forte · grande", Some(MetaValueKey::GrainStrongLarge))
+        );
+        assert_eq!(key("colorChrome"), ("Off", Some(MetaValueKey::EffectOff)));
+        // Numeri e sigle non si traducono.
+        assert_eq!(key("sharpness"), ("+1", None));
+        // Nomi propri: nessuna chiave.
+        let proper = MakerNote::parse(&makernote(&[(0x1401, 3, 0x600)]))
+            .unwrap()
+            .recipe()
+            .unwrap();
+        assert_eq!(proper.film.as_deref(), Some("Classic Chrome"));
+        assert_eq!(proper.film_key, None);
+        // Grana con dimensione sconosciuta: solo l'intensità.
+        assert_eq!(
+            grain(Some(32), None),
+            Some((MetaValueKey::EffectWeak, "Debole"))
+        );
+    }
+
+    #[test]
+    fn every_enumerated_table_entry_has_a_distinct_key_per_text() {
+        // Stessa chiave => stesso testo: la UI può tradurre senza ambiguità.
+        let mut seen: std::collections::BTreeMap<String, &str> = Default::default();
+        let mut check = |entry: Option<Entry>| {
+            if let Some((key, text)) = entry {
+                let name = serde_json::to_value(key)
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                let previous = seen.insert(name.clone(), text);
+                assert!(previous.is_none_or(|p| p == text), "{name}");
+            }
+        };
+        for v in 0..8 {
+            check(exposure_program(v));
+            check(metering_mode(v));
+        }
+        for v in 0..4 {
+            check(shutter_type(v));
+            check(focus_mode(v));
+        }
+        for v in 0..0x1000 {
+            check(white_balance_entry(v));
+        }
+        for v in [0, 32, 64] {
+            check(effect(v));
+            for size in [None, Some(16), Some(32)] {
+                check(grain(Some(v), size));
+            }
+        }
+        assert!(seen.len() >= 35, "{}", seen.len());
+        // Serializzazione camelCase: è la chiave i18n `rawReviewMeta.values.<chiave>`.
+        assert_eq!(
+            serde_json::to_value(MetaValueKey::WbFluorescent1).unwrap(),
+            "wbFluorescent1"
+        );
     }
 
     /// Every case of the real X-T5 matrix decodes to the settings that produced it.
@@ -1059,6 +1250,8 @@ mod file_tests {
         let json = serde_json::to_value(read_metadata(&path).unwrap()).unwrap();
         assert_eq!(json["sections"][0]["title"], "shot");
         assert_eq!(json["recipe"]["dynamicRange"], "DR200");
+        assert!(json["recipe"]["filmKey"].is_null());
+        assert!(json["sections"][0]["rows"][0]["valueKey"].is_null());
         assert!(json["gps"].is_null());
     }
 }

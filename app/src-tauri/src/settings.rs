@@ -53,6 +53,10 @@ pub async fn save_settings(state: State<'_, AppState>, config: Config) -> AppRes
     if previous.resources != config.resources {
         state.model_pool.evict_idle("");
         pc_governor::apply_resources(&state.governor, state.probe.as_ref(), &config.resources);
+        // Limite della cache delle Varianti RAW: si applica subito, senza riavvio.
+        state
+            .raw_review
+            .set_cache_limit(config.resources.raw_review_cache_bytes());
     }
     Ok(())
 }

@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -40,7 +41,9 @@ const RESIZE_ALG: fast_image_resize::ResizeAlg =
     fast_image_resize::ResizeAlg::Convolution(fast_image_resize::FilterType::CatmullRom);
 /// Cambia quando cambia il modo di generare le anteprime: invalida tutta la cache.
 const CACHE_VERSION: &str = "raw-review-preview-v1";
-/// Memoria concessa alle decodifiche in parallelo (MB).
+/// Memoria per le decodifiche dei test e del benchmark (MB); nell'app si usa il governor
+/// condiviso di photo-cat, passato a [`PreviewCache::open`].
+#[cfg(test)]
 const DECODE_BUDGET_MB: u64 = 2048;
 
 /// Anteprima pronta in cache.
@@ -58,11 +61,19 @@ pub struct PreviewResult {
 /// Cache delle anteprime. Si può condividere tra thread (`Arc<PreviewCache>`).
 pub struct PreviewCache {
     dir: PathBuf,
-    limit_bytes: u64,
-    db: Mutex<Connection>,
+    /// Limite in byte; si può cambiare a caldo dalle Impostazioni.
+    limit_bytes: AtomicU64,
+    db: Mutex<Index>,
     governor: MemoryGovernor,
     /// Una serratura per anteprima in corso: le richieste doppie aspettano la prima.
     in_flight: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+}
+
+/// Indice SQLite con il totale dei byte tenuto in memoria: ogni accesso alla cache
+/// aggiorna una riga invece di ricalcolare la somma di tutta la tabella.
+struct Index {
+    conn: Connection,
+    total: i64,
 }
 
 fn db_error(e: rusqlite::Error) -> AppError {
@@ -76,11 +87,25 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl PreviewCache {
     /// Apre (o crea) la cache in `<data_dir>/raw-review/previews/` con il limite in byte.
-    pub fn open(data_dir: &Path, limit_bytes: u64) -> AppResult<Self> {
+    /// Le decodifiche prenotano memoria su `governor` (nell'app, quello condiviso).
+    pub fn open(data_dir: &Path, limit_bytes: u64, governor: MemoryGovernor) -> AppResult<Self> {
         let dir = data_dir.join("raw-review").join("previews");
         fs::create_dir_all(&dir)?;
-        let db = Connection::open(dir.join("index.sqlite")).map_err(db_error)?;
-        db.execute_batch(
+        // Temporanei di generazioni interrotte (crash, chiusura): mai indicizzati.
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|e| e == "tmp") {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+        let conn = Connection::open(dir.join("index.sqlite")).map_err(db_error)?;
+        // È solo un indice ricostruibile: niente fsync a ogni accesso (come la libreria).
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .map_err(db_error)?;
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(db_error)?;
+        conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS cache_entries(
                 key TEXT PRIMARY KEY,
                 path TEXT NOT NULL,
@@ -90,13 +115,59 @@ impl PreviewCache {
             CREATE INDEX IF NOT EXISTS cache_entries_access ON cache_entries(last_access);",
         )
         .map_err(db_error)?;
-        Ok(Self {
+        let total = sum_bytes(&conn).map_err(db_error)?;
+        let cache = Self {
             dir,
-            limit_bytes,
-            db: Mutex::new(db),
-            governor: MemoryGovernor::new(DECODE_BUDGET_MB),
+            limit_bytes: AtomicU64::new(limit_bytes),
+            db: Mutex::new(Index { conn, total }),
+            governor,
             in_flight: Mutex::new(HashMap::new()),
-        })
+        };
+        // Il limite può essere sceso dall'ultimo avvio.
+        cache.evict(&mut lock(&cache.db), "");
+        Ok(cache)
+    }
+
+    /// Limite corrente in byte.
+    pub fn limit_bytes(&self) -> u64 {
+        self.limit_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Cambia il limite e, se serve, elimina subito le anteprime meno recenti.
+    pub fn set_limit_bytes(&self, limit_bytes: u64) {
+        self.limit_bytes.store(limit_bytes, Ordering::Relaxed);
+        self.evict(&mut lock(&self.db), "");
+    }
+
+    /// Svuota la cache: elimina tutte le anteprime registrate e restituisce i byte
+    /// liberati. Le anteprime in generazione in quel momento si registrano dopo, come
+    /// nuove. Non tocca nient'altro che i file dell'indice, tutti in [`Self::dir`].
+    pub fn clear(&self) -> AppResult<u64> {
+        let mut db = lock(&self.db);
+        let paths: Vec<String> = db
+            .conn
+            .prepare("SELECT path FROM cache_entries")
+            .and_then(|mut st| {
+                st.query_map([], |r| r.get(0))?
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .map_err(db_error)?;
+        for path in paths {
+            let _ = fs::remove_file(self.inside(&path));
+        }
+        db.conn
+            .execute("DELETE FROM cache_entries", [])
+            .map_err(db_error)?;
+        let freed = db.total.max(0) as u64;
+        db.total = 0;
+        Ok(freed)
+    }
+
+    /// Un percorso letto dall'indice, ricondotto alla cartella della cache: si cancella
+    /// solo `<dir>/<nome del file>`, anche se l'indice fosse stato alterato.
+    fn inside(&self, path: &str) -> PathBuf {
+        let name = Path::new(path).file_name().unwrap_or_default();
+        self.dir.join(name)
     }
 
     /// Cartella dei file in cache.
@@ -208,31 +279,34 @@ impl PreviewCache {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_micros() as i64;
-        let db = lock(&self.db);
-        let upsert = db.execute(
+        let bytes = meta.len() as i64;
+        let mut db = lock(&self.db);
+        let previous: Option<i64> = db
+            .conn
+            .query_row("SELECT bytes FROM cache_entries WHERE key=?1", [key], |r| {
+                r.get(0)
+            })
+            .ok();
+        let upsert = db.conn.execute(
             "INSERT INTO cache_entries(key,path,bytes,last_access) VALUES(?1,?2,?3,?4)
              ON CONFLICT(key) DO UPDATE SET last_access=?4, bytes=?3, path=?2",
-            params![key, path.to_string_lossy(), meta.len() as i64, now],
+            params![key, path.to_string_lossy(), bytes, now],
         );
         // Se l'indice non si aggiorna la cache funziona comunque: si salta l'eviction.
         if upsert.is_ok() {
-            self.evict(&db, key);
+            db.total += bytes - previous.unwrap_or(0);
+            self.evict(&mut db, key);
         }
     }
 
-    fn evict(&self, db: &Connection, keep: &str) {
-        let limit = i64::try_from(self.limit_bytes).unwrap_or(i64::MAX);
-        let total: i64 = db
-            .query_row(
-                "SELECT COALESCE(SUM(bytes),0) FROM cache_entries",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap_or(0);
-        if total <= limit {
+    /// Elimina le anteprime meno recenti finché il totale rientra nel limite, tranne `keep`.
+    fn evict(&self, db: &mut Index, keep: &str) {
+        let limit = i64::try_from(self.limit_bytes()).unwrap_or(i64::MAX);
+        if db.total <= limit {
             return;
         }
         let victims: Vec<(String, String, i64)> = db
+            .conn
             .prepare(
                 "SELECT key,path,bytes FROM cache_entries WHERE key<>?1
                  ORDER BY last_access ASC, rowid ASC",
@@ -242,32 +316,33 @@ impl PreviewCache {
                     .collect::<Result<Vec<_>, _>>()
             })
             .unwrap_or_default();
-        let mut remaining = total;
         for (k, p, bytes) in victims {
-            if remaining <= limit {
+            if db.total <= limit {
                 break;
             }
-            let _ = fs::remove_file(&p);
+            let _ = fs::remove_file(self.inside(&p));
             if db
+                .conn
                 .execute("DELETE FROM cache_entries WHERE key=?1", [&k])
                 .is_ok()
             {
-                remaining -= bytes;
+                db.total -= bytes;
             }
         }
     }
 
     /// Dimensione totale registrata nell'indice (byte).
     pub fn total_bytes(&self) -> u64 {
-        let db = lock(&self.db);
-        db.query_row(
-            "SELECT COALESCE(SUM(bytes),0) FROM cache_entries",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|v| v.max(0) as u64)
-        .unwrap_or(0)
+        lock(&self.db).total.max(0) as u64
     }
+}
+
+fn sum_bytes(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COALESCE(SUM(bytes),0) FROM cache_entries",
+        [],
+        |r| r.get(0),
+    )
 }
 
 fn extension_of(path: &Path) -> String {
@@ -509,7 +584,46 @@ mod tests {
     }
 
     fn cache(dir: &Path, limit: u64) -> PreviewCache {
-        PreviewCache::open(dir, limit).unwrap()
+        PreviewCache::open(dir, limit, MemoryGovernor::new(DECODE_BUDGET_MB)).unwrap()
+    }
+
+    #[test]
+    fn limit_change_clear_and_reopen_keep_the_total_consistent() {
+        let t = tempfile::tempdir().unwrap();
+        let sources: Vec<PathBuf> = (0..3)
+            .map(|i| write_jpeg(t.path(), &format!("{i}.jpg"), 800, 600, None))
+            .collect();
+        let c = cache(t.path(), DEFAULT_CACHE_LIMIT_BYTES);
+        let mut paths = Vec::new();
+        for s in &sources {
+            paths.push(c.get(s, 600).unwrap().cache_path);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let on_disk: u64 = paths.iter().map(|p| fs::metadata(p).unwrap().len()).sum();
+        assert_eq!(c.total_bytes(), on_disk);
+        // Un accesso ripetuto non conta due volte.
+        assert!(c.get(&sources[2], 600).unwrap().cached);
+        assert_eq!(c.total_bytes(), on_disk);
+        // Limite abbassato a caldo: restano solo le più recenti.
+        let one = fs::metadata(&paths[2]).unwrap().len();
+        c.set_limit_bytes(one);
+        assert_eq!(c.limit_bytes(), one);
+        assert!(!Path::new(&paths[0]).exists() && !Path::new(&paths[1]).exists());
+        assert!(Path::new(&paths[2]).exists());
+        assert_eq!(c.total_bytes(), one);
+        drop(c);
+        // Alla riapertura il totale si rilegge dall'indice; un temporaneo rimasto si elimina.
+        let stray = t.path().join("raw-review/previews/abc.123.tmp");
+        fs::write(&stray, b"parziale").unwrap();
+        let c = cache(t.path(), DEFAULT_CACHE_LIMIT_BYTES);
+        assert_eq!(c.total_bytes(), one);
+        assert!(!stray.exists());
+        // Svuota: niente più anteprime, l'indice resta e la sorgente è intatta.
+        assert_eq!(c.clear().unwrap(), one);
+        assert_eq!(c.total_bytes(), 0);
+        assert!(!Path::new(&paths[2]).exists());
+        assert!(sources.iter().all(|s| s.exists()));
+        assert!(!c.get(&sources[2], 600).unwrap().cached);
     }
 
     #[test]

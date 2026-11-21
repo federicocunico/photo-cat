@@ -232,6 +232,13 @@ export const commands = {
 	rawReviewThumbnails: (sessionId: string, shotKeys: string[]) => __TAURI_INVOKE<ThumbnailKey[]>("raw_review_thumbnails", { sessionId, shotKeys }),
 	/**  Chiude una sessione di revisione: le sue chiavi `review://` non valgono più. */
 	rawReviewClose: (sessionId: string) => __TAURI_INVOKE<boolean>("raw_review_close", { sessionId }),
+	/**  Spazio occupato e limite della cache delle anteprime delle Varianti RAW. */
+	rawReviewCacheInfo: () => __TAURI_INVOKE<ReviewCacheInfo>("raw_review_cache_info"),
+	/**
+	 *  Svuota la cache delle anteprime (solo i file della cache nei dati dell'app) e restituisce i
+	 *  byte liberati. Sessioni, scelte e foto non cambiano.
+	 */
+	rawReviewClearCache: () => __TAURI_INVOKE<number>("raw_review_clear_cache"),
 	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
 	/**  Nomi delle prime foto mentre si scrive il modello. */
 	sequenceExportPreview: (options: SequenceExportOptions, limit: number) => __TAURI_INVOKE<NamePreviewResult>("sequence_export_preview", { options, limit }),
@@ -959,6 +966,12 @@ export type GovernorSnapshot = {
 	aiPaused: boolean,
 };
 
+export type GpsPoint = {
+	latitude: number | null,
+	longitude: number | null,
+	altitude: number | null,
+};
+
 export type GridItem = {
 	id: number,
 	name: string,
@@ -1062,6 +1075,12 @@ export type IdentitySuggestion = {
 	person: number | null,
 };
 
+export type ImageMetadata = {
+	sections: MetaSection[],
+	gps: GpsPoint | null,
+	recipe: Recipe | null,
+};
+
 export type ImportConflict = {
 	name: string,
 	/**  Identità locale con lo stesso nome. */
@@ -1143,6 +1162,15 @@ export type LabelView = {
 };
 
 export type Language = "it" | "en";
+
+/**  Forma della cartella aperta. */
+export type Layout = 
+/**  Solo RAF al primo livello, nessuna variante generata. */
+{ kind: "rafOnly" } | 
+/**  RAF più sottocartelle di preset in `output_dir`. */
+{ kind: "rafWithVariants"; outputDir: string } | 
+/**  Una sottocartella per preset con JPEG o TIFF, senza RAF. */
+{ kind: "presets" };
 
 export type LibraryFilter = {
 	sourceIds?: number[],
@@ -1318,6 +1346,30 @@ export type MergeHint = {
 	score: number | null,
 };
 
+export type MetaRow = {
+	/**  Chiave stabile da tradurre (per esempio `exposureTime`). */
+	label: string,
+	/**  Valore già formattato (testo italiano per i valori enumerati). */
+	value: string,
+	/**  Chiave di traduzione del valore, solo per i valori enumerati da tradurre. */
+	valueKey: MetaValueKey | null,
+};
+
+export type MetaSection = {
+	/**  Chiave stabile della sezione: `shot`, `camera`, `place` o `file`. */
+	title: string,
+	rows: MetaRow[],
+};
+
+/**
+ *  Valori enumerati traducibili dalla UI (`rawReviewMeta.values.<chiave>`).
+ * 
+ *  Il nome serializzato è la chiave i18n. L'elenco è chiuso: nei binding
+ *  TypeScript diventa `MetaValueKey`, e il typecheck controlla che ogni chiave
+ *  abbia la traduzione in italiano e in inglese.
+ */
+export type MetaValueKey = "programManual" | "programNormal" | "programAperture" | "programShutter" | "meteringAverage" | "meteringCenterWeighted" | "meteringSpot" | "meteringMultiSpot" | "meteringMultiSegment" | "meteringPartial" | "flashFired" | "flashNotFired" | "shutterMechanical" | "shutterElectronic" | "shutterElectronicLong" | "shutterElectronicFront" | "focusAuto" | "focusManual" | "filmMonochrome" | "filmMonochromeR" | "filmMonochromeYe" | "filmMonochromeG" | "filmSepia" | "wbAuto" | "wbAutoWhite" | "wbAutoAmbience" | "wbDaylight" | "wbShade" | "wbFluorescent1" | "wbFluorescent2" | "wbFluorescent3" | "wbIncandescent" | "wbFlash" | "wbUnderwater" | "wbCustom" | "wbKelvin" | "effectOff" | "effectWeak" | "effectStrong" | "grainWeakSmall" | "grainWeakLarge" | "grainStrongSmall" | "grainStrongLarge";
+
 export type Method = "symlink" | "hardlink" | "copy";
 
 export type ModelState = { state: "missing" } | { state: "downloading"; done_bytes: number; total_bytes: number; bytes_per_second?: number } | { state: "verified" } | { state: "error"; code: string; message: string } | { state: "self_test_failed"; message: string } | { state: "update_available" };
@@ -1380,6 +1432,12 @@ export type OpenTarget =
 { kind: "reveal" } | 
 /**  Azione del doppio clic scelta nelle impostazioni. */
 { kind: "double_click" };
+
+/**  Cartella aperta per la revisione: indice e sessione già fusi e salvati. */
+export type OpenedFolder = {
+	index: ReviewIndex,
+	session: Session,
+};
 
 export type Organization = {
 	id: number,
@@ -1536,6 +1594,25 @@ export type RatingFilter = {
 
 export type RatingOp = "at_least" | "equal" | "at_most";
 
+export type Recipe = {
+	/**  Riga breve, per esempio "Classic Chrome · DR200 · Auto". */
+	summary: string,
+	/**  Simulazione pellicola, per l'intestazione del pannello. */
+	film: string | null,
+	/**
+	 *  Chiave di traduzione di `film` (solo monocromatico e seppia: gli altri
+	 *  sono nomi propri).
+	 */
+	filmKey: MetaValueKey | null,
+	/**  Gamma dinamica (`DR200`). */
+	dynamicRange: string | null,
+	/**  Bilanciamento del bianco. */
+	whiteBalance: string | null,
+	/**  Chiave di traduzione di `white_balance`. */
+	whiteBalanceKey: MetaValueKey | null,
+	rows: MetaRow[],
+};
+
 export type RefFaceView = {
 	id: number,
 	uid: string,
@@ -1617,11 +1694,33 @@ export type ResourcesConfig = {
 	raw_review_cache_mb?: number | null,
 };
 
+/**  Spazio della cache delle anteprime, per le Impostazioni. */
+export type ReviewCacheInfo = {
+	/**  `false` se la cache non si è aperta all'avvio (il modulo resta senza anteprime). */
+	available: boolean,
+	/**  Byte occupati dalle anteprime. */
+	usedBytes: number,
+	/**  Limite in vigore, in byte. */
+	limitBytes: number,
+};
+
 /**  Chiave `review://` di una variante di uno scatto. */
 export type ReviewImageKey = {
 	preset: string,
 	/**  Da passare a `convertFileSrc(key, "review")`. */
 	key: string,
+};
+
+export type ReviewIndex = {
+	/**  Percorso canonico della cartella aperta. */
+	root: string,
+	layout: Layout,
+	/**  Cartelle di preset reali, in ordine naturale (senza "Anteprima RAW"). */
+	presets: string[],
+	/**  Preset guida; `None` se non ci sono preset (solo RAF). */
+	guidePreset: string | null,
+	shots: Shot[],
+	warnings: string[],
 };
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
@@ -1704,6 +1803,25 @@ export type SequencePage = {
 
 export type SequenceScope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] };
 
+/**  Sessione di revisione di una cartella (schema v2). */
+export type Session = {
+	schemaVersion: number,
+	name: string,
+	sourceRoot: string,
+	/**  Forma della cartella (assente nei file v1 finché non si fa il merge). */
+	layout?: Layout | null,
+	/**  Cartella di output scelta per le varianti (nuovo in v2). */
+	variantsOutputDir?: string | null,
+	presets: string[],
+	guidePreset?: string | null,
+	panelPresets: string[],
+	hiddenPresets?: string[],
+	decisions?: { [key in string]: ShotDecision },
+	lastShotKey?: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
 export type SessionView = {
 	index: number,
 	startLocal: string,
@@ -1719,6 +1837,23 @@ export type SetTag = {
 	/**  Tasto rapido (1–9). */
 	key: number,
 	name: string,
+};
+
+export type Shot = {
+	/**  Nome base in minuscolo: chiave di abbinamento. */
+	key: string,
+	displayName: string,
+	variants: Variant[],
+};
+
+/**  Decisione su uno scatto. */
+export type ShotDecision = {
+	key: string,
+	/**  Valutazione da 0 a 5. */
+	rating: number,
+	/**  Preset della variante migliore; mai `raw-preview`. */
+	winnerPreset: string | null,
+	reviewed: boolean,
 };
 
 /**  Foto simili mostrate nell'Inspector. */
@@ -2022,6 +2157,23 @@ export type UpdateSummary = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+export type Variant = {
+	preset: string,
+	path: string,
+	fileName: string,
+	/**  Estensione in minuscolo, senza punto. */
+	extension: string,
+	bytes: number,
+	kind: VariantKind,
+};
+
+/**  Natura di una variante. */
+export type VariantKind = 
+/**  File immagine (JPEG o TIFF) di un preset. */
+"image" | 
+/**  Anteprima incorporata nel RAF ("Anteprima RAW"). */
+"raw_preview";
 
 /**  Stato del monitoraggio di una sorgente. */
 export type WatchState = 

@@ -211,6 +211,8 @@ pub fn bindings() -> Builder<tauri::Wry> {
             raw_review::raw_review_prefetch,
             raw_review::raw_review_thumbnails,
             raw_review::raw_review_close,
+            raw_review::raw_review_cache_info,
+            raw_review::raw_review_clear_cache,
             sequence::sequence_export_defaults,
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
@@ -274,6 +276,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_diag::ErrorRecord>()
         .typ::<pc_diag::ErrorBatch>()
         .typ::<pc_models::store::ModelStatus>()
+        // Varianti RAW: tipi dei comandi di apertura e dei metadati (task 3.2 e 3.3).
+        .typ::<pc_raw_review::session::OpenedFolder>()
+        .typ::<pc_raw_review::metadata::ImageMetadata>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
         .disable_serde_phases()
@@ -696,6 +701,7 @@ fn initialize(
     let raw_review = Arc::new(raw_review::ReviewState::new(
         paths.root(),
         config.resources.raw_review_cache_bytes(),
+        governor.clone(),
         raw_review::Workers::for_system(budget.budget_mb, cores),
     ));
     handle.manage(AppState {

@@ -71,6 +71,18 @@ pub struct PrefetchReport {
     pub cancelled: u32,
 }
 
+/// Spazio della cache delle anteprime, per le Impostazioni.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewCacheInfo {
+    /// `false` se la cache non si è aperta all'avvio (il modulo resta senza anteprime).
+    pub available: bool,
+    /// Byte occupati dalle anteprime.
+    pub used_bytes: u64,
+    /// Limite in vigore, in byte.
+    pub limit_bytes: u64,
+}
+
 /// Miniatura di uno scatto della lista.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -493,10 +505,16 @@ fn unknown_session(id: &str) -> AppError {
 }
 
 impl ReviewState {
-    /// Apre la cache in `<data_dir>/raw-review/previews/` con il limite in byte. Se la cache non si
-    /// apre, il modulo resta senza anteprime ma l'app parte comunque.
-    pub fn new(data_dir: &Path, limit_bytes: u64, workers: Workers) -> Self {
-        match PreviewCache::open(data_dir, limit_bytes) {
+    /// Apre la cache in `<data_dir>/raw-review/previews/` con il limite in byte; le decodifiche
+    /// prenotano memoria sul governor condiviso dell'app. Se la cache non si apre, il modulo resta
+    /// senza anteprime ma l'app parte comunque.
+    pub fn new(
+        data_dir: &Path,
+        limit_bytes: u64,
+        governor: pc_governor::MemoryGovernor,
+        workers: Workers,
+    ) -> Self {
+        match PreviewCache::open(data_dir, limit_bytes, governor) {
             Ok(cache) => Self::with_cache(Arc::new(cache), workers),
             Err(e) => {
                 tracing::error!(
@@ -530,6 +548,9 @@ impl ReviewState {
 
     /// Rende una sessione servibile dal protocollo. Una sessione già aperta sulla stessa radice
     /// viene sostituita (le sue chiavi smettono di valere). Restituisce l'identificatore.
+    ///
+    /// Uso previsto (task 3.2): `pc_raw_review::session::open_folder` (o `open_fujiview`) fonde
+    /// e salva la sessione, poi `register(&opened.index)` dà l'id da passare alla UI.
     #[allow(dead_code)] // usato da `raw_review_open` (task 3.2)
     pub fn register(&self, index: &ReviewIndex) -> AppResult<Arc<OpenSession>> {
         let nanos = std::time::SystemTime::now()
@@ -542,6 +563,56 @@ impl ReviewState {
         sessions.retain(|_, s| s.root != session.root);
         sessions.insert(session.id.clone(), session.clone());
         Ok(session)
+    }
+
+    /// Aggiorna l'indice di una sessione aperta mantenendo il suo id, per esempio dopo uno
+    /// sviluppo che ha creato nuovi preset: le chiavi già date alla UI restano valide per i file
+    /// ancora presenti. La radice deve essere la stessa.
+    #[allow(dead_code)] // usato alla fine dello sviluppo (task 5.3)
+    pub fn refresh(&self, session_id: &str, index: &ReviewIndex) -> AppResult<Arc<OpenSession>> {
+        let current = self.session(session_id)?;
+        let next = Arc::new(OpenSession::from_index(current.id.clone(), index)?);
+        if next.root != current.root {
+            return Err(AppError::invalid_input(
+                "l'indice aggiornato appartiene a un'altra cartella",
+            ));
+        }
+        self.sessions.write().insert(next.id.clone(), next.clone());
+        Ok(next)
+    }
+
+    /// Spazio occupato e limite della cache delle anteprime.
+    pub fn cache_info(&self) -> ReviewCacheInfo {
+        match &self.cache {
+            Some(cache) => ReviewCacheInfo {
+                available: true,
+                used_bytes: cache.total_bytes(),
+                limit_bytes: cache.limit_bytes(),
+            },
+            None => ReviewCacheInfo {
+                available: false,
+                used_bytes: 0,
+                limit_bytes: 0,
+            },
+        }
+    }
+
+    /// Applica a caldo un nuovo limite della cache (dalle Impostazioni).
+    pub fn set_cache_limit(&self, limit_bytes: u64) {
+        if let Some(cache) = &self.cache {
+            cache.set_limit_bytes(limit_bytes);
+        }
+    }
+
+    /// Svuota la cache delle anteprime e restituisce i byte liberati. Le code di precaricamento
+    /// si azzerano; le anteprime si rigenerano quando servono.
+    pub fn clear_cache(&self) -> AppResult<u64> {
+        let cache = self.cache.as_ref().ok_or_else(unavailable)?;
+        if let Some(scheduler) = &self.scheduler {
+            scheduler.shared.submit(Lane::Prefetch, Vec::new());
+            scheduler.shared.submit(Lane::Thumbnails, Vec::new());
+        }
+        cache.clear()
     }
 
     /// Chiude la sessione: da qui in poi le sue chiavi vengono rifiutate. Falso se non era aperta.
@@ -608,7 +679,11 @@ impl ReviewState {
                 continue;
             };
             for preset in presets {
-                if let Some(path) = session.file(shot, preset) {
+                // Stesso controllo del protocollo: nessun file fuori dalle cartelle ammesse.
+                if let Some(path) = session
+                    .file(shot, preset)
+                    .filter(|p| session.is_inside_allowed(p))
+                {
                     jobs.push((path.clone(), PREFETCH_EDGE));
                 }
             }
@@ -642,7 +717,9 @@ impl ReviewState {
                     .or_else(|| v.iter().min_by(|a, b| natord::compare(a.0, b.0)))
             });
             if let Some((preset, path)) = chosen {
-                jobs.push((path.clone(), THUMBNAIL_EDGE));
+                if session.is_inside_allowed(path) {
+                    jobs.push((path.clone(), THUMBNAIL_EDGE));
+                }
                 out.push(ThumbnailKey {
                     shot_key: shot.clone(),
                     key: Some(review_key(&session.id, shot, preset, THUMBNAIL_EDGE)),
@@ -706,9 +783,16 @@ impl ReviewState {
         };
         let result = {
             let _slot = self.interactive.enter();
-            cache.get(&file, edge)
+            let read = || {
+                cache
+                    .get(&file, edge)
+                    .and_then(|p| Ok(std::fs::read(p.cache_path)?))
+            };
+            // L'anteprima trovata può sparire prima della lettura (eviction, "Svuota cache"):
+            // un secondo tentativo la rigenera.
+            read().or_else(|_| read())
         };
-        match result.and_then(|p| std::fs::read(p.cache_path).map_err(AppError::from)) {
+        match result {
             Ok(bytes) => reply(StatusCode::OK, bytes),
             Err(e) => {
                 tracing::warn!(
@@ -828,6 +912,21 @@ pub async fn raw_review_thumbnails(
     .await
 }
 
+/// Spazio occupato e limite della cache delle anteprime delle Varianti RAW.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_cache_info(app: tauri::AppHandle) -> AppResult<ReviewCacheInfo> {
+    crate::state::blocking(app, move |_app, state| Ok(state.raw_review.cache_info())).await
+}
+
+/// Svuota la cache delle anteprime (solo i file della cache nei dati dell'app) e restituisce i
+/// byte liberati. Sessioni, scelte e foto non cambiano.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_clear_cache(app: tauri::AppHandle) -> AppResult<u64> {
+    crate::state::blocking(app, move |_app, state| state.raw_review.clear_cache()).await
+}
+
 /// Chiude una sessione di revisione: le sue chiavi `review://` non valgono più.
 #[tauri::command]
 #[specta::specta]
@@ -874,7 +973,12 @@ mod tests {
             }
         }
         let index = scan(&photos, None).unwrap();
-        let state = ReviewState::new(&tmp.path().join("dati"), 1 << 30, workers);
+        let state = ReviewState::new(
+            &tmp.path().join("dati"),
+            1 << 30,
+            pc_governor::MemoryGovernor::new(2048),
+            workers,
+        );
         Fixture {
             _tmp: tmp,
             photos,
@@ -1002,6 +1106,81 @@ mod tests {
         let session = f.state.register(&index).unwrap();
         let key = review_key(session.id(), "dscf0001", &preset, 1024);
         assert_eq!(f.state.serve(&key).status(), 403);
+    }
+
+    #[test]
+    fn symlink_out_of_the_folder_is_never_read() {
+        let f = fixture(1, NO_WORKERS);
+        let secret = f._tmp.path().join("segreto.jpg");
+        jpeg(&secret, 800, 600);
+        let link = f.photos.join("Acros").join("DSCF0009.jpg");
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(&secret, &link);
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_file(&secret, &link);
+        if made.is_err() {
+            // Su Windows serve la modalità sviluppatore per creare collegamenti: il caso è
+            // coperto comunque da `file_outside_allowed_roots_is_forbidden`.
+            return;
+        }
+        // La scansione vede il collegamento come una variante qualsiasi...
+        let index = scan(&f.photos, None).unwrap();
+        let session = f.state.register(&index).unwrap();
+        let key = review_key(session.id(), "dscf0009", "Acros", 1024);
+        // ...ma il protocollo non lo serve, e il precaricamento non lo legge.
+        assert_eq!(f.state.serve(&key).status(), 403);
+        let report = f
+            .state
+            .prefetch(session.id(), "dscf0001", &["Acros".to_string()])
+            .unwrap();
+        assert_eq!(report.queued, 0, "DSCF0009 è il vicino +1 di DSCF0001");
+    }
+
+    #[test]
+    fn refresh_keeps_the_id_and_adds_new_presets() {
+        let f = fixture(1, NO_WORKERS);
+        let session = f.state.register(&f.index).unwrap();
+        let old = f.state.image_keys(session.id(), "dscf0001", 1024).unwrap();
+        // Un nuovo preset compare dopo uno sviluppo.
+        fs::create_dir_all(f.photos.join("Velvia 2")).unwrap();
+        jpeg(&f.photos.join("Velvia 2").join("DSCF0001.jpg"), 800, 600);
+        let index = scan(&f.photos, None).unwrap();
+        let refreshed = f.state.refresh(session.id(), &index).unwrap();
+        assert_eq!(refreshed.id(), session.id());
+        let keys = f.state.image_keys(session.id(), "dscf0001", 1024).unwrap();
+        assert_eq!(keys.len(), 3);
+        // Le chiavi già date restano valide.
+        assert_eq!(f.state.serve(&old[0].key).status(), 200);
+        // Un indice di un'altra cartella non sostituisce la sessione.
+        let other = tempfile::tempdir().unwrap();
+        fs::create_dir_all(other.path().join("P")).unwrap();
+        jpeg(&other.path().join("P").join("A.jpg"), 400, 400);
+        let foreign = scan(other.path(), None).unwrap();
+        assert!(f.state.refresh(session.id(), &foreign).is_err());
+        assert!(f.state.refresh("nessuna", &index).is_err());
+    }
+
+    #[test]
+    fn cache_info_limit_and_clear() {
+        let f = fixture(2, NO_WORKERS);
+        let session = f.state.register(&f.index).unwrap();
+        assert_eq!(f.state.cache_info().used_bytes, 0);
+        assert_eq!(f.state.cache_info().limit_bytes, 1 << 30);
+        for k in f.state.image_keys(session.id(), "dscf0001", 1024).unwrap() {
+            assert_eq!(f.state.serve(&k.key).status(), 200);
+        }
+        let used = f.state.cache_info().used_bytes;
+        assert!(used > 0);
+        f.state.set_cache_limit(1);
+        assert_eq!(f.state.cache_info().limit_bytes, 1);
+        f.state.set_cache_limit(1 << 30);
+        let before = tree(&f.photos);
+        f.state.clear_cache().unwrap();
+        assert_eq!(f.state.cache_info().used_bytes, 0);
+        assert_eq!(tree(&f.photos), before);
+        // Dopo lo svuotamento le anteprime si rigenerano.
+        let k = &f.state.image_keys(session.id(), "dscf0002", 1024).unwrap()[0];
+        assert_eq!(f.state.serve(&k.key).status(), 200);
     }
 
     #[test]

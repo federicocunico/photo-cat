@@ -37,6 +37,7 @@ const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
   { id: "language", section: "general", label: "settings.language" },
   { id: "doubleClick", section: "general", label: "externalApps.doubleClick" },
   { id: "dataDir", section: "general", label: "settings.path" },
+  { id: "rawReviewCache", section: "general", label: "settings.rawReviewCache.label" },
   { id: "ignoredFolders", section: "library", label: "externalApps.ignoredFolders" },
   { id: "importFolders", section: "library", label: "settings.importFolders" },
   { id: "faces", section: "ai", label: "settings.faces" },

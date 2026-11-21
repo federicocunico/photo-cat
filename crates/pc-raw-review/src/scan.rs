@@ -162,6 +162,24 @@ fn unsupported_folder_error(root: &Path) -> AppError {
     )
 }
 
+/// Percorso canonico come lo mostra Esplora risorse: su Windows senza il prefisso
+/// `\\?\` (anche `\\?\UNC\server\share` → `\\server\share`), come i percorsi
+/// delle sorgenti della libreria. Altrove invariato.
+fn simplified(path: PathBuf) -> PathBuf {
+    if !cfg!(windows) {
+        return path;
+    }
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        // Solo `X:\...`: altri percorsi verbatim (per esempio `\\?\Volume{...}`) restano tali.
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
 fn lower_extension(path: &Path) -> Option<String> {
     Some(path.extension()?.to_string_lossy().to_ascii_lowercase())
 }
@@ -302,7 +320,7 @@ pub fn scan(root: &Path, variants_dir: Option<&Path>) -> AppResult<ReviewIndex> 
             "La cartella sorgente non esiste o non è accessibile",
         ));
     }
-    let canonical = root.canonicalize()?;
+    let canonical = simplified(root.canonicalize()?);
 
     let mut rafs = Vec::new();
     for entry in sorted_entries(&canonical)? {
@@ -371,18 +389,19 @@ fn scan_rafs(
     variants_dir: Option<&Path>,
 ) -> AppResult<ReviewIndex> {
     let mut warnings = Vec::new();
-    let candidate =
-        variants_dir.map_or_else(|| canonical.join(VARIANTS_DIR_NAME), Path::to_path_buf);
-    let output_dir = if candidate.is_dir() {
-        Some(candidate)
-    } else {
-        if variants_dir.is_some() {
+    let default_dir = canonical.join(VARIANTS_DIR_NAME);
+    // La cartella scelta dall'utente (per esempio su un disco non collegato) può mancare:
+    // si avvisa e si ripiega su quella predefinita accanto ai RAF.
+    let output_dir = match variants_dir {
+        Some(dir) if dir.is_dir() => Some(dir.to_path_buf()),
+        Some(dir) => {
             warnings.push(format!(
                 "Cartella delle varianti non trovata: {}",
-                candidate.display()
+                dir.display()
             ));
+            default_dir.is_dir().then_some(default_dir)
         }
-        None
+        None => default_dir.is_dir().then_some(default_dir),
     };
 
     // Gli scatti sono definiti dai RAF.
@@ -418,7 +437,17 @@ fn scan_rafs(
     let mut presets = Vec::new();
     let mut guide_preset = None;
     if let Some(dir) = &output_dir {
-        let preset_dirs = subdirectories(dir)?;
+        let mut preset_dirs = subdirectories(dir)?;
+        // Il nome della pseudo-variante è riservato: una cartella omonima la oscurerebbe.
+        preset_dirs.retain(|(name, _)| {
+            let reserved = name.eq_ignore_ascii_case(RAW_PREVIEW_PRESET);
+            if reserved {
+                warnings.push(format!(
+                    "Cartella «{name}» ignorata: il nome è riservato all'anteprima RAW"
+                ));
+            }
+            !reserved
+        });
         let Collected {
             grouped,
             mut preset_keys,
@@ -640,6 +669,59 @@ mod tests {
         let result = scan(temp.path(), Some(&missing)).unwrap();
         assert_eq!(result.layout, Layout::RafOnly);
         assert_eq!(result.warnings.len(), 1);
+    }
+
+    #[test]
+    fn missing_explicit_output_dir_falls_back_to_the_default_one() {
+        let temp = tempfile::tempdir().unwrap();
+        touch(&temp.path().join("DSCF0001.RAF"));
+        touch(
+            &temp
+                .path()
+                .join(VARIANTS_DIR_NAME)
+                .join("Velvia/DSCF0001.jpg"),
+        );
+        // Per esempio un disco esterno scelto come output e ora scollegato.
+        let missing = temp.path().join("disco-scollegato");
+        let result = scan(temp.path(), Some(&missing)).unwrap();
+        assert!(matches!(result.layout, Layout::RafWithVariants { .. }));
+        assert_eq!(result.presets, ["Velvia"]);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("non trovata"));
+    }
+
+    #[test]
+    fn preset_folder_named_like_the_raw_preview_is_ignored() {
+        let temp = tempfile::tempdir().unwrap();
+        touch(&temp.path().join("DSCF0001.RAF"));
+        let dir = temp.path().join(VARIANTS_DIR_NAME);
+        touch(&dir.join("Raw-Preview/DSCF0001.jpg"));
+        touch(&dir.join("Velvia/DSCF0001.jpg"));
+        let result = scan(temp.path(), None).unwrap();
+        assert_eq!(result.presets, ["Velvia"]);
+        let variants = &result.shots[0].variants;
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0].kind, VariantKind::RawPreview);
+        assert!(variants[0].path.to_lowercase().ends_with(".raf"));
+        assert!(result.warnings.iter().any(|w| w.contains("riservato")));
+    }
+
+    #[test]
+    fn root_has_no_verbatim_prefix() {
+        let temp = tempfile::tempdir().unwrap();
+        touch(&temp.path().join("DSCF0001.RAF"));
+        let result = scan(temp.path(), None).unwrap();
+        assert!(!result.root.starts_with(r"\\?\"), "{}", result.root);
+        assert!(!result.shots[0].variants[0].path.starts_with(r"\\?\"));
+        assert!(Path::new(&result.root).is_dir());
+        assert_eq!(
+            simplified(PathBuf::from(r"\\?\UNC\nas\foto")),
+            if cfg!(windows) {
+                PathBuf::from(r"\\nas\foto")
+            } else {
+                PathBuf::from(r"\\?\UNC\nas\foto")
+            }
+        );
     }
 
     #[test]

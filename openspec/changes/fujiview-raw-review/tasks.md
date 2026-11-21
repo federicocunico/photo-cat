@@ -34,7 +34,13 @@
 
   Benchmark `#[ignore]` a 2048 px.
 - [x] 2.2 Protocollo `review://` in `app/src-tauri` con controllo che la chiave appartenga a una sessione aperta, e precaricamento a code separate (anteprime interattive, scatti vicini +4/−2, miniature). Test Rust del rifiuto di chiavi estranee.
-- [ ] 2.3 Revisione Opus delle parti 1 e 2: fedeltà del porting, nessuna scrittura nelle cartelle sorgente, prestazioni.
+- [x] 2.3 Revisione Opus delle parti 1 e 2: fedeltà del porting, nessuna scrittura nelle cartelle sorgente, prestazioni.
+
+  Per i task successivi:
+  - 3.2: aprire con `session::open_folder` / `session::open_fujiview` (sessione salvata o `.fujiview`, cartella delle varianti, merge e salvataggio) e poi `ReviewState::register(&opened.index)`; dopo uno sviluppo (5.3) `ReviewState::refresh` mantiene l'id della sessione.
+  - 3.3: l'"Anteprima RAW" (`raw-preview`) è un pannello di `panelPresets` nelle cartelle con RAF; i testi dei metadati passano da `modules/raw-review/metaText.ts` (`valueKey` con fallback al testo).
+  - 4.2: una scelta su un preset assente dall'indice resta salvata (disco delle varianti scollegato): l'export deve verificare che la variante esista.
+  - 5.1: sostituire nel test di `metadata.rs` la tabella D192 locale con `camera::banks::film_simulation_name` (TODO nel codice).
 
 ## 3. Modulo UI di revisione
 

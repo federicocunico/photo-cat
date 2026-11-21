@@ -306,6 +306,12 @@ export const commandsMock = {
   listOrganizations: vi.fn(async () => []),
   undoOrganization: vi.fn(async () => [0, 0]),
   faceCount: vi.fn(async () => 0),
+  rawReviewCacheInfo: vi.fn(async () => ({
+    available: true,
+    usedBytes: 0,
+    limitBytes: 20 * 1024 ** 3,
+  })),
+  rawReviewClearCache: vi.fn(async () => 0),
   saveSettings: vi.fn(async () => null),
   getTaxonomy: vi.fn(),
   addCategory: vi.fn(),
