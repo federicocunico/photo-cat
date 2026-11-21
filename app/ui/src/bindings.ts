@@ -221,6 +221,17 @@ export const commands = {
 	ignoreTzSuggestion: (group: number, offsetMin: number) => __TAURI_INVOKE<null>("ignore_tz_suggestion", { group, offsetMin }),
 	/**  Nomi dei fusi IANA per il selettore dell'ora locale. */
 	listTimezones: () => __TAURI_INVOKE<string[]>("list_timezones"),
+	/**  Chiavi `review://` di tutte le varianti di uno scatto (il lato è limitato a 384–8192 px). */
+	rawReviewImageKeys: (sessionId: string, shotKey: string, maxEdge: number) => __TAURI_INVOKE<ReviewImageKey[]>("raw_review_image_keys", { sessionId, shotKey, maxEdge }),
+	/**
+	 *  Precarica gli scatti vicini allo scatto corrente per i preset dei pannelli, annullando il
+	 *  precaricamento precedente non ancora eseguito.
+	 */
+	rawReviewPrefetch: (sessionId: string, centerShotKey: string, presets: string[]) => __TAURI_INVOKE<PrefetchReport>("raw_review_prefetch", { sessionId, centerShotKey, presets }),
+	/**  Chiavi delle miniature degli scatti visibili e relativa generazione in background. */
+	rawReviewThumbnails: (sessionId: string, shotKeys: string[]) => __TAURI_INVOKE<ThumbnailKey[]>("raw_review_thumbnails", { sessionId, shotKeys }),
+	/**  Chiude una sessione di revisione: le sue chiavi `review://` non valgono più. */
+	rawReviewClose: (sessionId: string) => __TAURI_INVOKE<boolean>("raw_review_close", { sessionId }),
 	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
 	/**  Nomi delle prime foto mentre si scrive il modello. */
 	sequenceExportPreview: (options: SequenceExportOptions, limit: number) => __TAURI_INVOKE<NamePreviewResult>("sequence_export_preview", { options, limit }),
@@ -1481,6 +1492,14 @@ export type PlaceSuggestion = {
 
 export type Postprocessing = "normalized_embedding512" | "token_ids" | "person_nms" | "face_landmarks_nms" | "normalized_embedding128" | "city_index";
 
+/**  Esito di `raw_review_prefetch`. */
+export type PrefetchReport = {
+	/**  Anteprime messe in coda per gli scatti vicini. */
+	queued: number,
+	/**  Lavori della generazione precedente ancora in coda, annullati da questa richiesta. */
+	cancelled: number,
+};
+
 export type Preflight = {
 	available: boolean,
 	alternative: Method,
@@ -1594,6 +1613,15 @@ export type ResourcesConfig = {
 	profile?: ResourceProfile,
 	/**  Limite massimo manuale di RAM per l'app, in MB. */
 	ram_limit_mb?: number | null,
+	/**  Limite della cache delle anteprime delle Varianti RAW, in MB (`None` = 20 GB). */
+	raw_review_cache_mb?: number | null,
+};
+
+/**  Chiave `review://` di una variante di uno scatto. */
+export type ReviewImageKey = {
+	preset: string,
+	/**  Da passare a `convertFileSrc(key, "review")`. */
+	key: string,
 };
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
@@ -1914,6 +1942,13 @@ export type ThresholdImpact = {
 	/**  Gruppi di foto simili con la soglia attuale e con quella nuova. */
 	similarGroupsCurrent?: number,
 	similarGroups?: number,
+};
+
+/**  Miniatura di uno scatto della lista. */
+export type ThumbnailKey = {
+	shotKey: string,
+	/**  `None` se lo scatto non ha varianti da mostrare. */
+	key: string | null,
 };
 
 /**

@@ -33,7 +33,7 @@
   - chiave invalidata quando il file cambia.
 
   Benchmark `#[ignore]` a 2048 px.
-- [ ] 2.2 Protocollo `review://` in `app/src-tauri` con controllo che la chiave appartenga a una sessione aperta, e precaricamento a code separate (anteprime interattive, scatti vicini +4/−2, miniature). Test Rust del rifiuto di chiavi estranee.
+- [x] 2.2 Protocollo `review://` in `app/src-tauri` con controllo che la chiave appartenga a una sessione aperta, e precaricamento a code separate (anteprime interattive, scatti vicini +4/−2, miniature). Test Rust del rifiuto di chiavi estranee.
 - [ ] 2.3 Revisione Opus delle parti 1 e 2: fedeltà del porting, nessuna scrittura nelle cartelle sorgente, prestazioni.
 
 ## 3. Modulo UI di revisione

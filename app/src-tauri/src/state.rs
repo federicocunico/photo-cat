@@ -13,6 +13,8 @@ use pc_store::{AppStore, Store};
 use std::sync::Arc;
 
 pub struct AppState {
+    /// Varianti RAW: cache delle anteprime, sessioni aperte e precaricamento.
+    pub raw_review: Arc<crate::raw_review::ReviewState>,
     pub paths: AppPaths,
     pub config: Arc<RwLock<Config>>,
     pub face_policy: Arc<pc_ai::face_policy::FacePolicy>,

@@ -18,6 +18,7 @@ mod open_with;
 mod organize;
 mod people;
 mod places;
+mod raw_review;
 mod recovery;
 mod sequence;
 mod settings;
@@ -206,6 +207,10 @@ pub fn bindings() -> Builder<tauri::Wry> {
             timeline::place_undated,
             timeline::ignore_tz_suggestion,
             timeline::list_timezones,
+            raw_review::raw_review_image_keys,
+            raw_review::raw_review_prefetch,
+            raw_review::raw_review_thumbnails,
+            raw_review::raw_review_close,
             sequence::sequence_export_defaults,
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
@@ -342,6 +347,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
+        .register_asynchronous_uri_scheme_protocol("review", raw_review::review_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -686,7 +692,14 @@ fn initialize(
     #[cfg(any(debug_assertions, feature = "e2e"))]
     dev::on_startup(&store, &jobs);
 
+    // Varianti RAW: cache sotto la cartella dati, worker limitati da core e memoria del governor.
+    let raw_review = Arc::new(raw_review::ReviewState::new(
+        paths.root(),
+        config.resources.raw_review_cache_bytes(),
+        raw_review::Workers::for_system(budget.budget_mb, cores),
+    ));
     handle.manage(AppState {
+        raw_review,
         paths: paths.clone(),
         config: shared_config,
         face_policy,
