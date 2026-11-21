@@ -261,6 +261,13 @@ export const commandsMock = {
     async () => [],
   ),
   sequenceIds: vi.fn<(scope: SequenceScope) => Promise<number[]>>(async () => []),
+  sequenceSelection: vi.fn<(scope: SequenceScope) => Promise<SelectionBase>>(async () => ({
+    count: 0,
+    maxId: 0,
+  })),
+  sequenceSelectionIds: vi.fn<
+    (scope: SequenceScope, maxId: number, except: number[]) => Promise<number[]>
+  >(async () => []),
   setSessionGap: vi.fn(async () => null),
   setGroupDisplay: vi.fn(async () => 1),
   setGroupShift: vi.fn(async () => 1),

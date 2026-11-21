@@ -26,7 +26,9 @@ import { FACE_SORTS, usePeoplePrefs } from "../../store/peoplePrefs";
 import { buildFaceRows, orderYears, rectangleSelectRows } from "./faceLayout";
 import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
-import { clickSelect, rectangleSelect } from "../../store/library";
+import { idsSelection, rectangleSelect, selSet, type Selection } from "../../store/library";
+import { useGridSelection } from "../../lib/useGridSelection";
+import { useActiveGrid } from "../../commands/gridShortcuts";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import {
@@ -89,8 +91,6 @@ export const FaceGrid = forwardRef<
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [discardedOnly, setDiscardedOnly] = useState(false);
-  const [selected, setSelected] = useState<number[]>([]);
-  const [anchor, setAnchor] = useState<number | null>(null);
   const [focusedFace, setFocusedFace] = useState<number | null>(null);
   const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -103,7 +103,9 @@ export const FaceGrid = forwardRef<
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moveSelectRef = useRef<HTMLSelectElement>(null);
-  const drag = useRef<{ x: number; y: number; initial: number[] } | null>(null);
+  const drag = useRef<{ x: number; y: number; initial: Selection<FaceScope> | null } | null>(
+    null,
+  );
   const scrolledFor = useRef<number | null>(null);
   const photoActions = useFacePhotoActions();
   // Volto su cui si è aperto il menu contestuale e visore aperto (volti e posizione).
@@ -111,23 +113,16 @@ export const FaceGrid = forwardRef<
   const [viewer, setViewer] = useState<{ faces: FaceView[]; index: number } | null>(null);
 
   useEffect(() => {
-    setSelected([]);
-    setAnchor(null);
     setFocusedFace(null);
     setMoveTo("");
     setDiscardedOnly(highlight?.discarded ?? false);
     setError("");
     scrolledFor.current = null;
-    onSelectedFacesChange?.([]);
   }, [target?.kind === "group" ? target.id : target?.kind, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (highlight?.discarded) setDiscardedOnly(true);
   }, [highlight?.faceId, highlight?.discarded]);
-
-  useEffect(() => {
-    onSelectedFacesChange?.(selected);
-  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scope: FaceScope | null = useMemo(() => {
     if (!target || target.kind === "identity") return null;
@@ -180,6 +175,41 @@ export const FaceGrid = forwardRef<
 
   const items = useMemo(() => faces.data?.pages.flatMap((p) => p.items) ?? [], [faces.data]);
   const order = useMemo(() => items.map((i) => i.id), [items]);
+  const sel = useGridSelection<FaceScope>({
+    // Il filtro è lo scope: cambiando gruppo o vista la selezione ricomincia (vedi sotto).
+    filter: scope ?? { kind: "singles" },
+    order,
+    fetchBase: () => commands.faceSelection(scope!),
+    onError: (e) => setError((e as { detail?: string }).detail ?? String(e)),
+  });
+  const selection = sel.selection;
+  /** Id espliciti (vuoto con una selezione per filtro: si risolvono al momento dell'azione). */
+  const selected = sel.ids ?? [];
+  const selectedCount = sel.count;
+  /**
+   * Id dei volti selezionati: espliciti, oppure risolti dal backend per una selezione "tutti i
+   * volti dello scope" (meno le eccezioni), anche se solo una parte è caricata.
+   */
+  const resolveFaceIds = async (): Promise<number[]> => {
+    if (selection.mode === "ids") return [...selection.ids];
+    return commands.faceSelectionIds(selection.filter, selection.maxId, [...selection.except]);
+  };
+  const scopeKey = JSON.stringify(scope);
+  useEffect(() => {
+    sel.clear();
+  }, [scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    onSelectedFacesChange?.(selected);
+  }, [selection]); // eslint-disable-line react-hooks/exhaustive-deps
+  useActiveGrid(
+    {
+      selectAll: sel.selectAll,
+      invert: sel.invert,
+      clear: sel.clear,
+      count: () => selectedCount,
+    },
+    target != null && scope != null,
+  );
   const meta = faces.data?.pages[0];
   const goodCount = meta?.goodCount ?? group?.goodFaces ?? 0;
   const discardedCount = meta?.discardedCount ?? group?.discardedFaces ?? 0;
@@ -259,20 +289,10 @@ export const FaceGrid = forwardRef<
     virt.scrollToIndex(row, { align: "center" });
   }, [highlight, items, cols, faces, virt]);
 
-  const setSelection = (next: number[], nextAnchor?: number | null) => {
-    setSelected(next);
-    if (nextAnchor !== undefined) setAnchor(nextAnchor);
-  };
-
   const onFaceClick = (id: number) => (e: MouseEvent) => {
     e.stopPropagation();
     setFocusedFace(id);
-    const next = clickSelect(order, selected, anchor, id, {
-      ctrl: e.ctrlKey || e.metaKey,
-      shift: e.shiftKey,
-    });
-    // Maiusc non sposta l'ancora: solo clic semplice e Ctrl+clic.
-    setSelection(next, e.shiftKey && anchor !== null ? undefined : id);
+    sel.click(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   };
 
   const refresh = () => refreshPeople(qc);
@@ -281,19 +301,32 @@ export const FaceGrid = forwardRef<
    * Applica le correzioni in ordine. Con `done` l'esito compare come avviso con
    * "Annulla operazione" (e Ctrl+Z): ogni correzione è una voce del registro del backend.
    */
-  const correct = async (corrections: Correction[], done?: string) => {
-    if (!corrections.length) return;
+  const correct = async (
+    build: Correction[] | ((ids: number[]) => Correction[]),
+    done?: string | ((count: number) => string),
+    /** Id espliciti (menu su un volto fuori dalla selezione); altrimenti la selezione. */
+    explicit?: number[],
+  ) => {
     setBusy(true);
     setError("");
-    setProgress(corrections.length > 1 ? { done: 0, total: corrections.length } : null);
     try {
+      let ids: number[] = [];
+      if (typeof build === "function") ids = explicit ?? (await resolveFaceIds());
+      const corrections = typeof build === "function" ? build(ids) : build;
+      if (!corrections.length) return;
+      setProgress(corrections.length > 1 ? { done: 0, total: corrections.length } : null);
       for (const [i, c] of corrections.entries()) {
         await commands.correctPerson(c);
         if (corrections.length > 1) setProgress({ done: i + 1, total: corrections.length });
       }
-      setSelected([]);
+      sel.clear();
       setMoveTo("");
-      if (done) notifyPeopleUndo(qc, done, corrections.length);
+      if (done)
+        notifyPeopleUndo(
+          qc,
+          typeof done === "function" ? done(ids.length) : done,
+          corrections.length,
+        );
       // I comandi tornano disponibili appena i volti del gruppo sono aggiornati.
       await refreshPeopleFast(qc);
     } catch (err) {
@@ -304,10 +337,11 @@ export const FaceGrid = forwardRef<
     }
   };
 
-  const reject = (gid: number) =>
+  const reject = (gid: number, explicit?: number[]) =>
     correct(
-      selected.map((face): Correction => ({ action: "reject", person: gid, face })),
-      t("people.rejectedDone", { count: selected.length }),
+      (ids) => ids.map((face): Correction => ({ action: "reject", person: gid, face })),
+      (n) => t("people.rejectedDone", { count: n }),
+      explicit,
     );
 
   useImperativeHandle(ref, () => ({
@@ -315,8 +349,7 @@ export const FaceGrid = forwardRef<
       const id = focusedFace ?? items[0]?.id;
       if (id == null) return;
       setFocusedFace(id);
-      const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
-      setSelection(next, id);
+      sel.click(id, { ctrl: true, shift: false });
     },
     focusMoveSelect() {
       moveSelectRef.current?.focus();
@@ -324,7 +357,7 @@ export const FaceGrid = forwardRef<
     runNotSame() {
       const hint = group?.mergeHint;
       const gid = target?.kind === "group" ? target.id : null;
-      if (selected.length && gid != null) {
+      if (selectedCount > 0 && gid != null) {
         void reject(gid);
         return true;
       }
@@ -357,12 +390,16 @@ export const FaceGrid = forwardRef<
   const menuTargets = (): FaceView[] => {
     const f = items.find((i) => i.id === menuFace);
     if (!f) return [];
-    return selected.includes(f.id) ? items.filter((i) => selected.includes(i.id)) : [f];
+    return sel.has(f.id) ? items.filter((i) => sel.has(i.id)) : [f];
   };
   const menuItems = (): MenuItem[] => {
     const faces = menuTargets();
     if (!faces.length) return [{ kind: "label", label: t("people.emptyFaces") }];
-    const ids = faces.map((f) => f.id);
+    // Sulla selezione se contiene il volto cliccato (anche per filtro, oltre i caricati),
+    // altrimenti su quel solo volto.
+    const inSel = menuFace != null && sel.has(menuFace);
+    const explicit = inSel ? undefined : faces.map((f) => f.id);
+    const count = inSel ? selectedCount : 1;
     const photos = distinctByMedia(faces);
     const first = faces.find((f) => f.id === menuFace) ?? faces[0];
     const out: MenuItem[] = [
@@ -394,19 +431,16 @@ export const FaceGrid = forwardRef<
     if (groupId != null)
       out.push(
         {
-          label: withCount(t("people.reject"), ids.length),
-          onSelect: () =>
-            correct(
-              ids.map((face): Correction => ({ action: "reject", person: groupId, face })),
-              t("people.rejectedDone", { count: ids.length }),
-            ),
+          label: withCount(t("people.reject"), count),
+          onSelect: () => void reject(groupId, explicit),
         },
         {
           label: t("people.newGroup"),
           onSelect: () =>
             correct(
-              [{ action: "separate", person: groupId, faces: ids }],
-              t("people.separatedDone", { count: ids.length }),
+              (ids) => [{ action: "separate", person: groupId, faces: ids }],
+              (n) => t("people.separatedDone", { count: n }),
+              explicit,
             ),
         },
       );
@@ -415,18 +449,24 @@ export const FaceGrid = forwardRef<
         label: t("people.recover"),
         onSelect: () =>
           correct(
-            [{ action: "recover", faces: ids }],
-            t("people.recoveredDone", { count: ids.length }),
+            (ids) => [{ action: "recover", faces: ids }],
+            (n) => t("people.recoveredDone", { count: n }),
+            explicit,
           ),
       });
     out.push({
-      label: withCount(t("people.remove"), ids.length),
+      label: withCount(t("people.remove"), count),
       danger: true,
       onSelect: () => {
-        setSelected(ids);
+        if (explicit) sel.setIds(explicit);
         setRemoveOpen(true);
       },
     });
+    out.push(
+      { kind: "separator" },
+      { label: t("people.selectAll"), onSelect: () => void sel.selectAll() },
+      { label: t("people.invert"), onSelect: () => void sel.invert() },
+    );
     return out;
   };
   const openViewerAt = (id: number) => {
@@ -523,8 +563,8 @@ export const FaceGrid = forwardRef<
               : t("people.working")}
           </span>
         ) : (
-          selected.length > 0 && (
-            <span className="muted">{t("people.selected", { count: selected.length })}</span>
+          selectedCount > 0 && (
+            <span className="muted">{t("people.selected", { count: selectedCount })}</span>
           )
         )}
         {/* "Riassegna a…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
@@ -534,7 +574,7 @@ export const FaceGrid = forwardRef<
           className="field people-move-select"
           aria-label={t("people.move")}
           value={moveTo}
-          disabled={busy || selected.length === 0}
+          disabled={busy || selectedCount === 0}
           onChange={(e) => setMoveTo(e.target.value)}
         >
           <option value="">{t("people.move")}</option>
@@ -547,7 +587,7 @@ export const FaceGrid = forwardRef<
         <Button
           disabled={busy}
           disabledReason={
-            selected.length === 0
+            selectedCount === 0
               ? t("people.noSelection")
               : !moveTarget
                 ? t("people.moveDisabled")
@@ -556,8 +596,8 @@ export const FaceGrid = forwardRef<
           onClick={() =>
             moveTarget &&
             correct(
-              [moveTarget.correction(selected)],
-              t("people.movedDone", { count: selected.length, name: moveTarget.name }),
+              (ids) => [moveTarget.correction(ids)],
+              (n) => t("people.movedDone", { count: n, name: moveTarget.name }),
             )
           }
         >
@@ -565,15 +605,15 @@ export const FaceGrid = forwardRef<
         </Button>
         {groupId != null && (
           <>
-            <Button disabled={busy || selected.length === 0} onClick={() => reject(groupId)}>
-              {withCount(t("people.reject"), selected.length)}
+            <Button disabled={busy || selectedCount === 0} onClick={() => reject(groupId)}>
+              {withCount(t("people.reject"), selectedCount)}
             </Button>
             <Button
-              disabled={busy || selected.length === 0}
+              disabled={busy || selectedCount === 0}
               onClick={() =>
                 correct(
-                  [{ action: "separate", person: groupId, faces: selected }],
-                  t("people.separatedDone", { count: selected.length }),
+                  (ids) => [{ action: "separate", person: groupId, faces: ids }],
+                  (n) => t("people.separatedDone", { count: n }),
                 )
               }
             >
@@ -583,24 +623,30 @@ export const FaceGrid = forwardRef<
         )}
         <Button
           variant="danger"
-          disabled={busy || selected.length === 0}
+          disabled={busy || selectedCount === 0}
           onClick={() => setRemoveOpen(true)}
         >
-          {withCount(t("people.remove"), selected.length)}
+          {withCount(t("people.remove"), selectedCount)}
         </Button>
         {discardedOnly && (
           <Button
-            disabled={busy || selected.length === 0}
+            disabled={busy || selectedCount === 0}
             onClick={() =>
               correct(
-                [{ action: "recover", faces: selected }],
-                t("people.recoveredDone", { count: selected.length }),
+                (ids) => [{ action: "recover", faces: ids }],
+                (n) => t("people.recoveredDone", { count: n }),
               )
             }
           >
             {t("people.recover")}
           </Button>
         )}
+        <Button disabled={busy || scope == null} onClick={() => void sel.selectAll()}>
+          {t("people.selectAll")}
+        </Button>
+        <Button disabled={busy || scope == null} onClick={() => void sel.invert()}>
+          {t("people.invert")}
+        </Button>
         <span aria-hidden className="people-toolbar-sep" />
         <label className="muted" htmlFor="people-face-sort">
           {t("people.faceSortLabel")}
@@ -739,10 +785,12 @@ export const FaceGrid = forwardRef<
       <ConfirmDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
-        title={t("people.removeTitle", { count: selected.length })}
+        title={t("people.removeTitle", { count: selectedCount })}
         message={t("people.removeBody")}
-        confirmLabel={t("people.removeButton", { count: selected.length })}
-        onConfirm={() => correct(selected.map((face): Correction => ({ action: "remove", face })))}
+        confirmLabel={t("people.removeButton", { count: selectedCount })}
+        onConfirm={() =>
+          correct((ids) => ids.map((face): Correction => ({ action: "remove", face })))
+        }
       />
 
       {mergeHintOpen && group && hint && (
@@ -786,7 +834,7 @@ export const FaceGrid = forwardRef<
             drag.current = {
               x: e.clientX - r.left,
               y: e.clientY - r.top + e.currentTarget.scrollTop,
-              initial: e.ctrlKey || e.metaKey ? selected : [],
+              initial: e.ctrlKey || e.metaKey ? selection : null,
             };
             e.currentTarget.setPointerCapture?.(e.pointerId);
             e.preventDefault();
@@ -807,10 +855,7 @@ export const FaceGrid = forwardRef<
               h: Math.abs(y - d.y),
             };
             setBox(b);
-            setSelection([
-              ...new Set([
-                ...d.initial,
-                ...(faceRows
+            const hit = faceRows
                   ? rectangleSelectRows(order, b, faceRows, {
                       cell,
                       rowHeight,
@@ -824,9 +869,8 @@ export const FaceGrid = forwardRef<
                       rowHeight,
                       gap: GAP,
                       pad: PAD,
-                    })),
-              ]),
-            ]);
+                    });
+            sel.replace(d.initial ? selSet(d.initial, hit, true) : idsSelection<FaceScope>(hit));
           }}
           onPointerUp={() => {
             drag.current = null;
@@ -889,7 +933,7 @@ export const FaceGrid = forwardRef<
                         style={{ top: row.start + PAD }}
                       >
                         {items.slice(from, to).map((face) => {
-                          const sel = selected.includes(face.id);
+                          const isSel = sel.has(face.id);
                           const lit = highlight?.faceId === face.id;
                           const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
                           return (
@@ -902,7 +946,7 @@ export const FaceGrid = forwardRef<
                               onDoubleClick={() => openViewerAt(face.id)}
                               onKeyDown={onTileKey(face.id)}
                               data-highlighted={lit || undefined}
-                              aria-pressed={sel}
+                              aria-pressed={isSel}
                               title={tip}
                               onClick={onFaceClick(face.id)}
                               className="people-face-tile"
@@ -911,7 +955,7 @@ export const FaceGrid = forwardRef<
                                 border: `2px solid ${
                                   lit
                                     ? "var(--pc-warn)"
-                                    : sel
+                                    : isSel
                                       ? "var(--pc-accent)"
                                       : "var(--pc-raised)"
                                 }`,
