@@ -29,7 +29,8 @@ pub async fn export_diagnostics(
         .map(|d| pc_diag::dumps::crashpad_reports(&d.join("EBWebView")));
     tauri::async_runtime::spawn_blocking(move || {
         let errors = db.read(|c| {
-            errorlog::query(
+            // Il pacchetto include anche le voci archiviate.
+            errorlog::query_including_archived(
                 c,
                 &ErrorQuery {
                     limit: Some(5000),

@@ -1,10 +1,17 @@
 // Stato della vista Sequenza: ambito, selezione e vista interna (sequenza o export).
 import { create } from "zustand";
 import type { SequenceScope } from "../lib/ipc";
+import { idsSelection, selIds, type Selection } from "./library";
 
 interface SequenceState {
   scope: SequenceScope;
+  /** Selezione come insieme: id scelti, oppure "tutta la Sequenza" meno le eccezioni (D1). */
+  selection: Selection<SequenceScope>;
+  /** Id scelti uno per uno (vuoto con "Seleziona tutto": l'elenco si risolve nel backend). */
   selected: number[];
+  /** Ancora di Maiusc+clic. */
+  anchor: number | null;
+  setAnchor: (id: number | null) => void;
   /** Ultimo elemento cliccato (ancora per Maiusc+clic, sessione per il tasto A). */
   focused: number | null;
   view: "sequence" | "export";
@@ -12,19 +19,40 @@ interface SequenceState {
   stats: { total: number; devices: number; sessions: number };
   setScope: (s: SequenceScope) => void;
   setSelection: (ids: number[], focused?: number | null) => void;
+  replaceSelection: (s: Selection<SequenceScope>, focused?: number | null) => void;
   setView: (v: "sequence" | "export") => void;
   setStats: (s: SequenceState["stats"]) => void;
 }
 
 export const useSequence = create<SequenceState>()((set) => ({
   scope: { scope: "library" },
+  selection: idsSelection<SequenceScope>(),
   selected: [],
+  anchor: null,
+  setAnchor: (anchor) => set({ anchor }),
   focused: null,
   view: "sequence",
   stats: { total: 0, devices: 0, sessions: 0 },
-  setScope: (scope) => set({ scope, selected: [], focused: null }),
+  setScope: (scope) =>
+    set({
+      scope,
+      selection: idsSelection<SequenceScope>(),
+      selected: [],
+      anchor: null,
+      focused: null,
+    }),
   setSelection: (selected, focused) =>
-    set((s) => ({ selected, focused: focused === undefined ? s.focused : focused })),
+    set((s) => ({
+      selection: idsSelection<SequenceScope>(selected),
+      selected,
+      focused: focused === undefined ? s.focused : focused,
+    })),
+  replaceSelection: (selection, focused) =>
+    set((s) => ({
+      selection,
+      selected: selIds(selection) ?? [],
+      focused: focused === undefined ? s.focused : focused,
+    })),
   setView: (view) => set({ view }),
   setStats: (stats) => set({ stats }),
 }));

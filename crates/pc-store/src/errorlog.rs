@@ -33,6 +33,8 @@ pub struct ErrorQuery {
     pub job_id: Option<i64>,
     pub code: Option<String>,
     pub text: Option<String>,
+    /// `None`/`Some(false)`: solo le voci non archiviate (predefinito); `Some(true)`: solo quelle archiviate.
+    pub archived: Option<bool>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
 }
@@ -51,13 +53,23 @@ pub struct ErrorEntry {
     pub phase: Option<String>,
     pub path: Option<String>,
     pub detail: Option<String>,
+    /// Istante dell'archiviazione (RFC 3339); `None` per le voci attive.
+    pub archived_at: Option<String>,
 }
 
-pub fn query(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
-    let mut sql = String::from(
-        "SELECT id, ts, level, code, message, target, job_id, phase, path, detail FROM error_log WHERE 1=1",
-    );
+/// Condizioni comuni (`WHERE 1=1 AND ...`) e relativi argomenti. `archived`: `None` = tutte le voci.
+fn filter(
+    q: &ErrorQuery,
+    with_text: bool,
+    archived: Option<bool>,
+) -> (String, Vec<Box<dyn ToSql>>) {
+    let mut sql = String::from(" WHERE 1=1");
     let mut args: Vec<Box<dyn ToSql>> = Vec::new();
+    match archived {
+        Some(false) => sql.push_str(" AND archived_at IS NULL"),
+        Some(true) => sql.push_str(" AND archived_at IS NOT NULL"),
+        None => {}
+    }
     if let Some(v) = &q.level {
         sql.push_str(" AND level = ?");
         args.push(Box::new(v.to_ascii_uppercase()));
@@ -74,7 +86,11 @@ pub fn query(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
         sql.push_str(" AND code = ?");
         args.push(Box::new(v.clone()));
     }
-    if let Some(v) = q.text.as_deref().filter(|t| !t.trim().is_empty()) {
+    if let Some(v) = q
+        .text
+        .as_deref()
+        .filter(|t| with_text && !t.trim().is_empty())
+    {
         sql.push_str(" AND (message LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR detail LIKE ? ESCAPE '\\')");
         let pat = format!(
             "%{}%",
@@ -86,6 +102,24 @@ pub fn query(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
             args.push(Box::new(pat.clone()));
         }
     }
+    (sql, args)
+}
+
+/// Voci del registro filtrate; di norma solo le non archiviate (vedi [`ErrorQuery::archived`]).
+pub fn query(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
+    select(c, q, Some(q.archived.unwrap_or(false)))
+}
+
+/// Come [`query`] ma include anche le voci archiviate (pacchetto diagnostico).
+pub fn query_including_archived(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
+    select(c, q, None)
+}
+
+fn select(c: &Connection, q: &ErrorQuery, archived: Option<bool>) -> StoreResult<Vec<ErrorEntry>> {
+    let (cond, mut args) = filter(q, true, archived);
+    let mut sql = format!(
+        "SELECT id, ts, level, code, message, target, job_id, phase, path, detail, archived_at FROM error_log{cond}"
+    );
     sql.push_str(" ORDER BY id DESC LIMIT ? OFFSET ?");
     args.push(Box::new(q.limit.unwrap_or(200).min(5000)));
     args.push(Box::new(q.offset.unwrap_or(0)));
@@ -104,6 +138,7 @@ pub fn query(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorEntry>> {
                 phase: r.get(7)?,
                 path: r.get(8)?,
                 detail: r.get(9)?,
+                archived_at: r.get(10)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -209,6 +244,97 @@ impl DiagSink for DbErrorSink {
     }
 }
 
+/// Destinazione di un'archiviazione.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum ArchiveTarget {
+    /// Voci singole.
+    Ids { ids: Vec<i64> },
+    /// Un gruppo (codice + fase, anche assenti) con gli altri filtri di `query`.
+    Group {
+        /// Job del gruppo (`None` = voci senza job, non "qualsiasi job").
+        #[serde(rename = "jobId")]
+        job_id: Option<i64>,
+        code: Option<String>,
+        phase: Option<String>,
+        query: ErrorQuery,
+    },
+    /// Tutte le voci che corrispondono al filtro corrente.
+    Query { query: ErrorQuery },
+}
+
+fn now() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+/// Archivia le voci indicate (solo quelle ancora attive). Restituisce quante ne ha archiviate.
+/// Non cancella nulla: restano nel registro, nel file di log e nel pacchetto diagnostico.
+pub fn archive_errors(c: &Connection, target: &ArchiveTarget) -> StoreResult<usize> {
+    match target {
+        ArchiveTarget::Ids { ids } => set_archived(c, ids, Some(now())),
+        ArchiveTarget::Query { query } => archive_filtered(c, query, None),
+        ArchiveTarget::Group {
+            job_id,
+            code,
+            phase,
+            query,
+        } => archive_filtered(c, query, Some((*job_id, code.as_deref(), phase.as_deref()))),
+    }
+}
+
+/// Ripristina le voci archiviate indicate. Restituisce quante ne ha ripristinate.
+pub fn unarchive_errors(c: &Connection, ids: &[i64]) -> StoreResult<usize> {
+    set_archived(c, ids, None)
+}
+
+fn set_archived(c: &Connection, ids: &[i64], value: Option<String>) -> StoreResult<usize> {
+    let guard = if value.is_some() {
+        "archived_at IS NULL"
+    } else {
+        "archived_at IS NOT NULL"
+    };
+    let mut n = 0;
+    for chunk in ids.chunks(500) {
+        let marks = vec!["?"; chunk.len()].join(",");
+        let sql = format!("UPDATE error_log SET archived_at = ? WHERE {guard} AND id IN ({marks})");
+        let mut args: Vec<&dyn ToSql> = vec![&value];
+        args.extend(chunk.iter().map(|i| i as &dyn ToSql));
+        n += c.execute(&sql, args.as_slice())?;
+    }
+    Ok(n)
+}
+
+fn archive_filtered(
+    c: &Connection,
+    q: &ErrorQuery,
+    group: Option<(Option<i64>, Option<&str>, Option<&str>)>,
+) -> StoreResult<usize> {
+    let (mut cond, args) = filter(q, group.is_none(), Some(false));
+    let mut all: Vec<Box<dyn ToSql>> = vec![Box::new(now())];
+    all.extend(args);
+    if let Some((job_id, code, phase)) = group {
+        cond.push_str(" AND job_id IS ? AND code IS ? AND phase IS ?");
+        all.push(Box::new(job_id));
+        all.push(Box::new(code.map(str::to_owned)));
+        all.push(Box::new(phase.map(str::to_owned)));
+    }
+    let refs: Vec<&dyn ToSql> = all.iter().map(|b| b.as_ref()).collect();
+    Ok(c.execute(
+        &format!("UPDATE error_log SET archived_at = ?{}", cond),
+        refs.as_slice(),
+    )?)
+}
+
+/// Errori (livello ERROR) non archiviati: il valore dell'indicatore globale.
+pub fn active_error_count(c: &Connection) -> StoreResult<i64> {
+    Ok(c.query_row(
+        "SELECT COUNT(*) FROM error_log WHERE level='ERROR' AND archived_at IS NULL",
+        [],
+        |r| r.get(0),
+    )?)
+}
+
 /// Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -230,27 +356,11 @@ pub struct ErrorGroup {
 /// Riepilogo per `(job, fase, codice, livello)`, dal gruppo più recente, filtrato come [`query`]
 /// (testo escluso).
 pub fn groups(c: &Connection, q: &ErrorQuery) -> StoreResult<Vec<ErrorGroup>> {
-    let mut sql = String::from(
+    let (cond, mut args) = filter(q, false, Some(q.archived.unwrap_or(false)));
+    let mut sql = format!(
         "SELECT job_id, phase, code, level, COUNT(*), COUNT(DISTINCT path), MAX(ts), MAX(id) AS last_id
-         FROM error_log WHERE 1=1",
+         FROM error_log{cond}"
     );
-    let mut args: Vec<Box<dyn ToSql>> = Vec::new();
-    if let Some(v) = &q.level {
-        sql.push_str(" AND level = ?");
-        args.push(Box::new(v.to_ascii_uppercase()));
-    }
-    if let Some(v) = &q.phase {
-        sql.push_str(" AND phase = ?");
-        args.push(Box::new(v.clone()));
-    }
-    if let Some(v) = q.job_id {
-        sql.push_str(" AND job_id = ?");
-        args.push(Box::new(v));
-    }
-    if let Some(v) = &q.code {
-        sql.push_str(" AND code = ?");
-        args.push(Box::new(v.clone()));
-    }
     sql.push_str(" GROUP BY job_id, phase, code, level");
     let sql = format!(
         "SELECT g.*, (SELECT message FROM error_log WHERE id = g.last_id)
@@ -295,6 +405,123 @@ mod tests {
             path: Some(format!("D:\\Foto\\{i}.jpg")),
             detail: None,
         }
+    }
+
+    fn store_with(n: usize) -> (tempfile::TempDir, Store) {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::open(&tmp.path().join("c.db"), StoreOptions::default()).unwrap();
+        store
+            .write(move |c| {
+                for i in 0..n {
+                    insert(c, &record(i, if i % 2 == 0 { "A" } else { "B" }))?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        (tmp, store)
+    }
+
+    #[test]
+    fn archive_all_hides_entries_and_zeroes_count_then_restore() {
+        let (_t, store) = store_with(14);
+        assert_eq!(store.read(active_error_count).unwrap(), 14);
+        let q = ErrorQuery::default();
+        let n = store
+            .write(|c| {
+                archive_errors(
+                    c,
+                    &ArchiveTarget::Query {
+                        query: ErrorQuery::default(),
+                    },
+                )
+            })
+            .unwrap();
+        assert_eq!(n, 14);
+        assert_eq!(store.read(active_error_count).unwrap(), 0);
+        assert!(store.read(|c| query(c, &q)).unwrap().is_empty());
+        assert!(store.read(|c| groups(c, &q)).unwrap().is_empty());
+        let archived = ErrorQuery {
+            archived: Some(true),
+            ..Default::default()
+        };
+        let shown = store.read(|c| query(c, &archived)).unwrap();
+        assert!(shown.iter().all(|e| e.archived_at.is_some()));
+        assert_eq!(shown.len(), 14);
+        assert_eq!(store.read(|c| groups(c, &archived)).unwrap().len(), 2);
+        // Le voci restano nel registro e nel pacchetto diagnostico.
+        assert_eq!(
+            store
+                .read(|c| query_including_archived(c, &q))
+                .unwrap()
+                .len(),
+            14
+        );
+        // Un nuovo errore dopo l'archiviazione viene contato.
+        store
+            .write(|c| {
+                insert(c, &record(100, "A"))?;
+                insert(c, &record(101, "A"))?;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.read(active_error_count).unwrap(), 2);
+        assert_eq!(store.read(|c| query(c, &q)).unwrap().len(), 2);
+        // Ripristino di una voce.
+        let id = shown[0].id;
+        assert_eq!(store.write(move |c| unarchive_errors(c, &[id])).unwrap(), 1);
+        assert_eq!(store.read(active_error_count).unwrap(), 3);
+        assert_eq!(store.read(|c| query(c, &archived)).unwrap().len(), 13);
+    }
+
+    #[test]
+    fn archive_by_ids_and_by_group() {
+        let (_t, store) = store_with(10);
+        let all = store.read(|c| query(c, &ErrorQuery::default())).unwrap();
+        let ids = vec![all[0].id, all[1].id];
+        let n = store
+            .write(move |c| archive_errors(c, &ArchiveTarget::Ids { ids }))
+            .unwrap();
+        assert_eq!(n, 2);
+        // Il gruppo "senza job" non tocca le voci del job 3.
+        let none = store
+            .write(|c| {
+                archive_errors(
+                    c,
+                    &ArchiveTarget::Group {
+                        job_id: None,
+                        code: Some("A".into()),
+                        phase: Some("miniature".into()),
+                        query: ErrorQuery::default(),
+                    },
+                )
+            })
+            .unwrap();
+        assert_eq!(none, 0);
+        store
+            .write(|c| {
+                archive_errors(
+                    c,
+                    &ArchiveTarget::Group {
+                        job_id: Some(3),
+                        code: Some("A".into()),
+                        phase: Some("miniature".into()),
+                        query: ErrorQuery::default(),
+                    },
+                )
+            })
+            .unwrap();
+        let left = store.read(|c| query(c, &ErrorQuery::default())).unwrap();
+        assert!(left.iter().all(|e| e.code.as_deref() == Some("B")));
+        assert_eq!(left.len() as i64, store.read(active_error_count).unwrap());
+        // Ripristinare due volte non fa danni.
+        let ids: Vec<i64> = all.iter().map(|e| e.id).collect();
+        let again = ids.clone();
+        assert!(store.write(move |c| unarchive_errors(c, &ids)).unwrap() > 0);
+        assert_eq!(
+            store.write(move |c| unarchive_errors(c, &again)).unwrap(),
+            0
+        );
+        assert_eq!(store.read(active_error_count).unwrap(), 10);
     }
 
     #[test]

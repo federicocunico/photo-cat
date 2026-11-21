@@ -34,6 +34,8 @@ import {
 } from "../../store/library";
 import { useGridPages, windowAction } from "./gridPages";
 import { byBase, displayTotal, locate, toBase, type Expansion } from "./similarView";
+import { useActiveGrid } from "../../commands/gridShortcuts";
+import { useLibrarySelection } from "./useLibrarySelection";
 import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
 import { GridContextMenu } from "./GridContextMenu";
@@ -166,6 +168,16 @@ function Thumb({
                   ? t("library.queuedBadge")
                   : t("library.unprocessedBadge")}
           </span>
+          {item.rating > 0 && (
+            <span
+              className="thumb-badge thumb-badge-rating"
+              data-testid={`rating-${item.id}`}
+              role="img"
+              aria-label={t("library.inspector.stars", { count: item.rating })}
+            >
+              {"★".repeat(item.rating)}
+            </span>
+          )}
           <ThumbTags tags={item.tags} color={tagColor} />
           {cover && (
             <span data-testid={`cover-${item.id}`} className="thumb-badge thumb-badge-cover">
@@ -305,6 +317,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     return { item: s.base >= start ? items[s.base - start] : undefined };
   };
   const order = useMemo(() => items.map((i) => i.id), [items]);
+  const grid = useLibrarySelection(order);
+  useActiveGrid({
+    selectAll: grid.selectAll,
+    invert: grid.invert,
+    clear: grid.clear,
+    count: () => grid.count,
+  });
   const toggleGroup = (it: GridItem, base: number) => {
     const group = it.similarGroup;
     if (group == null) return;
@@ -381,6 +400,55 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const cursor = cursorState.key === viewKey ? Math.min(cursorState.at, Math.max(0, total - 1)) : 0;
   const setCursor = (at: number) => setCursorState({ key: viewKey, at });
   const cursorItem = total > 0 ? at_(cursor).item : undefined;
+  // Arrivo con una foto in focus ("Mostra in Libreria" da Persone): la griglia scorre fino a
+  // lei se è tra gli elementi caricati e fuori vista, e la tastiera riparte da lì. Una volta
+  // per foto; con uno scorrimento già ripristinato al montaggio non si interviene.
+  const revealed = useRef<number | null | undefined>(undefined);
+  const seeking = useRef<number | null>(null);
+  const focusedId = useLibrary((s) => s.focused);
+  useEffect(() => {
+    if (revealed.current === undefined) {
+      revealed.current = useLibrary.getState().scrollTop > 0 ? focusedId : null;
+    }
+    if (focusedId == null || revealed.current === focusedId) return;
+    const i = items.findIndex((x) => x.id === focusedId);
+    if (i < 0) {
+      // Foto oltre le pagine caricate (cartella con molte foto): la vista scorre alla sua
+      // posizione, la finestra di pagine la segue e l'effetto la mette a fuoco all'arrivo.
+      if (seeking.current === focusedId || !pages.isSuccess || !isTauri()) return;
+      seeking.current = focusedId;
+      const id = focusedId;
+      void commands
+        .libraryPosition(viewFilter, sort, id)
+        .then((pos) => {
+          if (pos == null || useLibrary.getState().focused !== id) return;
+          virt.scrollToIndex(Math.floor(pos / cols), { align: "center" });
+        })
+        .catch(() => {});
+      return;
+    }
+    revealed.current = focusedId;
+    const b = start + i;
+    const d = b + expansions.reduce((n, e) => (e.base < b ? n + e.members.length : n), 0);
+    const row = Math.floor(d / cols);
+    const top = row * rowHeight;
+    const view = virt.scrollOffset ?? 0;
+    const height = virt.scrollRect?.height ?? 0;
+    if (top < view || top + rowHeight > view + height) virt.scrollToIndex(row, { align: "center" });
+    setCursorState({ key: viewKey, at: d });
+  }, [
+    focusedId,
+    items,
+    start,
+    expansions,
+    cols,
+    rowHeight,
+    virt,
+    viewKey,
+    pages.isSuccess,
+    viewFilter,
+    sort,
+  ]);
   const moveCursor = (to: number, extend: boolean) => {
     const n = Math.max(0, Math.min(total - 1, to));
     setCursor(n);
@@ -430,7 +498,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     }
     if (mod && (e.key === "a" || e.key === "A") && !e.shiftKey) {
       e.preventDefault();
-      void commands.librarySelection(filter).then((base) => useLibrary.getState().selectAll(base));
+      void grid.selectAll();
       return true;
     }
     const restoreView = filter.excludedFrom != null;
@@ -456,18 +524,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     return false;
   };
   const onClick = (id: number) => (e: MouseEvent) => {
-    const ctrl = e.ctrlKey || e.metaKey;
-    if (selection.mode === "filter" && ctrl) {
-      // "Tutti tranne…": Ctrl+clic aggiunge o toglie un'eccezione.
-      replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
-      setRangeAnchor(id);
-      return;
-    }
-    const anchor = useLibrary.getState().anchor;
-    const next = clickSelect(order, explicit ?? [], anchor, id, { ctrl, shift: e.shiftKey });
-    setSelection(next, id);
-    // Maiusc non sposta l'ancora: solo clic semplice e Ctrl+clic.
-    if (!e.shiftKey || anchor === null) setRangeAnchor(id);
+    grid.click(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   };
   // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
   const onMenu = (id: number) => (x: number, y: number) => {
@@ -760,6 +817,15 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           onAddToCatalog={addToCatalog}
           onOpen={(ids, target) => void openWith.open(ids, target)}
           onPlace={(target, p) => void place.apply(target, p)}
+          onSelectAll={() => void grid.selectAll()}
+          onInvert={() => void grid.invert()}
+          onBulk={(target, operation, n) =>
+            void bulk.start(
+              target,
+              operation,
+              t(`selection.done.${operation.action}`, { count: n }),
+            )
+          }
           onClose={closeMenu}
         />
       )}

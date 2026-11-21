@@ -11,6 +11,7 @@ import { emptyFilter } from "../../store/library";
 import { useLabelName, useTaxonomy } from "../library/labelName";
 import { useTagOverview } from "../tags/data";
 import {
+  COLOR_TRAITS,
   MB,
   OTHER_FIELDS,
   comparisons,
@@ -156,6 +157,38 @@ function Condition({ rule, onChange }: { rule: Cond; onChange: (r: RuleNode) => 
         <option value="missing">{t("catalogs.status.missing")}</option>
       </select>
     );
+  } else if (kind === "rating" && !Array.isArray(rule.value)) {
+    value = (
+      <select
+        className="field"
+        aria-label={t("catalogs.value")}
+        value={String(rule.value)}
+        onChange={(e) => set(Number(e.target.value))}
+      >
+        {[5, 4, 3, 2, 1, 0].map((n) => (
+          <option key={n} value={n}>
+            {n > 0
+              ? `${"★".repeat(n)} ${t("library.inspector.stars", { count: n })}`
+              : t("library.inspector.noRating")}
+          </option>
+        ))}
+      </select>
+    );
+  } else if (kind === "color" && !Array.isArray(rule.value)) {
+    value = (
+      <select
+        className="field"
+        aria-label={t("catalogs.value")}
+        value={String(rule.value)}
+        onChange={(e) => set(e.target.value)}
+      >
+        {COLOR_TRAITS.map((c) => (
+          <option key={c} value={c}>
+            {t(`library.inspector.colorTraits.${c}`)}
+          </option>
+        ))}
+      </select>
+    );
   } else if (isNumeric(kind) && !Array.isArray(rule.value)) {
     const n = Number(rule.value) || 0;
     const unit =
@@ -242,7 +275,11 @@ function Condition({ rule, onChange }: { rule: Cond; onChange: (r: RuleNode) => 
       >
         {cmps.map((c, i) => (
           <option key={c} value={i}>
-            {known.includes(c) ? t(`catalogs.cmp.${c}`) : "—"}
+            {!known.includes(c)
+              ? "—"
+              : kind === "rating" && c === "eq"
+                ? t("catalogs.cmpEqual")
+                : t(`catalogs.cmp.${c}`)}
           </option>
         ))}
       </select>

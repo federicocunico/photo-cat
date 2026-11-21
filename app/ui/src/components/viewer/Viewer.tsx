@@ -5,6 +5,7 @@ import * as RDialog from "@radix-ui/react-dialog";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
+import { FaceFrame } from "./FaceFrame";
 import "./viewer.css";
 
 export type ViewerPhoto = {
@@ -14,6 +15,8 @@ export type ViewerPhoto = {
   src: string | null;
   /** Riga di informazioni in parole (data, luogo, dispositivo…). */
   details?: ReactNode;
+  /** Riquadro (bbox normalizzata) di un volto da evidenziare sulla foto. */
+  highlight?: [number | null, number | null, number | null, number | null];
 };
 
 export function Viewer({
@@ -114,7 +117,9 @@ export function Viewer({
             >
               <Icon.ChevronLeft size={28} aria-hidden="true" />
             </button>
-            {photo?.src ? (
+            {photo?.src && photo.highlight ? (
+              <FaceFrame src={photo.src} alt={photo.name} bbox={photo.highlight} />
+            ) : photo?.src ? (
               <img className="viewer-image" src={photo.src} alt={photo.name} />
             ) : (
               <span className="viewer-missing">{photo?.name ?? t("viewer.loading")}</span>

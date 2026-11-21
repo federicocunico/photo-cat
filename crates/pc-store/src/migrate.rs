@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v11.sql"),
     include_str!("schema_v12.sql"),
     include_str!("schema_v13.sql"),
+    include_str!("schema_v14.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -122,6 +123,62 @@ pub(crate) fn migrate_to(conn: &mut Connection, version: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrate_v14_adds_rating_color_manual_date_and_archive() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 13);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,status,added_at,updated_at)
+             VALUES (1,'a.jpg','a.jpg','jpg',7,1,'ok',1,1),
+                    (2,'b.jpg','b.jpg','jpg',7,1,'missing',1,1);
+             INSERT INTO media_dates(media_id) VALUES (1);
+             INSERT INTO error_log(ts,level,message,target) VALUES ('t','error','m','x');",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        let r: Vec<(i64, Option<String>, Option<i64>)> = c
+            .prepare("SELECT rating, color_trait, missing_since FROM media_item ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(r[0], (0, None, None));
+        assert_eq!(r[1].0, 0);
+        assert!(r[1].2.is_some(), "mancante preesistente con missing_since");
+        let (m, p, a): (Option<String>, Option<String>, Option<String>) = c
+            .query_row(
+                "SELECT d.manual_at, d.manual_precision, (SELECT archived_at FROM error_log)
+                 FROM media_dates d",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((m, p, a), (None, None, None));
+        for bad in [
+            "UPDATE media_item SET rating=6 WHERE id=1",
+            "UPDATE media_item SET color_trait='rosso' WHERE id=1",
+            "UPDATE media_dates SET manual_precision='ora' WHERE media_id=1",
+        ] {
+            assert!(c.execute(bad, []).is_err(), "{bad}");
+        }
+        c.execute_batch(
+            "UPDATE media_item SET rating=5, color_trait='sepia' WHERE id=1;
+             UPDATE media_dates SET manual_at='2001-01-01 00:00:00', manual_precision='year';",
+        )
+        .unwrap();
+        let n: i64 = c
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name IN
+                 ('media_rating','media_color_trait','error_log_active')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 3);
+    }
 
     #[test]
     fn migrate_v13_adds_place_geo_and_location_index() {

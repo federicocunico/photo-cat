@@ -20,6 +20,10 @@ import { useLibrary } from "../../store/library";
 import { openReprocessFor } from "../ai/reprocess/openReprocess";
 import { useCatalogAction } from "./useCatalogAction";
 import { Icon } from "../../components/icons";
+import { ManualDateDialog } from "./ManualDateDialog";
+import type { BulkAction, ColorTrait } from "../../bindings";
+
+const COLOR_TRAITS: Array<ColorTrait | null> = ["bw", "color", "faded", "sepia", null];
 
 export function GridContextMenu({
   x,
@@ -30,6 +34,9 @@ export function GridContextMenu({
   onOpen,
   onPlace,
   onAddToCatalog,
+  onBulk,
+  onSelectAll,
+  onInvert,
   onClose,
 }: {
   x: number;
@@ -44,6 +51,11 @@ export function GridContextMenu({
   onPlace: (target: Target, place: PlaceInput | null) => void;
   /** Aggiunge il bersaglio a un catalogo manuale (avviso e annullamento a cura di chi chiama). */
   onAddToCatalog: (target: Target, count: number, catalog: number, name: string) => void;
+  /** Valutazione, colore e data di scatto sul bersaglio (avviso e annullamento a cura di chi chiama). */
+  onBulk?: (target: Target, operation: BulkAction, count: number) => void;
+  /** "Seleziona tutto" e "Inverti selezione" sull'insieme della vista (selezione di D1). */
+  onSelectAll?: () => void;
+  onInvert?: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -58,11 +70,15 @@ export function GridContextMenu({
   const qc = useQueryClient();
   const [sub, setSub] = useState(false);
   const [catSub, setCatSub] = useState(false);
+  const [extra, setExtra] = useState<"rating" | "color" | null>(null);
+  const [dating, setDating] = useState(false);
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState("");
   const [nameError, setNameError] = useState("");
   const namingRef = useRef(false);
   namingRef.current = naming;
+  const datingRef = useRef(false);
+  datingRef.current = dating;
   const manual = (catalogs.data ?? [])
     .map((c) => c.catalog)
     .filter((c) => c.kind === "manual" && !c.system)
@@ -85,7 +101,13 @@ export function GridContextMenu({
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const away = (e: MouseEvent) => {
-      if (!namingRef.current && ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (
+        !namingRef.current &&
+        !datingRef.current &&
+        ref.current &&
+        !ref.current.contains(e.target as Node)
+      )
+        onClose();
     };
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
@@ -110,22 +132,35 @@ export function GridContextMenu({
       items[(i + (e.key === "ArrowDown" ? 1 : n - 1)) % n]?.focus();
     } else if (e.key === "ArrowRight" && document.activeElement?.hasAttribute("aria-haspopup")) {
       e.preventDefault();
-      if (document.activeElement?.getAttribute("data-catalog-trigger") != null) {
+      const extraKind = document.activeElement?.getAttribute("data-extra") as
+        "rating" | "color" | null;
+      if (extraKind) {
+        setExtra(extraKind);
+        setSub(false);
+        setCatSub(false);
+      } else if (document.activeElement?.getAttribute("data-catalog-trigger") != null) {
         setCatSub(true);
         setSub(false);
+        setExtra(null);
       } else {
         setSub(true);
         setCatSub(false);
+        setExtra(null);
       }
-    } else if (e.key === "ArrowLeft" && (sub || catSub)) {
+    } else if (e.key === "ArrowLeft" && (sub || catSub || extra)) {
       e.preventDefault();
       setSub(false);
       setCatSub(false);
+      setExtra(null);
     }
   };
   useEffect(() => {
     if (sub) ref.current?.querySelector<HTMLElement>('[data-sub] [role="menuitem"]')?.focus();
   }, [sub]);
+  useEffect(() => {
+    if (extra)
+      ref.current?.querySelector<HTMLElement>('[data-extra-sub] [role="menuitem"]')?.focus();
+  }, [extra]);
   useEffect(() => {
     if (catSub) ref.current?.querySelector<HTMLElement>("[data-catalog-sub] input")?.focus();
   }, [catSub]);
@@ -153,7 +188,7 @@ export function GridContextMenu({
         onKeyDown={onKeyDown}
         onContextMenu={(e) => e.preventDefault()}
         className="grid-menu"
-        style={{ left: x, top: y, display: naming ? "none" : undefined }}
+        style={{ left: x, top: y, display: naming || dating ? "none" : undefined }}
       >
         <div className="muted grid-menu-hint">
           {t("externalApps.actsOn", { count: ids.length })}
@@ -167,6 +202,7 @@ export function GridContextMenu({
           onClick={() => {
             setSub(!sub);
             setCatSub(false);
+            setExtra(null);
           }}
         >
           {t("externalApps.openWith")} <Icon.ChevronRight size={14} />
@@ -209,6 +245,7 @@ export function GridContextMenu({
           onClick={() => {
             setCatSub(!catSub);
             setSub(false);
+            setExtra(null);
           }}
         >
           {t("selection.addToCatalog")} <Icon.ChevronRight size={14} />
@@ -270,6 +307,108 @@ export function GridContextMenu({
           </BusyButton>
         )}
         <hr className="grid-menu-sep" />
+        {onBulk && (
+          <>
+            <BusyButton
+              type="button"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded={extra === "rating"}
+              data-extra="rating"
+              className="grid-menu-item"
+              onClick={() => {
+                setExtra(extra === "rating" ? null : "rating");
+                setSub(false);
+                setCatSub(false);
+              }}
+            >
+              {t("selection.rateMenu")} <Icon.ChevronRight size={14} />
+            </BusyButton>
+            {extra === "rating" && (
+              <div
+                role="menu"
+                data-extra-sub
+                aria-label={t("selection.rateMenu")}
+                className="grid-menu-sub"
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <BusyButton
+                    key={n}
+                    type="button"
+                    role="menuitem"
+                    className="grid-menu-item"
+                    aria-label={t("library.inspector.stars", { count: n })}
+                    onClick={act(() => onBulk(target, { action: "set_rating", rating: n }, count))}
+                  >
+                    {"★".repeat(n)}
+                  </BusyButton>
+                ))}
+                <BusyButton
+                  type="button"
+                  role="menuitem"
+                  className="grid-menu-item"
+                  onClick={act(() => onBulk(target, { action: "set_rating", rating: null }, count))}
+                >
+                  {t("library.inspector.noRating")}
+                </BusyButton>
+              </div>
+            )}
+            <BusyButton
+              type="button"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded={extra === "color"}
+              data-extra="color"
+              className="grid-menu-item"
+              onClick={() => {
+                setExtra(extra === "color" ? null : "color");
+                setSub(false);
+                setCatSub(false);
+              }}
+            >
+              {t("selection.colorMenu")} <Icon.ChevronRight size={14} />
+            </BusyButton>
+            {extra === "color" && (
+              <div
+                role="menu"
+                data-extra-sub
+                aria-label={t("selection.colorMenu")}
+                className="grid-menu-sub"
+              >
+                {COLOR_TRAITS.map((c) => (
+                  <BusyButton
+                    key={c ?? "none"}
+                    type="button"
+                    role="menuitem"
+                    className="grid-menu-item"
+                    onClick={act(() =>
+                      onBulk(target, { action: "set_color_trait", color_trait: c }, count),
+                    )}
+                  >
+                    {t(`library.inspector.colorTraits.${c ?? "none"}`)}
+                  </BusyButton>
+                ))}
+              </div>
+            )}
+            <BusyButton
+              type="button"
+              role="menuitem"
+              className="grid-menu-item"
+              onClick={() => setDating(true)}
+            >
+              {t("selection.setDateMenu")}
+            </BusyButton>
+            <BusyButton
+              type="button"
+              role="menuitem"
+              className="grid-menu-item"
+              onClick={act(() => onBulk(target, { action: "clear_manual_date" }, count))}
+            >
+              {t("library.inspector.restoreDate")}
+            </BusyButton>
+            <hr className="grid-menu-sep" />
+          </>
+        )}
         {placing ? (
           <div className="grid-menu-place">
             <span className="grid-menu-place-label">{t("place.dialogCount", { count })}</span>
@@ -328,7 +467,39 @@ export function GridContextMenu({
         >
           {t("externalApps.reanalyze")}
         </BusyButton>
+        {(onSelectAll || onInvert) && <hr className="grid-menu-sep" />}
+        {onSelectAll && (
+          <BusyButton
+            type="button"
+            role="menuitem"
+            className="grid-menu-item"
+            onClick={act(onSelectAll)}
+          >
+            {t("selection.selectAll")}
+          </BusyButton>
+        )}
+        {onInvert && (
+          <BusyButton
+            type="button"
+            role="menuitem"
+            className="grid-menu-item"
+            onClick={act(onInvert)}
+          >
+            {t("selection.invert")}
+          </BusyButton>
+        )}
       </div>
+      <ManualDateDialog
+        open={dating}
+        count={count}
+        onOpenChange={(o) => {
+          setDating(o);
+          if (!o) onClose();
+        }}
+        onConfirm={(value, precision) =>
+          onBulk?.(target, { action: "set_manual_date", value, precision }, count)
+        }
+      />
       <Dialog
         open={naming}
         onOpenChange={(o) => {

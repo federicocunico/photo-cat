@@ -114,6 +114,79 @@ pub fn compute(
     })
 }
 
+/// Istante di una data manuale: ora locale del gruppo (o di sistema), senza
+/// `shift_s` e sempre "presunto" (la data manuale non ha un fuso dichiarato).
+pub fn compute_manual(manual_at: &str, g: &GroupClock, system: &SystemOffset) -> Option<Instant> {
+    let local = parse_local(manual_at)?;
+    let offset = g
+        .display_tz
+        .as_deref()
+        .and_then(|tz| tz_offset_at_local(tz, local))
+        .or(g.display_offset_min)
+        .unwrap_or_else(|| system(local));
+    let utc_ms = local.and_utc().timestamp_millis() - offset as i64 * 60_000;
+    Some(Instant {
+        utc_ms,
+        presumed: true,
+        local_offset_min: offset,
+    })
+}
+
+/// Completa una data manuale al primo istante del periodo: `year` = `AAAA`,
+/// `month` = `AAAA-MM`, `day` = `AAAA-MM-GG` con ora opzionale (`HH:MM[:SS]`).
+pub fn normalize_manual(
+    value: &str,
+    precision: crate::model::DatePrecision,
+) -> StoreResult<String> {
+    use crate::model::DatePrecision;
+    use chrono::Datelike;
+    let bad = || StoreError::Invalid(format!("data non valida: {value}"));
+    let v = value.trim();
+    let (date_part, time_part) = match v.split_once([' ', 'T']) {
+        Some((d, t)) => (d, Some(t.trim())),
+        None => (v, None),
+    };
+    if time_part.is_some() && precision != DatePrecision::Day {
+        return Err(bad());
+    }
+    let mut it = date_part.split('-');
+    let year: i32 = it.next().and_then(|s| s.parse().ok()).ok_or_else(bad)?;
+    let max_year = chrono::Local::now().year() + 1;
+    if !(1800..=max_year).contains(&year) {
+        return Err(StoreError::Invalid(format!(
+            "anno fuori intervallo: {year} (da 1800 a {max_year})"
+        )));
+    }
+    let month: Option<u32> = it
+        .next()
+        .map(|s| s.parse().map_err(|_| bad()))
+        .transpose()?;
+    let day: Option<u32> = it
+        .next()
+        .map(|s| s.parse().map_err(|_| bad()))
+        .transpose()?;
+    if it.next().is_some() {
+        return Err(bad());
+    }
+    let (month, day) = match (precision, month, day) {
+        (DatePrecision::Year, None, None) => (1, 1),
+        (DatePrecision::Month, Some(m), None) => (m, 1),
+        (DatePrecision::Day, Some(m), Some(d)) => (m, d),
+        _ => return Err(bad()),
+    };
+    if !(1..=12).contains(&month) {
+        return Err(StoreError::Invalid(format!("mese non valido: {month}")));
+    }
+    let date = chrono::NaiveDate::from_ymd_opt(year, month, day).ok_or_else(bad)?;
+    let time = match time_part {
+        None => chrono::NaiveTime::MIN,
+        Some(t) => chrono::NaiveTime::parse_from_str(t, "%H:%M:%S")
+            .or_else(|_| chrono::NaiveTime::parse_from_str(t, "%H:%M"))
+            .map_err(|_| bad())?,
+    };
+    Ok(date.and_time(time).format(LOCAL_FMT).to_string())
+}
+
 /// Ora locale mostrata: `AAAA-MM-GG HH:MM:SS`.
 pub fn local_text(utc_ms: i64, offset_min: i32) -> Option<String> {
     let t = chrono::DateTime::from_timestamp_millis(utc_ms + offset_min as i64 * 60_000)?;
@@ -169,26 +242,38 @@ pub fn group_clock(c: &Connection, id: i64) -> StoreResult<GroupClock> {
 
 /// Ricalcola gruppo e istante di un file dopo che le sue date sono cambiate.
 pub fn refresh_media(c: &Connection, id: MediaId, system: &SystemOffset) -> StoreResult<()> {
-    let row: Option<(Option<String>, Option<i32>, Option<String>)> = c
+    #[allow(clippy::type_complexity)]
+    let row: Option<(Option<String>, Option<i32>, Option<String>, Option<String>)> = c
         .query_row(
-            "SELECT captured_at, declared_offset_min, device FROM media_dates WHERE media_id = ?1",
+            "SELECT captured_at, declared_offset_min, device, manual_at FROM media_dates WHERE media_id = ?1",
             [id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()?;
-    let Some((captured, declared, device)) = row else {
+    let Some((captured, declared, device, manual)) = row else {
         return Ok(());
     };
     let group = ensure_group(c, device.as_deref(), declared)?;
     let clock = group_clock(c, group)?;
-    write_instant(c, id, group, captured.as_deref(), declared, &clock, system)
+    write_instant(
+        c,
+        id,
+        group,
+        captured.as_deref(),
+        manual.as_deref(),
+        declared,
+        &clock,
+        system,
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_instant(
     c: &Connection,
     id: MediaId,
     group: i64,
     captured: Option<&str>,
+    manual: Option<&str>,
     declared: Option<i32>,
     clock: &GroupClock,
     system: &SystemOffset,
@@ -200,9 +285,11 @@ fn write_instant(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
-    let (utc, presumed, local) = match placed {
-        Some((utc, local)) => (Some(utc), true, local),
-        None => match captured.and_then(|s| compute(s, declared, clock, system)) {
+    let manual_instant = manual.and_then(|m| compute_manual(m, clock, system));
+    let (utc, presumed, local) = match (manual_instant, placed) {
+        (Some(i), _) => (Some(i.utc_ms), i.presumed, Some(i.local_offset_min)),
+        (None, Some((utc, local))) => (Some(utc), true, local),
+        (None, None) => match captured.and_then(|s| compute(s, declared, clock, system)) {
             Some(i) => (Some(i.utc_ms), i.presumed, Some(i.local_offset_min)),
             None => (None, true, None),
         },
@@ -220,7 +307,7 @@ fn write_instant(
 pub fn recompute_group(c: &Connection, group: i64, system: &SystemOffset) -> StoreResult<usize> {
     let clock = group_clock(c, group)?;
     let mut q = c.prepare(
-        "SELECT media_id, captured_at, declared_offset_min FROM media_dates WHERE group_id = ?1",
+        "SELECT media_id, captured_at, declared_offset_min, manual_at FROM media_dates WHERE group_id = ?1",
     )?;
     let rows = q
         .query_map([group], |r| {
@@ -228,15 +315,17 @@ pub fn recompute_group(c: &Connection, group: i64, system: &SystemOffset) -> Sto
                 r.get::<_, MediaId>(0)?,
                 r.get::<_, Option<String>>(1)?,
                 r.get::<_, Option<i32>>(2)?,
+                r.get::<_, Option<String>>(3)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    for (id, captured, declared) in &rows {
+    for (id, captured, declared, manual) in &rows {
         write_instant(
             c,
             *id,
             group,
             captured.as_deref(),
+            manual.as_deref(),
             *declared,
             &clock,
             system,
@@ -322,7 +411,7 @@ pub fn set_clock(
         let delta = (clock.shift_s - old.shift_s) * 1000;
         return Ok(c.execute(
             "UPDATE media_dates SET instant_utc = instant_utc + ?2
-             WHERE group_id = ?1 AND instant_utc IS NOT NULL
+             WHERE group_id = ?1 AND instant_utc IS NOT NULL AND manual_at IS NULL
                AND media_id NOT IN (SELECT media_id FROM media_time_placement)",
             params![group, delta],
         )?);
@@ -445,6 +534,17 @@ pub fn propose_alignment(
 ) -> StoreResult<Alignment> {
     let (a, ga) = instant_of(c, reference)?;
     let (b, gb) = instant_of(c, other)?;
+    // Lo scostamento del gruppo non sposta una data manuale: allinearla non avrebbe effetto.
+    let manual: bool = c.query_row(
+        "SELECT manual_at IS NOT NULL FROM media_dates WHERE media_id = ?1",
+        [other],
+        |r| r.get(0),
+    )?;
+    if manual {
+        return Err(StoreError::Invalid(
+            "la foto da allineare ha una data impostata a mano".into(),
+        ));
+    }
     if ga == gb {
         return Err(StoreError::Invalid(
             "le due foto appartengono allo stesso gruppo di sorgente".into(),
@@ -470,7 +570,9 @@ pub struct ClockPreview {
     pub after: Option<String>,
 }
 
-/// Anteprima delle prime `limit` foto del gruppo con correzioni diverse.
+/// Anteprima delle prime `limit` foto del gruppo con correzioni diverse. Come
+/// [`set_clock`], esclude le foto con data manuale o collocate a mano, che le
+/// correzioni del gruppo non spostano.
 pub fn preview_clock(
     c: &Connection,
     group: i64,
@@ -480,7 +582,9 @@ pub fn preview_clock(
 ) -> StoreResult<Vec<ClockPreview>> {
     let mut q = c.prepare(
         "SELECT media_id, captured_at, declared_offset_min, instant_utc, local_offset_min FROM media_dates
-         WHERE group_id = ?1 AND captured_at IS NOT NULL ORDER BY instant_utc, media_id LIMIT ?2",
+         WHERE group_id = ?1 AND captured_at IS NOT NULL AND manual_at IS NULL
+           AND media_id NOT IN (SELECT media_id FROM media_time_placement)
+         ORDER BY instant_utc, media_id LIMIT ?2",
     )?;
     let rows = q
         .query_map(params![group, limit as i64], |r| {
@@ -553,7 +657,7 @@ pub fn place_after(
     let next: Option<i64> = c.query_row(
         "SELECT MIN(d.instant_utc) FROM media_dates d
              WHERE d.instant_utc > ?1 AND d.media_id <> ?2
-               AND (d.captured_source <> 'file_system'
+               AND (d.captured_source <> 'file_system' OR d.manual_at IS NOT NULL
                     OR d.media_id IN (SELECT media_id FROM media_time_placement))",
         params![prev, id],
         |r| r.get(0),
@@ -631,7 +735,7 @@ pub fn suggest_timezones(
         "SELECT d.media_id, d.group_id, d.instant_utc, d.local_offset_min, e.gps_lat, e.gps_lon
          FROM media_dates d LEFT JOIN exif e ON e.media_id = d.media_id
          WHERE d.instant_utc IS NOT NULL AND d.group_id IS NOT NULL
-           AND d.captured_source <> 'file_system'
+           AND d.captured_source <> 'file_system' AND d.manual_at IS NULL
            AND (?1 IS NULL OR d.media_id IN (SELECT value FROM json_each(?1)))
          ORDER BY d.instant_utc",
     )?;

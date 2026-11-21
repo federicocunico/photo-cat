@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
-import { commandsMock, ipcMockModule } from "../../test/ipcMock";
+import { commandsMock, emit, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { emptyFilter, useLibrary } from "../../store/library";
 import { useLive } from "../../store/live";
@@ -73,7 +73,7 @@ describe("Importa", () => {
     expect(start).toHaveAttribute("aria-disabled", "true");
     expect(start).toHaveAccessibleDescription(/Scegli prima la cartella da importare/);
     fireEvent.change(screen.getByLabelText("Cartella"), { target: { value: "D:\\Foto\\2024" } });
-    fireEvent.click(screen.getByLabelText("Monitora la cartella per nuovi file"));
+    fireEvent.click(screen.getByLabelText("Aggiorna automaticamente"));
     fireEvent.click(screen.getByLabelText("RAW (RAF, CR2, CR3, NEF, ARW, DNG…)"));
     fireEvent.click(screen.getByLabelText("PNG"));
     // I modelli da ignorare stanno in "Avanzate", chiuso all'inizio.
@@ -142,7 +142,9 @@ const group = (ids: number[]) => ({ count: ids.length, ids });
 
 describe("gestione delle importazioni", () => {
   beforeEach(() => {
-    commandsMock.listSources.mockResolvedValue([{ source, items: 40, missing: 3 }] as never);
+    commandsMock.listSources.mockResolvedValue([
+      { source, items: 40, missing: 3, newMissing: 3, failedWarning: 0 },
+    ] as never);
     useLibrary.setState({ filter: emptyFilter() });
     useLayout.setState({ module: "import" });
   });
@@ -353,4 +355,116 @@ it("importazione in corso: 'Segui l'importazione' apre Attività su quell'attivi
 it("il titolo della pagina è quello della voce di navigazione", async () => {
   renderPage();
   expect(await screen.findByRole("heading", { level: 1, name: "Importa" })).toBeInTheDocument();
+});
+
+describe("avvisi e aggiornamento automatico", () => {
+  const src = { id: 1, path: "/foto", watch: true };
+  const row = (extra: object) => [
+    { source: src, items: 40, missing: 0, newMissing: 0, failedWarning: 0, ...extra },
+  ];
+
+  it("Ignora riconosce gli avvisi e scompare dopo il nuovo caricamento", async () => {
+    commandsMock.listSources.mockResolvedValue(row({ missing: 3, newMissing: 3 }) as never);
+    commandsMock.acknowledgeSourceWarnings.mockImplementation(async () => {
+      commandsMock.listSources.mockResolvedValue(row({ missing: 3, newMissing: 0 }) as never);
+      return null;
+    });
+    renderPage();
+    expect(await screen.findByText("3 mancanti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ignora gli avvisi di /foto" }));
+    await waitFor(() => expect(screen.queryByText("3 mancanti")).not.toBeInTheDocument());
+    expect(commandsMock.acknowledgeSourceWarnings).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole("button", { name: /Ignora gli avvisi/ })).toBeNull();
+  });
+
+  it("dopo un riconoscimento mostra solo i nuovi mancanti", async () => {
+    commandsMock.listSources.mockResolvedValue(row({ missing: 5, newMissing: 2 }) as never);
+    renderPage();
+    expect(await screen.findByText("2 nuovi mancanti")).toBeInTheDocument();
+  });
+
+  it("con avviso nascosto il menu offre ancora Ricollega e Rimuovi i mancanti", async () => {
+    commandsMock.listSources.mockResolvedValue(row({ missing: 4, newMissing: 0 }) as never);
+    renderPage();
+    await openMenu("Azioni su /foto");
+    expect(screen.queryByText(/mancanti$/, { selector: ".import-warn" })).toBeNull();
+    expect(await screen.findByRole("menuitem", { name: "Ricollega mancanti…" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Rimuovi mancanti…" })).toBeTruthy();
+  });
+
+  it("mostra l'avviso errori solo con failedWarning > 0", async () => {
+    commandsMock.listSources.mockResolvedValue(row({ failedWarning: 2 }) as never);
+    const { unmount } = renderPage();
+    expect(
+      await screen.findByText("2 file non letti nell'ultimo aggiornamento"),
+    ).toBeInTheDocument();
+    unmount();
+    commandsMock.listSources.mockResolvedValue(row({ failedWarning: 0 }) as never);
+    renderPage();
+    await screen.findByText("/foto");
+    expect(screen.queryByText(/non lett/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Ignora gli avvisi/ })).toBeNull();
+  });
+
+  it("l'opzione si chiama Aggiorna automaticamente e ha la descrizione", async () => {
+    commandsMock.listSources.mockResolvedValue(row({}) as never);
+    renderPage();
+    const label = (await screen.findAllByText("Aggiorna automaticamente"))[0].closest("label")!;
+    expect(label).toHaveAttribute(
+      "title",
+      "Mentre photo-cat è aperto, le foto aggiunte, spostate o cancellate in questa cartella vengono importate o aggiornate da sole.",
+    );
+  });
+
+  it("stato del monitoraggio: attivo con ultimo orario, non raggiungibile, e aggiornamento all'evento", async () => {
+    commandsMock.listSources.mockResolvedValue(row({}) as never);
+    const now = new Date();
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 30).getTime();
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      { sourceId: 1, state: "active", lastAutoUpdateAt: at, message: null },
+    ]);
+    renderPage();
+    const hhmm = "00:30";
+    expect(
+      await screen.findByText(`Aggiornamento automatico attivo · ultimo alle ${hhmm}`),
+    ).toBeInTheDocument();
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      { sourceId: 1, state: "unreachable", lastAutoUpdateAt: null, message: null },
+    ]);
+    await act(async () => emit("sourceWatchChanged", undefined));
+    expect(
+      await screen.findByText(
+        "Aggiornamento automatico non disponibile: la cartella non è raggiungibile (disco scollegato o cartella spostata)",
+      ),
+    ).toBeInTheDocument();
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      { sourceId: 1, state: "active", lastAutoUpdateAt: null, message: null },
+    ]);
+    await act(async () => emit("sourceWatchChanged", undefined));
+    expect(await screen.findByText("Aggiornamento automatico attivo")).toBeInTheDocument();
+  });
+
+  it("stato del monitoraggio: giorno se non è di oggi, motivo comprensibile se il sistema rifiuta", async () => {
+    commandsMock.listSources.mockResolvedValue(row({}) as never);
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      {
+        sourceId: 1,
+        state: "active",
+        lastAutoUpdateAt: new Date(2025, 0, 5, 14, 30).getTime(),
+        message: null,
+      },
+    ]);
+    renderPage();
+    expect(
+      await screen.findByText("Aggiornamento automatico attivo · ultimo il 5 gennaio alle 14:30"),
+    ).toBeInTheDocument();
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      { sourceId: 1, state: "error", lastAutoUpdateAt: null, message: "os error 24" },
+    ]);
+    await act(async () => emit("sourceWatchChanged", undefined));
+    const line = await screen.findByText(
+      "Aggiornamento automatico non disponibile: il sistema non permette di sorvegliare questa cartella",
+    );
+    expect(line).toHaveAttribute("title", "os error 24");
+  });
 });

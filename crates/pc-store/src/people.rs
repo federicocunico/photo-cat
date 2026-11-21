@@ -174,6 +174,17 @@ pub enum FaceSort {
     #[default]
     QualityDesc,
     CapturedDesc,
+    /// Dal più vecchio; i volti senza data restano comunque in fondo.
+    CapturedAsc,
+}
+
+/// Anno di scatto (ora locale) con il numero di volti; `year = None` è "Senza data".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FaceYear {
+    pub year: Option<i32>,
+    pub count: i64,
 }
 
 /// Ambito dei volti richiesti con `group_faces`.
@@ -1065,57 +1076,55 @@ pub fn group_faces(
         }
     };
 
-    let instant_sql = "COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000, -9223372036854775807)";
+    // Istante materializzato (rispetta le date manuali). I volti senza data
+    // prendono un sentinella che li manda in fondo in entrambe le direzioni.
+    let instant_raw =
+        "COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000)";
+    let asc = sort == FaceSort::CapturedAsc;
+    let sentinel = if asc { i64::MAX } else { -i64::MAX };
+    let instant_sql = format!("COALESCE({instant_raw}, {sentinel})");
     let (order_sql, after_q, after_id, after_t) = match sort {
-        FaceSort::QualityDesc => match after {
-            Some(cur) => (
-                "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
-                Some(cur.quality_score),
-                Some(cur.id),
-                None::<i64>,
-            ),
-            None => (
-                "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
-                None,
-                None,
-                None,
-            ),
-        },
-        FaceSort::CapturedDesc => match after {
-            Some(cur) => {
-                let t: i64 = c
-                    .query_row(
-                        &format!(
-                            "SELECT {instant_sql} FROM face f \
-                             LEFT JOIN media_dates d ON d.media_id = f.media_id \
-                             WHERE f.id = ?1"
-                        ),
-                        [cur.id],
-                        |r| r.get(0),
-                    )
-                    .unwrap_or(i64::MIN);
-                (
-                    format!("{instant_sql} DESC, f.id DESC"),
-                    None,
-                    Some(cur.id),
-                    Some(t),
-                )
+        FaceSort::QualityDesc => (
+            "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
+            after.map(|cur| cur.quality_score),
+            after.map(|cur| cur.id),
+            None::<i64>,
+        ),
+        FaceSort::CapturedDesc | FaceSort::CapturedAsc => {
+            let dir = if asc { "ASC" } else { "DESC" };
+            let order = format!("{instant_sql} {dir}, f.id {dir}");
+            match after {
+                Some(cur) => {
+                    let t: i64 = c
+                        .query_row(
+                            &format!(
+                                "SELECT {instant_sql} FROM face f \
+                                 LEFT JOIN media_dates d ON d.media_id = f.media_id \
+                                 WHERE f.id = ?1"
+                            ),
+                            [cur.id],
+                            |r| r.get(0),
+                        )
+                        .unwrap_or(sentinel);
+                    (order, None, Some(cur.id), Some(t))
+                }
+                None => (order, None, None, None),
             }
-            None => (format!("{instant_sql} DESC, f.id DESC"), None, None, None),
-        },
+        }
     };
 
+    let cmp = if asc { ">" } else { "<" };
     let after_clause = match sort {
         FaceSort::QualityDesc if after_q.is_some() => {
             "AND (COALESCE(f.quality_score, f.quality) < ?aq \
               OR (COALESCE(f.quality_score, f.quality) = ?aq AND f.id < ?aid))"
+                .to_string()
         }
-        FaceSort::CapturedDesc if after_t.is_some() => {
-            "AND ({instant} < ?at OR ({instant} = ?at AND f.id < ?aid))"
+        FaceSort::CapturedDesc | FaceSort::CapturedAsc if after_t.is_some() => {
+            format!("AND ({instant_sql} {cmp} ?at OR ({instant_sql} = ?at AND f.id {cmp} ?aid))")
         }
-        _ => "",
+        _ => String::new(),
     };
-    let after_clause = after_clause.replace("{instant}", instant_sql);
 
     let mut sql = format!(
         "SELECT {FACE_VIEW_COLS}, {instant_sql} FROM face f \
@@ -1169,7 +1178,7 @@ pub fn group_faces(
                 quality_score: f.quality_score,
                 id: f.id,
             },
-            FaceSort::CapturedDesc => FaceCursor {
+            FaceSort::CapturedDesc | FaceSort::CapturedAsc => FaceCursor {
                 quality_score: last_instant as f32,
                 id: f.id,
             },
@@ -1184,6 +1193,146 @@ pub fn group_faces(
         good_count,
         discarded_count,
     })
+}
+
+/// Conteggio dei volti per anno di scatto (ora locale), dal più recente;
+/// "Senza data" (`year = None`) per ultimo. Stessi filtri di `group_faces`.
+pub fn group_face_years(
+    c: &Connection,
+    scope: FaceScope,
+    m: &FaceMatch,
+) -> StoreResult<Vec<FaceYear>> {
+    let discarded = discarded_sql(m);
+    let (filter_sql, bind): (String, Option<i64>) = match &scope {
+        FaceScope::Group { group } => (
+            format!("f.person_id = ?1 AND NOT {discarded}"),
+            Some(*group),
+        ),
+        FaceScope::Singles => (format!("f.person_id IS NULL AND NOT {discarded}"), None),
+        FaceScope::Discarded { group: Some(g) } => {
+            (format!("f.person_id = ?1 AND {discarded}"), Some(*g))
+        }
+        FaceScope::Discarded { group: None } => (discarded.clone(), None),
+    };
+    let year_sql = crate::query::LOCAL_YEAR_SQL;
+    let sql = format!(
+        "SELECT {year_sql} AS y, count(*) FROM face f \
+         JOIN media_item m ON m.id = f.media_id \
+         LEFT JOIN media_dates d ON d.media_id = f.media_id \
+         WHERE {filter_sql} GROUP BY y ORDER BY (y IS NULL), y DESC"
+    );
+    let mut st = c.prepare(&sql)?;
+    let map = |r: &rusqlite::Row| {
+        Ok(FaceYear {
+            year: r.get::<_, Option<i32>>(0)?,
+            count: r.get(1)?,
+        })
+    };
+    let rows = match bind {
+        Some(b) => st.query_map([b], map)?.collect::<Result<Vec<_>, _>>()?,
+        None => st.query_map([], map)?.collect::<Result<Vec<_>, _>>()?,
+    };
+    Ok(rows)
+}
+
+/// Condizione SQL (alias `f`, persona in `?1`) di un ambito di volti: la stessa di `group_faces`.
+fn scope_filter(scope: &FaceScope, m: &FaceMatch) -> (String, Option<i64>) {
+    let discarded = discarded_sql(m);
+    match scope {
+        FaceScope::Group { group } => (
+            format!("f.person_id = ?1 AND NOT {discarded}"),
+            Some(*group),
+        ),
+        // `?1 IS NULL` tiene il parametro presente anche negli ambiti senza gruppo,
+        // così le query che legano sempre `?1` hanno il numero giusto di parametri.
+        FaceScope::Singles => (
+            format!("?1 IS NULL AND f.person_id IS NULL AND NOT {discarded}"),
+            None,
+        ),
+        FaceScope::Discarded { group: Some(g) } => {
+            (format!("f.person_id = ?1 AND {discarded}"), Some(*g))
+        }
+        FaceScope::Discarded { group: None } => (format!("?1 IS NULL AND {discarded}"), None),
+    }
+}
+
+/// Base di "Seleziona tutto" sui volti di un ambito: quanti sono e l'id massimo dei volti in
+/// quell'istante (`SelectionBase::max_id` è un id di volto). Non dipende da ordinamento né pagine.
+pub fn face_selection_base(
+    c: &Connection,
+    scope: &FaceScope,
+    m: &FaceMatch,
+) -> StoreResult<crate::query::SelectionBase> {
+    let (filter, bind) = scope_filter(scope, m);
+    let max_id: i64 = c.query_row("SELECT COALESCE(MAX(id), 0) FROM face", [], |r| r.get(0))?;
+    let count: i64 = c.query_row(
+        &format!("SELECT count(*) FROM face f WHERE {filter}"),
+        params![bind],
+        |r| r.get(0),
+    )?;
+    Ok(crate::query::SelectionBase { count, max_id })
+}
+
+/// Id dei volti selezionati: l'ambito meno le eccezioni, limitato ai volti con id fino a
+/// `max_id` (quelli presenti al momento di "Seleziona tutto"), in ordine di id.
+pub fn face_selection_ids(
+    c: &Connection,
+    scope: &FaceScope,
+    max_id: i64,
+    except: &[i64],
+    m: &FaceMatch,
+) -> StoreResult<Vec<i64>> {
+    let (filter, bind) = scope_filter(scope, m);
+    let mut st = c.prepare(&format!(
+        "SELECT f.id FROM face f WHERE {filter} AND f.id <= ?2 \
+         AND f.id NOT IN (SELECT value FROM json_each(?3)) ORDER BY f.id"
+    ))?;
+    let rows = st
+        .query_map(params![bind, max_id, serde_json::to_string(except)?], |r| {
+            r.get(0)
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Foto distinte dei volti selezionati "per filtro" (stesso insieme di `face_selection_ids`),
+/// divise tra presenti sul disco e mancanti: servono a "Apri con" e "Mostra nella cartella"
+/// anche sui volti non ancora caricati nella griglia.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FaceSelectionMedia {
+    /// Id delle foto presenti, nell'ordine del primo volto di ciascuna.
+    pub present: Vec<i64>,
+    /// Percorsi delle foto segnate come mancanti.
+    pub missing: Vec<String>,
+}
+
+pub fn face_selection_media(
+    c: &Connection,
+    scope: &FaceScope,
+    max_id: i64,
+    except: &[i64],
+    m: &FaceMatch,
+) -> StoreResult<FaceSelectionMedia> {
+    let (filter, bind) = scope_filter(scope, m);
+    let mut st = c.prepare(&format!(
+        "SELECT mi.id, mi.path, mi.status = 'missing' FROM \
+           (SELECT f.media_id AS media_id, MIN(f.id) AS first FROM face f \
+            WHERE {filter} AND f.id <= ?2 AND f.id NOT IN (SELECT value FROM json_each(?3)) \
+            GROUP BY f.media_id) s \
+         JOIN media_item mi ON mi.id = s.media_id ORDER BY s.first"
+    ))?;
+    let mut out = FaceSelectionMedia::default();
+    let mut rows = st.query(params![bind, max_id, serde_json::to_string(except)?])?;
+    while let Some(r) = rows.next()? {
+        if r.get::<_, bool>(2)? {
+            out.missing.push(r.get(1)?);
+        } else {
+            out.present.push(r.get(0)?);
+        }
+    }
+    Ok(out)
 }
 
 /// Posizione di un volto (o del volto scelto su una foto) nell'ordinamento
@@ -2537,20 +2686,36 @@ pub fn separate(c: &Connection, ids: &[i64], from: i64) -> StoreResult<i64> {
     Ok(target)
 }
 pub fn reject(c: &Connection, face: i64, person: i64) -> StoreResult<()> {
-    let f = records(c, None)?
-        .into_iter()
-        .find(|f| f.id == face)
-        .ok_or_else(|| StoreError::NotFound("volto".into()))?;
-    let mut rejected = f.rejected;
-    if !rejected.contains(&person) {
-        rejected.push(person);
+    reject_faces(c, &[face], person)
+}
+/// Rifiuta più volti per la persona con un solo ricalcolo dei centroidi.
+/// Un volto inesistente annulla l'intera operazione (i chiamanti la eseguono in transazione).
+pub fn reject_faces(c: &Connection, faces: &[i64], person: i64) -> StoreResult<()> {
+    if faces.is_empty() {
+        return Ok(());
     }
-    c.execute(
-        "UPDATE face SET rejected=?2,person_id=NULL,assigned_by=NULL WHERE id=?1",
-        params![face, serde_json::to_string(&rejected)?],
-    )?;
+    let wanted: HashSet<i64> = faces.iter().copied().collect();
+    let found: Vec<FaceRecord> = records(c, None)?
+        .into_iter()
+        .filter(|f| wanted.contains(&f.id))
+        .collect();
+    if found.len() != wanted.len() {
+        return Err(StoreError::NotFound("volto".into()));
+    }
+    let mut media = HashSet::new();
+    for f in found {
+        let mut rejected = f.rejected;
+        if !rejected.contains(&person) {
+            rejected.push(person);
+        }
+        c.execute(
+            "UPDATE face SET rejected=?2,person_id=NULL,assigned_by=NULL WHERE id=?1",
+            params![f.id, serde_json::to_string(&rejected)?],
+        )?;
+        media.insert(f.media_id);
+    }
     refresh_centroids(c)?;
-    repo::fts::refresh(c, f.media_id)
+    refresh_media(c, &media)
 }
 /// Unione senza ricalcolo di centroidi e media: restituisce i media da aggiornare.
 fn merge_rows(c: &Connection, from: i64, to: i64) -> StoreResult<HashSet<i64>> {
@@ -2641,17 +2806,32 @@ pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
     refresh_media(c, &media)
 }
 pub fn remove_face(c: &Connection, id: i64) -> StoreResult<()> {
-    let f = records(c, None)?
+    remove_faces(c, &[id])
+}
+/// Rimuove più volti (con esclusione del riquadro) con un solo ricalcolo dei centroidi.
+pub fn remove_faces(c: &Connection, ids: &[i64]) -> StoreResult<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let wanted: HashSet<i64> = ids.iter().copied().collect();
+    let found: Vec<FaceRecord> = records(c, None)?
         .into_iter()
-        .find(|f| f.id == id)
-        .ok_or_else(|| StoreError::NotFound("volto".into()))?;
-    c.execute(
-        "INSERT INTO face_exclusion(media_id,bbox) VALUES (?1,?2)",
-        params![f.media_id, serde_json::to_string(&f.bbox)?],
-    )?;
-    c.execute("DELETE FROM face WHERE id=?1", [id])?;
+        .filter(|f| wanted.contains(&f.id))
+        .collect();
+    if found.len() != wanted.len() {
+        return Err(StoreError::NotFound("volto".into()));
+    }
+    let mut media = HashSet::new();
+    for f in found {
+        c.execute(
+            "INSERT INTO face_exclusion(media_id,bbox) VALUES (?1,?2)",
+            params![f.media_id, serde_json::to_string(&f.bbox)?],
+        )?;
+        c.execute("DELETE FROM face WHERE id=?1", [f.id])?;
+        media.insert(f.media_id);
+    }
     refresh_centroids(c)?;
-    repo::fts::refresh(c, f.media_id)
+    refresh_media(c, &media)
 }
 /// "Elimina tutti i dati dei volti": volti e persone della libreria e volti di
 /// riferimento delle identità in `app.db` (le identità restano).

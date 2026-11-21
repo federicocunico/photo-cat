@@ -10,11 +10,13 @@ import {
   emptyFilter,
   idsSelection,
   selCount,
+  selHas,
   selIds,
   useLibrary,
 } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { LibraryPage } from "./LibraryPage";
+import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { useLive } from "../../store/live";
 import { useFloating } from "../../store/floating";
 import i18n from "../../i18n";
@@ -90,6 +92,7 @@ const list = (values: { value: string; count: number }[], total = values.length)
 const item = (id: number): GridItem => ({
   id,
   excludedAt: null,
+  rating: 0,
   name: `IMG_${String(id).padStart(4, "0")}.JPG`,
   path: `D:\\Foto\\IMG_${id}.JPG`,
   thumb: id % 2 ? `abcdef${id}0000` : null,
@@ -219,11 +222,18 @@ beforeEach(() => {
 });
 afterEach(checkedCleanup(A11Y_KNOWN.library));
 
+/** Come AppShell: Ctrl+A, Ctrl+Maiusc+I ed Esc sono registrati una volta sola, fuori dalla vista. */
+function ShellShortcuts() {
+  useGridShortcuts();
+  return null;
+}
+
 function renderPage() {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
+      <ShellShortcuts />
       <LibraryPage />
       <ToastHost />
     </QueryClientProvider>,
@@ -1391,5 +1401,121 @@ describe("trascinamento sui cataloghi e barra laterale dei cataloghi", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Cartelle/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Gestisci cartelle" }));
     expect(useLayout.getState().module).toBe("import");
+  });
+});
+
+describe("Seleziona tutto e Inverti dal menu contestuale", () => {
+  it("in un catalogo, Inverti la selezione rende selezionate le altre 11 foto", async () => {
+    commandsMock.librarySelection.mockResolvedValue({ count: 12, maxId: 12 });
+    useLibrary.setState({ filter: { ...emptyFilter(), catalogId: 5 } });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("thumb-1"));
+    fireEvent.contextMenu(screen.getByTestId("thumb-1"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Inverti la selezione" }));
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(11));
+    const s = useLibrary.getState().selection;
+    expect(s.mode).toBe("filter");
+    expect(selHas(s, 1)).toBe(false);
+    expect(selHas(s, 2)).toBe(true);
+    expect(commandsMock.librarySelection).toHaveBeenCalledWith(
+      expect.objectContaining({ catalogId: 5 }),
+    );
+  });
+
+  it("Seleziona tutto dal menu contestuale seleziona le 12 foto della vista", async () => {
+    commandsMock.librarySelection.mockResolvedValue({ count: 12, maxId: 12 });
+    renderPage();
+    fireEvent.contextMenu(await screen.findByTestId("thumb-3"));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Seleziona tutte le foto della vista" }),
+    );
+    await waitFor(() => expect(selCount(useLibrary.getState().selection)).toBe(12));
+  });
+});
+
+describe("scorrimento alla foto in focus", () => {
+  const many = (n: number) =>
+    vi.fn(async () => ({ items: Array.from({ length: n }, (_, i) => item(i + 1)), next: null }));
+  let scrollTo: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    scrollTo = vi.fn();
+    Element.prototype.scrollTo = scrollTo as never;
+    // jsdom non fa layout: il virtualizzatore limita lo scorrimento a scrollHeight − clientHeight.
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(100_000);
+    commandsMock.libraryPage = many(300) as never;
+    commandsMock.libraryCount.mockResolvedValue(300 as never);
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollTo?: unknown }).scrollTo;
+    vi.restoreAllMocks();
+  });
+
+  it("arrivando con una foto lontana ('Mostra in Libreria') la griglia scorre fino a lei", async () => {
+    useLibrary.setState({ selection: idsSelection([250]), focused: 250, scrollTop: 0 });
+    renderPage();
+    await screen.findByTestId("grid-scroll");
+    await waitFor(() => expect(scrollTo).toHaveBeenCalled());
+    const top = Math.max(...scrollTo.mock.calls.map(([o]) => (o as { top: number }).top));
+    expect(top).toBeGreaterThan(1000);
+    // La tastiera riparte da quella foto.
+    expect(screen.getByTestId("grid-scroll").getAttribute("aria-activedescendant")).toBe(
+      "thumb-opt-250",
+    );
+  });
+
+  it("una foto già in vista non fa scorrere la griglia", async () => {
+    useLibrary.setState({ selection: idsSelection([2]), focused: 2, scrollTop: 0 });
+    renderPage();
+    await screen.findByTestId("thumb-2");
+    expect(scrollTo.mock.calls.every(([o]) => (o as { top: number }).top === 0)).toBe(true);
+  });
+
+  it("una foto oltre le pagine caricate viene raggiunta con la sua posizione", async () => {
+    commandsMock.libraryCount.mockResolvedValue(1000);
+    // 1000 foto con id = posizione + 1, a pagine come il backend (offset e cursori).
+    commandsMock.libraryPage.mockImplementation((async (
+      _f: unknown,
+      _s: unknown,
+      at: { kind: string; offset?: number; cursor?: { id: number } } | null,
+      limit: number,
+    ) => {
+      const total = 1000;
+      let from = at?.kind === "offset" ? (at.offset ?? 0) : 0;
+      let to = Math.min(total, from + limit);
+      if (at?.kind === "after")
+        [from, to] = [at.cursor!.id, Math.min(total, at.cursor!.id + limit)];
+      if (at?.kind === "before")
+        [from, to] = [Math.max(0, at.cursor!.id - 1 - limit), at.cursor!.id - 1];
+      const items = Array.from({ length: to - from }, (_, i) => item(from + i + 1));
+      const cur = (id: number) => ({ key: id, id });
+      return {
+        items,
+        next: to < total ? cur(to) : null,
+        prev: from > 0 ? cur(from + 1) : null,
+      };
+    }) as never);
+    commandsMock.libraryPosition.mockResolvedValue(604);
+    // Qui lo scorrimento deve spostare davvero la vista, come nel browser.
+    Element.prototype.scrollTo = vi.fn(function (this: HTMLElement, o: ScrollToOptions) {
+      Object.defineProperty(this, "scrollTop", { value: o.top ?? 0, configurable: true });
+      this.dispatchEvent(new Event("scroll"));
+    }) as never;
+    useLibrary.setState({ selection: idsSelection([605]), focused: 605, anchor: 605 });
+    renderPage();
+    await waitFor(() =>
+      expect(commandsMock.libraryPosition).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        605,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("grid-scroll")).toHaveAttribute(
+        "aria-activedescendant",
+        "thumb-opt-605",
+      ),
+    );
+    expect(commandsMock.libraryPosition).toHaveBeenCalledTimes(1);
   });
 });

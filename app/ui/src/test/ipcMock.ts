@@ -41,7 +41,10 @@ import type {
   GroupSort,
   FacePage,
   FaceScope,
+  SelectionBase,
+  FaceSelectionMedia,
   FaceSort,
+  FaceYear,
   FaceCursor,
   LocateFaceRequest,
   LocatedFace,
@@ -59,6 +62,7 @@ export const emitters = {
   uiRecovered: [] as Cb<void>[],
   trimCaches: [] as Cb<void>[],
   facesChanged: [] as Cb<void>[],
+  sourceWatchChanged: [] as Cb<void>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -93,9 +97,14 @@ export const commandsMock = {
   startDemoJob: vi.fn(),
   queryErrors: vi.fn(async () => []),
   errorGroups: vi.fn(async () => []),
+  errorCount: vi.fn(async () => 0),
+  archiveErrors: vi.fn(async () => ({ affected: 0, activeCount: 0 })),
+  unarchiveErrors: vi.fn(async () => ({ affected: 0, activeCount: 0 })),
   logTail: vi.fn(async () => []),
   setLogLevel: vi.fn(async () => null),
   listSources: vi.fn(async () => [] as SourceSummary[]),
+  acknowledgeSourceWarnings: vi.fn(async () => null),
+  sourceWatchStatus: vi.fn(async () => [] as import("../bindings").SourceWatchStatus[]),
   addSource: vi.fn(),
   updateSource: vi.fn(),
   removeSource: vi.fn(),
@@ -108,6 +117,7 @@ export const commandsMock = {
   importUpdates: vi.fn(async () => [] as UpdateSummary[]),
   lastRelink: vi.fn(async () => null as RelinkSummary | null),
   libraryPage: vi.fn(),
+  libraryPosition: vi.fn(async () => null as number | null),
   libraryCount: vi.fn(),
   libraryFacets: vi.fn(),
   libraryFacetValues: vi.fn(async () => ({ values: [] as FacetValue[], total: 0 })),
@@ -161,6 +171,7 @@ export const commandsMock = {
     }
     return null;
   }),
+  groupFaceYears: vi.fn<(scope: FaceScope) => Promise<FaceYear[]>>(async () => []),
   groupFaces: vi.fn<
     (
       scope: FaceScope,
@@ -175,6 +186,16 @@ export const commandsMock = {
     goodCount: 0,
     discardedCount: 0,
   })),
+  faceSelection: vi.fn<(scope: FaceScope) => Promise<SelectionBase>>(async () => ({
+    count: 0,
+    maxId: 0,
+  })),
+  faceSelectionIds: vi.fn<
+    (scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>
+  >(async () => []),
+  faceSelectionMedia: vi.fn<
+    (scope: FaceScope, maxId: number, except: number[]) => Promise<FaceSelectionMedia>
+  >(async () => ({ present: [], missing: [] })),
   locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
   personFaces: vi.fn(async () => []),
   correctPerson: vi.fn(async () => null),
@@ -245,6 +266,13 @@ export const commandsMock = {
     async () => [],
   ),
   sequenceIds: vi.fn<(scope: SequenceScope) => Promise<number[]>>(async () => []),
+  sequenceSelection: vi.fn<(scope: SequenceScope) => Promise<SelectionBase>>(async () => ({
+    count: 0,
+    maxId: 0,
+  })),
+  sequenceSelectionIds: vi.fn<
+    (scope: SequenceScope, maxId: number, except: number[]) => Promise<number[]>
+  >(async () => []),
   setSessionGap: vi.fn(async () => null),
   setGroupDisplay: vi.fn(async () => 1),
   setGroupShift: vi.fn(async () => 1),
@@ -316,7 +344,7 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: { facesChanged: "faces://changed" },
+    EVENTS: { facesChanged: "faces://changed", sourceWatchChanged: "sources://watch-changed" },
     events: {
       onBootPhase: reg(emitters.boot),
       onBootReady: reg(emitters.boot),
@@ -328,6 +356,7 @@ export function ipcMockModule(tauri = false) {
       onUiRecovered: reg(emitters.uiRecovered),
       onTrimCaches: reg(emitters.trimCaches),
       onFacesChanged: reg(emitters.facesChanged),
+      onSourceWatchChanged: reg(emitters.sourceWatchChanged),
     },
   };
 }

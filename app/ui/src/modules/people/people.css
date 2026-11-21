@@ -567,3 +567,13 @@
   gap: var(--pc-space-2);
   color: var(--pc-text-secondary);
 }
+
+.people-year-head {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  border-bottom: 1px solid var(--pc-border);
+}

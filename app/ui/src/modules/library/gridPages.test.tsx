@@ -14,6 +14,7 @@ const TOTAL = 100_000;
 const item = (i: number): GridItem =>
   ({
     id: i + 1,
+    rating: 0,
     name: `IMG_${i}.jpg`,
     path: "",
     thumb: null,

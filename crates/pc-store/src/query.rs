@@ -2,11 +2,11 @@
 //! (manuali e smart), facet e paginazione keyset.
 
 use crate::coverage::{self, Stage, StageKeys};
-use crate::model::{CatalogKind, MediaId, MediaStatus};
+use crate::model::{CatalogKind, ColorTrait, MediaId, MediaStatus};
 use crate::rules::{self, SqlFragment};
 use crate::{repo, StoreError, StoreResult};
 use rusqlite::types::Value;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +45,12 @@ pub struct LibraryFilter {
     pub date_from: Option<String>,
     pub date_to: Option<String>,
     pub formats: Vec<String>,
+    /// Valutazione minima, esatta o massima.
+    pub rating: Option<RatingFilter>,
+    /// Caratteristiche di colore (OR); `None` = "Non indicato".
+    pub color_trait: Vec<Option<ColorTrait>>,
+    /// Con un anno scelto: solo le foto con data manuale "solo anno" ("Anno senza mese").
+    pub date_no_month: bool,
     /// Tutti i tag indicati devono essere presenti.
     pub tags: Vec<String>,
     pub text: Option<String>,
@@ -73,6 +79,23 @@ pub struct LibraryFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub stage_keys: Option<StageKeys>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum RatingOp {
+    AtLeast,
+    Equal,
+    AtMost,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct RatingFilter {
+    pub op: RatingOp,
+    pub value: u8,
 }
 
 /// Area geografica del filtro: `label` (luogo prevalente) serve solo per il chip.
@@ -319,6 +342,8 @@ pub struct GridItem {
     pub similar_cover: bool,
     /// Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta).
     pub similar_count: Option<i64>,
+    /// Valutazione da 0 (non indicata) a 5.
+    pub rating: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -518,6 +543,41 @@ pub fn compile_filter(c: &Connection, f: &LibraryFilter) -> StoreResult<SqlFragm
         ));
         args.extend(f.places.iter().map(|v| Value::Text(v.clone())));
     }
+    if let Some(r) = f.rating {
+        let op = match r.op {
+            RatingOp::AtLeast => ">=",
+            RatingOp::Equal => "=",
+            RatingOp::AtMost => "<=",
+        };
+        parts.push(format!("m.rating {op} ?"));
+        args.push(Value::Integer(i64::from(r.value.min(5))));
+    }
+    if !f.color_trait.is_empty() {
+        let named: Vec<&str> = f.color_trait.iter().flatten().map(|c| c.as_str()).collect();
+        let mut alts: Vec<String> = Vec::new();
+        if !named.is_empty() {
+            alts.push(format!("m.color_trait IN ({})", placeholders(named.len())));
+            args.extend(named.iter().map(|v| Value::Text((*v).to_string())));
+        }
+        if f.color_trait.iter().any(Option::is_none) {
+            alts.push("m.color_trait IS NULL".into());
+        }
+        parts.push(format!("({})", alts.join(" OR ")));
+    }
+    if f.date_no_month {
+        parts.push("d.manual_precision = 'year'".into());
+    }
+    // Una data manuale con precisione minore non appartiene a un periodo più fine:
+    // "solo anno" non sta sotto un mese, "anno e mese" non sta sotto un giorno.
+    if let (Some(from), Some(to)) = (&f.date_from, &f.date_to) {
+        if from.len() == 10 && to.len() == 10 && from[..7] == to[..7] && !f.date_no_month {
+            if from == to {
+                parts.push("COALESCE(d.manual_precision, 'day') = 'day'".into());
+            } else {
+                parts.push("COALESCE(d.manual_precision, 'day') <> 'year'".into());
+            }
+        }
+    }
     if let Some(from) = &f.date_from {
         parts.push(format!("{LOCAL_TIME_SQL} >= ?"));
         args.push(Value::Text(from.clone()));
@@ -576,14 +636,17 @@ pub fn page(
     page_at(c, f, sort, at.as_ref(), limit)
 }
 
-/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
-pub fn page_at(
-    c: &Connection,
-    f: &LibraryFilter,
-    sort: SortKey,
-    at: Option<&PageAt>,
-    limit: u32,
-) -> StoreResult<Page> {
+/// Elementi della griglia per `f` e `sort`: CTE iniziale, condizione su `m`, espressione di
+/// ordinamento, colonna del numero di simili ed eventuale colonna dell'esclusione.
+struct GridView {
+    with: String,
+    w: SqlFragment,
+    key: String,
+    count_column: &'static str,
+    excluded: Option<String>,
+}
+
+fn grid_view(c: &Connection, f: &LibraryFilter, sort: SortKey) -> StoreResult<GridView> {
     let mut w = compile_filter(c, f)?;
     // Griglia raggruppata: i risultati filtrati diventano una CTE; di ogni gruppo resta un
     // rappresentante (la principale se è nei risultati, altrimenti la migliore presente).
@@ -617,6 +680,65 @@ pub fn page_at(
     } else {
         sort.expr().to_string()
     };
+    Ok(GridView {
+        with,
+        w,
+        key,
+        count_column,
+        excluded,
+    })
+}
+
+/// Posizione (da 0) della foto `id` nella griglia di `f` ordinata per `sort`, come la conta
+/// `page_at` con `PageAt::Offset`; `None` se la foto non è tra i risultati. Serve a portare
+/// in vista una foto non ancora caricata ("Mostra in Libreria" da Persone).
+pub fn position(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    id: MediaId,
+) -> StoreResult<Option<u32>> {
+    let GridView { with, w, key, .. } = grid_view(c, f, sort)?;
+    let mut args = w.args.clone();
+    args.push(Value::Integer(id));
+    let k: Option<Value> = c
+        .query_row(
+            &format!("{with}SELECT {key} {FROM} WHERE {} AND m.id = ?", w.sql),
+            rusqlite::params_from_iter(args.iter()),
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(k) = k else { return Ok(None) };
+    // Prima della foto: chiave precedente nell'ordine, o stessa chiave e id precedente.
+    let op = if sort.desc() { ">" } else { "<" };
+    let mut args = w.args;
+    args.extend([k.clone(), k, Value::Integer(id)]);
+    let n: i64 = c.query_row(
+        &format!(
+            "{with}SELECT count(*) {FROM} WHERE {} AND ({key} {op} ? OR ({key} = ? AND m.id {op} ?))",
+            w.sql
+        ),
+        rusqlite::params_from_iter(args.iter()),
+        |r| r.get(0),
+    )?;
+    Ok(Some(n as u32))
+}
+
+/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
+pub fn page_at(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    at: Option<&PageAt>,
+    limit: u32,
+) -> StoreResult<Page> {
+    let GridView {
+        with,
+        mut w,
+        key,
+        count_column,
+        excluded,
+    } = grid_view(c, f, sort)?;
     let excluded_column = excluded.as_deref().unwrap_or("NULL");
     // All'indietro si legge in ordine inverso e si ribalta il risultato.
     let backward = matches!(at, Some(PageAt::Before { .. }));
@@ -654,7 +776,7 @@ pub fn page_at(
                  WHERE mt.media_id = m.id), {excluded_column},
                 (SELECT group_id FROM similar_member WHERE media_id = m.id),
                 EXISTS (SELECT 1 FROM similar_group g WHERE g.cover_media_id = m.id),
-                {count_column}
+                {count_column}, m.rating
          {FROM} WHERE {} ORDER BY {key} {dir}, m.id {dir} LIMIT ? OFFSET ?",
         w.sql
     );
@@ -682,6 +804,7 @@ pub fn page_at(
                 similar_group: r.get(13)?,
                 similar_cover: r.get(14)?,
                 similar_count: r.get(15)?,
+                rating: r.get(16)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -923,6 +1046,10 @@ pub struct Facets {
     pub formats: FacetList,
     pub people: FacetList,
     pub tags: FacetList,
+    /// Valori `"0"`..`"5"` (esatti, non cumulativi), sempre tutti presenti.
+    pub ratings: FacetList,
+    /// Valori `bw`, `color`, `faded`, `sepia`, `none` ("Non indicato"), sempre tutti presenti.
+    pub colors: FacetList,
 }
 
 /// Valori restituiti per lista nel riepilogo dei filtri (l'elenco completo
@@ -939,6 +1066,8 @@ pub enum FacetKey {
     Year,
     Format,
     Tag,
+    Rating,
+    Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -976,9 +1105,15 @@ impl FacetKey {
                 g.labels.len() != before
             }
             Self::Place => !std::mem::take(&mut g.places).is_empty(),
-            Self::Year => g.date_from.take().is_some() | g.date_to.take().is_some(),
+            Self::Year => {
+                g.date_from.take().is_some()
+                    | g.date_to.take().is_some()
+                    | std::mem::take(&mut g.date_no_month)
+            }
             Self::Format => !std::mem::take(&mut g.formats).is_empty(),
             Self::Tag => !std::mem::take(&mut g.tags).is_empty(),
+            Self::Rating => g.rating.take().is_some(),
+            Self::Color => !std::mem::take(&mut g.color_trait).is_empty(),
         };
         changed.then_some(g)
     }
@@ -996,6 +1131,20 @@ impl FacetKey {
             Self::Year => date_path(f).year.into_iter().collect(),
             Self::Format => f.formats.clone(),
             Self::Tag => f.tags.clone(),
+            Self::Rating => f
+                .rating
+                .map(|r| {
+                    (0..=5u8)
+                        .filter(|v| rating_matches(r, *v))
+                        .map(|v| v.to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            Self::Color => f
+                .color_trait
+                .iter()
+                .map(|c| c.map_or("none", |c| c.as_str()).to_string())
+                .collect(),
         }
     }
 
@@ -1011,16 +1160,43 @@ impl FacetKey {
             // Gli anni restano in ordine cronologico inverso.
             Self::Year => format!(
                 "SELECT substr({LOCAL_TIME_SQL}, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
-                 WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1 DESC"
+                 WHERE (d.captured_at IS NOT NULL OR d.manual_at IS NOT NULL) GROUP BY 1 ORDER BY 1 DESC"
             ),
             Self::Format => "SELECT m.ext, count(*) FROM media_item m JOIN f ON f.id = m.id \
                  GROUP BY m.ext ORDER BY 2 DESC, 1"
+                .into(),
+            Self::Rating => "SELECT CAST(m.rating AS TEXT), count(*) FROM media_item m JOIN f ON f.id = m.id \
+                 GROUP BY m.rating ORDER BY 1 DESC"
+                .into(),
+            Self::Color => "SELECT COALESCE(m.color_trait, 'none'), count(*) FROM media_item m JOIN f ON f.id = m.id \
+                 GROUP BY 1 ORDER BY 2 DESC, 1"
                 .into(),
             Self::Tag => "SELECT tg.name, count(*) FROM media_tag mt JOIN f ON f.id = mt.media_id \
                  JOIN tag tg ON tg.id = mt.tag_id GROUP BY tg.id ORDER BY 2 DESC, 1"
                 .into(),
         }
     }
+}
+
+fn rating_matches(r: RatingFilter, v: u8) -> bool {
+    match r.op {
+        RatingOp::AtLeast => v >= r.value,
+        RatingOp::Equal => v == r.value,
+        RatingOp::AtMost => v <= r.value,
+    }
+}
+
+const RATING_VALUES: [&str; 6] = ["5", "4", "3", "2", "1", "0"];
+const COLOR_VALUES: [&str; 5] = ["bw", "color", "faded", "sepia", "none"];
+
+/// Tutte le voci nell'ordine fisso `all`, con conteggio 0 se mancanti.
+fn fill_fixed(rows: Vec<FacetValue>, all: &[&str]) -> Vec<FacetValue> {
+    all.iter()
+        .map(|v| FacetValue {
+            value: (*v).to_string(),
+            count: rows.iter().find(|r| r.value == *v).map_or(0, |r| r.count),
+        })
+        .collect()
 }
 
 /// Tutti i valori di una lista (senza limiti), con il filtro già compilato.
@@ -1054,10 +1230,15 @@ fn rows_for(
     base: &SqlFragment,
     key: &FacetKey,
 ) -> StoreResult<Vec<FacetValue>> {
-    match key.without_own(f) {
-        Some(g) => facet_rows(c, &compile_filter(c, &g)?, key),
-        None => facet_rows(c, base, key),
-    }
+    let rows = match key.without_own(f) {
+        Some(g) => facet_rows(c, &compile_filter(c, &g)?, key)?,
+        None => facet_rows(c, base, key)?,
+    };
+    Ok(match key {
+        FacetKey::Rating => fill_fixed(rows, &RATING_VALUES),
+        FacetKey::Color => fill_fixed(rows, &COLOR_VALUES),
+        _ => rows,
+    })
 }
 
 /// Riepilogo di una lista: i primi [`FACET_TOP`] valori più quelli selezionati
@@ -1111,6 +1292,13 @@ pub fn date_path(f: &LibraryFilter) -> DatePath {
     };
     let to = f.date_to.as_deref().unwrap_or("");
     let year = Some(from[..4].to_string());
+    if f.date_no_month {
+        return DatePath {
+            year,
+            month: Some(format!("{}-00", &from[..4])),
+            day: None,
+        };
+    }
     if from.len() == 10 && to == from {
         return DatePath {
             year,
@@ -1138,6 +1326,9 @@ pub fn date_path(f: &LibraryFilter) -> DatePath {
 /// Intervallo inclusivo di un anno (`AAAA`) o di un mese (`AAAA-MM`).
 fn period_range(p: &str) -> Option<(String, String)> {
     let y: i32 = p.get(..4)?.parse().ok()?;
+    if p.get(5..7) == Some("00") {
+        return None;
+    }
     match p.get(5..7) {
         None => Some((format!("{y:04}-01-01"), format!("{y:04}-12-31"))),
         Some(m) => {
@@ -1169,10 +1360,22 @@ fn date_list(
     };
     let w = compile_filter(c, &g)?;
     let len = if period.len() == 4 { 7 } else { 10 };
+    // Mesi: le date "solo anno" vanno nel nodo `AAAA-00`; giorni: solo date con giorno.
+    let (key, only_day) = if len == 7 {
+        (
+            format!("CASE WHEN d.manual_precision = 'year' THEN substr({LOCAL_TIME_SQL}, 1, 4) || '-00' ELSE substr({LOCAL_TIME_SQL}, 1, 7) END"),
+            "",
+        )
+    } else {
+        (
+            format!("substr({LOCAL_TIME_SQL}, 1, 10)"),
+            " AND COALESCE(d.manual_precision, 'day') = 'day'",
+        )
+    };
     let sql = format!(
         "WITH f AS (SELECT m.id {FROM} WHERE {}) \
-         SELECT substr({LOCAL_TIME_SQL}, 1, {len}), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
-         WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1",
+         SELECT {key}, count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
+         WHERE (d.captured_at IS NOT NULL OR d.manual_at IS NOT NULL){only_day} GROUP BY 1 ORDER BY 1",
         w.sql
     );
     let mut st = c.prepare(&sql)?;
@@ -1245,12 +1448,14 @@ pub fn facets(c: &Connection, f: &LibraryFilter) -> StoreResult<Facets> {
             ..f.clone()
         };
         out.months = Some(date_list(c, &undated, year, date.month.as_deref())?);
-        if let Some(month) = &date.month {
+        if let Some(month) = date.month.as_ref().filter(|_| !f.date_no_month) {
             out.days = Some(date_list(c, &undated, month, date.day.as_deref())?);
         }
     }
     out.formats = list(FacetKey::Format)?;
     out.tags = list(FacetKey::Tag)?;
+    out.ratings = list(FacetKey::Rating)?;
+    out.colors = list(FacetKey::Color)?;
     // Persone: non mostrate nella barra laterale, con il filtro completo.
     let people = column(
         "SELECT p.name, count(DISTINCT fc.media_id) FROM face fc JOIN f ON f.id = fc.media_id \

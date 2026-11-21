@@ -217,3 +217,44 @@ fn first_page_of_100k_within_one_second() {
     let s = sequence::sessions(&c, &SequenceScope::Library, DEFAULT_SESSION_GAP_MIN).unwrap();
     assert_eq!(s.len(), 201);
 }
+
+#[test]
+fn selection_covers_the_dated_sequence_with_exceptions_and_snapshot() {
+    let c = lib();
+    let ids = day(&c);
+    // Foto senza data affidabile: fuori dalla sequenza.
+    let undated = photo(
+        &c,
+        "u.jpg",
+        "2026-08-19 10:00:00",
+        "X",
+        DateSource::FileSystem,
+    );
+    let scope = SequenceScope::Library;
+    let base = sequence::selection_base(&c, &scope).unwrap();
+    assert_eq!(base.count, 5);
+    assert_eq!(base.max_id, undated);
+    let all = sequence::selection_ids(&c, &scope, base.max_id, &[]).unwrap();
+    assert_eq!(all, ids, "in ordine di istante, senza la foto non datata");
+    // Eccezioni.
+    let some = sequence::selection_ids(&c, &scope, base.max_id, &[ids[0], ids[4]]).unwrap();
+    assert_eq!(some, vec![ids[1], ids[2], ids[3]]);
+    // Una foto aggiunta dopo lo snapshot resta fuori finche non si riprende la base.
+    let later = photo(&c, "z.jpg", "2026-08-20 08:00:00", "X", EXIF);
+    assert_eq!(
+        sequence::selection_ids(&c, &scope, base.max_id, &[]).unwrap(),
+        ids
+    );
+    assert_eq!(sequence::selection_base(&c, &scope).unwrap().count, 6);
+    assert!(later > base.max_id);
+    // Ambito a elenco: solo gli id dati, se datati.
+    let sel = SequenceScope::Selection {
+        ids: vec![ids[1], ids[2], undated],
+    };
+    let b = sequence::selection_base(&c, &sel).unwrap();
+    assert_eq!(b.count, 2);
+    assert_eq!(
+        sequence::selection_ids(&c, &sel, b.max_id, &[ids[2]]).unwrap(),
+        vec![ids[1]]
+    );
+}

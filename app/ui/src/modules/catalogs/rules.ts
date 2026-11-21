@@ -17,6 +17,8 @@ export type FieldKind =
   | "format"
   | "text"
   | "status"
+  | "rating"
+  | "color"
   | "year"
   | "count"
   | "pixels"
@@ -34,7 +36,12 @@ const KINDS: Record<string, FieldKind> = {
   size: "size",
   name: "text",
   status: "status",
+  rating: "rating",
+  color_trait: "color",
 };
+
+/** Tratti di colore di una regola; "none" = Non indicato. */
+export const COLOR_TRAITS = ["bw", "color", "faded", "sepia", "none"] as const;
 
 /** Campi offerti nell'editor dopo i gruppi della tassonomia (`label.<gruppo>`). */
 export const OTHER_FIELDS = Object.keys(KINDS);
@@ -49,6 +56,7 @@ export const isNumeric = (kind: FieldKind | null) => kind != null && NUMERIC.has
 export function comparisons(kind: FieldKind | null): Cmp[] {
   if (kind == null) return ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "in"];
   if (isNumeric(kind)) return ["eq", "neq", "gt", "gte", "lt", "lte"];
+  if (kind === "rating") return ["gte", "eq", "lte"];
   if (kind === "place" || kind === "text") return ["eq", "neq", "contains"];
   return ["eq", "neq"];
 }
@@ -68,6 +76,10 @@ export function defaultValue(kind: FieldKind | null): string | number {
       return 10 * MB;
     case "status":
       return "ok";
+    case "rating":
+      return 3;
+    case "color":
+      return "bw";
     default:
       return "";
   }
@@ -104,6 +116,10 @@ export function valueText(t: TFunction, names: Names, field: string, value: Cond
   if (kind === "status")
     return value === "ok" || value === "missing" ? t(`catalogs.status.${value}`) : String(value);
   const n = Number(value);
+  if (kind === "rating")
+    return n > 0 ? t("library.inspector.stars", { count: n }) : t("library.inspector.noRating");
+  if (kind === "color")
+    return t(`library.inspector.colorTraits.${value}`, { defaultValue: String(value) });
   if (kind === "year") return String(value);
   if (kind === "count") return `${fmtInt(n)} ${t("catalogs.units.people", { count: n })}`;
   if (kind === "pixels") return `${fmtInt(n)} ${t("catalogs.units.px")}`;

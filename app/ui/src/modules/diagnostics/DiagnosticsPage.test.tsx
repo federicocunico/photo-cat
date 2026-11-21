@@ -23,6 +23,7 @@ const entry = (over: Partial<ErrorEntry>): ErrorEntry => ({
   phase: "scansione",
   path: "D:\\Foto\\2023\\Privato",
   detail: "Access is denied. (os error 5)",
+  archivedAt: null,
   ...over,
 });
 

@@ -108,8 +108,17 @@ export function RemoveSourceDialog({
 
 const GROUPS = ["new", "modified", "moved", "missing", "restored"] as const;
 
-/** Riepilogo dell'ultimo aggiornamento, con i gruppi che aprono la Libreria. */
-export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
+/**
+ * Riepilogo dell'ultimo aggiornamento, con i gruppi che aprono la Libreria. `quiet`: gli avvisi
+ * della cartella sono stati chiusi con "Ignora", quindi mancanti ed errori non sono evidenziati.
+ */
+export function UpdateSummaryView({
+  summary,
+  quiet = false,
+}: {
+  summary: UpdateSummary;
+  quiet?: boolean;
+}) {
   const { t } = useTranslation();
   const show = useShowInLibrary();
   const groups = GROUPS.map((g) => [g, summary[g] as ChangeGroup] as const).filter(
@@ -132,7 +141,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
             key={g}
             type="button"
             className="btn btn-ghost import-update-link"
-            data-warn={g === "missing" || undefined}
+            data-warn={(!quiet && g === "missing") || undefined}
             aria-label={t("sources.summary.show", { label })}
             onClick={() => show(grp.ids)}
           >
@@ -148,7 +157,7 @@ export function UpdateSummaryView({ summary }: { summary: UpdateSummary }) {
         </span>
       )}
       {summary.failed > 0 && (
-        <span className="import-update-failed">
+        <span className={quiet ? "muted" : "import-update-failed"}>
           {t("sources.summary.failed", { n: fmtInt(summary.failed) })}
         </span>
       )}

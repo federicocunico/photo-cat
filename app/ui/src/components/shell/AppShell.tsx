@@ -10,6 +10,7 @@ import { usePaletteCommand } from "../../commands/paletteCommand";
 import { ShortcutSheet } from "../command/ShortcutSheet";
 import { GuideDialog } from "../guide/GuideDialog";
 import { useShortcutCatalog } from "../../commands/catalog";
+import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 import "./shell.css";
@@ -85,6 +86,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
   useUndoHotkey();
   usePaletteCommand();
   useShortcutCatalog();
+  useGridShortcuts();
   useSheetCommand();
   return (
     <div className="app-shell">

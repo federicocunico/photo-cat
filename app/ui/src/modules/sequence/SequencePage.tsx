@@ -12,11 +12,17 @@ import {
   type SequencePage as Page,
   type SequenceScope,
   type SessionView,
+  type Target,
   type SourceGroupView,
   type UndatedItem,
 } from "../../lib/ipc";
 import { fmtDate, fmtDateTime, fmtInt } from "../../lib/format";
-import { clickSelect, selIds, useLibrary } from "../../store/library";
+import { selCount, selIds, selTarget, useLibrary, type Selection } from "../../store/library";
+import { useGridSelection, type GridSelection } from "../../lib/useGridSelection";
+import { sequenceTarget } from "./sequenceTarget";
+import { useActiveGrid } from "../../commands/gridShortcuts";
+import { notifyError } from "../../store/toasts";
+import { ContextMenu, Menu, type MenuItem } from "../../components/ui";
 import { collapseLoaded } from "../library/similarView";
 import { Icon } from "../../components/icons";
 
@@ -35,6 +41,7 @@ import "./sequence.css";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Viewer } from "../../components/viewer/Viewer";
 import { useBulkJob } from "../library/bulkJob";
+import { useRatingHotkeys } from "../library/useRatingHotkeys";
 import { useCommands } from "../../commands/registry";
 import { SequenceExport } from "./SequenceExport";
 
@@ -67,6 +74,15 @@ function FocusedFaces() {
       ))}
     </div>
   );
+}
+
+/** Voci "Seleziona tutto" e "Inverti selezione" della barra e del menu contestuale. */
+function useSelectionItems(grid: GridSelection<SequenceScope>): MenuItem[] {
+  const { t } = useTranslation();
+  return [
+    { label: t("selection.selectAll"), shortcut: "Ctrl+A", onSelect: () => void grid.selectAll() },
+    { label: t("selection.invert"), onSelect: () => void grid.invert() },
+  ];
 }
 
 const PAGE = 500;
@@ -123,8 +139,9 @@ function deviceMarks(groups: SourceGroupView[], t: (k: string) => string): Map<n
 }
 
 /** Barra con ambito, soglia delle sessioni e tasti del set attivo. */
-function Toolbar({ gap }: { gap: number }) {
+function Toolbar({ gap, grid }: { gap: number; grid: GridSelection<SequenceScope> }) {
   const { t } = useTranslation();
+  const selectItems = useSelectionItems(grid);
   const qc = useQueryClient();
   // Esito visibile della modifica della pausa: salvata, non valida o non riuscita.
   const [gapState, setGapState] = useState<
@@ -192,6 +209,15 @@ function Toolbar({ gap }: { gap: number }) {
           </option>
         </select>
       </label>
+      <Menu
+        trigger={
+          <button type="button" className="btn btn-ghost btn-sm">
+            {t("selection.select")}
+            <Icon.ChevronDown size={14} aria-hidden="true" />
+          </button>
+        }
+        items={selectItems}
+      />
       <span className="muted">
         {t("sequence.order")}{" "}
         <strong className="seq-order-strong">{t("sequence.realInstant")}</strong>
@@ -348,7 +374,9 @@ function SessionsGrid({
   hasMore,
   loadMore,
   onPlace,
+  grid,
 }: {
+  grid: GridSelection<SequenceScope>;
   sessions: SessionView[];
   items: SequenceItem[];
   groups: SourceGroupView[];
@@ -358,7 +386,7 @@ function SessionsGrid({
 }) {
   const { t } = useTranslation();
   const scope = useSequence((s) => s.scope);
-  const { selected, focused, setSelection } = useSequence();
+  const selectItems = useSelectionItems(grid);
   const tags = useTagOverview().data;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(900);
@@ -402,7 +430,6 @@ function SessionsGrid({
     }
     return out;
   }, [sessions, shown, cols]);
-  const order = useMemo(() => items.map((i) => i.id), [items]);
   const color = (g: number | null) =>
     deviceColorVar(
       Math.max(
@@ -426,70 +453,66 @@ function SessionsGrid({
   }, [last, rows.length, hasMore, loadMore]);
   const selectSession = async (index: number) => {
     const ids = await commands.sequenceSessionIds(scope, index);
-    setSelection(ids, ids[0] ?? null);
+    grid.setIds(ids, ids[0] ?? null);
   };
   return (
-    <div ref={scrollRef} data-testid="sequence-scroll" className="seq-scroll">
-      <div className="seq-virt" style={{ height: virt.getTotalSize() + PAD }}>
-        {vitems.map((v) => {
-          const row = rows[v.index];
-          return (
-            <div key={v.key} className="seq-virt-row" style={{ top: v.start + PAD / 2 }}>
-              {row.kind === "header" ? (
-                <div className="seq-session-head">
-                  <h2 className="seq-session-title">
-                    {fmtDate(localDate(row.session.startLocal))} ·{" "}
-                    {timeOf(row.session.startLocal).slice(0, 5)}–
-                    {timeOf(row.session.endLocal).slice(0, 5)}
-                  </h2>
-                  <span className="muted">
-                    {[row.session.place, t("sequence.photos", { count: row.session.count })]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                  <BusyButton
-                    className="btn seq-push"
-                    onClick={() => selectSession(row.session.index)}
-                  >
-                    {t("sequence.selectSession")}
-                  </BusyButton>
-                </div>
-              ) : (
-                row.items.map((it) => (
-                  <Card
-                    key={it.id}
-                    item={it}
-                    selected={selected.includes(it.id)}
-                    color={color(it.groupId)}
-                    mark={(it.groupId != null && marks.get(it.groupId)) || "?"}
-                    tagColor={(n) => colorOf(tags, n)}
-                    onDropUndated={(media) => onPlace(media, it.id)}
-                    group={
-                      counts.get(it.id) != null && it.similarGroup != null
-                        ? {
-                            count: counts.get(it.id)!,
-                            open: open.has(it.similarGroup),
-                            onToggle: () => toggle(it.similarGroup!),
-                          }
-                        : undefined
-                    }
-                    onClick={(e) =>
-                      setSelection(
-                        clickSelect(order, selected, focused, it.id, {
-                          ctrl: e.ctrlKey || e.metaKey,
-                          shift: e.shiftKey,
-                        }),
-                        it.id,
-                      )
-                    }
-                  />
-                ))
-              )}
-            </div>
-          );
-        })}
+    <ContextMenu items={selectItems} label={t("selection.select")}>
+      <div ref={scrollRef} data-testid="sequence-scroll" className="seq-scroll">
+        <div className="seq-virt" style={{ height: virt.getTotalSize() + PAD }}>
+          {vitems.map((v) => {
+            const row = rows[v.index];
+            return (
+              <div key={v.key} className="seq-virt-row" style={{ top: v.start + PAD / 2 }}>
+                {row.kind === "header" ? (
+                  <div className="seq-session-head">
+                    <h2 className="seq-session-title">
+                      {fmtDate(localDate(row.session.startLocal))} ·{" "}
+                      {timeOf(row.session.startLocal).slice(0, 5)}–
+                      {timeOf(row.session.endLocal).slice(0, 5)}
+                    </h2>
+                    <span className="muted">
+                      {[row.session.place, t("sequence.photos", { count: row.session.count })]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                    <BusyButton
+                      className="btn seq-push"
+                      onClick={() => selectSession(row.session.index)}
+                    >
+                      {t("sequence.selectSession")}
+                    </BusyButton>
+                  </div>
+                ) : (
+                  row.items.map((it) => (
+                    <Card
+                      key={it.id}
+                      item={it}
+                      selected={grid.has(it.id)}
+                      color={color(it.groupId)}
+                      mark={(it.groupId != null && marks.get(it.groupId)) || "?"}
+                      tagColor={(n) => colorOf(tags, n)}
+                      onDropUndated={(media) => onPlace(media, it.id)}
+                      group={
+                        counts.get(it.id) != null && it.similarGroup != null
+                          ? {
+                              count: counts.get(it.id)!,
+                              open: open.has(it.similarGroup),
+                              onToggle: () => toggle(it.similarGroup!),
+                            }
+                          : undefined
+                      }
+                      onClick={(e) =>
+                        grid.click(it.id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey })
+                      }
+                    />
+                  ))
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </ContextMenu>
   );
 }
 
@@ -794,6 +817,41 @@ export function SequencePage() {
   const tagInfo = useTagOverview().data;
   const bulk = useBulkJob();
   const o = overview.data;
+  // Selezione della Sequenza (D1): id espliciti o "tutta la Sequenza" meno le eccezioni.
+  const order = useMemo(() => items.map((i) => i.id), [items]);
+  const selection = useSequence((s) => s.selection);
+  const grid = useGridSelection<SequenceScope>({
+    filter: scope,
+    order,
+    fetchBase: () => commands.sequenceSelection(scope),
+    state: {
+      selection,
+      getSelection: () => useSequence.getState().selection,
+      getAnchor: () => useSequence.getState().anchor,
+      setAnchor: (id) => useSequence.getState().setAnchor(id),
+      replace: (sel, focused) => useSequence.getState().replaceSelection(sel, focused),
+    },
+    onError: notifyError,
+  });
+  useActiveGrid(
+    {
+      selectAll: grid.selectAll,
+      invert: grid.invert,
+      clear: grid.clear,
+      count: () => selCount(useSequence.getState().selection),
+    },
+    view === "sequence",
+  );
+  /** Selezione corrente per i tasti dei tag e delle stelle; il bersaglio si risolve al volo. */
+  const currentSelection = () => {
+    const { selection: sel, scope: sc } = useSequence.getState();
+    return {
+      target:
+        sel.mode === "ids" ? selTarget(sel as Selection) : ({ kind: "ids", ids: [] } as Target),
+      count: selCount(sel),
+      resolve: () => sequenceTarget(sc, sel),
+    };
+  };
   useEffect(() => {
     if (o)
       setStats({
@@ -802,10 +860,8 @@ export function SequencePage() {
         sessions: o.sessions.length,
       });
   }, [o, setStats]);
-  useTagHotkeys(() => {
-    const ids = useSequence.getState().selected;
-    return { target: { kind: "ids", ids }, count: ids.length };
-  }, view === "sequence");
+  useTagHotkeys(currentSelection, view === "sequence");
+  useRatingHotkeys(currentSelection, view === "sequence");
   // Foto con il focus: A seleziona la sua sessione, Spazio o Invio aprono il visualizzatore.
   const focusedItem = () => items.find((i) => i.id === useSequence.getState().focused);
   useCommands(
@@ -853,7 +909,7 @@ export function SequencePage() {
     <ModulePage title={t("modules.sequence")}>
       <div className="seq-layout">
         <section className="seq-main">
-          <Toolbar gap={o?.gapMin ?? 120} />
+          <Toolbar gap={o?.gapMin ?? 120} grid={grid} />
           <FocusedFaces />
           {o?.suggestions.map((s) => {
             const g = o.groups.find((x) => x.id === s.group);
@@ -914,6 +970,7 @@ export function SequencePage() {
                 hasMore={!!pages.hasNextPage && !pages.isFetchingNextPage}
                 loadMore={() => void pages.fetchNextPage()}
                 onPlace={(m, a) => void place(m, a)}
+                grid={grid}
               />
             )}
           </QueryView>
@@ -974,7 +1031,7 @@ export function SequencePage() {
 export function SequenceStatus() {
   const { t } = useTranslation();
   const stats = useSequence((s) => s.stats);
-  const selected = useSequence((s) => s.selected.length);
+  const selected = useSequence((s) => selCount(s.selection));
   return (
     <>
       <span>
@@ -984,7 +1041,9 @@ export function SequenceStatus() {
           sessions: stats.sessions,
         })}
       </span>
-      <span>{t("sequence.selected", { count: selected })}</span>
+      <span aria-live="polite" aria-atomic="true">
+        {t("sequence.selected", { count: selected })}
+      </span>
       <span className="status-keys" aria-label={t("sequence.keysLabel")}>
         {(
           [

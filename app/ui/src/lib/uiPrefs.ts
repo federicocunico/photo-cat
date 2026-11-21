@@ -12,6 +12,7 @@ export const UI_PREF_KEYS = [
   "photo-cat.floating",
   "photo-cat.palette",
   "photo-cat.guide",
+  "photo-cat.people",
 ];
 
 const SAVE_DELAY = 500;

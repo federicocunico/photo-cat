@@ -295,6 +295,7 @@ pub fn resolve_dates(meta: &std::fs::Metadata, exif: Option<&ExifMeta>) -> Media
         modified_at: modified,
         declared_offset_min: offset,
         device: exif.and_then(|e| e.device.clone()),
+        ..Default::default()
     }
 }
 

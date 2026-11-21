@@ -18,6 +18,14 @@ pub const ERROR_BATCH: &str = "errors://batch";
 /// aggiorna le liste su questo evento invece di interrogare a intervalli.
 pub const FACES_CHANGED: &str = "faces://changed";
 
+/// Stato del monitoraggio delle cartelle cambiato (riavvio del monitoraggio o
+/// aggiornamento automatico avviato): l'UI rilegge `source_watch_status`.
+pub const SOURCE_WATCH_CHANGED: &str = "sources://watch-changed";
+
+pub fn source_watch_changed(app: &AppHandle) {
+    let _ = app.emit(SOURCE_WATCH_CHANGED, ());
+}
+
 pub fn faces_changed(app: &AppHandle) {
     let _ = app.emit(FACES_CHANGED, ());
 }

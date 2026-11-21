@@ -409,3 +409,85 @@ it("issue #26: con più foto selezionate l'Ispettore aggiunge al catalogo tutte,
     ),
   );
 });
+
+it("valutazione, colore e data di scatto si modificano dall'Inspector", async () => {
+  const current = await commandsMock.mediaDetail();
+  commandsMock.mediaDetail.mockResolvedValue({ ...current, rating: 3, colorTrait: null } as never);
+  const { unmount } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  const ids = { kind: "ids", ids: [7] };
+  // Stelle: cliccare la stella corrente azzera.
+  fireEvent.click(await screen.findByRole("button", { name: "5 stelle" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      ids,
+      { action: "set_rating", rating: 5 },
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "3 stelle" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      ids,
+      { action: "set_rating", rating: null },
+      false,
+    ),
+  );
+  // Colore.
+  fireEvent.change(screen.getByRole("combobox", { name: "Colore" }), {
+    target: { value: "sepia" },
+  });
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      ids,
+      { action: "set_color_trait", color_trait: "sepia" },
+      false,
+    ),
+  );
+  // Data con precisione mese.
+  fireEvent.click(await screen.findByRole("button", { name: /Acquisizione/ }));
+  fireEvent.click(screen.getByRole("radio", { name: "Mese" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Mese" }), { target: { value: "06" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Anno" }), { target: { value: "1984" } });
+  fireEvent.click(screen.getByRole("button", { name: "Imposta data" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      ids,
+      { action: "set_manual_date", value: "1984-06", precision: "month" },
+      false,
+    ),
+  );
+  unmount();
+
+  // Con una data manuale: fonte mostrata e ripristino.
+  commandsMock.mediaDetail.mockResolvedValue({
+    ...current,
+    rating: 0,
+    colorTrait: "bw",
+    dates: {
+      capturedAt: "2020-01-01 00:00:00",
+      capturedSource: "manual",
+      manualAt: "1962-01-01 00:00:00",
+      manualPrecision: "year",
+      modifiedAt: null,
+    },
+  } as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Inspector />
+    </QueryClientProvider>,
+  );
+  const shown = await screen.findByRole("button", { name: /1962 \(impostata a mano\)/ });
+  fireEvent.click(shown);
+  fireEvent.click(await screen.findByRole("button", { name: "Ripristina data del file" }));
+  await waitFor(() =>
+    expect(commandsMock.startBulk).toHaveBeenLastCalledWith(
+      ids,
+      { action: "clear_manual_date" },
+      false,
+    ),
+  );
+});

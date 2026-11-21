@@ -159,6 +159,71 @@ pub async fn error_groups(
         .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Esito di un'archiviazione/ripristino: voci toccate e nuovo valore dell'indicatore globale.
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveOutcome {
+    pub affected: u32,
+    /// Errori (ERROR) non archiviati: sostituisce `errorCount` nello store live.
+    pub active_count: i64,
+}
+
+/// Archivia voci singole, un gruppo o tutto il filtro corrente. Non cancella nulla.
+#[tauri::command]
+#[specta::specta]
+pub async fn archive_errors(
+    state: State<'_, AppState>,
+    target: errorlog::ArchiveTarget,
+) -> AppResult<ArchiveOutcome> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| {
+            let affected = errorlog::archive_errors(c, &target)? as u32;
+            let active_count = errorlog::active_error_count(c)?;
+            Ok(ArchiveOutcome {
+                affected,
+                active_count,
+            })
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Ripristina voci archiviate.
+#[tauri::command]
+#[specta::specta]
+pub async fn unarchive_errors(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> AppResult<ArchiveOutcome> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| {
+            let affected = errorlog::unarchive_errors(c, &ids)? as u32;
+            let active_count = errorlog::active_error_count(c)?;
+            Ok(ArchiveOutcome {
+                affected,
+                active_count,
+            })
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Conteggio iniziale dell'indicatore globale: errori non archiviati.
+#[tauri::command]
+#[specta::specta]
+pub async fn error_count(state: State<'_, AppState>) -> AppResult<i64> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || Ok(db.read(errorlog::active_error_count)?))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn log_tail(state: State<'_, AppState>) -> Vec<LogLine> {

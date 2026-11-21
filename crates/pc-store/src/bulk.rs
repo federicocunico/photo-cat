@@ -1,7 +1,7 @@
 //! Modifiche in blocco a tag, cataloghi e catalogazioni, con registrazione
 //! dell'operazione inversa in `undo_log` per "Annulla".
 
-use crate::model::{Location, LocationSource, MediaId};
+use crate::model::{ColorTrait, DatePrecision, Location, LocationSource, MediaId};
 use crate::repo::{catalog, fts, tag};
 use crate::{now_ms, StoreError, StoreResult};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -102,6 +102,18 @@ pub enum UndoAction {
     Placement {
         media_id: MediaId,
         previous: Option<(i64, Option<i32>)>,
+    },
+    /// Valutazioni precedenti (0 = non indicata) per id.
+    SetRating {
+        previous: Vec<(MediaId, u8)>,
+    },
+    /// Caratteristiche di colore precedenti (`None` = non indicata) per id.
+    SetColorTrait {
+        previous: Vec<(MediaId, Option<ColorTrait>)>,
+    },
+    /// Date manuali precedenti (testo e precisione) per id.
+    SetManualDate {
+        previous: Vec<(MediaId, Option<String>, Option<DatePrecision>)>,
     },
     /// Luoghi precedenti (riga completa o assenza) di un gruppo di file.
     LocationReplaced {
@@ -308,6 +320,147 @@ pub fn set_place(
     record_undo(c, &description, &UndoAction::LocationReplaced { previous })?;
     Ok(BulkOutcome {
         changed: ids.len(),
+        requested: ids.len(),
+    })
+}
+
+/// Imposta la valutazione (1-5 stelle; 0 o `None` = non indicata). Annullabile.
+pub fn set_rating(c: &Connection, ids: &[MediaId], rating: Option<u8>) -> StoreResult<BulkOutcome> {
+    let value = rating.unwrap_or(0);
+    if value > 5 {
+        return Err(StoreError::Invalid(format!(
+            "valutazione non valida: {value} (da 0 a 5)"
+        )));
+    }
+    let mut previous = Vec::with_capacity(ids.len());
+    let mut read = c.prepare_cached("SELECT rating FROM media_item WHERE id = ?1")?;
+    let mut write = c.prepare_cached("UPDATE media_item SET rating = ?2 WHERE id = ?1")?;
+    for id in ids {
+        if let Some(old) = read.query_row([id], |r| r.get::<_, u8>(0)).optional()? {
+            previous.push((*id, old));
+            write.execute(params![id, value])?;
+        }
+    }
+    let description = if value == 0 {
+        "Rimuovi valutazione".to_string()
+    } else {
+        format!("Imposta valutazione {value}")
+    };
+    let changed = previous.len();
+    record_undo(c, &description, &UndoAction::SetRating { previous })?;
+    Ok(BulkOutcome {
+        changed,
+        requested: ids.len(),
+    })
+}
+
+/// Imposta la caratteristica di colore (`None` = non indicata). Annullabile.
+pub fn set_color_trait(
+    c: &Connection,
+    ids: &[MediaId],
+    value: Option<ColorTrait>,
+) -> StoreResult<BulkOutcome> {
+    let mut previous = Vec::with_capacity(ids.len());
+    let mut read = c.prepare_cached("SELECT color_trait FROM media_item WHERE id = ?1")?;
+    let mut write = c.prepare_cached("UPDATE media_item SET color_trait = ?2 WHERE id = ?1")?;
+    for id in ids {
+        if let Some(old) = read
+            .query_row([id], |r| r.get::<_, Option<String>>(0))
+            .optional()?
+        {
+            previous.push((*id, old.as_deref().and_then(ColorTrait::parse)));
+            write.execute(params![id, value.map(ColorTrait::as_str)])?;
+        }
+    }
+    let description = match value {
+        Some(t) => format!("Imposta colore {}", t.as_str()),
+        None => "Rimuovi caratteristica di colore".to_string(),
+    };
+    let changed = previous.len();
+    record_undo(c, &description, &UndoAction::SetColorTrait { previous })?;
+    Ok(BulkOutcome {
+        changed,
+        requested: ids.len(),
+    })
+}
+
+/// Imposta la data di scatto a mano con la precisione indicata (`AAAA`,
+/// `AAAA-MM`, `AAAA-MM-GG [HH:MM[:SS]]`). Annullabile.
+pub fn set_manual_date(
+    c: &Connection,
+    ids: &[MediaId],
+    value: &str,
+    precision: DatePrecision,
+) -> StoreResult<BulkOutcome> {
+    set_manual_date_with(c, ids, value, precision, &crate::timeline::system_offset)
+}
+
+pub fn set_manual_date_with(
+    c: &Connection,
+    ids: &[MediaId],
+    value: &str,
+    precision: DatePrecision,
+    system: &crate::timeline::SystemOffset,
+) -> StoreResult<BulkOutcome> {
+    let at = crate::timeline::normalize_manual(value, precision)?;
+    let description = format!("Imposta data di scatto {}", value.trim());
+    write_manual_date(c, ids, Some((&at, precision)), &description, system)
+}
+
+/// Ripristina la data letta dal file (toglie la data manuale). Annullabile.
+pub fn clear_manual_date(c: &Connection, ids: &[MediaId]) -> StoreResult<BulkOutcome> {
+    clear_manual_date_with(c, ids, &crate::timeline::system_offset)
+}
+
+pub fn clear_manual_date_with(
+    c: &Connection,
+    ids: &[MediaId],
+    system: &crate::timeline::SystemOffset,
+) -> StoreResult<BulkOutcome> {
+    write_manual_date(c, ids, None, "Ripristina data del file", system)
+}
+
+fn write_manual_date(
+    c: &Connection,
+    ids: &[MediaId],
+    value: Option<(&str, DatePrecision)>,
+    description: &str,
+    system: &crate::timeline::SystemOffset,
+) -> StoreResult<BulkOutcome> {
+    let mut previous = Vec::with_capacity(ids.len());
+    let mut exists = c.prepare_cached("SELECT 1 FROM media_item WHERE id = ?1")?;
+    let mut read = c.prepare_cached(
+        "SELECT manual_at, manual_precision FROM media_dates WHERE media_id = ?1",
+    )?;
+    let mut ensure = c.prepare_cached("INSERT OR IGNORE INTO media_dates(media_id) VALUES (?1)")?;
+    let mut write = c.prepare_cached(
+        "UPDATE media_dates SET manual_at = ?2, manual_precision = ?3 WHERE media_id = ?1",
+    )?;
+    let (at, precision) = match value {
+        Some((a, p)) => (Some(a), Some(p.as_str())),
+        None => (None, None),
+    };
+    for id in ids {
+        if !exists.exists([id])? {
+            continue;
+        }
+        let old: Option<(Option<String>, Option<String>)> = read
+            .query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()?;
+        let (old_at, old_prec) = old.unwrap_or((None, None));
+        previous.push((
+            *id,
+            old_at,
+            old_prec.as_deref().and_then(DatePrecision::parse),
+        ));
+        ensure.execute([id])?;
+        write.execute(params![id, at, precision])?;
+        crate::timeline::refresh_media(c, *id, system)?;
+    }
+    let changed = previous.len();
+    record_undo(c, description, &UndoAction::SetManualDate { previous })?;
+    Ok(BulkOutcome {
+        changed,
         requested: ids.len(),
     })
 }
@@ -1323,6 +1476,29 @@ fn undo_action(
         }
         UndoAction::Placement { media_id, previous } => {
             crate::timeline::set_placement(c, media_id, previous, &crate::timeline::system_offset)?;
+        }
+        UndoAction::SetRating { previous } => {
+            let mut up = c.prepare_cached("UPDATE media_item SET rating = ?2 WHERE id = ?1")?;
+            // All'indietro: con id ripetuti vince il primo valore letto, cioè l'originale.
+            for (id, rating) in previous.iter().rev() {
+                up.execute(params![id, rating])?;
+            }
+        }
+        UndoAction::SetColorTrait { previous } => {
+            let mut up =
+                c.prepare_cached("UPDATE media_item SET color_trait = ?2 WHERE id = ?1")?;
+            for (id, t) in previous.iter().rev() {
+                up.execute(params![id, t.map(ColorTrait::as_str)])?;
+            }
+        }
+        UndoAction::SetManualDate { previous } => {
+            let mut up = c.prepare_cached(
+                "UPDATE media_dates SET manual_at = ?2, manual_precision = ?3 WHERE media_id = ?1",
+            )?;
+            for (id, at, precision) in previous.iter().rev() {
+                up.execute(params![id, at, precision.map(DatePrecision::as_str)])?;
+                crate::timeline::refresh_media(c, *id, &crate::timeline::system_offset)?;
+            }
         }
         UndoAction::LocationReplaced { previous } => {
             for (id, l) in &previous {

@@ -13,7 +13,7 @@ const TAIL_MAX = 500;
 interface LiveState {
   jobs: Record<number, JobSnapshot>;
   resources: ResourceSnapshot | null;
-  /** Errori/avvisi ricevuti in questa sessione (per il contatore della barra di stato). */
+  /** Errori non archiviati (valore iniziale dal backend, poi eventi live e archiviazioni). */
   errorCount: number;
   lastError: ErrorRecord | null;
   tail: LogLine[];
@@ -24,7 +24,8 @@ interface LiveState {
   addErrors: (b: ErrorBatch) => void;
   addLines: (l: LogLine[]) => void;
   setTail: (lines: LogLine[]) => void;
-  resetErrors: () => void;
+  /** Valore autorevole dal backend (avvio, archiviazione, ripristino). */
+  setErrorCount: (n: number) => void;
 }
 
 const sameJob = (a: JobSnapshot | undefined, b: JobSnapshot) =>
@@ -50,7 +51,7 @@ export const useLive = create<LiveState>()((set) => ({
     })),
   addLines: (l) => set((st) => ({ tail: [...st.tail, ...l].slice(-TAIL_MAX) })),
   setTail: (tail) => set({ tail: tail.slice(-TAIL_MAX) }),
-  resetErrors: () => set({ errorCount: 0 }),
+  setErrorCount: (errorCount) => set({ errorCount }),
 }));
 
 /** Job attivi, il più recente per primo. */
@@ -102,6 +103,10 @@ export function useLiveEvents() {
       commands
         .getResources()
         .then(s.setResources)
+        .catch(() => {});
+      commands
+        .errorCount()
+        .then((n) => s.setErrorCount(n + useLive.getState().errorCount))
         .catch(() => {});
       commands
         .logTail()

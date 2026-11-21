@@ -76,3 +76,11 @@ export function fmtPeriod(p: string, short = false): string {
       : { month: "long", year: "numeric" };
   return new Intl.DateTimeFormat(locale(), { ...opts, timeZone: "UTC" }).format(date);
 }
+
+/** Ora e minuti ("15:42") nella lingua dell'app. */
+export const fmtHourMinute = (d: string | number | Date) =>
+  new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(new Date(d));
+
+/** Giorno e mese per esteso ("5 gennaio") nella lingua dell'app. */
+export const fmtDayMonth = (d: string | number | Date) =>
+  new Intl.DateTimeFormat(locale(), { day: "numeric", month: "long" }).format(new Date(d));

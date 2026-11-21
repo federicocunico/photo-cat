@@ -119,7 +119,7 @@ pub mod media {
                 kind=excluded.kind, source_id=excluded.source_id, name=excluded.name, ext=excluded.ext,
                 size=excluded.size, mtime=excluded.mtime, quick_hash=excluded.quick_hash,
                 content_hash=COALESCE(excluded.content_hash, media_item.content_hash),
-                status='ok', updated_at=excluded.updated_at",
+                status='ok', missing_since=NULL, updated_at=excluded.updated_at",
             params![
                 m.kind.as_str(),
                 m.source_id,
@@ -201,9 +201,14 @@ pub mod media {
     }
 
     pub fn set_status(c: &Connection, id: MediaId, status: MediaStatus) -> StoreResult<()> {
+        let now = now_ms();
+        // `missing_since`: istante in cui il file è diventato mancante (NULL se presente).
+        let since = (status == MediaStatus::Missing).then_some(now);
         c.execute(
-            "UPDATE media_item SET status=?2, updated_at=?3 WHERE id=?1",
-            params![id, status.as_str(), now_ms()],
+            "UPDATE media_item SET status=?2, updated_at=?3,
+                missing_since=CASE WHEN ?2='missing' THEN COALESCE(missing_since, ?4) ELSE NULL END
+             WHERE id=?1",
+            params![id, status.as_str(), now, since],
         )?;
         Ok(())
     }
@@ -242,7 +247,7 @@ pub mod media {
         mtime: i64,
     ) -> StoreResult<()> {
         c.execute(
-            "UPDATE media_item SET path=?2, name=?3, mtime=?4, status='ok', updated_at=?5 WHERE id=?1",
+            "UPDATE media_item SET path=?2, name=?3, mtime=?4, status='ok', missing_since=NULL, updated_at=?5 WHERE id=?1",
             params![id, path, name, mtime, now_ms()],
         )?;
         Ok(())
@@ -332,16 +337,27 @@ pub mod meta {
 
     pub fn dates(c: &Connection, id: MediaId) -> StoreResult<Option<MediaDates>> {
         Ok(c.query_row(
-            "SELECT captured_at, captured_source, modified_at, declared_offset_min, device FROM media_dates WHERE media_id=?1",
+            "SELECT captured_at, captured_source, modified_at, declared_offset_min, device, manual_at, manual_precision FROM media_dates WHERE media_id=?1",
             [id],
             |r| {
                 let src: Option<String> = r.get(1)?;
+                let manual_at: Option<String> = r.get(5)?;
+                let precision: Option<String> = r.get(6)?;
+                let captured_source = if manual_at.is_some() {
+                    Some(DateSource::Manual)
+                } else {
+                    src.as_deref().and_then(DateSource::parse)
+                };
                 Ok(MediaDates {
                     captured_at: r.get(0)?,
-                    captured_source: src.as_deref().and_then(DateSource::parse),
+                    captured_source,
                     modified_at: r.get(2)?,
                     declared_offset_min: r.get(3)?,
                     device: r.get(4)?,
+                    manual_at,
+                    manual_precision: precision
+                        .as_deref()
+                        .and_then(crate::model::DatePrecision::parse),
                 })
             },
         )

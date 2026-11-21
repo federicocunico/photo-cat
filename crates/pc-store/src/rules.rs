@@ -104,6 +104,9 @@ enum Kind {
     Exists,
 }
 
+/// Valori del campo `color_trait`; `none` = "Non indicato".
+const COLOR_RULE_VALUES: [&str; 5] = ["bw", "color", "faded", "sepia", "none"];
+
 fn field_kind(field: &str) -> StoreResult<Kind> {
     if let Some(grp) = field.strip_prefix("label.") {
         return if !grp.is_empty() && grp.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
@@ -114,8 +117,10 @@ fn field_kind(field: &str) -> StoreResult<Kind> {
     }
     Ok(match field {
         "person" | "tag" | "catalog" => Kind::Exists,
-        "format" | "place" | "captured_at" | "status" | "text" | "name" => Kind::Text,
-        "year" | "people_count" | "width" | "height" | "size" | "source" => Kind::Number,
+        "format" | "place" | "captured_at" | "status" | "text" | "name" | "color_trait" => {
+            Kind::Text
+        }
+        "year" | "rating" | "people_count" | "width" | "height" | "size" | "source" => Kind::Number,
         other => return Err(StoreError::Invalid(format!("campo sconosciuto: {other}"))),
     })
 }
@@ -130,15 +135,45 @@ fn check_value(kind: Kind, cmp: Cmp, v: &serde_json::Value, field: &str) -> Stor
         Kind::Number => v.is_number(),
         _ => v.is_string() || (field == "catalog" && v.is_number()),
     };
+    // Valori ammessi oltre al tipo: colore tra quelli noti, valutazione da 0 a 5.
+    let domain_ok = |v: &serde_json::Value| match field {
+        "color_trait" => v.as_str().is_some_and(|s| COLOR_RULE_VALUES.contains(&s)),
+        "rating" => matches!(v.as_i64(), Some(0..=5)),
+        _ => true,
+    };
     match (kind, cmp) {
         (_, Cmp::In) => match v.as_array() {
-            Some(a) if !a.is_empty() && a.len() <= 500 && a.iter().all(scalar_ok) => Ok(()),
+            Some(a)
+                if !a.is_empty()
+                    && a.len() <= 500
+                    && a.iter().all(|x| scalar_ok(x) && domain_ok(x)) =>
+            {
+                Ok(())
+            }
             _ => bad(),
         },
         (Kind::Exists, Cmp::Eq | Cmp::Neq) if scalar_ok(v) => Ok(()),
         (Kind::Exists, _) => bad(),
         (Kind::Text, Cmp::Contains) if v.is_string() => Ok(()),
         (Kind::Text, _) if field == "text" => bad(),
+        (Kind::Text, Cmp::Contains | Cmp::Lt | Cmp::Lte | Cmp::Gt | Cmp::Gte)
+            if field == "color_trait" =>
+        {
+            bad()
+        }
+        (Kind::Text, _) if field == "color_trait" => {
+            if v.as_str().is_some_and(|s| COLOR_RULE_VALUES.contains(&s)) {
+                Ok(())
+            } else {
+                bad()
+            }
+        }
+        (Kind::Number, _) if field == "rating" && !matches!(cmp, Cmp::In | Cmp::Contains) => {
+            match v.as_i64() {
+                Some(0..=5) => Ok(()),
+                _ => bad(),
+            }
+        }
         (Kind::Number, Cmp::Contains) => bad(),
         (_, _) if scalar_ok(v) => Ok(()),
         _ => bad(),
@@ -330,6 +365,27 @@ fn compile_cond(
             f.args.extend(vals);
             return Ok(());
         }
+        // "uguale a" e "uno tra" usano l'indice `media_color_trait`: `none` diventa
+        // `IS NULL` invece di passare per `COALESCE`, che obbligherebbe a una scansione.
+        "color_trait" if matches!(cmp, Cmp::Eq | Cmp::In) => {
+            let none = vals
+                .iter()
+                .any(|v| matches!(v, Value::Text(s) if s == "none"));
+            let named: Vec<Value> = vals
+                .into_iter()
+                .filter(|v| !matches!(v, Value::Text(s) if s == "none"))
+                .collect();
+            let mut alts = Vec::new();
+            if !named.is_empty() {
+                alts.push(format!("m.color_trait IN ({})", placeholders(named.len())));
+            }
+            if none {
+                alts.push("m.color_trait IS NULL".to_string());
+            }
+            f.sql.push_str(&format!("({})", alts.join(" OR ")));
+            f.args.extend(named);
+            return Ok(());
+        }
         "text" => {
             f.sql
                 .push_str("m.id IN (SELECT rowid FROM media_fts WHERE media_fts MATCH ?)");
@@ -338,6 +394,8 @@ fn compile_cond(
             return Ok(());
         }
         "format" => "m.ext",
+        "color_trait" => "COALESCE(m.color_trait, 'none')",
+        "rating" => "m.rating",
         "name" => "m.name",
         "status" => "m.status",
         "place" => "(SELECT lo.name FROM location lo WHERE lo.media_id = m.id)",

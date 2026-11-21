@@ -36,6 +36,8 @@ export interface DiagFilter {
   phase?: string;
   jobId?: number;
   text?: string;
+  /** `true`: mostra le voci archiviate. */
+  archived?: boolean;
 }
 
 /** Destinazione per aprire il modulo Persone su una persona, un volto o una foto. */

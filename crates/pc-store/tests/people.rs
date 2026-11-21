@@ -1315,3 +1315,341 @@ fn assign_to_identity_reuses_or_creates_the_linked_person() {
     );
     assert!(people::assign_to_identity(&c, &[], "uid-m", "Marco Russo").is_err());
 }
+
+/// Gruppo con sei volti: 2019, 2020 (data manuale: instant_utc vince sul vecchio
+/// captured_at), due nel 2021 e due senza data. Ritorna (conn, gruppo, id volti per media).
+fn dated_group() -> (Connection, i64, Vec<i64>) {
+    let c = lib_with(6);
+    let g = people::create_person(&c, None).unwrap();
+    let mut faces = Vec::new();
+    for media in 1..=6_i64 {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(media)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        faces.push(fid);
+    }
+    let dated = [
+        (1_i64, "2019-05-01 12:00:00", 1_556_712_000_000_i64),
+        (2, "2021-01-01 12:00:00", 1_609_502_400_000),
+        (3, "2021-06-01 12:00:00", 1_622_548_800_000),
+        // Data manuale: il vecchio captured_at e diverso dall'istante materializzato.
+        (6, "2010-01-01 12:00:00", 1_583_236_800_000),
+    ];
+    for (media, text, ms) in dated {
+        c.execute(
+            "INSERT INTO media_dates(media_id, captured_at, instant_utc, local_offset_min) \
+             VALUES (?1, ?2, ?3, 0)",
+            rusqlite::params![media, text, ms],
+        )
+        .unwrap();
+    }
+    // Media 4 senza riga di date, media 5 con riga ma senza istante.
+    c.execute("INSERT INTO media_dates(media_id) VALUES (5)", [])
+        .unwrap();
+    (c, g, faces)
+}
+
+fn face_ids_paged(c: &Connection, g: i64, sort: people::FaceSort, limit: i64) -> Vec<i64> {
+    let m = people::default_face_match();
+    let mut out = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = people::group_faces(
+            c,
+            people::FaceScope::Group { group: g },
+            sort,
+            cursor.as_ref(),
+            limit,
+            &m,
+        )
+        .unwrap();
+        out.extend(page.items.iter().map(|f| f.id));
+        match page.next {
+            Some(n) => cursor = Some(n),
+            None => break,
+        }
+    }
+    out
+}
+
+#[test]
+fn faces_sort_by_captured_in_both_directions_with_undated_last() {
+    let (c, g, f) = dated_group();
+    // Ordine per istante: 1 (2019), 6 (2020 manuale), 2, 3 (2021), poi senza data 4, 5.
+    let asc = vec![f[0], f[5], f[1], f[2], f[3], f[4]];
+    // Decrescente: 3, 2, 6, 1, poi senza data (id decrescente: 5, 4).
+    let desc = vec![f[2], f[1], f[5], f[0], f[4], f[3]];
+    for limit in [1, 2, 4, 100] {
+        assert_eq!(
+            face_ids_paged(&c, g, people::FaceSort::CapturedAsc, limit),
+            asc,
+            "asc limit {limit}"
+        );
+        assert_eq!(
+            face_ids_paged(&c, g, people::FaceSort::CapturedDesc, limit),
+            desc,
+            "desc limit {limit}"
+        );
+    }
+}
+
+#[test]
+fn face_years_count_manual_dates_and_undated() {
+    let (c, g, _) = dated_group();
+    let m = people::default_face_match();
+    let years = people::group_face_years(&c, people::FaceScope::Group { group: g }, &m).unwrap();
+    assert_eq!(
+        years,
+        vec![
+            people::FaceYear {
+                year: Some(2021),
+                count: 2
+            },
+            people::FaceYear {
+                year: Some(2020),
+                count: 1
+            },
+            people::FaceYear {
+                year: Some(2019),
+                count: 1
+            },
+            people::FaceYear {
+                year: None,
+                count: 2
+            },
+        ]
+    );
+    // Gli scartati non entrano nei conteggi del gruppo e il totale coincide con i volti.
+    let page = people::group_faces(
+        &c,
+        people::FaceScope::Group { group: g },
+        people::FaceSort::CapturedAsc,
+        None,
+        100,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(years.iter().map(|y| y.count).sum::<i64>(), page.total);
+    let none =
+        people::group_face_years(&c, people::FaceScope::Discarded { group: Some(g) }, &m).unwrap();
+    assert!(none.is_empty());
+}
+
+/// Persona con `n` volti utilizzabili, uno per foto.
+fn group_of(n: i64) -> (Connection, i64, Vec<i64>) {
+    let c = lib_with(n);
+    let g = people::create_person(&c, None).unwrap();
+    let mut faces = Vec::new();
+    for media in 1..=n {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(media)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        faces.push(fid);
+    }
+    (c, g, faces)
+}
+
+#[test]
+fn face_selection_covers_the_whole_person_regardless_of_pages() {
+    let (c, g, faces) = group_of(400);
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    // Una sola pagina da 120 volti: la base conta comunque tutti i 400.
+    let page = people::group_faces(
+        &c,
+        scope.clone(),
+        people::FaceSort::QualityDesc,
+        None,
+        120,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(page.items.len(), 120);
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    assert_eq!(base.count, 400);
+    assert_eq!(base.max_id, *faces.iter().max().unwrap());
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &[], &m).unwrap();
+    assert_eq!(ids.len(), 400);
+    // Stessa base con ogni ordinamento.
+    for sort in [
+        people::FaceSort::CapturedAsc,
+        people::FaceSort::CapturedDesc,
+    ] {
+        let p = people::group_faces(&c, scope.clone(), sort, None, 10, &m).unwrap();
+        assert_eq!(p.total, base.count);
+    }
+}
+
+#[test]
+fn face_selection_applies_exceptions_and_ignores_later_faces() {
+    let (c, g, faces) = group_of(10);
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    // Eccezioni: due volti tolti dalla selezione.
+    let except = [faces[1], faces[7]];
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &except, &m).unwrap();
+    assert_eq!(ids.len(), 8);
+    assert!(except.iter().all(|e| !ids.contains(e)));
+    // Un volto aggiunto dopo lo snapshot non entra nella selezione.
+    let extra = {
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (11,'t11.jpg','t','jpg',1,1,1,1)", []).unwrap();
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, 11, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(11)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        fid
+    };
+    assert!(extra > base.max_id);
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &except, &m).unwrap();
+    assert_eq!(ids.len(), 8);
+    assert!(!ids.contains(&extra));
+    // Una nuova base include il volto aggiunto.
+    assert_eq!(
+        people::face_selection_base(&c, &scope, &m).unwrap().count,
+        11
+    );
+}
+
+#[test]
+fn face_selection_media_dedupes_photos_and_splits_missing() {
+    // 6 volti su 4 foto: le foto 1 e 2 hanno due volti ciascuna.
+    let c = lib_with(4);
+    let g = people::create_person(&c, None).unwrap();
+    let good = |x: f32| {
+        let mut f = face(x, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        f
+    };
+    for (media, n) in [(1_i64, 2), (2, 2), (3, 1), (4, 1)] {
+        let detected: Vec<_> = (0..n).map(|k| good(0.1 + 0.4 * k as f32)).collect();
+        people::save_faces(&c, media, &detected, "sface", "det+sface", 0.363).unwrap();
+    }
+    let mut faces = Vec::new();
+    for media in 1..=4_i64 {
+        for r in people::records(&c, Some(media)).unwrap() {
+            faces.push(r.id);
+        }
+    }
+    people::assign(&c, &faces, g).unwrap();
+    assert_eq!(faces.len(), 6);
+    c.execute("UPDATE media_item SET status = 'missing' WHERE id = 3", [])
+        .unwrap();
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    assert_eq!(base.count, 6);
+    let sel = people::face_selection_media(&c, &scope, base.max_id, &[], &m).unwrap();
+    assert_eq!(sel.present, vec![1, 2, 4]);
+    assert_eq!(sel.missing, vec!["t3.jpg".to_string()]);
+    // Le eccezioni tolgono la foto 4 (unico volto) ma non la 1 (resta un volto).
+    let f4 = people::records(&c, Some(4)).unwrap()[0].id;
+    let f1 = people::records(&c, Some(1)).unwrap()[0].id;
+    let sel = people::face_selection_media(&c, &scope, base.max_id, &[f4, f1], &m).unwrap();
+    assert_eq!(sel.present, vec![1, 2]);
+}
+
+#[test]
+fn face_selection_follows_singles_and_discarded_scopes() {
+    let c = lib_with(3);
+    let m = people::default_face_match();
+    for media in 1..=3_i64 {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        // Il terzo volto e troppo piccolo: scartato.
+        if media == 3 {
+            f.size_px = Some(10);
+        }
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let singles = people::FaceScope::Singles;
+    let discarded = people::FaceScope::Discarded { group: None };
+    let sb = people::face_selection_base(&c, &singles, &m).unwrap();
+    let db = people::face_selection_base(&c, &discarded, &m).unwrap();
+    assert_eq!((sb.count, db.count), (2, 1));
+    assert_eq!(
+        people::face_selection_ids(&c, &singles, sb.max_id, &[], &m)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        people::face_selection_ids(&c, &discarded, db.max_id, &[], &m)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+fn many_faces(n: usize) -> (Connection, Vec<i64>, i64) {
+    let mut c = Connection::open_in_memory().unwrap();
+    migrate::migrate(&mut c, None).unwrap();
+    c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (1,'synthetic.jpg','synthetic.jpg','jpg',1,1,1,1)",[]).unwrap();
+    let found: Vec<_> = (0..n).map(|i| face(0.01 * i as f32, i % 100)).collect();
+    people::save_faces(&c, 1, &found, "sface1", "det1+sface1", 0.363).unwrap();
+    let ids: Vec<i64> = people::records(&c, Some(1))
+        .unwrap()
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    let person = people::create_person(&c, None).unwrap();
+    people::assign(&c, &ids, person).unwrap();
+    (c, ids, person)
+}
+
+#[test]
+fn reject_faces_in_one_call_with_a_single_undo_entry() {
+    let (c, ids, person) = many_faces(30);
+    let states = people::face_states(&c, &ids).unwrap();
+    people::reject_faces(&c, &ids, person).unwrap();
+    pc_store::bulk::record_undo(
+        &c,
+        "Non è questa persona",
+        &pc_store::bulk::UndoAction::FacesRestored {
+            states,
+            created: None,
+        },
+    )
+    .unwrap();
+    let after = people::records(&c, None).unwrap();
+    assert!(after
+        .iter()
+        .all(|f| f.person_id.is_none() && f.rejected.contains(&person)));
+    let entries: i64 = c
+        .query_row("SELECT count(*) FROM undo_log", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(entries, 1);
+    pc_store::bulk::undo_last(&c).unwrap();
+    let back = people::records(&c, None).unwrap();
+    assert_eq!(back.len(), 30);
+    assert!(back
+        .iter()
+        .all(|f| f.person_id == Some(person) && !f.rejected.contains(&person)));
+}
+
+#[test]
+fn remove_faces_in_one_call_and_unknown_face_is_an_error() {
+    let (c, ids, _) = many_faces(30);
+    assert!(people::remove_faces(&c, &[ids[0], 9_999_999]).is_err());
+    people::remove_faces(&c, &ids[..20]).unwrap();
+    assert_eq!(people::records(&c, None).unwrap().len(), 10);
+    let n: i64 = c
+        .query_row("SELECT count(*) FROM face_exclusion", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 20);
+}

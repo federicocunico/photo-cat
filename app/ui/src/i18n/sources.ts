@@ -3,6 +3,25 @@
 export const sources = {
   it: {
     sources: {
+      warn: {
+        missing_one: "{{count}} mancante",
+        missing_other: "{{count}} mancanti",
+        newMissing_one: "{{count}} nuovo mancante",
+        newMissing_other: "{{count}} nuovi mancanti",
+        failed_one: "{{count}} file non letto nell'ultimo aggiornamento",
+        failed_other: "{{count}} file non letti nell'ultimo aggiornamento",
+        ignore: "Ignora",
+        ignoreLabel: "Ignora gli avvisi di {{name}}",
+      },
+      watchStatus: {
+        active: "Aggiornamento automatico attivo",
+        activeLast: "Aggiornamento automatico attivo · ultimo alle {{time}}",
+        activeLastDay: "Aggiornamento automatico attivo · ultimo il {{date}} alle {{time}}",
+        unreachable:
+          "Aggiornamento automatico non disponibile: la cartella non è raggiungibile (disco scollegato o cartella spostata)",
+        error:
+          "Aggiornamento automatico non disponibile: il sistema non permette di sorvegliare questa cartella",
+      },
       menu: "Azioni su {{name}}",
       update: "Aggiorna",
       updateFolder: "Aggiorna cartella…",
@@ -76,6 +95,24 @@ export const sources = {
   },
   en: {
     sources: {
+      warn: {
+        missing_one: "{{count}} missing",
+        missing_other: "{{count}} missing",
+        newMissing_one: "{{count}} new missing",
+        newMissing_other: "{{count}} new missing",
+        failed_one: "{{count}} file not read in the last update",
+        failed_other: "{{count}} files not read in the last update",
+        ignore: "Dismiss",
+        ignoreLabel: "Dismiss the warnings of {{name}}",
+      },
+      watchStatus: {
+        active: "Automatic update on",
+        activeLast: "Automatic update on · last at {{time}}",
+        activeLastDay: "Automatic update on · last on {{date}} at {{time}}",
+        unreachable:
+          "Automatic update unavailable: the folder is not reachable (drive disconnected or folder moved)",
+        error: "Automatic update unavailable: the system does not allow watching this folder",
+      },
       menu: "Actions on {{name}}",
       update: "Update",
       updateFolder: "Update folder…",

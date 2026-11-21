@@ -129,6 +129,7 @@ pub enum DateSource {
     ExifOriginal,
     ExifCreate,
     FileSystem,
+    Manual,
 }
 
 impl DateSource {
@@ -137,6 +138,7 @@ impl DateSource {
             Self::ExifOriginal => "exif_original",
             Self::ExifCreate => "exif_create",
             Self::FileSystem => "file_system",
+            Self::Manual => "manual",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
@@ -144,8 +146,37 @@ impl DateSource {
             "exif_original" => Self::ExifOriginal,
             "exif_create" => Self::ExifCreate,
             "file_system" => Self::FileSystem,
+            "manual" => Self::Manual,
             _ => return None,
         })
+    }
+}
+
+/// Precisione di una data di scatto impostata a mano.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum DatePrecision {
+    Day,
+    Month,
+    Year,
+}
+
+impl DatePrecision {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Day => "day",
+            Self::Month => "month",
+            Self::Year => "year",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "day" => Some(Self::Day),
+            "month" => Some(Self::Month),
+            "year" => Some(Self::Year),
+            _ => None,
+        }
     }
 }
 
@@ -163,6 +194,12 @@ pub struct MediaDates {
     /// Dispositivo normalizzato (marca + modello).
     #[serde(default)]
     pub device: Option<String>,
+    /// Data impostata a mano (`AAAA-MM-GG HH:MM:SS`, primo istante del periodo).
+    /// Quando c'è, `captured_source` è `manual` e `captured_at` resta quella del file.
+    #[serde(default)]
+    pub manual_at: Option<String>,
+    #[serde(default)]
+    pub manual_precision: Option<DatePrecision>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -180,6 +217,37 @@ pub struct ExifInfo {
     pub gps_lon: Option<f64>,
     /// Tutti i tag letti, come oggetto JSON.
     pub raw: Option<serde_json::Value>,
+}
+
+/// Caratteristica di colore di una foto (bianco e nero, a colori, sbiadita, seppia).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum ColorTrait {
+    Bw,
+    Color,
+    Faded,
+    Sepia,
+}
+
+impl ColorTrait {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Bw => "bw",
+            Self::Color => "color",
+            Self::Faded => "faded",
+            Self::Sepia => "sepia",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "bw" => Some(Self::Bw),
+            "color" => Some(Self::Color),
+            "faded" => Some(Self::Faded),
+            "sepia" => Some(Self::Sepia),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -2,7 +2,7 @@
 
 use crate::state::AppState;
 use pc_core::{AppError, AppResult, ErrorCode};
-use pc_ingest::watch::SourceWatcher;
+use pc_ingest::watch::{SourceWatcher, WatchState, WatchStatus};
 use pc_ingest::{import, manage, relink};
 use pc_store::detail::{self, CatalogSummary, MediaDetail, SourceSummary};
 use pc_store::model::{MediaId, NewSource, Source};
@@ -113,6 +113,20 @@ pub async fn start_import(
 pub async fn import_updates(app: tauri::AppHandle) -> AppResult<Vec<UpdateSummary>> {
     crate::state::blocking(app, move |_app, state| {
         Ok(state.store.read(sources::updates)?)
+    })
+    .await
+}
+
+/// Chiude gli avvisi della sorgente (mancanti nuovi ed errori dell'ultimo
+/// aggiornamento) senza toccare i file mancanti.
+#[tauri::command]
+#[specta::specta]
+pub async fn acknowledge_source_warnings(app: tauri::AppHandle, source_id: i64) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .store
+            .write(move |c| sources::acknowledge_warnings(c, source_id))?;
+        Ok(())
     })
     .await
 }
@@ -243,6 +257,26 @@ pub async fn library_page(
         Ok(state
             .store
             .read(|c| query::page_at(c, &filter, sort, at.as_ref(), limit))?)
+    })
+    .await
+}
+
+/// Posizione di una foto nella griglia (per portarla in vista anche se non è tra le pagine
+/// caricate); `None` se non è tra i risultati.
+#[tauri::command]
+#[specta::specta]
+pub async fn library_position(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    sort: SortKey,
+    id: MediaId,
+) -> AppResult<Option<u32>> {
+    crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
+        Ok(state
+            .store
+            .read(|c| query::position(c, &filter, sort, id))?)
     })
     .await
 }
@@ -419,8 +453,11 @@ pub fn restart_watcher(app: &AppHandle) {
     let mut slot = state.watcher.lock();
     *slot = None;
     if watched.is_empty() {
+        *WATCH_STATUS.lock() = Vec::new();
+        crate::events::source_watch_changed(app);
         return;
     }
+    let ids: Vec<i64> = watched.iter().map(|(id, _, _)| *id).collect();
     let handle = app.clone();
     match SourceWatcher::start(watched, Duration::from_secs(2), move |id| {
         let Some(st) = handle.try_state::<AppState>() else {
@@ -433,15 +470,73 @@ pub fn restart_watcher(app: &AppHandle) {
             let _ = st
                 .jobs
                 .submit(import::JOB_KIND, serde_json::json!({ "sourceId": id }));
+            // Nel database del catalogo: gli id delle sorgenti sono per catalogo.
+            let now = chrono::Utc::now().timestamp_millis();
+            if let Err(e) = st
+                .store
+                .write(move |c| sources::record_auto_update(c, id, now))
+            {
+                tracing::warn!(source_id = id, code = "DATABASE", detail = %e, "ultimo aggiornamento automatico non salvato");
+            }
+            crate::events::source_watch_changed(&handle);
         }
     }) {
-        Ok(w) => *slot = Some(w),
-        Err(e) => tracing::warn!(
-            code = e.code.as_str(),
-            detail = e.detail.as_str(),
-            "monitoraggio non avviato"
-        ),
+        Ok(w) => {
+            *WATCH_STATUS.lock() = w.statuses().to_vec();
+            *slot = Some(w);
+        }
+        Err(e) => {
+            tracing::warn!(
+                code = e.code.as_str(),
+                detail = e.detail.as_str(),
+                "monitoraggio non avviato"
+            );
+            *WATCH_STATUS.lock() = ids
+                .into_iter()
+                .map(|source_id| WatchStatus {
+                    source_id,
+                    state: WatchState::Error,
+                    message: Some(e.detail.clone()),
+                })
+                .collect();
+        }
     }
+    crate::events::source_watch_changed(app);
+}
+
+/// Stato corrente del monitoraggio per sorgente (aggiornato da `restart_watcher`).
+static WATCH_STATUS: parking_lot::Mutex<Vec<WatchStatus>> = parking_lot::Mutex::new(Vec::new());
+
+/// Stato del monitoraggio di una sorgente per la UI.
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceWatchStatus {
+    pub source_id: i64,
+    pub state: WatchState,
+    /// Ultimo aggiornamento automatico avviato dal monitoraggio (ms dall'epoca Unix).
+    pub last_auto_update_at: Option<i64>,
+    pub message: Option<String>,
+}
+
+/// Una voce per ogni sorgente monitorata.
+#[tauri::command]
+#[specta::specta]
+pub async fn source_watch_status(app: tauri::AppHandle) -> AppResult<Vec<SourceWatchStatus>> {
+    crate::state::blocking(app, move |_app, state| {
+        let statuses = WATCH_STATUS.lock().clone();
+        Ok(state.store.read(move |c| {
+            Ok(statuses
+                .into_iter()
+                .map(|s| SourceWatchStatus {
+                    source_id: s.source_id,
+                    state: s.state,
+                    last_auto_update_at: sources::last_auto_update(c, s.source_id).ok().flatten(),
+                    message: s.message,
+                })
+                .collect())
+        })?)
+    })
+    .await
 }
 
 /// Cache della WebView per le miniature: un giorno, senza `immutable` (la WebView può

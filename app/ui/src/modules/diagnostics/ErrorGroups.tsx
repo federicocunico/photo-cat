@@ -8,6 +8,7 @@ import {
   commands,
   isTauri,
   type ErrorEntry,
+  type ArchiveTarget,
   type ErrorGroup,
   type ErrorQuery,
 } from "../../lib/ipc";
@@ -18,11 +19,11 @@ import { GROUP_PAGE, useCauseText, useEntryLabels, useErrorText } from "./errors
 
 const groupKey = (g: ErrorGroup) => `${g.jobId}|${g.phase}|${g.code}|${g.level}`;
 
-function GroupFiles({ group }: { group: ErrorGroup }) {
+function GroupFiles({ group, archived }: { group: ErrorGroup; archived: boolean }) {
   const { t } = useTranslation();
   const cause = useCauseText();
   const files = useInfiniteQuery({
-    queryKey: ["error-group-files", groupKey(group)],
+    queryKey: ["error-group-files", groupKey(group), archived],
     queryFn: ({ pageParam }) =>
       commands.queryErrors({
         level: group.level,
@@ -30,6 +31,7 @@ function GroupFiles({ group }: { group: ErrorGroup }) {
         jobId: group.jobId,
         code: group.code,
         text: null,
+        archived: archived ? true : null,
         limit: GROUP_PAGE,
         offset: pageParam,
       }),
@@ -63,7 +65,15 @@ function GroupFiles({ group }: { group: ErrorGroup }) {
   );
 }
 
-export function ErrorGroups({ query }: { query: ErrorQuery }) {
+export function ErrorGroups({
+  query,
+  busy,
+  onArchive,
+}: {
+  query: ErrorQuery;
+  busy: boolean;
+  onArchive: (target: ArchiveTarget) => void;
+}) {
   const { t } = useTranslation();
   const text = useErrorText();
   const labels = useEntryLabels();
@@ -105,7 +115,26 @@ export function ErrorGroups({ query }: { query: ErrorQuery }) {
                 </Badge>
               </span>
             </button>
-            {expanded && <GroupFiles group={g} />}
+            {!query.archived && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                data-testid={"archive-group-" + (g.code ?? "none") + "-" + (g.phase ?? "none")}
+                onClick={() =>
+                  onArchive({
+                    kind: "group",
+                    code: g.code,
+                    phase: g.phase,
+                    jobId: g.jobId,
+                    query: { ...query, text: null, level: g.level },
+                  })
+                }
+              >
+                {t("diag.archiveGroup")}
+              </Button>
+            )}
+            {expanded && <GroupFiles group={g} archived={!!query.archived} />}
           </div>
         );
       })}

@@ -8,7 +8,14 @@ import { useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
 import { Badge, Button, DataTable, FormField, InlineAlert, type Column } from "../../components/ui";
-import { commands, events, isTauri, type ErrorEntry, type LogLevel } from "../../lib/ipc";
+import {
+  commands,
+  events,
+  isTauri,
+  type ArchiveTarget,
+  type ErrorEntry,
+  type LogLevel,
+} from "../../lib/ipc";
 import { ENTRY_LEVELS, LOG_LEVELS, PHASES, toQuery, useEntryLabels, useErrorText } from "./errors";
 import { ErrorGroups } from "./ErrorGroups";
 import { fmtDateTime, fmtTime } from "../../lib/format";
@@ -18,7 +25,17 @@ import { SettingsCtx } from "../settings/settingsContext";
 
 const levelTone = (level: string) => (level === "ERROR" ? "danger" : "warn");
 
-function Detail({ entry }: { entry: ErrorEntry }) {
+function Detail({
+  entry,
+  busy,
+  onArchive,
+  onRestore,
+}: {
+  entry: ErrorEntry;
+  busy: boolean;
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const text = useErrorText();
   const labels = useEntryLabels();
@@ -38,12 +55,29 @@ function Detail({ entry }: { entry: ErrorEntry }) {
         <dd>{labels.phase(entry.phase)}</dd>
         <dt className="muted">{t("diag.time")}</dt>
         <dd>{fmtDateTime(entry.ts)}</dd>
+        {entry.archivedAt && (
+          <>
+            <dt className="muted">{t("diag.archivedAt")}</dt>
+            <dd>{fmtDateTime(entry.archivedAt)}</dd>
+          </>
+        )}
       </dl>
       {hintKey && i18n.exists(hintKey) && (
         <p className="diag-hint" data-testid="detail-hint">
           {t("diag.suggestion")}: {t(hintKey)}
         </p>
       )}
+      <div className="diag-detail-actions">
+        {entry.archivedAt ? (
+          <Button size="sm" disabled={busy} onClick={onRestore}>
+            {t("diag.restore")}
+          </Button>
+        ) : (
+          <Button size="sm" disabled={busy} onClick={onArchive}>
+            {t("diag.archive")}
+          </Button>
+        )}
+      </div>
       <details>
         <summary>{t("diag.technical")}</summary>
         <pre className="mono diag-technical">
@@ -101,9 +135,8 @@ export function DiagnosticsPage() {
   const [filter, setFilter] = useState<DiagFilter>(initial);
   const [selected, setSelected] = useState<number | null>(null);
   const [level, setLevel] = useState<LogLevel | "">("");
-  const resetErrors = useLive((s) => s.resetErrors);
+  const setErrorCount = useLive((s) => s.setErrorCount);
   useEffect(() => setFilter(initial), [initial]);
-  useEffect(() => resetErrors(), [resetErrors]);
   // Dalla ricerca delle Impostazioni ("log"): il campo "Livello di log" è evidenziato.
   const highlight = useContext(SettingsCtx)?.highlight;
   const report = useGuide((g) => g.report);
@@ -158,6 +191,26 @@ export function DiagnosticsPage() {
       setBusy(false);
     }
   };
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["errors"] });
+    void qc.invalidateQueries({ queryKey: ["error-groups"] });
+    void qc.invalidateQueries({ queryKey: ["error-group-files"] });
+  };
+  const archive = async (target: ArchiveTarget) =>
+    await run(async () => {
+      const o = await commands.archiveErrors(target);
+      setErrorCount(o.activeCount);
+      refresh();
+      return t("diag.archivedN", { count: o.affected });
+    });
+  const restore = async (ids: number[]) =>
+    await run(async () => {
+      const o = await commands.unarchiveErrors(ids);
+      setErrorCount(o.activeCount);
+      refresh();
+      return t("diag.restoredN", { count: o.affected });
+    });
 
   const select = (
     label: string,
@@ -300,6 +353,15 @@ export function DiagnosticsPage() {
           >
             {t("diag.retryFailed")}
           </Button>
+          {!filter.archived && (
+            <Button
+              disabled={busy}
+              disabledReason={rows.length === 0 ? t("diag.nothingToArchive") : undefined}
+              onClick={() => archive({ kind: "query", query })}
+            >
+              {t("diag.archiveAll")}
+            </Button>
+          )}
         </div>
         <div className="diag-filters" role="group" aria-label={t("diag.filters")}>
           {select(
@@ -318,6 +380,15 @@ export function DiagnosticsPage() {
             filter.phase ?? "",
             [["", t("diag.any")], ...PHASES.map((p) => [p, labels.phase(p)] as [string, string])],
             (v) => setFilter({ ...filter, phase: v || undefined }),
+          )}
+          {select(
+            t("diag.state"),
+            filter.archived ? "archived" : "active",
+            [
+              ["active", t("diag.stateActive")],
+              ["archived", t("diag.stateArchived")],
+            ],
+            (v) => setFilter({ ...filter, archived: v === "archived" ? true : undefined }),
           )}
           <label className="diag-filter muted">
             {t("diag.job")}
@@ -344,7 +415,7 @@ export function DiagnosticsPage() {
             {t("diag.clearFilters")}
           </Button>
         </div>
-        <ErrorGroups query={query} />
+        <ErrorGroups query={query} busy={busy} onArchive={archive} />
         <div className="diag-split">
           <div className="diag-table">
             <QueryView query={errors} empty={<p className="muted diag-empty">{t("diag.empty")}</p>}>
@@ -366,7 +437,12 @@ export function DiagnosticsPage() {
           </div>
           {current && (
             <div ref={detailRef} className="diag-detail-wrap">
-              <Detail entry={current} />
+              <Detail
+                entry={current}
+                busy={busy}
+                onArchive={() => archive({ kind: "ids", ids: [current.id] })}
+                onRestore={() => restore([current.id])}
+              />
             </div>
           )}
         </div>

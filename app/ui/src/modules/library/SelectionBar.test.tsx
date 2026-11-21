@@ -21,6 +21,7 @@ import { LibraryHeader } from "./LibraryHeader";
 import { SelectionBar } from "./SelectionBar";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
+import { useActiveGrid, useGridShortcuts } from "../../commands/gridShortcuts";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(checkedCleanup(A11Y_KNOWN.library));
@@ -33,7 +34,15 @@ beforeEach(() => {
 /** Come in LibraryPage: la barra delle azioni prende il posto della barra della vista. */
 function Bars() {
   useCatalogFeedback();
+  // Esc viene dalla shell: la griglia attiva (qui il solo svuotamento) lo riceve.
+  useGridShortcuts();
   const count = useLibrary((s) => selCount(s.selection));
+  useActiveGrid({
+    selectAll: () => undefined,
+    invert: () => undefined,
+    clear: () => useLibrary.getState().setSelection([]),
+    count: () => selCount(useLibrary.getState().selection),
+  });
   return count > 0 ? <SelectionBar /> : <LibraryHeader />;
 }
 

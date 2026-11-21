@@ -35,6 +35,12 @@ export const commands = {
 	queryErrors: (query: ErrorQuery) => __TAURI_INVOKE<ErrorEntry[]>("query_errors", { query }),
 	/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
 	errorGroups: (query: ErrorQuery) => __TAURI_INVOKE<ErrorGroup[]>("error_groups", { query }),
+	/**  Archivia voci singole, un gruppo o tutto il filtro corrente. Non cancella nulla. */
+	archiveErrors: (target: ArchiveTarget) => __TAURI_INVOKE<ArchiveOutcome>("archive_errors", { target }),
+	/**  Ripristina voci archiviate. */
+	unarchiveErrors: (ids: number[]) => __TAURI_INVOKE<ArchiveOutcome>("unarchive_errors", { ids }),
+	/**  Conteggio iniziale dell'indicatore globale: errori non archiviati. */
+	errorCount: () => __TAURI_INVOKE<number>("error_count"),
 	logTail: () => __TAURI_INVOKE<LogLine[]>("log_tail"),
 	setLogLevel: (level: LogLevel) => __TAURI_INVOKE<null>("set_log_level", { level }),
 	listSources: () => __TAURI_INVOKE<SourceSummary[]>("list_sources"),
@@ -57,11 +63,23 @@ export const commands = {
 	moveSource: (id: number, path: string) => __TAURI_INVOKE<null>("move_source", { id, path }),
 	/**  Cartella comune più profonda dei mancanti (proposta per "Ricollega"). */
 	missingFolder: (sourceId: number) => __TAURI_INVOKE<string | null>("missing_folder", { sourceId }),
+	/**
+	 *  Chiude gli avvisi della sorgente (mancanti nuovi ed errori dell'ultimo
+	 *  aggiornamento) senza toccare i file mancanti.
+	 */
+	acknowledgeSourceWarnings: (sourceId: number) => __TAURI_INVOKE<null>("acknowledge_source_warnings", { sourceId }),
+	/**  Una voce per ogni sorgente monitorata. */
+	sourceWatchStatus: () => __TAURI_INVOKE<SourceWatchStatus[]>("source_watch_status"),
 	/**  Riepiloghi dell'ultimo aggiornamento di ogni sorgente. */
 	importUpdates: () => __TAURI_INVOKE<UpdateSummary[]>("import_updates"),
 	/**  Esito dell'ultimo ricollegamento della sorgente. */
 	lastRelink: (sourceId: number) => __TAURI_INVOKE<RelinkSummary | null>("last_relink", { sourceId }),
 	libraryPage: (filter: LibraryFilter, sort: SortKey, at: PageAt | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, at, limit }),
+	/**
+	 *  Posizione di una foto nella griglia (per portarla in vista anche se non è tra le pagine
+	 *  caricate); `None` se non è tra i risultati.
+	 */
+	libraryPosition: (filter: LibraryFilter, sort: SortKey, id: number) => __TAURI_INVOKE<number | null>("library_position", { filter, sort, id }),
 	/**  Numero di elementi del filtro; `None` se la richiesta è stata superata. */
 	libraryCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_count", { filter, request }),
 	/**  Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili). */
@@ -97,6 +115,23 @@ export const commands = {
 	/**  Un singolo gruppo, in qualunque sezione: `None` se non esiste più. */
 	getGroup: (id: number) => __TAURI_INVOKE<GroupRow | null>("get_group", { id }),
 	groupFaces: (scope: FaceScope, sort: FaceSort, after: FaceCursor | null, limit: number | null) => __TAURI_INVOKE<FacePage>("group_faces", { scope, sort, after, limit }),
+	/**  Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo). */
+	groupFaceYears: (scope: FaceScope) => __TAURI_INVOKE<FaceYear[]>("group_face_years", { scope }),
+	/**
+	 *  Base di "Seleziona tutto" sui volti di un ambito (stessi filtri di `group_faces`): numero di
+	 *  volti e id massimo in quell'istante, indipendenti da ordinamento e pagine caricate.
+	 */
+	faceSelection: (scope: FaceScope) => __TAURI_INVOKE<SelectionBase>("face_selection", { scope }),
+	/**
+	 *  Id dei volti selezionati (ambito meno eccezioni, solo volti con id <= `max_id`), per le
+	 *  correzioni che prendono un elenco di volti ("Assegna a…", "Sposta", "Separa", ...).
+	 */
+	faceSelectionIds: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<number[]>("face_selection_ids", { scope, maxId, except }),
+	/**
+	 *  Foto distinte dei volti selezionati per filtro (presenti e mancanti), per "Apri con" e
+	 *  "Mostra nella cartella" anche sui volti non caricati.
+	 */
+	faceSelectionMedia: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<FaceSelectionMedia>("face_selection_media", { scope, maxId, except }),
 	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
 	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
@@ -169,6 +204,13 @@ export const commands = {
 	sequencePage: (scope: SequenceScope, after: SequenceCursor | null, limit: number) => __TAURI_INVOKE<SequencePage>("sequence_page", { scope, after, limit }),
 	sequenceSessionIds: (scope: SequenceScope, session: number) => __TAURI_INVOKE<number[]>("sequence_session_ids", { scope, session }),
 	sequenceIds: (scope: SequenceScope) => __TAURI_INVOKE<number[]>("sequence_ids", { scope }),
+	/**  Base di "Seleziona tutto" della Sequenza: numero di foto dell'ambito e id massimo in quell'istante. */
+	sequenceSelection: (scope: SequenceScope) => __TAURI_INVOKE<SelectionBase>("sequence_selection", { scope }),
+	/**
+	 *  Id delle foto selezionate nella Sequenza (base meno eccezioni, solo foto con id <= `max_id`),
+	 *  da usare come `Target::Ids` nelle azioni bulk.
+	 */
+	sequenceSelectionIds: (scope: SequenceScope, maxId: number, except: number[]) => __TAURI_INVOKE<number[]>("sequence_selection_ids", { scope, maxId, except }),
 	setSessionGap: (minutes: number) => __TAURI_INVOKE<null>("set_session_gap", { minutes }),
 	setGroupDisplay: (group: number, tz: string | null, offsetMin: number | null) => __TAURI_INVOKE<number>("set_group_display", { group, tz, offsetMin }),
 	setGroupShift: (group: number, shiftS: number) => __TAURI_INVOKE<number>("set_group_shift", { group, shiftS }),
@@ -378,6 +420,24 @@ export type AppInfo = {
 	previousCrash: CrashInfo | null,
 };
 
+/**  Esito di un'archiviazione/ripristino: voci toccate e nuovo valore dell'indicatore globale. */
+export type ArchiveOutcome = {
+	affected: number,
+	/**  Errori (ERROR) non archiviati: sostituisce `errorCount` nello store live. */
+	activeCount: number,
+};
+
+/**  Destinazione di un'archiviazione. */
+export type ArchiveTarget = 
+/**  Voci singole. */
+{ kind: "ids"; ids: number[] } | 
+/**  Un gruppo (codice + fase, anche assenti) con gli altri filtri di `query`. */
+{ kind: "group"; 
+/**  Job del gruppo (`None` = voci senza job, non "qualsiasi job"). */
+jobId: number | null; code: string | null; phase: string | null; query: ErrorQuery } | 
+/**  Tutte le voci che corrispondono al filtro corrente. */
+{ kind: "query"; query: ErrorQuery };
+
 /**  Classe dell'istogramma: `[from, to)` (l'ultima include 1,0). */
 export type Bin = {
 	from: number | null,
@@ -410,7 +470,18 @@ exclusive?: string[] } | { action: "remove_tag"; name: string } |
 /**  "Sposta nel cestino": toglie le foto anche dai cataloghi manuali. */
 { action: "move_to_trash" } | { action: "set_label"; group: string; value: string | null } | { action: "assign_person"; person: number } | 
 /**  Luogo manuale (`Some`) o ripristino del luogo automatico (`None`). */
-{ action: "set_place"; place: PlaceInput | null } | { action: "remove_library" } | 
+{ action: "set_place"; place: PlaceInput | null } | 
+/**  Valutazione da 1 a 5; `None` (o 0) la toglie. */
+{ action: "set_rating"; rating: number | null } | 
+/**  Caratteristica di colore; `None` la toglie. */
+{ action: "set_color_trait"; color_trait: ColorTrait | null } | 
+/**
+ *  Data di scatto manuale (`value`: `AAAA`, `AAAA-MM`, `AAAA-MM-GG [HH:MM[:SS]]`
+ *  secondo `precision`).
+ */
+{ action: "set_manual_date"; value: string; precision: DatePrecision } | 
+/**  Ripristina la data letta dal file. */
+{ action: "clear_manual_date" } | { action: "remove_library" } | 
 /**  Rifiuta l'etichetta automatica `grp = value` (con `score < max_score` se dato). */
 { action: "reject_auto_labels"; grp: string; value: string; max_score?: number | null };
 
@@ -511,6 +582,9 @@ export type ClockPreview = {
 	after: string | null,
 };
 
+/**  Caratteristica di colore di una foto (bianco e nero, a colori, sbiadita, seppia). */
+export type ColorTrait = "bw" | "color" | "faded" | "sepia";
+
 export type Config = {
 	resources?: ResourcesConfig,
 	ai?: AiConfig,
@@ -522,7 +596,7 @@ export type Config = {
 	external_apps?: ExternalApp[],
 };
 
-export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; face: number } | { action: "remove"; face: number } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number } | { action: "assign_identity"; identity: string; faces: number[] };
+export type Correction = { action: "rename"; person: number; name: string } | { action: "merge"; from: number; to: number } | { action: "separate"; person: number; faces: number[] } | { action: "assign"; person: number; faces: number[] } | { action: "reject"; person: number; faces: number[] } | { action: "remove"; faces: number[] } | { action: "merge_many"; from: number[]; to: number } | { action: "move"; faces: number[]; to: number } | { action: "not_same"; a: number; b: number } | { action: "ignore"; group: number } | { action: "restore"; group: number } | { action: "recover"; faces: number[] } | { action: "set_cover"; group: number; face: number } | { action: "assign_identity"; identity: string; faces: number[] };
 
 export type CrashInfo = {
 	/**  Assente nel marker scritto dai gestori nativi: si usa l'ora del file. */
@@ -555,7 +629,10 @@ export type Cursor = {
 	id: number,
 };
 
-export type DateSource = "exif_original" | "exif_create" | "file_system";
+/**  Precisione di una data di scatto impostata a mano. */
+export type DatePrecision = "day" | "month" | "year";
+
+export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
 
 /**  Motivo per cui un volto è scartato per qualità dal raggruppamento e dai suggerimenti. */
 export type DiscardReason = "blurred" | "too_small" | "non_frontal" | "low_confidence";
@@ -612,6 +689,8 @@ export type ErrorEntry = {
 	phase: string | null,
 	path: string | null,
 	detail: string | null,
+	/**  Istante dell'archiviazione (RFC 3339); `None` per le voci attive. */
+	archivedAt: string | null,
 };
 
 /**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
@@ -635,6 +714,8 @@ export type ErrorQuery = {
 	jobId?: number | null,
 	code?: string | null,
 	text?: string | null,
+	/**  `None`/`Some(false)`: solo le voci non archiviate (predefinito); `Some(true)`: solo quelle archiviate. */
+	archived?: boolean | null,
 	limit?: number | null,
 	offset?: number | null,
 };
@@ -739,8 +820,22 @@ export type FacePage = {
 /**  Ambito dei volti richiesti con `group_faces`. */
 export type FaceScope = { kind: "group"; group: number } | { kind: "singles" } | { kind: "discarded"; group: number | null };
 
+/**
+ *  Foto distinte dei volti selezionati "per filtro" (stesso insieme di `face_selection_ids`),
+ *  divise tra presenti sul disco e mancanti: servono a "Apri con" e "Mostra nella cartella"
+ *  anche sui volti non ancora caricati nella griglia.
+ */
+export type FaceSelectionMedia = {
+	/**  Id delle foto presenti, nell'ordine del primo volto di ciascuna. */
+	present: number[],
+	/**  Percorsi delle foto segnate come mancanti. */
+	missing: string[],
+};
+
 /**  Ordinamento dei volti in `group_faces`. */
-export type FaceSort = "quality_desc" | "captured_desc";
+export type FaceSort = "quality_desc" | "captured_desc" | 
+/**  Dal più vecchio; i volti senza data restano comunque in fondo. */
+"captured_asc";
 
 export type FaceView = {
 	id: number,
@@ -757,8 +852,14 @@ export type FaceView = {
 	personId: number | null,
 };
 
+/**  Anno di scatto (ora locale) con il numero di volti; `year = None` è "Senza data". */
+export type FaceYear = {
+	year: number | null,
+	count: number,
+};
+
 /**  Una lista di filtro. */
-export type FacetKey = { kind: "label"; group: string } | { kind: "place" } | { kind: "year" } | { kind: "format" } | { kind: "tag" };
+export type FacetKey = { kind: "label"; group: string } | { kind: "place" } | { kind: "year" } | { kind: "format" } | { kind: "tag" } | { kind: "rating" } | { kind: "color" };
 
 /**
  *  Valori di una lista di filtro: i principali (più quelli selezionati) e il
@@ -799,6 +900,10 @@ export type Facets = {
 	formats: FacetList,
 	people: FacetList,
 	tags: FacetList,
+	/**  Valori `"0"`..`"5"` (esatti, non cumulativi), sempre tutti presenti. */
+	ratings: FacetList,
+	/**  Valori `bw`, `color`, `faded`, `sepia`, `none` ("Non indicato"), sempre tutti presenti. */
+	colors: FacetList,
 };
 
 /**  Filtro per cartella sul percorso dei file. */
@@ -863,6 +968,8 @@ export type GridItem = {
 	similarCover: boolean,
 	/**  Griglia raggruppata: foto del gruppo presenti nei risultati (l'elemento le rappresenta). */
 	similarCount: number | null,
+	/**  Valutazione da 0 (non indicata) a 5. */
+	rating: number,
 };
 
 export type Group = {
@@ -1042,6 +1149,12 @@ export type LibraryFilter = {
 	dateFrom?: string | null,
 	dateTo?: string | null,
 	formats?: string[],
+	/**  Valutazione minima, esatta o massima. */
+	rating?: RatingFilter | null,
+	/**  Caratteristiche di colore (OR); `None` = "Non indicato". */
+	colorTrait?: (ColorTrait | null)[],
+	/**  Con un anno scelto: solo le foto con data manuale "solo anno" ("Anno senza mese"). */
+	dateNoMonth?: boolean,
 	/**  Tutti i tag indicati devono essere presenti. */
 	tags?: string[],
 	text?: string | null,
@@ -1117,10 +1230,19 @@ export type MediaDates = {
 	declaredOffsetMin?: number | null,
 	/**  Dispositivo normalizzato (marca + modello). */
 	device?: string | null,
+	/**
+	 *  Data impostata a mano (`AAAA-MM-GG HH:MM:SS`, primo istante del periodo).
+	 *  Quando c'è, `captured_source` è `manual` e `captured_at` resta quella del file.
+	 */
+	manualAt?: string | null,
+	manualPrecision?: DatePrecision | null,
 };
 
 export type MediaDetail = {
 	item: MediaItem,
+	/**  Valutazione da 0 (non indicata) a 5. */
+	rating: number,
+	colorTrait: ColorTrait | null,
 	tech: TechInfo | null,
 	dates: MediaDates | null,
 	exif: ExifInfo | null,
@@ -1388,6 +1510,13 @@ export type Preview = {
 
 export type Provider = "cpu" | "direct_ml" | "cuda" | "core_ml";
 
+export type RatingFilter = {
+	op: RatingOp,
+	value: number,
+};
+
+export type RatingOp = "at_least" | "equal" | "at_most";
+
 export type RefFaceView = {
 	id: number,
 	uid: string,
@@ -1632,7 +1761,21 @@ export type SourceGroupView = {
 export type SourceSummary = {
 	source: Source,
 	items: number,
+	/**  Mancanti vivi (restano per Ricollega/Rimuovi). */
 	missing: number,
+	/**  Mancanti diventati tali dopo l'ultimo riconoscimento degli avvisi. */
+	newMissing: number,
+	/**  File non letti nell'ultimo aggiornamento, se non ancora riconosciuti. */
+	failedWarning: number,
+};
+
+/**  Stato del monitoraggio di una sorgente per la UI. */
+export type SourceWatchStatus = {
+	sourceId: number,
+	state: WatchState,
+	/**  Ultimo aggiornamento automatico avviato dal monitoraggio (ms dall'epoca Unix). */
+	lastAutoUpdateAt: number | null,
+	message: string | null,
 };
 
 export type Stage = "classification" | "persons" | "faces" | "similar" | "phash";
@@ -1844,4 +1987,13 @@ export type UpdateSummary = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  Stato del monitoraggio di una sorgente. */
+export type WatchState = 
+/**  La cartella è sorvegliata. */
+"active" | 
+/**  La cartella non è raggiungibile (es. disco scollegato). */
+"unreachable" | 
+/**  Il sistema ha rifiutato la sorveglianza (vedi `message`). */
+"error";
 

@@ -2,12 +2,14 @@
 // voci, caricamento a pagine dell'elenco completo e apertura in un pannello.
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
   commands,
   isTauri,
   type FacetKey,
   type FacetSort,
+  type ColorTrait,
   type FacetValue,
   type LibraryFilter,
 } from "../../lib/ipc";
@@ -24,7 +26,8 @@ export const facetId = (key: FacetKey) =>
 export function facetFromId(id: string): FacetKey | null {
   if (id.startsWith("facet:label:")) return { kind: "label", group: id.slice(12) };
   const kind = id.slice(6);
-  return ["place", "year", "format", "tag"].includes(kind) && id.startsWith("facet:")
+  return ["place", "year", "format", "tag", "rating", "color"].includes(kind) &&
+    id.startsWith("facet:")
     ? ({ kind } as FacetKey)
     : null;
 }
@@ -99,8 +102,18 @@ export function selectedOf(key: FacetKey, f: LibraryFilter): string[] {
       return f.formats ?? [];
     case "tag":
       return f.tags ?? [];
+    case "rating":
+      return f.rating ? [String(f.rating.value)] : [];
+    case "color":
+      return (f.colorTrait ?? []).map((c) => c ?? NO_COLOR);
   }
 }
+
+/** Valore della lista Colore per "Non indicato". */
+export const NO_COLOR = "none";
+
+/** Nodo "Anno senza mese" tra i mesi di un anno (`AAAA-00`). */
+export const NO_MONTH = /^\d{4}-00$/;
 
 /** Modifica del filtro che seleziona o deseleziona una voce. */
 export function toggleIn(key: FacetKey, f: LibraryFilter, v: string): Partial<LibraryFilter> {
@@ -113,11 +126,23 @@ export function toggleIn(key: FacetKey, f: LibraryFilter, v: string): Partial<Li
     case "place":
       return { places: toggle(f.places ?? [], v) };
     case "year":
-      return toggleDate(f, v);
+      return { ...toggleDate(f, v), ...(f.dateNoMonth ? { dateNoMonth: false } : {}) };
     case "format":
       return { formats: toggle(f.formats ?? [], v) };
     case "tag":
       return { tags: toggle(f.tags ?? [], v) };
+    case "rating":
+      // Stessa voce: toglie il filtro; altrimenti la sceglie tenendo il confronto già scelto.
+      return {
+        rating:
+          f.rating?.value === Number(v) ? null : { op: f.rating?.op ?? "equal", value: Number(v) },
+      };
+    case "color":
+      return {
+        colorTrait: toggle(selectedOf(key, f), v).map((c) =>
+          c === NO_COLOR ? null : (c as ColorTrait),
+        ),
+      };
   }
 }
 
@@ -129,13 +154,23 @@ export function clearIn(key: FacetKey, f: LibraryFilter): Partial<LibraryFilter>
     case "place":
       return { places: [] };
     case "year":
-      return { dateFrom: null, dateTo: null };
+      return { dateFrom: null, dateTo: null, ...(f.dateNoMonth ? { dateNoMonth: false } : {}) };
     case "format":
       return { formats: [] };
     case "tag":
       return { tags: [] };
+    case "rating":
+      return { rating: null };
+    case "color":
+      return { colorTrait: [] };
   }
 }
+
+/** Valutazione a parole: "★★★ 3 stelle" oppure "Nessuna". */
+export const ratingName = (t: TFunction, n: number) =>
+  n > 0
+    ? `${"★".repeat(n)} ${t("library.inspector.stars", { count: n })}`
+    : t("library.inspector.noRating");
 
 /** Titolo della lista e nome mostrato di ogni voce. */
 export function useFacetNames(key: FacetKey) {
@@ -150,10 +185,17 @@ export function useFacetNames(key: FacetKey) {
             year: "library.facets.years",
             format: "library.facets.formats",
             tag: "library.facets.tags",
+            rating: "library.facets.ratings",
+            color: "library.facets.colors",
           }[key.kind],
         );
-  const render = (v: string) =>
-    key.kind === "label" ? names.label(key.group, v) : key.kind === "format" ? v.toUpperCase() : v;
+  const render = (v: string) => {
+    if (key.kind === "label") return names.label(key.group, v);
+    if (key.kind === "format") return v.toUpperCase();
+    if (key.kind === "color") return t(`library.inspector.colorTraits.${v}`);
+    if (key.kind === "rating") return ratingName(t, Number(v));
+    return v;
+  };
   return { title, render };
 }
 

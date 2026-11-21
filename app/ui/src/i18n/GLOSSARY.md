@@ -16,6 +16,9 @@ I termini vietati sono controllati da `glossary.test.ts`.
 | Valore 0–1 di affidabilità           | **Sensibilità**, scala "Più risultati ↔ Più precisi"              | **Sensitivity**, "More results ↔ More precise" | soglia, confidenza, punteggi senza nome   |
 | Voce della tassonomia                | **Categoria**                                                     | **Category**                                   | voce, etichetta                           |
 | Catalogo con regole                  | **Smart** ("aggiornato dalle regole")                             | **Smart**                                      | dinamico                                  |
+| Giudizio da 0 a 5 stelle | **Valutazione** ("almeno 4 stelle") | **Rating** | voto, punteggio |
+| Aspetto cromatico della foto | **Colore**: Bianco e nero, Colore, **Colore virato**, **Seppia**, **Non indicato** | **Colour**: Black and white, Colour, Toned colour, Sepia, Not set | color_trait, tono |
+| Foto con data di solo anno | **Anno senza mese** | **Year without month** | mese 00 |
 
 Altre etichette comuni (`common.*`): Salva / Save, Chiudi / Close, Riprova / Retry, Dettagli / Details, Applica / Apply, Ripristina / Reset.
 

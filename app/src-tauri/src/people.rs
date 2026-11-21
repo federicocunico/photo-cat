@@ -17,8 +17,8 @@ pub enum Correction {
     Merge { from: i64, to: i64 },
     Separate { person: i64, faces: Vec<i64> },
     Assign { person: i64, faces: Vec<i64> },
-    Reject { person: i64, face: i64 },
-    Remove { face: i64 },
+    Reject { person: i64, faces: Vec<i64> },
+    Remove { faces: Vec<i64> },
     MergeMany { from: Vec<i64>, to: i64 },
     Move { faces: Vec<i64>, to: i64 },
     NotSame { a: i64, b: i64 },
@@ -117,6 +117,77 @@ pub async fn group_faces(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Base di "Seleziona tutto" sui volti di un ambito (stessi filtri di `group_faces`): numero di
+/// volti e id massimo in quell'istante, indipendenti da ordinamento e pagine caricate.
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+) -> AppResult<pc_store::query::SelectionBase> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_base(c, &scope, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Id dei volti selezionati (ambito meno eccezioni, solo volti con id <= `max_id`), per le
+/// correzioni che prendono un elenco di volti ("Assegna a…", "Sposta", "Separa", ...).
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection_ids(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+    max_id: i64,
+    except: Vec<i64>,
+) -> AppResult<Vec<i64>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_ids(c, &scope, max_id, &except, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Foto distinte dei volti selezionati per filtro (presenti e mancanti), per "Apri con" e
+/// "Mostra nella cartella" anche sui volti non caricati.
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection_media(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+    max_id: i64,
+    except: Vec<i64>,
+) -> AppResult<people::FaceSelectionMedia> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_media(c, &scope, max_id, &except, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo).
+#[tauri::command]
+#[specta::specta]
+pub async fn group_face_years(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+) -> AppResult<Vec<people::FaceYear>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::group_face_years(c, scope, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn locate_face(
@@ -196,9 +267,9 @@ pub async fn correct_person(
                 Correction::Assign { person, faces } => {
                     move_with_undo(c, &faces, person, |c| people::assign(c, &faces, person))?
                 }
-                Correction::Reject { person, face } => {
-                    let states = people::face_states(c, &[face])?;
-                    people::reject(c, face, person)?;
+                Correction::Reject { person, faces } => {
+                    let states = people::face_states(c, &faces)?;
+                    people::reject_faces(c, &faces, person)?;
                     bulk::record_undo(
                         c,
                         "Non è questa persona",
@@ -208,7 +279,7 @@ pub async fn correct_person(
                         },
                     )?;
                 }
-                Correction::Remove { face } => people::remove_face(c, face)?,
+                Correction::Remove { faces } => people::remove_faces(c, &faces)?,
                 Correction::MergeMany { from, to } => {
                     let from: Vec<i64> = from.into_iter().filter(|id| *id != to).collect();
                     if from.is_empty() {

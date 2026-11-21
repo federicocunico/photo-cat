@@ -1,0 +1,89 @@
+# Spec Delta
+
+## MODIFIED Requirements
+
+### Requirement: Selezione multipla
+L'utente SHALL poter selezionare più file con clic, Ctrl/Shift+clic, selezione rettangolare, "seleziona tutto" sui risultati del filtro corrente e inversione della selezione; la UI SHALL mostrare sempre il numero di elementi selezionati. "Seleziona tutto" e l'inversione SHALL funzionare con 100.000 risultati senza caricare nell'interfaccia l'elenco di tutti gli elementi, e le azioni bulk SHALL applicarsi esattamente agli elementi selezionati. Shift+clic SHALL selezionare l'intervallo dall'ancora, cioè l'elemento dell'ultimo clic semplice o Ctrl+clic; Shift+clic successivi MUST NOT spostare l'ancora. "Seleziona tutto" e "Inverti selezione" SHALL essere disponibili in ogni vista che mostra più foto o volti selezionabili (Libreria, cataloghi manuali e smart, cataloghi di sistema, foto escluse, griglia dei volti di Persone, Sequenza, risultati e foto simili del modulo AI), dalla barra della vista, dal menu contestuale e da tastiera con Ctrl+A (Cmd+A su macOS) e Ctrl+Maiusc+I; Esc SHALL svuotare la selezione. Le scorciatoie MUST NOT agire quando il focus è in un campo di testo.
+
+#### Scenario: Seleziona tutto i risultati
+- **WHEN** un filtro restituisce 2.340 file e l'utente sceglie "Seleziona tutto"
+- **THEN** risultano selezionati 2.340 file, inclusi quelli non ancora visualizzati nella griglia
+
+#### Scenario: Seleziona tutto su una libreria grande
+- **WHEN** la libreria contiene 100.000 foto e l'utente sceglie "Seleziona tutto", poi deseleziona 3 foto con Ctrl+clic e aggiunge un tag
+- **THEN** il conteggio indica 99.997 selezionati, l'interfaccia resta reattiva e il tag viene aggiunto esattamente alle 99.997 foto
+
+#### Scenario: Risultati cambiati dopo la selezione
+- **WHEN** dopo "Seleziona tutto" su un filtro un import aggiunge nuove foto che soddisfano il filtro
+- **THEN** l'azione bulk si applica solo alle foto che erano nei risultati al momento della selezione
+
+#### Scenario: Shift+clic ripetuti
+- **WHEN** in una cartella con le foto 1…10 l'utente fa clic sulla foto 2, poi Shift+clic sulla 5, poi Shift+clic sulla 8
+- **THEN** risultano selezionate le foto da 2 a 8
+
+#### Scenario: Intervallo che si restringe
+- **WHEN** dopo clic sulla foto 2 e Shift+clic sulla 8 l'utente fa Shift+clic sulla 4
+- **THEN** risultano selezionate le foto da 2 a 4
+
+#### Scenario: Ctrl+Shift+clic
+- **WHEN** l'utente fa clic sulla foto 2, Ctrl+clic sulla 6 e poi Ctrl+Shift+clic sulla 9
+- **THEN** risultano selezionate la foto 2 e le foto da 6 a 9
+
+#### Scenario: Volti in Persone
+- **WHEN** nella griglia dei volti l'utente fa clic sul primo volto, poi Shift+clic sul terzo e Shift+clic sul sesto
+- **THEN** risultano selezionati i volti dal primo al sesto
+
+#### Scenario: Seleziona tutto i volti di una persona
+- **WHEN** la persona "Giulia" ha 400 volti, la griglia ne ha caricati 120 e l'utente preme Ctrl+A
+- **THEN** risultano selezionati 400 volti e "Assegna a…" agisce su tutti e 400
+
+#### Scenario: Inverti selezione in un catalogo
+- **WHEN** il catalogo "Mare" ha 50 foto, ne sono selezionate 10 e l'utente sceglie "Inverti selezione" dal menu contestuale
+- **THEN** risultano selezionate le altre 40 foto del catalogo
+
+#### Scenario: Seleziona tutto in Sequenza
+- **WHEN** la Sequenza mostra 310 foto e l'utente preme Ctrl+A
+- **THEN** risultano selezionate le 310 foto della sequenza e il conteggio lo indica
+
+#### Scenario: Scorciatoia in un campo di testo
+- **WHEN** il focus è nella casella di ricerca e l'utente preme Ctrl+A
+- **THEN** viene selezionato il testo della casella e la selezione delle foto non cambia
+
+### Requirement: Azioni bulk disponibili
+Su una selezione l'utente SHALL poter: aggiungere/rimuovere tag, aggiungere a cataloghi manuali, escludere da un catalogo (manuale o smart) e reinserire nel catalogo, impostare o correggere un campo di catalogazione, impostare il luogo o ripristinare il luogo automatico, impostare la valutazione, impostare o rimuovere la caratteristica di colore, impostare la data di scatto o ripristinare quella del file, assegnare una persona, rianalizzare con AI, esportare, organizzare in cartelle e rimuovere dalla libreria.
+
+#### Scenario: Tag in bulk
+- **WHEN** l'utente aggiunge il tag "Matrimonio" a 150 file selezionati
+- **THEN** tutti i 150 file hanno il tag "Matrimonio"
+
+#### Scenario: Correzione campo in bulk
+- **WHEN** l'utente imposta "Locazione = Interno: Teatro" su 40 file
+- **THEN** i 40 file hanno quella locazione marcata come correzione manuale
+
+#### Scenario: Luogo in bulk
+- **WHEN** l'utente seleziona le 300 foto della cartella `Viaggio Giappone\D7000` e imposta il luogo "Giappone"
+- **THEN** le 300 foto hanno luogo "Giappone" con fonte "manuale" e una rianalisi successiva non lo modifica
+
+#### Scenario: Ripristino del luogo automatico
+- **WHEN** l'utente sceglie "Ripristina luogo automatico" su 10 foto con luogo manuale
+- **THEN** le 10 foto tornano al luogo dedotto da GPS o directory, con la relativa fonte
+
+#### Scenario: Annulla luogo
+- **WHEN** l'utente imposta un luogo su 50 foto e poi sceglie "Annulla"
+- **THEN** le 50 foto tornano al luogo e alla fonte che avevano prima
+
+#### Scenario: Esclusione in bulk da un catalogo smart
+- **WHEN** l'utente seleziona 120 foto del catalogo smart "Paesaggi" e sceglie "Escludi dal catalogo"
+- **THEN** le 120 foto non compaiono più in "Paesaggi", compaiono tra le sue escluse, e "Annulla" le riporta nel catalogo
+
+#### Scenario: Valutazione in bulk
+- **WHEN** l'utente seleziona 25 foto e sceglie "Valutazione ▸ ★★★★"
+- **THEN** le 25 foto hanno valutazione 4 e "Annulla" ripristina la valutazione che ciascuna aveva prima
+
+#### Scenario: Caratteristica di colore in bulk
+- **WHEN** l'utente seleziona 80 scansioni e sceglie "Colore ▸ Seppia" dal menu contestuale
+- **THEN** le 80 foto hanno caratteristica di colore "Seppia"
+
+#### Scenario: Data di scatto in bulk
+- **WHEN** l'utente seleziona 60 scansioni di negativi e imposta come data di scatto l'anno 1987
+- **THEN** le 60 foto hanno data di scatto 1987 con precisione "anno" e fonte "manuale", e "Annulla" ripristina le date precedenti
