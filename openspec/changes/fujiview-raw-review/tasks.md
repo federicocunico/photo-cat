@@ -4,7 +4,7 @@
 
 ## 1. Crate e scansione
 
-- [ ] 1.1 Creare `crates/pc-raw-review` nel workspace (D1):
+- [x] 1.1 Creare `crates/pc-raw-review` nel workspace (D1):
   - dipendenze `natord`, `blake3`, `kamadak-exif`, `image`, `rusqlite` 0.32;
   - `windows` solo su `cfg(windows)`;
   - feature `simd-jpeg` (turbojpeg) e `fake-camera`.

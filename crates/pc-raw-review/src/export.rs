@@ -1,0 +1,1 @@
+//! Esportazione delle varianti scelte.

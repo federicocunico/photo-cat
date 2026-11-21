@@ -10,6 +10,7 @@ members = [
     "crates/pc-models",
     "crates/pc-ai",
     "crates/pc-organize",
+    "crates/pc-raw-review",
     "app/src-tauri",
 ]
 
@@ -30,6 +31,7 @@ pc-ingest = { path = "crates/pc-ingest" }
 pc-models = { path = "crates/pc-models" }
 pc-ai = { path = "crates/pc-ai" }
 pc-organize = { path = "crates/pc-organize" }
+pc-raw-review = { path = "crates/pc-raw-review" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
