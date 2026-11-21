@@ -362,7 +362,84 @@ pub fn forget_update(c: &Connection, source_id: i64) -> StoreResult<()> {
         "DELETE FROM settings_kv WHERE key=?1",
         [summary_key(source_id)],
     )?;
+    c.execute("DELETE FROM settings_kv WHERE key=?1", [ack_key(source_id)])?;
     Ok(())
+}
+
+// ------------------------------------------------------- riconoscimento avvisi
+
+/// Soglia del riconoscimento degli avvisi di una sorgente: istante e
+/// aggiornamento (job) riconosciuto.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WarningAck {
+    pub at: i64,
+    pub job_id: Option<i64>,
+}
+
+fn ack_key(source_id: i64) -> String {
+    format!("import.ack.{source_id}")
+}
+
+pub fn warning_ack(c: &Connection, source_id: i64) -> StoreResult<Option<WarningAck>> {
+    let v: Option<String> = c
+        .query_row(
+            "SELECT value FROM settings_kv WHERE key=?1",
+            [ack_key(source_id)],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(v.and_then(|v| serde_json::from_str(&v).ok()))
+}
+
+/// Riconosce gli avvisi correnti: i mancanti esistenti non sono più "nuovi" e
+/// l'ultimo aggiornamento non segnala più errori.
+pub fn acknowledge_warnings(c: &Connection, source_id: i64) -> StoreResult<()> {
+    let job_id = c
+        .query_row(
+            "SELECT value FROM settings_kv WHERE key=?1",
+            [summary_key(source_id)],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .and_then(|v| serde_json::from_str::<UpdateSummary>(&v).ok())
+        .map(|s| s.job_id);
+    let ack = WarningAck {
+        at: now_ms(),
+        job_id,
+    };
+    c.execute(
+        "INSERT INTO settings_kv(key,value) VALUES (?1,?2)
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        params![ack_key(source_id), serde_json::to_string(&ack)?],
+    )?;
+    Ok(())
+}
+
+/// Mancanti nuovi (dopo il riconoscimento, o tutti se mai riconosciuto) e errori
+/// dell'ultimo aggiornamento non ancora riconosciuti.
+pub fn warning_counts(c: &Connection, source_id: i64) -> StoreResult<(i64, i64)> {
+    let ack = warning_ack(c, source_id)?;
+    let at = ack.as_ref().map_or(i64::MIN, |a| a.at);
+    let new_missing: i64 = c.query_row(
+        "SELECT count(*) FROM media_item
+         WHERE source_id=?1 AND status='missing' AND COALESCE(missing_since, 0) > ?2",
+        params![source_id, at],
+        |r| r.get(0),
+    )?;
+    let last: Option<UpdateSummary> = c
+        .query_row(
+            "SELECT value FROM settings_kv WHERE key=?1",
+            [summary_key(source_id)],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .and_then(|v| serde_json::from_str(&v).ok());
+    let failed = match last {
+        Some(s) if ack.as_ref().and_then(|a| a.job_id) != Some(s.job_id) => s.failed,
+        _ => 0,
+    };
+    Ok((new_missing, failed))
 }
 
 /// Ricollega un mancante a un nuovo percorso (anche in un'altra sorgente),

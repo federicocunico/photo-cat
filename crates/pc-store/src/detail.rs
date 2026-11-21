@@ -114,7 +114,12 @@ pub fn media_detail(c: &Connection, id: MediaId) -> StoreResult<MediaDetail> {
 pub struct SourceSummary {
     pub source: Source,
     pub items: i64,
+    /// Mancanti vivi (restano per Ricollega/Rimuovi).
     pub missing: i64,
+    /// Mancanti diventati tali dopo l'ultimo riconoscimento degli avvisi.
+    pub new_missing: i64,
+    /// File non letti nell'ultimo aggiornamento, se non ancora riconosciuti.
+    pub failed_warning: i64,
 }
 
 pub fn source_summaries(c: &Connection) -> StoreResult<Vec<SourceSummary>> {
@@ -126,10 +131,13 @@ pub fn source_summaries(c: &Connection) -> StoreResult<Vec<SourceSummary>> {
         .into_iter()
         .map(|source| {
             let (items, missing) = st.query_row([source.id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let (new_missing, failed_warning) = crate::sources::warning_counts(c, source.id)?;
             Ok(SourceSummary {
                 source,
                 items,
                 missing,
+                new_missing,
+                failed_warning,
             })
         })
         .collect()

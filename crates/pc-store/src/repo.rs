@@ -119,7 +119,7 @@ pub mod media {
                 kind=excluded.kind, source_id=excluded.source_id, name=excluded.name, ext=excluded.ext,
                 size=excluded.size, mtime=excluded.mtime, quick_hash=excluded.quick_hash,
                 content_hash=COALESCE(excluded.content_hash, media_item.content_hash),
-                status='ok', updated_at=excluded.updated_at",
+                status='ok', missing_since=NULL, updated_at=excluded.updated_at",
             params![
                 m.kind.as_str(),
                 m.source_id,
@@ -201,9 +201,14 @@ pub mod media {
     }
 
     pub fn set_status(c: &Connection, id: MediaId, status: MediaStatus) -> StoreResult<()> {
+        let now = now_ms();
+        // `missing_since`: istante in cui il file è diventato mancante (NULL se presente).
+        let since = (status == MediaStatus::Missing).then_some(now);
         c.execute(
-            "UPDATE media_item SET status=?2, updated_at=?3 WHERE id=?1",
-            params![id, status.as_str(), now_ms()],
+            "UPDATE media_item SET status=?2, updated_at=?3,
+                missing_since=CASE WHEN ?2='missing' THEN COALESCE(missing_since, ?4) ELSE NULL END
+             WHERE id=?1",
+            params![id, status.as_str(), now, since],
         )?;
         Ok(())
     }
@@ -242,7 +247,7 @@ pub mod media {
         mtime: i64,
     ) -> StoreResult<()> {
         c.execute(
-            "UPDATE media_item SET path=?2, name=?3, mtime=?4, status='ok', updated_at=?5 WHERE id=?1",
+            "UPDATE media_item SET path=?2, name=?3, mtime=?4, status='ok', missing_since=NULL, updated_at=?5 WHERE id=?1",
             params![id, path, name, mtime, now_ms()],
         )?;
         Ok(())
