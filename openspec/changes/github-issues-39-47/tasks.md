@@ -36,7 +36,7 @@
 ## 3. Selezione ovunque (#39)
 
 - [x] 3.1 Estrarre `useGridSelection` (D1) da `useLibrary`, portarvi la Libreria e i cataloghi senza cambiarne il comportamento. I test esistenti della selezione devono restare verdi.
-- [ ] 3.2 Comandi `faceSelection` e `sequenceSelection` con snapshot e test Rust (400 volti con 120 caricati).
+- [x] 3.2 Comandi `faceSelection` e `sequenceSelection` con snapshot e test Rust (400 volti con 120 caricati).
 - [ ] 3.3 Collegare FaceGrid, Sequenza, catalogo di sistema, escluse e sezioni AI. Voci "Seleziona tutto"/"Inverti selezione" in barra e menu contestuale. Scorciatoie Ctrl/Cmd+A, Ctrl+Maiusc+I ed Esc registrate nella shell e ignorate nei campi di testo. Test vitest per ogni vista e per il campo di ricerca.
 - [ ] 3.4 Revisione Opus della parte 3: coerenza della selezione tra viste, prestazioni con 100.000 elementi, accessibilità delle scorciatoie.
 
