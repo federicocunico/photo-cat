@@ -91,7 +91,7 @@ const it = {
       },
       autoUpdate: {
         title: "Aggiornamento automatico",
-        body: "Con «Aggiorna automaticamente» su una cartella, finché photo-cat è aperto le foto aggiunte, spostate o cancellate in quella cartella vengono importate o aggiornate da sole. Lo stato (attivo, cartella non raggiungibile, errore) è mostrato sotto la cartella in Importa.",
+        body: "Con «Aggiorna automaticamente» attivo su una cartella, mentre photo-cat è aperto le foto aggiunte, spostate o cancellate in quella cartella vengono importate o aggiornate da sole. Ad app chiusa non succede nulla: alla riapertura usa «Aggiorna». Sotto la cartella, nella pagina Importa, vedi se l'aggiornamento automatico è attivo e quando è avvenuto l'ultimo, oppure perché non è disponibile.",
       },
       settings: {
         title: "Impostazioni",
@@ -192,7 +192,7 @@ const en: typeof it = {
       },
       autoUpdate: {
         title: "Automatic update",
-        body: "With “Update automatically” on a folder, while photo-cat is open photos added, moved or deleted in that folder are imported or updated on their own. The status (on, folder not reachable, error) is shown under the folder in Import.",
+        body: "With “Update automatically” on for a folder, while photo-cat is open photos added, moved or deleted in that folder are imported or updated on their own. Nothing happens while the app is closed: use “Update” when you reopen it. Under the folder, on the Import page, you can see whether automatic update is on and when the last one happened, or why it is not available.",
       },
       settings: {
         title: "Settings",

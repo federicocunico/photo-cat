@@ -19,7 +19,8 @@ export function distinctByMedia(faces: FaceView[]): FaceView[] {
   return faces.filter((f) => !seen.has(f.mediaId) && seen.add(f.mediaId));
 }
 
-const folderOf = (path: string) => path.replace(/[\/][^\/]*$/, "") || path;
+/** Cartella della foto, con separatori di Windows (`D:\Foto\x.jpg`) o Unix. */
+export const folderOf = (path: string) => path.replace(/[\\/][^\\/]*$/, "") || path;
 
 /** Cartella e foto selezionata nella Libreria, che si apre sulla foto del volto. */
 export function showInLibrary(detail: MediaDetail) {

@@ -418,12 +418,13 @@ describe("avvisi e aggiornamento automatico", () => {
 
   it("stato del monitoraggio: attivo con ultimo orario, non raggiungibile, e aggiornamento all'evento", async () => {
     commandsMock.listSources.mockResolvedValue(row({}) as never);
-    const at = new Date(2025, 0, 5, 14, 30).getTime();
+    const now = new Date();
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 30).getTime();
     commandsMock.sourceWatchStatus.mockResolvedValue([
       { sourceId: 1, state: "active", lastAutoUpdateAt: at, message: null },
     ]);
     renderPage();
-    const hhmm = new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const hhmm = "00:30";
     expect(
       await screen.findByText(`Aggiornamento automatico attivo · ultimo alle ${hhmm}`),
     ).toBeInTheDocument();
@@ -433,7 +434,7 @@ describe("avvisi e aggiornamento automatico", () => {
     await act(async () => emit("sourceWatchChanged", undefined));
     expect(
       await screen.findByText(
-        "Aggiornamento automatico non disponibile: cartella non raggiungibile",
+        "Aggiornamento automatico non disponibile: la cartella non è raggiungibile (disco scollegato o cartella spostata)",
       ),
     ).toBeInTheDocument();
     commandsMock.sourceWatchStatus.mockResolvedValue([
@@ -441,5 +442,29 @@ describe("avvisi e aggiornamento automatico", () => {
     ]);
     await act(async () => emit("sourceWatchChanged", undefined));
     expect(await screen.findByText("Aggiornamento automatico attivo")).toBeInTheDocument();
+  });
+
+  it("stato del monitoraggio: giorno se non è di oggi, motivo comprensibile se il sistema rifiuta", async () => {
+    commandsMock.listSources.mockResolvedValue(row({}) as never);
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      {
+        sourceId: 1,
+        state: "active",
+        lastAutoUpdateAt: new Date(2025, 0, 5, 14, 30).getTime(),
+        message: null,
+      },
+    ]);
+    renderPage();
+    expect(
+      await screen.findByText("Aggiornamento automatico attivo · ultimo il 5 gennaio alle 14:30"),
+    ).toBeInTheDocument();
+    commandsMock.sourceWatchStatus.mockResolvedValue([
+      { sourceId: 1, state: "error", lastAutoUpdateAt: null, message: "os error 24" },
+    ]);
+    await act(async () => emit("sourceWatchChanged", undefined));
+    const line = await screen.findByText(
+      "Aggiornamento automatico non disponibile: il sistema non permette di sorvegliare questa cartella",
+    );
+    expect(line).toHaveAttribute("title", "os error 24");
   });
 });

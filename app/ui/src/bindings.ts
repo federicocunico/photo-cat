@@ -75,6 +75,11 @@ export const commands = {
 	/**  Esito dell'ultimo ricollegamento della sorgente. */
 	lastRelink: (sourceId: number) => __TAURI_INVOKE<RelinkSummary | null>("last_relink", { sourceId }),
 	libraryPage: (filter: LibraryFilter, sort: SortKey, at: PageAt | null, limit: number) => __TAURI_INVOKE<Page>("library_page", { filter, sort, at, limit }),
+	/**
+	 *  Posizione di una foto nella griglia (per portarla in vista anche se non è tra le pagine
+	 *  caricate); `None` se non è tra i risultati.
+	 */
+	libraryPosition: (filter: LibraryFilter, sort: SortKey, id: number) => __TAURI_INVOKE<number | null>("library_position", { filter, sort, id }),
 	/**  Numero di elementi del filtro; `None` se la richiesta è stata superata. */
 	libraryCount: (filter: LibraryFilter, request: RequestTag | null) => __TAURI_INVOKE<number | null>("library_count", { filter, request }),
 	/**  Elementi della griglia (con la griglia raggruppata, un elemento per gruppo di foto simili). */
@@ -122,16 +127,16 @@ export const commands = {
 	 *  correzioni che prendono un elenco di volti ("Assegna a…", "Sposta", "Separa", ...).
 	 */
 	faceSelectionIds: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<number[]>("face_selection_ids", { scope, maxId, except }),
-	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
-	faceCount: () => __TAURI_INVOKE<number>("face_count"),
-	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
-	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
-	/**
 	/**
 	 *  Foto distinte dei volti selezionati per filtro (presenti e mancanti), per "Apri con" e
 	 *  "Mostra nella cartella" anche sui volti non caricati.
 	 */
 	faceSelectionMedia: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<FaceSelectionMedia>("face_selection_media", { scope, maxId, except }),
+	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
+	faceCount: () => __TAURI_INVOKE<number>("face_count"),
+	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
+	correctPerson: (correction: Correction) => __TAURI_INVOKE<null>("correct_person", { correction }),
+	/**
 	 *  Annulla l'ultima correzione delle persone (Ctrl+Z nel modulo Persone). Se l'ultima
 	 *  operazione annullabile riguarda altro (tag, cataloghi…) non fa nulla e restituisce `None`.
 	 */
@@ -427,7 +432,9 @@ export type ArchiveTarget =
 /**  Voci singole. */
 { kind: "ids"; ids: number[] } | 
 /**  Un gruppo (codice + fase, anche assenti) con gli altri filtri di `query`. */
-{ kind: "group"; code: string | null; phase: string | null; query: ErrorQuery } | 
+{ kind: "group"; 
+/**  Job del gruppo (`None` = voci senza job, non "qualsiasi job"). */
+jobId: number | null; code: string | null; phase: string | null; query: ErrorQuery } | 
 /**  Tutte le voci che corrispondono al filtro corrente. */
 { kind: "query"; query: ErrorQuery };
 
@@ -682,6 +689,8 @@ export type ErrorEntry = {
 	phase: string | null,
 	path: string | null,
 	detail: string | null,
+	/**  Istante dell'archiviazione (RFC 3339); `None` per le voci attive. */
+	archivedAt: string | null,
 };
 
 /**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
@@ -811,15 +820,6 @@ export type FacePage = {
 /**  Ambito dei volti richiesti con `group_faces`. */
 export type FaceScope = { kind: "group"; group: number } | { kind: "singles" } | { kind: "discarded"; group: number | null };
 
-/**  Ordinamento dei volti in `group_faces`. */
-export type FaceSort = "quality_desc" | "captured_desc" | 
-/**  Dal più vecchio; i volti senza data restano comunque in fondo. */
-"captured_asc";
-
-export type FaceView = {
-	id: number,
-	mediaId: number,
-	bbox: [(number | null), (number | null), (number | null), (number | null)],
 /**
  *  Foto distinte dei volti selezionati "per filtro" (stesso insieme di `face_selection_ids`),
  *  divise tra presenti sul disco e mancanti: servono a "Apri con" e "Mostra nella cartella"
@@ -832,6 +832,15 @@ export type FaceSelectionMedia = {
 	missing: string[],
 };
 
+/**  Ordinamento dei volti in `group_faces`. */
+export type FaceSort = "quality_desc" | "captured_desc" | 
+/**  Dal più vecchio; i volti senza data restano comunque in fondo. */
+"captured_asc";
+
+export type FaceView = {
+	id: number,
+	mediaId: number,
+	bbox: [(number | null), (number | null), (number | null), (number | null)],
 	quality: number | null,
 	qualityScore: number | null,
 	sharpness: number | null,

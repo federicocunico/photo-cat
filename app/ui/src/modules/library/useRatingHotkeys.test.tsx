@@ -115,3 +115,24 @@ it("a operazione finita compare l'avviso con Annulla", async () => {
     ),
   );
 });
+
+it("Option+4 su macOS (e.key = «¢») imposta comunque 4 stelle dal tasto fisico", async () => {
+  await waitFor(() => expect(commandsMock.tagOverview).toHaveBeenCalled());
+  fireEvent.keyDown(window, { key: "¢", code: "Digit4", altKey: true });
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalledTimes(1));
+  expect(commandsMock.startBulk).toHaveBeenCalledWith(
+    ids,
+    { action: "set_rating", rating: 4 },
+    false,
+  );
+});
+
+it("Option+0 su macOS (e.key = «º») toglie la valutazione", async () => {
+  fireEvent.keyDown(window, { key: "º", code: "Digit0", altKey: true });
+  await waitFor(() => expect(commandsMock.startBulk).toHaveBeenCalledTimes(1));
+  expect(commandsMock.startBulk).toHaveBeenCalledWith(
+    ids,
+    { action: "set_rating", rating: null },
+    false,
+  );
+});

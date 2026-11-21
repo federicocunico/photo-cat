@@ -117,6 +117,7 @@ export const commandsMock = {
   importUpdates: vi.fn(async () => [] as UpdateSummary[]),
   lastRelink: vi.fn(async () => null as RelinkSummary | null),
   libraryPage: vi.fn(),
+  libraryPosition: vi.fn(async () => null as number | null),
   libraryCount: vi.fn(),
   libraryFacets: vi.fn(),
   libraryFacetValues: vi.fn(async () => ({ values: [] as FacetValue[], total: 0 })),
@@ -192,10 +193,10 @@ export const commandsMock = {
   faceSelectionIds: vi.fn<
     (scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>
   >(async () => []),
-  locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
   faceSelectionMedia: vi.fn<
     (scope: FaceScope, maxId: number, except: number[]) => Promise<FaceSelectionMedia>
   >(async () => ({ present: [], missing: [] })),
+  locateFace: vi.fn<(request: LocateFaceRequest) => Promise<LocatedFace>>(),
   personFaces: vi.fn(async () => []),
   correctPerson: vi.fn(async () => null),
   purgeFaces: vi.fn(async () => null),

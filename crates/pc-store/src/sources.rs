@@ -363,7 +363,41 @@ pub fn forget_update(c: &Connection, source_id: i64) -> StoreResult<()> {
         [summary_key(source_id)],
     )?;
     c.execute("DELETE FROM settings_kv WHERE key=?1", [ack_key(source_id)])?;
+    c.execute(
+        "DELETE FROM settings_kv WHERE key=?1",
+        [auto_update_key(source_id)],
+    )?;
     Ok(())
+}
+
+// ------------------------------------------------- aggiornamento automatico
+
+/// Chiave nel database del catalogo: gli id delle sorgenti sono per catalogo,
+/// quindi l'istante non va nel kv globale dell'app.
+fn auto_update_key(source_id: i64) -> String {
+    format!("import.auto_update.{source_id}")
+}
+
+/// Registra l'avvio di un aggiornamento automatico (dal monitoraggio) della sorgente.
+pub fn record_auto_update(c: &Connection, source_id: i64, at_ms: i64) -> StoreResult<()> {
+    c.execute(
+        "INSERT INTO settings_kv(key,value) VALUES (?1,?2)
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        params![auto_update_key(source_id), at_ms.to_string()],
+    )?;
+    Ok(())
+}
+
+/// Ultimo aggiornamento automatico della sorgente (ms dall'epoca Unix), se c'è.
+pub fn last_auto_update(c: &Connection, source_id: i64) -> StoreResult<Option<i64>> {
+    let v: Option<String> = c
+        .query_row(
+            "SELECT value FROM settings_kv WHERE key=?1",
+            [auto_update_key(source_id)],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(v.and_then(|v| v.parse().ok()))
 }
 
 // ------------------------------------------------------- riconoscimento avvisi

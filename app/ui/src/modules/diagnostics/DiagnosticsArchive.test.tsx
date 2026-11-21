@@ -20,8 +20,9 @@ const entry = (id: number): ErrorEntry => ({
   target: "pc_ingest::scan",
   jobId: 7,
   phase: "scansione",
-  path: `D:\Foto\IMG_${id}.JPG`,
+  path: `D:\\Foto\\IMG_${id}.JPG`,
   detail: null,
+  archivedAt: null,
 });
 
 // Backend simulato: due errori attivi; l'archiviazione li sposta tra le archiviate.
@@ -60,14 +61,14 @@ beforeEach(() => {
   commandsMock.errorGroups.mockResolvedValue([] as never);
   commandsMock.archiveErrors.mockImplementation((async () => {
     const n = active.length;
-    archived = [...archived, ...active];
+    archived = [...archived, ...active.map((e) => ({ ...e, archivedAt: "2026-10-31T09:00:00Z" }))];
     active = [];
     return { affected: n, activeCount: 0 };
   }) as never);
   commandsMock.unarchiveErrors.mockImplementation((async (ids: number[]) => {
     const back = archived.filter((e) => ids.includes(e.id));
     archived = archived.filter((e) => !ids.includes(e.id));
-    active = [...active, ...back];
+    active = [...active, ...back.map((e) => ({ ...e, archivedAt: null }))];
     return { affected: back.length, activeCount: active.length };
   }) as never);
 });
@@ -84,14 +85,14 @@ describe("errori archiviati", () => {
       expect.objectContaining({ kind: "query" }),
     );
     await waitFor(() => expect(screen.getByTestId("error-count")).toHaveTextContent("Nessun errore"));
-    expect(await screen.findByText("Archiviati 2 errori")).toBeInTheDocument();
+    expect(await screen.findByText("2 errori archiviati")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByRole("table", { name: "Errori registrati" })).not.toBeInTheDocument(),
     );
   });
 
   it("il filtro Archiviati mostra le voci e Ripristina chiama unarchive", async () => {
-    archived = [entry(5)];
+    archived = [{ ...entry(5), archivedAt: "2026-10-31T09:00:00Z" }];
     active = [];
     useLive.setState({ errorCount: 0 });
     renderAll();
@@ -119,5 +120,37 @@ describe("errori archiviati", () => {
       }),
     );
     expect(useLive.getState().errorCount).toBe(1);
+  });
+
+  it("il dettaglio sceglie Archivia o Ripristina dalla voce, non dal filtro", async () => {
+    renderAll();
+    await screen.findByTestId("detail-message");
+    expect(screen.queryByRole("button", { name: "Ripristina" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Archivia" }));
+    await waitFor(() =>
+      expect(commandsMock.archiveErrors).toHaveBeenCalledWith({ kind: "ids", ids: [1] }),
+    );
+  });
+
+  it("Archivia il gruppo passa il job del gruppo", async () => {
+    commandsMock.errorGroups.mockResolvedValue([
+      {
+        jobId: null,
+        phase: "scansione",
+        code: "ACCESS_DENIED",
+        level: "ERROR",
+        count: 2,
+        files: 2,
+        lastTs: "2026-10-30T14:31:03Z",
+        message: "errors.access_denied",
+      },
+    ] as never);
+    renderAll();
+    fireEvent.click(await screen.findByTestId("archive-group-ACCESS_DENIED-scansione"));
+    await waitFor(() =>
+      expect(commandsMock.archiveErrors).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "group", jobId: null, code: "ACCESS_DENIED" }),
+      ),
+    );
   });
 });

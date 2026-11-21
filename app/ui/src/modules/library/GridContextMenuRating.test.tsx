@@ -44,7 +44,7 @@ it("Valutazione: 4 stelle e Nessuna", async () => {
   await user.click(screen.getByRole("menuitem", { name: /^Valutazione/ }));
   await user.click(screen.getByRole("menuitem", { name: "4 stelle" }));
   expect(onBulk).toHaveBeenCalledWith(target, { action: "set_rating", rating: 4 }, 3);
-  await user.click(screen.getByRole("menuitem", { name: "Nessuna" }));
+  await user.click(screen.getByRole("menuitem", { name: "Nessuna valutazione" }));
   expect(onBulk).toHaveBeenLastCalledWith(target, { action: "set_rating", rating: null }, 3);
 });
 

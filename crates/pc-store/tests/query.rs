@@ -793,3 +793,47 @@ fn analysis_state_of_scoped_reprocess_jobs() {
         vec![Processed, Processed, Processed, Queued, Queued, Queued]
     );
 }
+
+/// "Mostra in Libreria": la posizione di una foto nella griglia coincide con quella delle
+/// pagine, per ogni ordinamento e anche con chiavi uguali; fuori dai risultati è `None`.
+#[test]
+fn position_matches_page_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(tmp.path());
+    s.write(|c| {
+        seed(c, 700);
+        Ok(())
+    })
+    .unwrap();
+    for sort in [
+        SortKey::CapturedDesc,
+        SortKey::CapturedAsc,
+        SortKey::NameAsc,
+        SortKey::SizeDesc,
+        SortKey::AddedDesc,
+    ] {
+        let f = LibraryFilter::default();
+        let all: Vec<i64> = s
+            .read(|c| query::page_at(c, &f, sort, None, 2000))
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.id)
+            .collect();
+        for at in [0usize, 1, 299, 300, 451, 699] {
+            let id = all[at];
+            let pos = s.read(|c| query::position(c, &f, sort, id)).unwrap();
+            assert_eq!(pos, Some(at as u32), "{sort:?} @ {at}");
+        }
+    }
+    // Una foto esclusa dal filtro non ha posizione.
+    let f = LibraryFilter {
+        text: Some("IMG_000001.JPG".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        s.read(|c| query::position(c, &f, SortKey::NameAsc, 2))
+            .unwrap(),
+        None
+    );
+}

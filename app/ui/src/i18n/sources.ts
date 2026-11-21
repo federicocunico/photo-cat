@@ -16,8 +16,11 @@ export const sources = {
       watchStatus: {
         active: "Aggiornamento automatico attivo",
         activeLast: "Aggiornamento automatico attivo · ultimo alle {{time}}",
-        unreachable: "Aggiornamento automatico non disponibile: cartella non raggiungibile",
-        error: "Aggiornamento automatico non disponibile: {{message}}",
+        activeLastDay: "Aggiornamento automatico attivo · ultimo il {{date}} alle {{time}}",
+        unreachable:
+          "Aggiornamento automatico non disponibile: la cartella non è raggiungibile (disco scollegato o cartella spostata)",
+        error:
+          "Aggiornamento automatico non disponibile: il sistema non permette di sorvegliare questa cartella",
       },
       menu: "Azioni su {{name}}",
       update: "Aggiorna",
@@ -105,8 +108,10 @@ export const sources = {
       watchStatus: {
         active: "Automatic update on",
         activeLast: "Automatic update on · last at {{time}}",
-        unreachable: "Automatic update unavailable: folder not reachable",
-        error: "Automatic update unavailable: {{message}}",
+        activeLastDay: "Automatic update on · last on {{date}} at {{time}}",
+        unreachable:
+          "Automatic update unavailable: the folder is not reachable (drive disconnected or folder moved)",
+        error: "Automatic update unavailable: the system does not allow watching this folder",
       },
       menu: "Actions on {{name}}",
       update: "Update",

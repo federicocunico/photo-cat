@@ -130,3 +130,10 @@ describe("FaceGrid: dal volto alla foto", () => {
     expect(await screen.findByTestId("viewer")).toBeTruthy();
   });
 });
+
+it("la cartella della foto si ricava anche dai percorsi di Windows", async () => {
+  const { folderOf } = await import("./useFacePhotoActions");
+  expect(folderOf("D:\\Foto\\Mare\\IMG_1.jpg")).toBe("D:\\Foto\\Mare");
+  expect(folderOf("D:/Foto/Mare/IMG_1.jpg")).toBe("D:/Foto/Mare");
+  expect(folderOf("\\\\nas\\foto\\1962\\scan.tif")).toBe("\\\\nas\\foto\\1962");
+});

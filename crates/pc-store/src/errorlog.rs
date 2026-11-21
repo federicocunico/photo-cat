@@ -53,6 +53,8 @@ pub struct ErrorEntry {
     pub phase: Option<String>,
     pub path: Option<String>,
     pub detail: Option<String>,
+    /// Istante dell'archiviazione (RFC 3339); `None` per le voci attive.
+    pub archived_at: Option<String>,
 }
 
 /// Condizioni comuni (`WHERE 1=1 AND ...`) e relativi argomenti. `archived`: `None` = tutte le voci.
@@ -116,7 +118,7 @@ pub fn query_including_archived(c: &Connection, q: &ErrorQuery) -> StoreResult<V
 fn select(c: &Connection, q: &ErrorQuery, archived: Option<bool>) -> StoreResult<Vec<ErrorEntry>> {
     let (cond, mut args) = filter(q, true, archived);
     let mut sql = format!(
-        "SELECT id, ts, level, code, message, target, job_id, phase, path, detail FROM error_log{cond}"
+        "SELECT id, ts, level, code, message, target, job_id, phase, path, detail, archived_at FROM error_log{cond}"
     );
     sql.push_str(" ORDER BY id DESC LIMIT ? OFFSET ?");
     args.push(Box::new(q.limit.unwrap_or(200).min(5000)));
@@ -136,6 +138,7 @@ fn select(c: &Connection, q: &ErrorQuery, archived: Option<bool>) -> StoreResult
                 phase: r.get(7)?,
                 path: r.get(8)?,
                 detail: r.get(9)?,
+                archived_at: r.get(10)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -250,6 +253,9 @@ pub enum ArchiveTarget {
     Ids { ids: Vec<i64> },
     /// Un gruppo (codice + fase, anche assenti) con gli altri filtri di `query`.
     Group {
+        /// Job del gruppo (`None` = voci senza job, non "qualsiasi job").
+        #[serde(rename = "jobId")]
+        job_id: Option<i64>,
         code: Option<String>,
         phase: Option<String>,
         query: ErrorQuery,
@@ -268,9 +274,12 @@ pub fn archive_errors(c: &Connection, target: &ArchiveTarget) -> StoreResult<usi
     match target {
         ArchiveTarget::Ids { ids } => set_archived(c, ids, Some(now())),
         ArchiveTarget::Query { query } => archive_filtered(c, query, None),
-        ArchiveTarget::Group { code, phase, query } => {
-            archive_filtered(c, query, Some((code.as_deref(), phase.as_deref())))
-        }
+        ArchiveTarget::Group {
+            job_id,
+            code,
+            phase,
+            query,
+        } => archive_filtered(c, query, Some((*job_id, code.as_deref(), phase.as_deref()))),
     }
 }
 
@@ -299,13 +308,14 @@ fn set_archived(c: &Connection, ids: &[i64], value: Option<String>) -> StoreResu
 fn archive_filtered(
     c: &Connection,
     q: &ErrorQuery,
-    group: Option<(Option<&str>, Option<&str>)>,
+    group: Option<(Option<i64>, Option<&str>, Option<&str>)>,
 ) -> StoreResult<usize> {
     let (mut cond, args) = filter(q, group.is_none(), Some(false));
     let mut all: Vec<Box<dyn ToSql>> = vec![Box::new(now())];
     all.extend(args);
-    if let Some((code, phase)) = group {
-        cond.push_str(" AND code IS ? AND phase IS ?");
+    if let Some((job_id, code, phase)) = group {
+        cond.push_str(" AND job_id IS ? AND code IS ? AND phase IS ?");
+        all.push(Box::new(job_id));
         all.push(Box::new(code.map(str::to_owned)));
         all.push(Box::new(phase.map(str::to_owned)));
     }
@@ -435,6 +445,7 @@ mod tests {
             ..Default::default()
         };
         let shown = store.read(|c| query(c, &archived)).unwrap();
+        assert!(shown.iter().all(|e| e.archived_at.is_some()));
         assert_eq!(shown.len(), 14);
         assert_eq!(store.read(|c| groups(c, &archived)).unwrap().len(), 2);
         // Le voci restano nel registro e nel pacchetto diagnostico.
@@ -471,11 +482,27 @@ mod tests {
             .write(move |c| archive_errors(c, &ArchiveTarget::Ids { ids }))
             .unwrap();
         assert_eq!(n, 2);
+        // Il gruppo "senza job" non tocca le voci del job 3.
+        let none = store
+            .write(|c| {
+                archive_errors(
+                    c,
+                    &ArchiveTarget::Group {
+                        job_id: None,
+                        code: Some("A".into()),
+                        phase: Some("miniature".into()),
+                        query: ErrorQuery::default(),
+                    },
+                )
+            })
+            .unwrap();
+        assert_eq!(none, 0);
         store
             .write(|c| {
                 archive_errors(
                     c,
                     &ArchiveTarget::Group {
+                        job_id: Some(3),
                         code: Some("A".into()),
                         phase: Some("miniature".into()),
                         query: ErrorQuery::default(),

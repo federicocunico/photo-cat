@@ -6,7 +6,7 @@ use crate::model::{CatalogKind, ColorTrait, MediaId, MediaStatus};
 use crate::rules::{self, SqlFragment};
 use crate::{repo, StoreError, StoreResult};
 use rusqlite::types::Value;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -636,14 +636,17 @@ pub fn page(
     page_at(c, f, sort, at.as_ref(), limit)
 }
 
-/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
-pub fn page_at(
-    c: &Connection,
-    f: &LibraryFilter,
-    sort: SortKey,
-    at: Option<&PageAt>,
-    limit: u32,
-) -> StoreResult<Page> {
+/// Elementi della griglia per `f` e `sort`: CTE iniziale, condizione su `m`, espressione di
+/// ordinamento, colonna del numero di simili ed eventuale colonna dell'esclusione.
+struct GridView {
+    with: String,
+    w: SqlFragment,
+    key: String,
+    count_column: &'static str,
+    excluded: Option<String>,
+}
+
+fn grid_view(c: &Connection, f: &LibraryFilter, sort: SortKey) -> StoreResult<GridView> {
     let mut w = compile_filter(c, f)?;
     // Griglia raggruppata: i risultati filtrati diventano una CTE; di ogni gruppo resta un
     // rappresentante (la principale se è nei risultati, altrimenti la migliore presente).
@@ -677,6 +680,65 @@ pub fn page_at(
     } else {
         sort.expr().to_string()
     };
+    Ok(GridView {
+        with,
+        w,
+        key,
+        count_column,
+        excluded,
+    })
+}
+
+/// Posizione (da 0) della foto `id` nella griglia di `f` ordinata per `sort`, come la conta
+/// `page_at` con `PageAt::Offset`; `None` se la foto non è tra i risultati. Serve a portare
+/// in vista una foto non ancora caricata ("Mostra in Libreria" da Persone).
+pub fn position(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    id: MediaId,
+) -> StoreResult<Option<u32>> {
+    let GridView { with, w, key, .. } = grid_view(c, f, sort)?;
+    let mut args = w.args.clone();
+    args.push(Value::Integer(id));
+    let k: Option<Value> = c
+        .query_row(
+            &format!("{with}SELECT {key} {FROM} WHERE {} AND m.id = ?", w.sql),
+            rusqlite::params_from_iter(args.iter()),
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(k) = k else { return Ok(None) };
+    // Prima della foto: chiave precedente nell'ordine, o stessa chiave e id precedente.
+    let op = if sort.desc() { ">" } else { "<" };
+    let mut args = w.args;
+    args.extend([k.clone(), k, Value::Integer(id)]);
+    let n: i64 = c.query_row(
+        &format!(
+            "{with}SELECT count(*) {FROM} WHERE {} AND ({key} {op} ? OR ({key} = ? AND m.id {op} ?))",
+            w.sql
+        ),
+        rusqlite::params_from_iter(args.iter()),
+        |r| r.get(0),
+    )?;
+    Ok(Some(n as u32))
+}
+
+/// Pagina della griglia a partire da `at` (inizio della lista se `None`).
+pub fn page_at(
+    c: &Connection,
+    f: &LibraryFilter,
+    sort: SortKey,
+    at: Option<&PageAt>,
+    limit: u32,
+) -> StoreResult<Page> {
+    let GridView {
+        with,
+        mut w,
+        key,
+        count_column,
+        excluded,
+    } = grid_view(c, f, sort)?;
     let excluded_column = excluded.as_deref().unwrap_or("NULL");
     // All'indietro si legge in ordine inverso e si ribalta il risultato.
     let backward = matches!(at, Some(PageAt::Before { .. }));

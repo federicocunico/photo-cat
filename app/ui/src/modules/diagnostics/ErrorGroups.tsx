@@ -126,7 +126,8 @@ export function ErrorGroups({
                     kind: "group",
                     code: g.code,
                     phase: g.phase,
-                    query: { ...query, text: null, jobId: g.jobId ?? query.jobId, level: g.level },
+                    jobId: g.jobId,
+                    query: { ...query, text: null, level: g.level },
                   })
                 }
               >

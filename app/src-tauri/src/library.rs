@@ -261,6 +261,26 @@ pub async fn library_page(
     .await
 }
 
+/// Posizione di una foto nella griglia (per portarla in vista anche se non è tra le pagine
+/// caricate); `None` se non è tra i risultati.
+#[tauri::command]
+#[specta::specta]
+pub async fn library_position(
+    app: tauri::AppHandle,
+    filter: LibraryFilter,
+    sort: SortKey,
+    id: MediaId,
+) -> AppResult<Option<u32>> {
+    crate::state::blocking(app, move |_app, state| {
+        let mut filter = filter;
+        crate::stage_keys::fill_filter(state, &mut filter);
+        Ok(state
+            .store
+            .read(|c| query::position(c, &filter, sort, id))?)
+    })
+    .await
+}
+
 /// Etichetta di una richiesta della UI: le richieste più vecchie dello stesso canale vengono
 /// scartate o interrotte (filtro cambiato mentre il motore calcolava).
 #[derive(Debug, Clone, serde::Deserialize, specta::Type)]
@@ -450,8 +470,14 @@ pub fn restart_watcher(app: &AppHandle) {
             let _ = st
                 .jobs
                 .submit(import::JOB_KIND, serde_json::json!({ "sourceId": id }));
+            // Nel database del catalogo: gli id delle sorgenti sono per catalogo.
             let now = chrono::Utc::now().timestamp_millis();
-            let _ = st.app_store.kv_set(&auto_update_key(id), &now.to_string());
+            if let Err(e) = st
+                .store
+                .write(move |c| sources::record_auto_update(c, id, now))
+            {
+                tracing::warn!(source_id = id, code = "DATABASE", detail = %e, "ultimo aggiornamento automatico non salvato");
+            }
             crate::events::source_watch_changed(&handle);
         }
     }) {
@@ -481,10 +507,6 @@ pub fn restart_watcher(app: &AppHandle) {
 /// Stato corrente del monitoraggio per sorgente (aggiornato da `restart_watcher`).
 static WATCH_STATUS: parking_lot::Mutex<Vec<WatchStatus>> = parking_lot::Mutex::new(Vec::new());
 
-fn auto_update_key(source_id: i64) -> String {
-    format!("import.auto_update.{source_id}")
-}
-
 /// Stato del monitoraggio di una sorgente per la UI.
 #[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -502,20 +524,17 @@ pub struct SourceWatchStatus {
 pub async fn source_watch_status(app: tauri::AppHandle) -> AppResult<Vec<SourceWatchStatus>> {
     crate::state::blocking(app, move |_app, state| {
         let statuses = WATCH_STATUS.lock().clone();
-        Ok(statuses
-            .into_iter()
-            .map(|s| SourceWatchStatus {
-                source_id: s.source_id,
-                state: s.state,
-                last_auto_update_at: state
-                    .app_store
-                    .kv_get(&auto_update_key(s.source_id))
-                    .ok()
-                    .flatten()
-                    .and_then(|v| v.parse().ok()),
-                message: s.message,
-            })
-            .collect())
+        Ok(state.store.read(move |c| {
+            Ok(statuses
+                .into_iter()
+                .map(|s| SourceWatchStatus {
+                    source_id: s.source_id,
+                    state: s.state,
+                    last_auto_update_at: sources::last_auto_update(c, s.source_id).ok().flatten(),
+                    message: s.message,
+                })
+                .collect())
+        })?)
     })
     .await
 }

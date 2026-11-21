@@ -23,7 +23,7 @@ import {
   type SourceSummary,
   type SourceWatchStatus,
 } from "../../lib/ipc";
-import { fmtInt } from "../../lib/format";
+import { fmtDayMonth, fmtHourMinute, fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
 import { notify, notifyError } from "../../store/toasts";
@@ -65,24 +65,27 @@ function useWatchStatus() {
 
 function WatchStatusLine({ status }: { status: SourceWatchStatus }) {
   const { t } = useTranslation();
-  const time =
-    status.lastAutoUpdateAt === null
-      ? null
-      : new Date(status.lastAutoUpdateAt).toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+  const at = status.lastAutoUpdateAt;
+  // Solo l'ora se è di oggi, altrimenti anche il giorno ("ultimo il 5 gennaio alle 14:30").
+  const today = at !== null && new Date(at).toDateString() === new Date().toDateString();
   const text =
     status.state === "active"
-      ? time
-        ? t("sources.watchStatus.activeLast", { time })
-        : t("sources.watchStatus.active")
+      ? at === null
+        ? t("sources.watchStatus.active")
+        : today
+          ? t("sources.watchStatus.activeLast", { time: fmtHourMinute(at) })
+          : t("sources.watchStatus.activeLastDay", {
+              date: fmtDayMonth(at),
+              time: fmtHourMinute(at),
+            })
       : status.state === "unreachable"
         ? t("sources.watchStatus.unreachable")
-        : t("sources.watchStatus.error", { message: status.message ?? "" });
+        : t("sources.watchStatus.error");
   return (
     <span
       className={status.state === "active" ? "muted" : "import-warn"}
+      // Il messaggio tecnico del sistema resta consultabile al passaggio del puntatore.
+      title={status.state === "error" ? (status.message ?? undefined) : undefined}
       data-testid={`watch-status-${status.sourceId}`}
     >
       {text}
@@ -211,7 +214,7 @@ function FolderRow({
       {last && (
         <div className="import-folder-summary">
           <span className="muted">{t("sources.summary.title")}:</span>
-          <UpdateSummaryView summary={last} />
+          <UpdateSummaryView summary={last} quiet={!warned} />
         </div>
       )}
     </li>

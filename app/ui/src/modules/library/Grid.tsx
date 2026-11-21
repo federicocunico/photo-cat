@@ -404,6 +404,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   // lei se è tra gli elementi caricati e fuori vista, e la tastiera riparte da lì. Una volta
   // per foto; con uno scorrimento già ripristinato al montaggio non si interviene.
   const revealed = useRef<number | null | undefined>(undefined);
+  const seeking = useRef<number | null>(null);
   const focusedId = useLibrary((s) => s.focused);
   useEffect(() => {
     if (revealed.current === undefined) {
@@ -411,7 +412,21 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     }
     if (focusedId == null || revealed.current === focusedId) return;
     const i = items.findIndex((x) => x.id === focusedId);
-    if (i < 0) return;
+    if (i < 0) {
+      // Foto oltre le pagine caricate (cartella con molte foto): la vista scorre alla sua
+      // posizione, la finestra di pagine la segue e l'effetto la mette a fuoco all'arrivo.
+      if (seeking.current === focusedId || !pages.isSuccess || !isTauri()) return;
+      seeking.current = focusedId;
+      const id = focusedId;
+      void commands
+        .libraryPosition(viewFilter, sort, id)
+        .then((pos) => {
+          if (pos == null || useLibrary.getState().focused !== id) return;
+          virt.scrollToIndex(Math.floor(pos / cols), { align: "center" });
+        })
+        .catch(() => {});
+      return;
+    }
     revealed.current = focusedId;
     const b = start + i;
     const d = b + expansions.reduce((n, e) => (e.base < b ? n + e.members.length : n), 0);
@@ -421,7 +436,19 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     const height = virt.scrollRect?.height ?? 0;
     if (top < view || top + rowHeight > view + height) virt.scrollToIndex(row, { align: "center" });
     setCursorState({ key: viewKey, at: d });
-  }, [focusedId, items, start, expansions, cols, rowHeight, virt, viewKey]);
+  }, [
+    focusedId,
+    items,
+    start,
+    expansions,
+    cols,
+    rowHeight,
+    virt,
+    viewKey,
+    pages.isSuccess,
+    viewFilter,
+    sort,
+  ]);
   const moveCursor = (to: number, extend: boolean) => {
     const n = Math.max(0, Math.min(total - 1, to));
     setCursor(n);

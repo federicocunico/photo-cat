@@ -27,13 +27,11 @@ const levelTone = (level: string) => (level === "ERROR" ? "danger" : "warn");
 
 function Detail({
   entry,
-  archived,
   busy,
   onArchive,
   onRestore,
 }: {
   entry: ErrorEntry;
-  archived: boolean;
   busy: boolean;
   onArchive: () => void;
   onRestore: () => void;
@@ -57,6 +55,12 @@ function Detail({
         <dd>{labels.phase(entry.phase)}</dd>
         <dt className="muted">{t("diag.time")}</dt>
         <dd>{fmtDateTime(entry.ts)}</dd>
+        {entry.archivedAt && (
+          <>
+            <dt className="muted">{t("diag.archivedAt")}</dt>
+            <dd>{fmtDateTime(entry.archivedAt)}</dd>
+          </>
+        )}
       </dl>
       {hintKey && i18n.exists(hintKey) && (
         <p className="diag-hint" data-testid="detail-hint">
@@ -64,7 +68,7 @@ function Detail({
         </p>
       )}
       <div className="diag-detail-actions">
-        {archived ? (
+        {entry.archivedAt ? (
           <Button size="sm" disabled={busy} onClick={onRestore}>
             {t("diag.restore")}
           </Button>
@@ -435,7 +439,6 @@ export function DiagnosticsPage() {
             <div ref={detailRef} className="diag-detail-wrap">
               <Detail
                 entry={current}
-                archived={!!filter.archived}
                 busy={busy}
                 onArchive={() => archive({ kind: "ids", ids: [current.id] })}
                 onRestore={() => restore([current.id])}

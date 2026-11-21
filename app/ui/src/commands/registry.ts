@@ -61,6 +61,13 @@ function matches(s: Shortcut, e: KeyboardEvent): boolean {
   // "?" si ottiene con Maiusc: per i simboli conta il carattere, non il tasto Maiusc.
   const symbol = s.key.length === 1 && !/[a-z0-9]/i.test(s.key);
   if (!symbol && Boolean(s.shift) !== e.shiftKey) return false;
+  // Con Alt (Option su macOS) `e.key` diventa un altro carattere (Option+1 = "¡"):
+  // per lettere e cifre conta il tasto fisico.
+  if (s.alt && !symbol && s.key.length === 1) {
+    const k = s.key.toUpperCase();
+    const codes = /[0-9]/.test(k) ? [`Digit${k}`, `Numpad${k}`] : [`Key${k}`];
+    if (codes.includes(e.code)) return true;
+  }
   return e.key.toLowerCase() === s.key.toLowerCase();
 }
 

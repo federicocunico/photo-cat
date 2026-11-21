@@ -70,7 +70,8 @@ export const selection = {
       dateTitle_other: "Data di scatto per {{count}} foto",
       dateApply: "Imposta",
       dateInvalid: "Data non valida",
-      rateKey: "Valutazione {{count}} sulla selezione",
+      rateKey_one: "Assegna {{count}} stella alla selezione",
+      rateKey_other: "Assegna {{count}} stelle alla selezione",
       rateKeyNone: "Togli la valutazione dalla selezione",
       done: {
         trash: "{{count}} foto nel cestino",
@@ -163,7 +164,8 @@ export const selection = {
       dateTitle_other: "Shot date for {{count}} photos",
       dateApply: "Set",
       dateInvalid: "Invalid date",
-      rateKey: "Rating {{count}} on the selection",
+      rateKey_one: "Give {{count}} star to the selection",
+      rateKey_other: "Give {{count}} stars to the selection",
       rateKeyNone: "Remove the rating from the selection",
       done: {
         trash: "{{count}} photos moved to Trash",

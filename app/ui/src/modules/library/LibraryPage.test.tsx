@@ -1470,4 +1470,52 @@ describe("scorrimento alla foto in focus", () => {
     await screen.findByTestId("thumb-2");
     expect(scrollTo.mock.calls.every(([o]) => (o as { top: number }).top === 0)).toBe(true);
   });
+
+  it("una foto oltre le pagine caricate viene raggiunta con la sua posizione", async () => {
+    commandsMock.libraryCount.mockResolvedValue(1000);
+    // 1000 foto con id = posizione + 1, a pagine come il backend (offset e cursori).
+    commandsMock.libraryPage.mockImplementation((async (
+      _f: unknown,
+      _s: unknown,
+      at: { kind: string; offset?: number; cursor?: { id: number } } | null,
+      limit: number,
+    ) => {
+      const total = 1000;
+      let from = at?.kind === "offset" ? (at.offset ?? 0) : 0;
+      let to = Math.min(total, from + limit);
+      if (at?.kind === "after")
+        [from, to] = [at.cursor!.id, Math.min(total, at.cursor!.id + limit)];
+      if (at?.kind === "before")
+        [from, to] = [Math.max(0, at.cursor!.id - 1 - limit), at.cursor!.id - 1];
+      const items = Array.from({ length: to - from }, (_, i) => item(from + i + 1));
+      const cur = (id: number) => ({ key: id, id });
+      return {
+        items,
+        next: to < total ? cur(to) : null,
+        prev: from > 0 ? cur(from + 1) : null,
+      };
+    }) as never);
+    commandsMock.libraryPosition.mockResolvedValue(604);
+    // Qui lo scorrimento deve spostare davvero la vista, come nel browser.
+    Element.prototype.scrollTo = vi.fn(function (this: HTMLElement, o: ScrollToOptions) {
+      Object.defineProperty(this, "scrollTop", { value: o.top ?? 0, configurable: true });
+      this.dispatchEvent(new Event("scroll"));
+    }) as never;
+    useLibrary.setState({ selection: idsSelection([605]), focused: 605, anchor: 605 });
+    renderPage();
+    await waitFor(() =>
+      expect(commandsMock.libraryPosition).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        605,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("grid-scroll")).toHaveAttribute(
+        "aria-activedescendant",
+        "thumb-opt-605",
+      ),
+    );
+    expect(commandsMock.libraryPosition).toHaveBeenCalledTimes(1);
+  });
 });

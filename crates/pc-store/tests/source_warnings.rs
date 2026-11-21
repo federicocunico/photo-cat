@@ -117,3 +117,47 @@ fn failed_warning_clears_on_acknowledgement_and_on_clean_update() {
     })
     .unwrap();
 }
+
+/// L'ultimo aggiornamento automatico è salvato nel database del catalogo: due
+/// cataloghi con la stessa sorgente 1 non si sovrascrivono a vicenda.
+#[test]
+fn last_auto_update_is_per_catalog() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let (sa, sb) = (store(a.path()), store(b.path()));
+    let src_a = sa.write(|c| Ok(source(c))).unwrap();
+    let src_b = sb.write(|c| Ok(source(c))).unwrap();
+    assert_eq!(
+        src_a, src_b,
+        "gli id delle sorgenti ripartono in ogni catalogo"
+    );
+
+    sa.write(move |c| sources::record_auto_update(c, src_a, 1_000))
+        .unwrap();
+    assert_eq!(
+        sa.read(move |c| sources::last_auto_update(c, src_a))
+            .unwrap(),
+        Some(1_000)
+    );
+    assert_eq!(
+        sb.read(move |c| sources::last_auto_update(c, src_b))
+            .unwrap(),
+        None
+    );
+
+    sb.write(move |c| sources::record_auto_update(c, src_b, 2_000))
+        .unwrap();
+    assert_eq!(
+        sa.read(move |c| sources::last_auto_update(c, src_a))
+            .unwrap(),
+        Some(1_000)
+    );
+
+    // La rimozione della sorgente dimentica anche l'istante.
+    sa.write(move |c| sources::forget_update(c, src_a)).unwrap();
+    assert_eq!(
+        sa.read(move |c| sources::last_auto_update(c, src_a))
+            .unwrap(),
+        None
+    );
+}

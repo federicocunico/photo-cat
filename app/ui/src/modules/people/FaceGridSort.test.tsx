@@ -90,19 +90,19 @@ describe("ordinamento dei volti per data", () => {
     usePeoplePrefs.setState({ faceSort: "captured_desc" });
     renderGrid();
     expect(await screen.findByText("2021 · 2 volti")).toBeInTheDocument();
-    expect(screen.getByText("2020 · 1 volti")).toBeInTheDocument();
+    expect(screen.getByText("2020 · 1 volto")).toBeInTheDocument();
     const heads = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    expect(heads).toEqual(["2021 · 2 volti", "2020 · 1 volti", "Senza data · 1 volti"]);
+    expect(heads).toEqual(["2021 · 2 volti", "2020 · 1 volto", "Senza data · 1 volto"]);
     expect(commandsMock.groupFaceYears).toHaveBeenCalledWith({ kind: "group", group: 1 });
   });
 
   it("dal più vecchio ordina gli anni in modo crescente", async () => {
     usePeoplePrefs.setState({ faceSort: "captured_asc" });
     renderGrid();
-    await screen.findByText("2020 · 1 volti");
+    await screen.findByText("2020 · 1 volto");
     const heads = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    expect(heads[0]).toBe("2020 · 1 volti");
-    expect(heads[heads.length - 1]).toBe("Senza data · 1 volti");
+    expect(heads[0]).toBe("2020 · 1 volto");
+    expect(heads[heads.length - 1]).toBe("Senza data · 1 volto");
   });
 
   it("la scelta è ricordata nelle preferenze", async () => {

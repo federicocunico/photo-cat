@@ -81,6 +81,33 @@ describe("registro dei comandi", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("con Alt conta il tasto fisico (Option+cifra su macOS cambia e.key) e i tasti senza Alt restano distinti", () => {
+    const rate = vi.fn();
+    const tag = vi.fn();
+    registerCommands([
+      { id: "tag", label: "Tag", group: "selection", shortcut: { key: "2" }, run: tag },
+      {
+        id: "rate",
+        label: "2 stelle",
+        group: "selection",
+        shortcut: { key: "2", alt: true },
+        run: rate,
+      },
+    ]);
+    key("™", { code: "Digit2", altKey: true });
+    expect(rate).toHaveBeenCalledTimes(1);
+    key("2", { code: "Digit2", altKey: true });
+    expect(rate).toHaveBeenCalledTimes(2);
+    expect(tag).not.toHaveBeenCalled();
+    key("2", { code: "Digit2" });
+    expect(tag).toHaveBeenCalledTimes(1);
+    expect(rate).toHaveBeenCalledTimes(2);
+    // Un altro tasto fisico con lo stesso carattere non basta, né Ctrl+Alt.
+    key("™", { code: "Digit3", altKey: true });
+    key("2", { code: "Digit2", altKey: true, ctrlKey: true });
+    expect(rate).toHaveBeenCalledTimes(2);
+  });
+
   it("useCommands registra finché il componente è montato; la palette vede quelli disponibili", () => {
     function Host({ on }: { on: boolean }) {
       useCommands([
