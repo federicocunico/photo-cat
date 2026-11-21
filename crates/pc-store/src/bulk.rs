@@ -346,9 +346,10 @@ pub fn set_rating(c: &Connection, ids: &[MediaId], rating: Option<u8>) -> StoreR
     } else {
         format!("Imposta valutazione {value}")
     };
+    let changed = previous.len();
     record_undo(c, &description, &UndoAction::SetRating { previous })?;
     Ok(BulkOutcome {
-        changed: ids.len(),
+        changed,
         requested: ids.len(),
     })
 }
@@ -375,9 +376,10 @@ pub fn set_color_trait(
         Some(t) => format!("Imposta colore {}", t.as_str()),
         None => "Rimuovi caratteristica di colore".to_string(),
     };
+    let changed = previous.len();
     record_undo(c, &description, &UndoAction::SetColorTrait { previous })?;
     Ok(BulkOutcome {
-        changed: ids.len(),
+        changed,
         requested: ids.len(),
     })
 }
@@ -1477,14 +1479,15 @@ fn undo_action(
         }
         UndoAction::SetRating { previous } => {
             let mut up = c.prepare_cached("UPDATE media_item SET rating = ?2 WHERE id = ?1")?;
-            for (id, rating) in &previous {
+            // All'indietro: con id ripetuti vince il primo valore letto, cioè l'originale.
+            for (id, rating) in previous.iter().rev() {
                 up.execute(params![id, rating])?;
             }
         }
         UndoAction::SetColorTrait { previous } => {
             let mut up =
                 c.prepare_cached("UPDATE media_item SET color_trait = ?2 WHERE id = ?1")?;
-            for (id, t) in &previous {
+            for (id, t) in previous.iter().rev() {
                 up.execute(params![id, t.map(ColorTrait::as_str)])?;
             }
         }
@@ -1492,7 +1495,7 @@ fn undo_action(
             let mut up = c.prepare_cached(
                 "UPDATE media_dates SET manual_at = ?2, manual_precision = ?3 WHERE media_id = ?1",
             )?;
-            for (id, at, precision) in &previous {
+            for (id, at, precision) in previous.iter().rev() {
                 up.execute(params![id, at, precision.map(DatePrecision::as_str)])?;
                 crate::timeline::refresh_media(c, *id, &crate::timeline::system_offset)?;
             }

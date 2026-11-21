@@ -256,3 +256,128 @@ fn year_only_dates_live_in_year_without_month() {
     assert_eq!(count(&months, "1984-00"), 1);
     assert_eq!(fa.days, None);
 }
+
+#[test]
+fn color_rule_in_and_values_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    let ids = s.write(|c| Ok(seed(c))).unwrap();
+    let ids_of = |rule: serde_json::Value| -> Vec<i64> {
+        let f = LibraryFilter {
+            rule: Some(rule),
+            ..Default::default()
+        };
+        let mut got = s.read(|c| query::ids(c, &f)).unwrap();
+        got.sort();
+        got
+    };
+    assert_eq!(
+        ids_of(json!({"field": "color_trait", "cmp": "in", "value": ["sepia", "none"]})),
+        vec![ids[1], ids[2], ids[4]]
+    );
+    assert_eq!(
+        ids_of(json!({"field": "color_trait", "cmp": "eq", "value": "bw"})),
+        vec![ids[0], ids[3]]
+    );
+    // "diverso da" include le foto non indicate.
+    assert_eq!(
+        ids_of(json!({"field": "color_trait", "cmp": "neq", "value": "none"})),
+        vec![ids[0], ids[1], ids[3]]
+    );
+    for bad in [
+        json!({"field": "color_trait", "cmp": "in", "value": ["sepia", "rosso"]}),
+        json!({"field": "rating", "cmp": "in", "value": [4, 9]}),
+    ] {
+        assert!(pc_store::rules::parse(&bad).is_err(), "{bad}");
+    }
+}
+
+/// I percorsi caldi usano gli indici `media_rating` e `media_color_trait`
+/// invece di scandire la tabella (100.000 foto).
+#[test]
+fn rating_and_color_filters_use_their_indexes() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| Ok(seed(c))).unwrap();
+    let plan = |f: LibraryFilter| -> String {
+        s.read(move |c| {
+            let w = query::compile_filter(c, &f)?;
+            let sql = format!(
+                "EXPLAIN QUERY PLAN SELECT m.id FROM media_item m \
+                 LEFT JOIN media_dates d ON d.media_id = m.id WHERE {}",
+                w.sql
+            );
+            let mut st = c.prepare(&sql)?;
+            let rows: Vec<String> = st
+                .query_map(rusqlite::params_from_iter(w.args.iter()), |r| r.get(3))?
+                .collect::<Result<_, _>>()?;
+            Ok(rows.join("\n"))
+        })
+        .unwrap()
+    };
+    let cases = [
+        (
+            LibraryFilter {
+                rating: rating(RatingOp::AtLeast, 4),
+                ..Default::default()
+            },
+            "media_rating (rating>?)",
+        ),
+        (
+            LibraryFilter {
+                color_trait: vec![Some(ColorTrait::Sepia)],
+                ..Default::default()
+            },
+            "media_color_trait (color_trait=?)",
+        ),
+        (
+            LibraryFilter {
+                rule: Some(json!({"field": "rating", "cmp": "gte", "value": 4})),
+                ..Default::default()
+            },
+            "media_rating (rating>?)",
+        ),
+        (
+            LibraryFilter {
+                rule: Some(json!({"field": "color_trait", "cmp": "eq", "value": "bw"})),
+                ..Default::default()
+            },
+            "media_color_trait (color_trait=?)",
+        ),
+        (
+            LibraryFilter {
+                rule: Some(json!({"field": "color_trait", "cmp": "eq", "value": "none"})),
+                ..Default::default()
+            },
+            "media_color_trait (color_trait=?)",
+        ),
+    ];
+    for (f, expected) in cases {
+        let p = plan(f);
+        assert!(p.contains(expected), "{expected} non in:\n{p}");
+    }
+}
+
+#[test]
+fn manual_date_without_file_date_appears_in_year_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| {
+        let id = repo::media::upsert(
+            c,
+            &NewMedia {
+                path: r"D:\foto\senza.jpg".into(),
+                name: "senza.jpg".into(),
+                ext: "jpg".into(),
+                ..Default::default()
+            },
+        )?;
+        bulk::set_manual_date_with(c, &[id], "1962", DatePrecision::Year, UTC)?;
+        Ok(())
+    })
+    .unwrap();
+    let fa = s
+        .read(|c| query::facets(c, &LibraryFilter::default()))
+        .unwrap();
+    assert_eq!(count(&fa.years, "1962"), 1);
+}

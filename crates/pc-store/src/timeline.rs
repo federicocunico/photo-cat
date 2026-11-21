@@ -534,6 +534,17 @@ pub fn propose_alignment(
 ) -> StoreResult<Alignment> {
     let (a, ga) = instant_of(c, reference)?;
     let (b, gb) = instant_of(c, other)?;
+    // Lo scostamento del gruppo non sposta una data manuale: allinearla non avrebbe effetto.
+    let manual: bool = c.query_row(
+        "SELECT manual_at IS NOT NULL FROM media_dates WHERE media_id = ?1",
+        [other],
+        |r| r.get(0),
+    )?;
+    if manual {
+        return Err(StoreError::Invalid(
+            "la foto da allineare ha una data impostata a mano".into(),
+        ));
+    }
     if ga == gb {
         return Err(StoreError::Invalid(
             "le due foto appartengono allo stesso gruppo di sorgente".into(),
@@ -559,7 +570,9 @@ pub struct ClockPreview {
     pub after: Option<String>,
 }
 
-/// Anteprima delle prime `limit` foto del gruppo con correzioni diverse.
+/// Anteprima delle prime `limit` foto del gruppo con correzioni diverse. Come
+/// [`set_clock`], esclude le foto con data manuale o collocate a mano, che le
+/// correzioni del gruppo non spostano.
 pub fn preview_clock(
     c: &Connection,
     group: i64,
@@ -569,7 +582,9 @@ pub fn preview_clock(
 ) -> StoreResult<Vec<ClockPreview>> {
     let mut q = c.prepare(
         "SELECT media_id, captured_at, declared_offset_min, instant_utc, local_offset_min FROM media_dates
-         WHERE group_id = ?1 AND captured_at IS NOT NULL ORDER BY instant_utc, media_id LIMIT ?2",
+         WHERE group_id = ?1 AND captured_at IS NOT NULL AND manual_at IS NULL
+           AND media_id NOT IN (SELECT media_id FROM media_time_placement)
+         ORDER BY instant_utc, media_id LIMIT ?2",
     )?;
     let rows = q
         .query_map(params![group, limit as i64], |r| {
@@ -720,7 +735,7 @@ pub fn suggest_timezones(
         "SELECT d.media_id, d.group_id, d.instant_utc, d.local_offset_min, e.gps_lat, e.gps_lon
          FROM media_dates d LEFT JOIN exif e ON e.media_id = d.media_id
          WHERE d.instant_utc IS NOT NULL AND d.group_id IS NOT NULL
-           AND d.captured_source <> 'file_system'
+           AND d.captured_source <> 'file_system' AND d.manual_at IS NULL
            AND (?1 IS NULL OR d.media_id IN (SELECT value FROM json_each(?1)))
          ORDER BY d.instant_utc",
     )?;

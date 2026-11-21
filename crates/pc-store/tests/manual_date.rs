@@ -176,6 +176,118 @@ fn group_shift_does_not_touch_manual_date() {
 }
 
 #[test]
+fn clock_preview_skips_manual_dates_like_set_clock() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| {
+        let manual = add(c, "a.jpg", "2019-03-02 10:00:00", DateSource::ExifOriginal);
+        let plain = add(c, "b.jpg", "2019-03-02 11:00:00", DateSource::ExifOriginal);
+        bulk::set_manual_date_with(c, &[manual], "1984-06", DatePrecision::Month, UTC)?;
+        let (_, group) = timeline::instant_of(c, plain)?;
+        let clock = GroupClock {
+            shift_s: 3600,
+            ..Default::default()
+        };
+        let preview = timeline::preview_clock(c, group, &clock, 10, UTC)?;
+        assert_eq!(
+            preview.iter().map(|p| p.media_id).collect::<Vec<_>>(),
+            vec![plain]
+        );
+        assert_eq!(preview[0].before.as_deref(), Some("2019-03-02 11:00:00"));
+        assert_eq!(preview[0].after.as_deref(), Some("2019-03-02 12:00:00"));
+        // L'anteprima coincide con ciò che `set_clock` applica davvero.
+        let m0 = local(c, manual);
+        timeline::set_clock(c, group, &clock, UTC)?;
+        assert_eq!(local(c, manual), m0);
+        assert_eq!(local(c, plain), preview[0].after);
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn alignment_refuses_a_photo_with_manual_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| {
+        let reference = add(c, "a.jpg", "2019-03-02 10:00:00", DateSource::ExifOriginal);
+        let other = add(c, "b.jpg", "2019-03-02 11:00:00", DateSource::ExifOriginal);
+        repo::meta::set_dates_with(
+            c,
+            other,
+            &MediaDates {
+                captured_at: Some("2019-03-02 11:00:00".into()),
+                captured_source: Some(DateSource::ExifOriginal),
+                device: Some("Nikon D7000".into()),
+                ..Default::default()
+            },
+            UTC,
+        )?;
+        assert!(timeline::propose_alignment(c, reference, other).is_ok());
+        bulk::set_manual_date_with(c, &[other], "1984", DatePrecision::Year, UTC)?;
+        assert!(matches!(
+            timeline::propose_alignment(c, reference, other),
+            Err(pc_store::StoreError::Invalid(_))
+        ));
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn reimport_keeps_manual_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| {
+        let id = add(c, "a.jpg", "2019-03-02 10:00:00", DateSource::ExifOriginal);
+        bulk::set_manual_date_with(c, &[id], "1962", DatePrecision::Year, UTC)?;
+        // Una rianalisi riscrive le date lette dal file senza toccare quella manuale.
+        repo::meta::set_dates_with(
+            c,
+            id,
+            &MediaDates {
+                captured_at: Some("2019-03-02 10:00:05".into()),
+                captured_source: Some(DateSource::ExifOriginal),
+                ..Default::default()
+            },
+            UTC,
+        )?;
+        let d = repo::meta::dates(c, id)?.unwrap();
+        assert_eq!(d.manual_at.as_deref(), Some("1962-01-01 00:00:00"));
+        assert_eq!(d.captured_source, Some(DateSource::Manual));
+        assert_eq!(instant(c, id), Some(day("1962-01-01 00:00:00")));
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn undo_with_repeated_ids_restores_the_original_value() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(dir.path());
+    s.write(|c| {
+        let a = add(c, "a.jpg", "2019-03-02 10:00:00", DateSource::ExifOriginal);
+        bulk::set_manual_date_with(c, &[a, a], "1962", DatePrecision::Year, UTC)?;
+        bulk::set_rating(c, &[a], Some(2))?;
+        bulk::set_rating(c, &[a, a], Some(5))?;
+        bulk::set_color_trait(c, &[a, a], Some(ColorTrait::Sepia))?;
+        bulk::undo_last(c)?;
+        bulk::undo_last(c)?;
+        let r: (i64, Option<String>) = c.query_row(
+            "SELECT rating, color_trait FROM media_item WHERE id = ?1",
+            [a],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        assert_eq!(r, (2, None));
+        bulk::undo_last(c)?;
+        bulk::undo_last(c)?;
+        assert_eq!(repo::meta::dates(c, a)?.unwrap().manual_at, None);
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
 fn undo_restores_previous_values_per_id() {
     let dir = tempfile::tempdir().unwrap();
     let s = store(dir.path());

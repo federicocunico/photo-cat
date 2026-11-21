@@ -1098,7 +1098,7 @@ impl FacetKey {
             // Gli anni restano in ordine cronologico inverso.
             Self::Year => format!(
                 "SELECT substr({LOCAL_TIME_SQL}, 1, 4), count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
-                 WHERE d.captured_at IS NOT NULL GROUP BY 1 ORDER BY 1 DESC"
+                 WHERE (d.captured_at IS NOT NULL OR d.manual_at IS NOT NULL) GROUP BY 1 ORDER BY 1 DESC"
             ),
             Self::Format => "SELECT m.ext, count(*) FROM media_item m JOIN f ON f.id = m.id \
                  GROUP BY m.ext ORDER BY 2 DESC, 1"
@@ -1313,7 +1313,7 @@ fn date_list(
     let sql = format!(
         "WITH f AS (SELECT m.id {FROM} WHERE {}) \
          SELECT {key}, count(*) FROM media_dates d JOIN f ON f.id = d.media_id \
-         WHERE d.captured_at IS NOT NULL{only_day} GROUP BY 1 ORDER BY 1",
+         WHERE (d.captured_at IS NOT NULL OR d.manual_at IS NOT NULL){only_day} GROUP BY 1 ORDER BY 1",
         w.sql
     );
     let mut st = c.prepare(&sql)?;

@@ -22,11 +22,11 @@
   - uscita dalle foto senza data;
   - scostamento di gruppo che non tocca la data manuale.
 - [x] 1.4 Filtri e regole smart (`LibraryFilter.rating`, `color_trait`) in `compile_filter`, facet con conteggi, nodo "Anno senza mese" nel filtro per data. Test Rust su "almeno 4", "Non indicato", combinazione con un altro filtro e catalogo smart aggiornato dopo un bulk.
-- [ ] 1.5 Revisione Opus della parte 1: correttezza dell'istante reale con date manuali, costo delle query sui nuovi indici, completezza dell'annulla.
+- [x] 1.5 Revisione Opus della parte 1: correttezza dell'istante reale con date manuali, costo delle query sui nuovi indici, completezza dell'annulla.
 
 ## 2. Valutazione, colore e data nell'interfaccia (#41, #43)
 
-- [ ] 2.1 Inspector: stelle cliccabili, selettore "Colore", editor "Data di scatto" con precisione giorno/mese/anno e "Ripristina data del file", con la fonte mostrata. Test vitest delle tre modifiche e del ripristino.
+- [x] 2.1 Inspector: stelle cliccabili, selettore "Colore", editor "Data di scatto" con precisione giorno/mese/anno e "Ripristina data del file", con la fonte mostrata. Test vitest delle tre modifiche e del ripristino.
 - [ ] 2.2 Menu contestuale della griglia: "Valutazione ▸", "Colore ▸" (con "Non indicato") e "Imposta data di scatto…" sulla selezione. Alt+1–5 e Alt+0 in Libreria e Sequenza, senza toccare i tasti 1–9 dei tag. Stelle sulle miniature. Test vitest:
   - Alt+5 su 3 foto;
   - il tasto 2 assegna ancora il tag;

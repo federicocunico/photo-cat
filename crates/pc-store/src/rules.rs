@@ -135,9 +135,21 @@ fn check_value(kind: Kind, cmp: Cmp, v: &serde_json::Value, field: &str) -> Stor
         Kind::Number => v.is_number(),
         _ => v.is_string() || (field == "catalog" && v.is_number()),
     };
+    // Valori ammessi oltre al tipo: colore tra quelli noti, valutazione da 0 a 5.
+    let domain_ok = |v: &serde_json::Value| match field {
+        "color_trait" => v.as_str().is_some_and(|s| COLOR_RULE_VALUES.contains(&s)),
+        "rating" => matches!(v.as_i64(), Some(0..=5)),
+        _ => true,
+    };
     match (kind, cmp) {
         (_, Cmp::In) => match v.as_array() {
-            Some(a) if !a.is_empty() && a.len() <= 500 && a.iter().all(scalar_ok) => Ok(()),
+            Some(a)
+                if !a.is_empty()
+                    && a.len() <= 500
+                    && a.iter().all(|x| scalar_ok(x) && domain_ok(x)) =>
+            {
+                Ok(())
+            }
             _ => bad(),
         },
         (Kind::Exists, Cmp::Eq | Cmp::Neq) if scalar_ok(v) => Ok(()),
@@ -351,6 +363,27 @@ fn compile_cond(
                 "SELECT 1 FROM catalog_item ci WHERE ci.media_id = m.id AND ci.catalog_id {cond}",
             ));
             f.args.extend(vals);
+            return Ok(());
+        }
+        // "uguale a" e "uno tra" usano l'indice `media_color_trait`: `none` diventa
+        // `IS NULL` invece di passare per `COALESCE`, che obbligherebbe a una scansione.
+        "color_trait" if matches!(cmp, Cmp::Eq | Cmp::In) => {
+            let none = vals
+                .iter()
+                .any(|v| matches!(v, Value::Text(s) if s == "none"));
+            let named: Vec<Value> = vals
+                .into_iter()
+                .filter(|v| !matches!(v, Value::Text(s) if s == "none"))
+                .collect();
+            let mut alts = Vec::new();
+            if !named.is_empty() {
+                alts.push(format!("m.color_trait IN ({})", placeholders(named.len())));
+            }
+            if none {
+                alts.push("m.color_trait IS NULL".to_string());
+            }
+            f.sql.push_str(&format!("({})", alts.join(" OR ")));
+            f.args.extend(named);
             return Ok(());
         }
         "text" => {
