@@ -714,3 +714,10 @@ body[data-photo-drag] {
   display: flex;
   gap: var(--pc-space-2);
 }
+.thumb-badge-rating {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  color: var(--pc-warn);
+  letter-spacing: 1px;
+}

@@ -63,6 +63,15 @@ export const selection = {
       assignBody:
         "Tutti i volti di {{count}} foto vengono assegnati a {{name}}. Non si può annullare da qui: eventuali errori si correggono nel modulo Persone.",
       assignConfirm: "Assegna a {{name}}",
+      rateMenu: "Valutazione",
+      colorMenu: "Colore",
+      setDateMenu: "Imposta data di scatto…",
+      dateTitle_one: "Data di scatto per {{count}} foto",
+      dateTitle_other: "Data di scatto per {{count}} foto",
+      dateApply: "Imposta",
+      dateInvalid: "Data non valida",
+      rateKey: "Valutazione {{count}} sulla selezione",
+      rateKeyNone: "Togli la valutazione dalla selezione",
       done: {
         trash: "{{count}} foto nel cestino",
         restore_from_system: "{{count}} foto ripristinate da «{{name}}»",
@@ -147,6 +156,15 @@ export const selection = {
       assignBody:
         "All faces in {{count}} photos are assigned to {{name}}. This cannot be undone here: fix mistakes in People.",
       assignConfirm: "Assign to {{name}}",
+      rateMenu: "Rating",
+      colorMenu: "Colour",
+      setDateMenu: "Set shot date…",
+      dateTitle_one: "Shot date for {{count}} photo",
+      dateTitle_other: "Shot date for {{count}} photos",
+      dateApply: "Set",
+      dateInvalid: "Invalid date",
+      rateKey: "Rating {{count}} on the selection",
+      rateKeyNone: "Remove the rating from the selection",
       done: {
         trash: "{{count}} photos moved to Trash",
         restore_from_system: "{{count}} photos restored from “{{name}}”",

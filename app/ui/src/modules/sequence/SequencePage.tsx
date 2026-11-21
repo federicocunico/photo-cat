@@ -35,6 +35,7 @@ import "./sequence.css";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Viewer } from "../../components/viewer/Viewer";
 import { useBulkJob } from "../library/bulkJob";
+import { useRatingHotkeys } from "../library/useRatingHotkeys";
 import { useCommands } from "../../commands/registry";
 import { SequenceExport } from "./SequenceExport";
 
@@ -803,6 +804,10 @@ export function SequencePage() {
       });
   }, [o, setStats]);
   useTagHotkeys(() => {
+    const ids = useSequence.getState().selected;
+    return { target: { kind: "ids", ids }, count: ids.length };
+  }, view === "sequence");
+  useRatingHotkeys(() => {
     const ids = useSequence.getState().selected;
     return { target: { kind: "ids", ids }, count: ids.length };
   }, view === "sequence");

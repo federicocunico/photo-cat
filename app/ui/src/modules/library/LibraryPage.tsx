@@ -8,6 +8,7 @@ import { useCatalogFeedback } from "./catalogActions";
 import { FacetPanels } from "./FacetPanel";
 import { LibraryHeader } from "./LibraryHeader";
 import { useTagHotkeys } from "../tags/useTagHotkeys";
+import { useRatingHotkeys } from "./useRatingHotkeys";
 import { FirstSteps } from "./FirstSteps";
 import { useSystemCatalogCommands } from "./useSystemCatalogCommands";
 import { DragGhost } from "../../components/dnd/photoDrag";
@@ -19,6 +20,10 @@ export function LibraryPage() {
   useSystemCatalogCommands();
   const selected = useLibrary((s) => selCount(s.selection));
   useTagHotkeys(() => {
+    const s = useLibrary.getState().selection;
+    return { target: selTarget(s), count: selCount(s) };
+  });
+  useRatingHotkeys(() => {
     const s = useLibrary.getState().selection;
     return { target: selTarget(s), count: selCount(s) };
   });

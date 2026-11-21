@@ -166,6 +166,16 @@ function Thumb({
                   ? t("library.queuedBadge")
                   : t("library.unprocessedBadge")}
           </span>
+          {item.rating > 0 && (
+            <span
+              className="thumb-badge thumb-badge-rating"
+              data-testid={`rating-${item.id}`}
+              role="img"
+              aria-label={t("library.inspector.stars", { count: item.rating })}
+            >
+              {"★".repeat(item.rating)}
+            </span>
+          )}
           <ThumbTags tags={item.tags} color={tagColor} />
           {cover && (
             <span data-testid={`cover-${item.id}`} className="thumb-badge thumb-badge-cover">
@@ -760,6 +770,13 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           onAddToCatalog={addToCatalog}
           onOpen={(ids, target) => void openWith.open(ids, target)}
           onPlace={(target, p) => void place.apply(target, p)}
+          onBulk={(target, operation, n) =>
+            void bulk.start(
+              target,
+              operation,
+              t(`selection.done.${operation.action}`, { count: n }),
+            )
+          }
           onClose={closeMenu}
         />
       )}
