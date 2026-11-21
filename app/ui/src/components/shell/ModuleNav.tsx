@@ -9,7 +9,7 @@ import { commands } from "../../lib/ipc";
 import { useCommands, type Command } from "../../commands/registry";
 import { fmtInt } from "../../lib/format";
 import { Icon } from "../icons";
-import { Tooltip } from "../ui";
+import { Tooltip, chooseFolder } from "../ui";
 import "./shell.css";
 
 /** Sotto questa larghezza della finestra la navigazione passa a sole icone (design D2). */
@@ -56,7 +56,11 @@ function useNavCommands() {
       label: t("commands.rawReviewOpen"),
       group: "navigation",
       keywords: `${t("modules.raw-review")} RAW Fujifilm X-T5 FujiView`,
-      run: () => openModule({ module: "raw-review" }),
+      // Apre il dialogo di scelta cartella e porta la cartella scelta nel modulo.
+      run: async () => {
+        const root = await chooseFolder().catch(() => null);
+        openModule(root ? { module: "raw-review", root } : { module: "raw-review" });
+      },
     },
     ...(["overview", "reprocess", "cleanup", "map"] as const).map((section): Command => ({
       id: `nav.ai.${section}`,

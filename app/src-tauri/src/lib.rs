@@ -207,6 +207,16 @@ pub fn bindings() -> Builder<tauri::Wry> {
             timeline::place_undated,
             timeline::ignore_tz_suggestion,
             timeline::list_timezones,
+            raw_review::raw_review_open,
+            raw_review::raw_review_open_fujiview,
+            raw_review::raw_review_recent,
+            raw_review::raw_review_forget,
+            raw_review::raw_review_set_winner,
+            raw_review::raw_review_set_rating,
+            raw_review::raw_review_set_reviewed,
+            raw_review::raw_review_toggle_preset,
+            raw_review::raw_review_set_last_shot,
+            raw_review::raw_review_save,
             raw_review::raw_review_image_keys,
             raw_review::raw_review_prefetch,
             raw_review::raw_review_thumbnails,
@@ -276,8 +286,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_diag::ErrorRecord>()
         .typ::<pc_diag::ErrorBatch>()
         .typ::<pc_models::store::ModelStatus>()
-        // Varianti RAW: tipi dei comandi di apertura e dei metadati (task 3.2 e 3.3).
-        .typ::<pc_raw_review::session::OpenedFolder>()
+        // Varianti RAW: tipi dei metadati (task 3.3).
         .typ::<pc_raw_review::metadata::ImageMetadata>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()

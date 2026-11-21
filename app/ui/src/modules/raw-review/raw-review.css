@@ -1,0 +1,71 @@
+/* Varianti RAW: pagina iniziale e riepilogo della cartella aperta. */
+.raw-review-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-4);
+  min-height: 0;
+  overflow: auto;
+}
+.raw-review-start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-5);
+}
+.raw-review-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-1);
+}
+.raw-review-recent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.raw-review-recent-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--pc-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.raw-review-recent-open:hover:not(:disabled) {
+  background: var(--pc-panel-alt);
+  border-color: var(--pc-border);
+}
+.raw-review-recent-root {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.raw-review-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--pc-space-1) var(--pc-space-4);
+  margin: 0;
+}
+.raw-review-facts dd {
+  margin: 0;
+}
+.raw-review-warnings {
+  margin: 0;
+  padding-left: var(--pc-space-4);
+}
+.raw-review-compare {
+  padding: var(--pc-space-6) var(--pc-space-4);
+  border: 1px dashed var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  text-align: center;
+}

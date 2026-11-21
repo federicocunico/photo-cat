@@ -101,7 +101,31 @@ export const rawReview = {
       subtitle:
         "Confronta le varianti di simulazione pellicola dei RAW della Fujifilm X-T5 e scegli la migliore.",
       emptyTitle: "Nessuna cartella aperta",
-      emptyHint: "Scegli una cartella di RAW Fujifilm per iniziare la revisione.",
+      emptyHint:
+        "Scegli una cartella di RAW Fujifilm, o con una sottocartella per ogni preset, per iniziare la revisione. Le foto non vengono importate né modificate.",
+      openFolder: "Apri cartella…",
+      openProject: "Apri progetto FujiView (.fujiview)…",
+      recentTitle: "Sessioni recenti",
+      recentEmpty: "Nessuna sessione recente.",
+      recentMeta: "{{shots}} scatti · {{choices}} scelte · {{date}}",
+      recentForgetLabel: "Rimuovi {{name}} dall'elenco",
+      unsupportedTitle: "Cartella non supportata",
+      unsupportedBody:
+        "La cartella non contiene foto da rivedere. Le forme supportate sono: (1) file RAF al primo livello; (2) file RAF con le varianti già generate in «FujiView varianti/<preset>/»; (3) una sottocartella per preset con file JPEG o TIFF.",
+      openFailedTitle: "Impossibile aprire la cartella",
+      forgetFailed: "Impossibile aggiornare l'elenco delle sessioni recenti.",
+      shotsLabel: "Scatti",
+      shotCount_one: "{{count}} scatto",
+      shotCount_other: "{{count}} scatti",
+      layoutLabel: "Forma della cartella",
+      layout: {
+        rafOnly: "Solo file RAF",
+        rafWithVariants: "RAF con le varianti generate",
+        presets: "Una sottocartella per preset",
+      },
+      warningsTitle: "Avvisi della scansione",
+      compareSoon: "Qui compare il confronto tra le varianti.",
+      closeSession: "Chiudi la cartella",
     },
     rawReviewMeta: {
       sections: {
@@ -152,7 +176,31 @@ export const rawReview = {
       subtitle:
         "Compare the film simulation variants of Fujifilm X-T5 RAW files and pick the best one.",
       emptyTitle: "No folder open",
-      emptyHint: "Choose a folder of Fujifilm RAW files to start the review.",
+      emptyHint:
+        "Choose a folder of Fujifilm RAW files, or one with a subfolder per preset, to start the review. Photos are neither imported nor modified.",
+      openFolder: "Open folder…",
+      openProject: "Open FujiView project (.fujiview)…",
+      recentTitle: "Recent sessions",
+      recentEmpty: "No recent sessions.",
+      recentMeta: "{{shots}} shots · {{choices}} picks · {{date}}",
+      recentForgetLabel: "Remove {{name}} from the list",
+      unsupportedTitle: "Unsupported folder",
+      unsupportedBody:
+        "The folder has no photos to review. Supported layouts are: (1) RAF files at the top level; (2) RAF files with the generated variants in “FujiView varianti/<preset>/”; (3) one subfolder per preset with JPEG or TIFF files.",
+      openFailedTitle: "Could not open the folder",
+      forgetFailed: "Could not update the list of recent sessions.",
+      shotsLabel: "Shots",
+      shotCount_one: "{{count}} shot",
+      shotCount_other: "{{count}} shots",
+      layoutLabel: "Folder layout",
+      layout: {
+        rafOnly: "RAF files only",
+        rafWithVariants: "RAF files with generated variants",
+        presets: "One subfolder per preset",
+      },
+      warningsTitle: "Scan warnings",
+      compareSoon: "The variant comparison appears here.",
+      closeSession: "Close the folder",
     },
     rawReviewMeta: {
       sections: {

@@ -28,7 +28,8 @@ use crate::state::AppState;
 use parking_lot::{Condvar, Mutex, RwLock};
 use pc_core::{AppError, AppResult, ErrorCode};
 use pc_raw_review::preview::{PreviewCache, MAX_EDGE, MIN_EDGE};
-use pc_raw_review::scan::{Layout, ReviewIndex};
+use pc_raw_review::scan::{Layout, ReviewIndex, VariantKind};
+use pc_raw_review::session::{RecentSession, Session, ShotDecision};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -92,6 +93,102 @@ pub struct ThumbnailKey {
     pub key: Option<String>,
 }
 
+/// Forma della cartella aperta, senza i percorsi del [`Layout`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ReviewLayoutKind {
+    /// Solo RAF al primo livello.
+    RafOnly,
+    /// RAF più sottocartella delle varianti già generate.
+    RafWithVariants,
+    /// Una sottocartella per preset.
+    Presets,
+}
+
+/// Variante di uno scatto come la vede la UI: nessun percorso, il file si chiede a `review://`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewVariantView {
+    pub preset: String,
+    pub file_name: String,
+    pub extension: String,
+    pub bytes: u64,
+    pub kind: VariantKind,
+    /// Si può scegliere come variante migliore (l'anteprima RAW no).
+    pub selectable: bool,
+    /// Il file è un JPEG, quindi entra nell'export.
+    pub exportable: bool,
+}
+
+/// Scatto della lista di revisione.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewShotView {
+    pub key: String,
+    pub display_name: String,
+    pub variants: Vec<ReviewVariantView>,
+}
+
+/// Esito dell'apertura di una cartella o di un progetto: sessione registrata per `review://`,
+/// scelte salvate e indice degli scatti.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedReview {
+    /// Identificatore opaco per `review://` e per i comandi di modifica.
+    pub session_id: String,
+    pub session: Session,
+    pub layout: ReviewLayoutKind,
+    pub presets: Vec<String>,
+    pub guide_preset: Option<String>,
+    pub shots: Vec<ReviewShotView>,
+    /// Avvisi della scansione (file ignorati, duplicati, varianti mancanti).
+    pub warnings: Vec<String>,
+}
+
+/// Pannelli di confronto dopo aver mostrato o nascosto un preset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelState {
+    pub panel_presets: Vec<String>,
+    pub hidden_presets: Vec<String>,
+}
+
+fn opened_review(session_id: &str, session: Session, index: &ReviewIndex) -> OpenedReview {
+    OpenedReview {
+        session_id: session_id.to_string(),
+        session,
+        layout: match &index.layout {
+            Layout::RafOnly => ReviewLayoutKind::RafOnly,
+            Layout::RafWithVariants { .. } => ReviewLayoutKind::RafWithVariants,
+            Layout::Presets => ReviewLayoutKind::Presets,
+        },
+        presets: index.presets.clone(),
+        guide_preset: index.guide_preset.clone(),
+        shots: index
+            .shots
+            .iter()
+            .map(|shot| ReviewShotView {
+                key: shot.key.clone(),
+                display_name: shot.display_name.clone(),
+                variants: shot
+                    .variants
+                    .iter()
+                    .map(|v| ReviewVariantView {
+                        preset: v.preset.clone(),
+                        file_name: v.file_name.clone(),
+                        extension: v.extension.clone(),
+                        bytes: v.bytes,
+                        kind: v.kind,
+                        selectable: v.is_selectable(),
+                        exportable: pc_raw_review::scan::is_exportable_jpeg(v),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        warnings: index.warnings.clone(),
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Sessione aperta
 // ---------------------------------------------------------------------------------------------
@@ -148,13 +245,12 @@ impl OpenSession {
     }
 
     /// Identificatore opaco della sessione.
-    #[allow(dead_code)] // usato da `raw_review_open` (task 3.2)
     pub fn id(&self) -> &str {
         &self.id
     }
 
     /// Radice canonica della cartella aperta.
-    #[allow(dead_code)] // usato da `raw_review_open` (task 3.2)
+    #[allow(dead_code)] // usato dall'export (task 4.2)
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -487,6 +583,9 @@ pub struct ReviewState {
     scheduler: Option<Scheduler>,
     interactive: Slots,
     sessions: RwLock<HashMap<String, Arc<OpenSession>>>,
+    /// Sessione di revisione (scelte, valutazioni, pannelli) per id: la modificano i comandi e
+    /// `raw_review_save` la scrive nei dati dell'app.
+    working: RwLock<HashMap<String, Arc<Mutex<Session>>>>,
     counter: AtomicU64,
 }
 
@@ -542,6 +641,7 @@ impl ReviewState {
             scheduler: None,
             interactive: Slots::new(workers.interactive),
             sessions: RwLock::new(HashMap::new()),
+            working: RwLock::new(HashMap::new()),
             counter: AtomicU64::new(0),
         }
     }
@@ -551,7 +651,6 @@ impl ReviewState {
     ///
     /// Uso previsto (task 3.2): `pc_raw_review::session::open_folder` (o `open_fujiview`) fonde
     /// e salva la sessione, poi `register(&opened.index)` dà l'id da passare alla UI.
-    #[allow(dead_code)] // usato da `raw_review_open` (task 3.2)
     pub fn register(&self, index: &ReviewIndex) -> AppResult<Arc<OpenSession>> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -617,7 +716,116 @@ impl ReviewState {
 
     /// Chiude la sessione: da qui in poi le sue chiavi vengono rifiutate. Falso se non era aperta.
     pub fn close(&self, session_id: &str) -> bool {
+        self.working.write().remove(session_id);
         self.sessions.write().remove(session_id).is_some()
+    }
+
+    /// Apre `root` (scansione, sessione salvata, fusione) e rende servibili le anteprime.
+    pub fn open_folder(&self, data_dir: &Path, root: &Path) -> AppResult<OpenedReview> {
+        let opened = pc_raw_review::session::open_folder(data_dir, root, None)?;
+        self.adopt(opened)
+    }
+
+    /// Apre un progetto FujiView (`.fujiview`) senza modificarlo.
+    pub fn open_fujiview(&self, data_dir: &Path, file: &Path) -> AppResult<OpenedReview> {
+        let opened = pc_raw_review::session::open_fujiview(data_dir, file)?;
+        self.adopt(opened)
+    }
+
+    fn adopt(&self, opened: pc_raw_review::session::OpenedFolder) -> AppResult<OpenedReview> {
+        let registered = self.register(&opened.index)?;
+        let view = opened_review(registered.id(), opened.session.clone(), &opened.index);
+        let mut working = self.working.write();
+        working.insert(
+            registered.id().to_string(),
+            Arc::new(Mutex::new(opened.session)),
+        );
+        // Una sessione aperta di nuovo sulla stessa cartella sostituisce la precedente.
+        let sessions = self.sessions.read();
+        working.retain(|id, _| sessions.contains_key(id));
+        Ok(view)
+    }
+
+    fn working_session(&self, id: &str) -> AppResult<Arc<Mutex<Session>>> {
+        self.working
+            .read()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| unknown_session(id))
+    }
+
+    /// Imposta o toglie la variante migliore di uno scatto; l'anteprima RAW si rifiuta.
+    pub fn set_winner(
+        &self,
+        session_id: &str,
+        shot_key: &str,
+        preset: Option<&str>,
+    ) -> AppResult<ShotDecision> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        session.set_winner(shot_key, preset)?;
+        Ok(session.decisions[shot_key].clone())
+    }
+
+    /// Imposta la valutazione (0-5) di uno scatto.
+    pub fn set_rating(
+        &self,
+        session_id: &str,
+        shot_key: &str,
+        rating: u8,
+    ) -> AppResult<ShotDecision> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        session.set_rating(shot_key, rating)?;
+        Ok(session.decisions[shot_key].clone())
+    }
+
+    /// Segna uno scatto come rivisto o da rivedere.
+    pub fn set_reviewed(
+        &self,
+        session_id: &str,
+        shot_key: &str,
+        reviewed: bool,
+    ) -> AppResult<ShotDecision> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        session.set_reviewed(shot_key, reviewed)?;
+        Ok(session.decisions[shot_key].clone())
+    }
+
+    /// Mostra o nasconde il pannello di un preset (almeno uno resta visibile, al massimo nove).
+    pub fn toggle_preset(&self, session_id: &str, preset: &str) -> AppResult<PanelState> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        session.toggle_preset_visibility(preset);
+        Ok(PanelState {
+            panel_presets: session.panel_presets.clone(),
+            hidden_presets: session.hidden_presets.clone(),
+        })
+    }
+
+    /// Ricorda l'ultimo scatto visto; lo scatto deve esistere nella sessione.
+    pub fn set_last_shot(&self, session_id: &str, shot_key: Option<&str>) -> AppResult<()> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        if let Some(key) = shot_key {
+            if !session.decisions.contains_key(key) {
+                return Err(AppError::new(
+                    ErrorCode::NotFound,
+                    format!("scatto «{key}» sconosciuto"),
+                ));
+            }
+        }
+        session.set_last_shot(shot_key);
+        Ok(())
+    }
+
+    /// Scrive la sessione nei dati dell'app (scrittura atomica con `.bak`) e aggiorna le recenti.
+    /// Non tocca mai la cartella delle foto.
+    pub fn save(&self, data_dir: &Path, session_id: &str) -> AppResult<()> {
+        let session = self.working_session(session_id)?;
+        let snapshot = session.lock().clone();
+        pc_raw_review::session::save(data_dir, &snapshot)
     }
 
     fn session(&self, id: &str) -> AppResult<Arc<OpenSession>> {
@@ -933,6 +1141,145 @@ pub async fn raw_review_clear_cache(app: tauri::AppHandle) -> AppResult<u64> {
 pub async fn raw_review_close(app: tauri::AppHandle, session_id: String) -> AppResult<bool> {
     crate::state::blocking(app, move |_app, state| {
         Ok(state.raw_review.close(&session_id))
+    })
+    .await
+}
+
+/// Apre una cartella di foto per la revisione, senza importarla: scansiona, riprende la sessione
+/// salvata (o ne crea una) e rende servibili le anteprime. Una cartella senza foto è un errore che
+/// elenca le forme supportate.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_open(app: tauri::AppHandle, root: String) -> AppResult<OpenedReview> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .open_folder(state.paths.root(), Path::new(&root))
+    })
+    .await
+}
+
+/// Apre un progetto FujiView (`.fujiview`): riprende la sua cartella con scelte e valutazioni. Il
+/// file non viene modificato.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_open_fujiview(
+    app: tauri::AppHandle,
+    path: String,
+) -> AppResult<OpenedReview> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .open_fujiview(state.paths.root(), Path::new(&path))
+    })
+    .await
+}
+
+/// Sessioni recenti, dalla più recente.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_recent(app: tauri::AppHandle) -> AppResult<Vec<RecentSession>> {
+    crate::state::blocking(app, move |_app, state| {
+        Ok(pc_raw_review::session::list_recent(state.paths.root()))
+    })
+    .await
+}
+
+/// Toglie una cartella dall'elenco delle recenti; la sessione salvata resta.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_forget(app: tauri::AppHandle, root: String) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        pc_raw_review::session::forget_recent(state.paths.root(), &root)
+    })
+    .await
+}
+
+/// Imposta o toglie la variante migliore di uno scatto (l'anteprima RAW è rifiutata).
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_set_winner(
+    app: tauri::AppHandle,
+    session_id: String,
+    shot_key: String,
+    preset: Option<String>,
+) -> AppResult<ShotDecision> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .set_winner(&session_id, &shot_key, preset.as_deref())
+    })
+    .await
+}
+
+/// Imposta la valutazione (0-5) di uno scatto.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_set_rating(
+    app: tauri::AppHandle,
+    session_id: String,
+    shot_key: String,
+    rating: u8,
+) -> AppResult<ShotDecision> {
+    crate::state::blocking(app, move |_app, state| {
+        state.raw_review.set_rating(&session_id, &shot_key, rating)
+    })
+    .await
+}
+
+/// Segna uno scatto come rivisto o da rivedere.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_set_reviewed(
+    app: tauri::AppHandle,
+    session_id: String,
+    shot_key: String,
+    reviewed: bool,
+) -> AppResult<ShotDecision> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .set_reviewed(&session_id, &shot_key, reviewed)
+    })
+    .await
+}
+
+/// Mostra o nasconde il pannello di un preset.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_toggle_preset(
+    app: tauri::AppHandle,
+    session_id: String,
+    preset: String,
+) -> AppResult<PanelState> {
+    crate::state::blocking(app, move |_app, state| {
+        state.raw_review.toggle_preset(&session_id, &preset)
+    })
+    .await
+}
+
+/// Ricorda l'ultimo scatto visto.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_set_last_shot(
+    app: tauri::AppHandle,
+    session_id: String,
+    shot_key: Option<String>,
+) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .set_last_shot(&session_id, shot_key.as_deref())
+    })
+    .await
+}
+
+/// Salva la sessione di revisione nei dati dell'app (mai nella cartella delle foto).
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_save(app: tauri::AppHandle, session_id: String) -> AppResult<()> {
+    crate::state::blocking(app, move |_app, state| {
+        state.raw_review.save(state.paths.root(), &session_id)
     })
     .await
 }
@@ -1300,6 +1647,136 @@ mod tests {
         let job = shared.pop(Lane::Thumbnails).unwrap();
         shared.run(Lane::Thumbnails, job);
         assert_eq!(f.state.stats().unwrap().completed, 1);
+    }
+
+    #[test]
+    fn open_folder_registers_and_returns_the_view_without_paths() {
+        let f = fixture(2, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        assert_eq!(opened.layout, ReviewLayoutKind::Presets);
+        assert_eq!(opened.shots.len(), 2);
+        assert_eq!(opened.presets, vec!["Acros", "Velvia"]);
+        assert_eq!(opened.session.decisions.len(), 2);
+        assert!(opened.shots[0].variants.iter().all(|v| v.selectable));
+        // Le anteprime si servono con l'id della sessione appena aperta.
+        let keys = f
+            .state
+            .image_keys(&opened.session_id, "dscf0001", 1024)
+            .unwrap();
+        assert_eq!(keys.len(), 2);
+        // Nessun percorso del disco nella vista.
+        let json = serde_json::to_string(&opened.shots).unwrap();
+        assert!(!json.contains("foto"), "{json}");
+    }
+
+    #[test]
+    fn unsupported_folder_explains_the_supported_shapes() {
+        let f = fixture(1, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let empty = f._tmp.path().join("vuota");
+        fs::create_dir_all(&empty).unwrap();
+        let error = f.state.open_folder(&data, &empty).unwrap_err();
+        assert_eq!(error.code, ErrorCode::InvalidInput);
+        assert!(error.detail.contains("RAF"), "{}", error.detail);
+        assert!(error.detail.contains("sottocartella per preset"));
+        // Nessuna sessione né recente per una cartella rifiutata.
+        assert!(pc_raw_review::session::list_recent(&data).is_empty());
+    }
+
+    #[test]
+    fn recent_sessions_are_listed_and_forgotten() {
+        let f = fixture(2, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        let recent = pc_raw_review::session::list_recent(&data);
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].shot_count, 2);
+        assert_eq!(recent[0].choice_count, 0);
+        pc_raw_review::session::forget_recent(&data, &recent[0].source_root).unwrap();
+        assert!(pc_raw_review::session::list_recent(&data).is_empty());
+        // La sessione salvata resta: riaprendo la cartella le scelte tornano.
+        f.state
+            .set_winner(&opened.session_id, "dscf0001", Some("Acros"))
+            .unwrap();
+        f.state.save(&data, &opened.session_id).unwrap();
+        let again = f.state.open_folder(&data, &f.photos).unwrap();
+        assert_ne!(again.session_id, opened.session_id);
+        assert_eq!(
+            again.session.decisions["dscf0001"].winner_preset.as_deref(),
+            Some("Acros")
+        );
+    }
+
+    #[test]
+    fn edits_are_validated_and_saved_outside_the_photo_folder() {
+        let f = fixture(2, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let before = tree(&f.photos);
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        let id = opened.session_id.as_str();
+
+        let decision = f.state.set_winner(id, "dscf0001", Some("Velvia")).unwrap();
+        assert_eq!(decision.winner_preset.as_deref(), Some("Velvia"));
+        assert_eq!(f.state.set_rating(id, "dscf0001", 4).unwrap().rating, 4);
+        assert!(f.state.set_reviewed(id, "dscf0001", true).unwrap().reviewed);
+        // Valori non validi: l'anteprima RAW, un preset sconosciuto, 6 stelle, scatto assente.
+        assert!(f
+            .state
+            .set_winner(id, "dscf0001", Some("raw-preview"))
+            .is_err());
+        assert!(f.state.set_winner(id, "dscf0001", Some("Mai")).is_err());
+        assert!(f.state.set_rating(id, "dscf0001", 6).is_err());
+        assert!(f.state.set_rating(id, "assente", 1).is_err());
+        assert!(f.state.set_last_shot(id, Some("assente")).is_err());
+        f.state.set_last_shot(id, Some("dscf0002")).unwrap();
+        // L'ultimo pannello visibile non si nasconde, un altro sì.
+        let panels = f.state.toggle_preset(id, "Acros").unwrap();
+        assert_eq!(panels.hidden_presets, vec!["Acros"]);
+        assert_eq!(
+            f.state.toggle_preset(id, "Velvia").unwrap().panel_presets,
+            vec!["Velvia"]
+        );
+        assert!(f.state.set_winner("sconosciuta", "dscf0001", None).is_err());
+
+        f.state.save(&data, id).unwrap();
+        assert_eq!(tree(&f.photos), before);
+        let saved = pc_raw_review::session::load(&data, &opened.session.source_root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.decisions["dscf0001"].rating, 4);
+        assert_eq!(saved.last_shot_key.as_deref(), Some("dscf0002"));
+        assert_eq!(saved.hidden_presets, vec!["Acros"]);
+        let recent = pc_raw_review::session::list_recent(&data);
+        assert_eq!(recent[0].choice_count, 1);
+
+        // Chiusa la sessione, i comandi di modifica la rifiutano.
+        assert!(f.state.close(id));
+        assert!(f.state.save(&data, id).is_err());
+    }
+
+    #[test]
+    fn open_fujiview_resumes_the_project_and_leaves_the_file_alone() {
+        let f = fixture(2, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let root = f.photos.to_string_lossy().replace('\\', "\\\\");
+        let project = format!(
+            r#"{{"schemaVersion":1,"name":"Dolomiti","sourceRoot":"{root}","presets":["Acros","Velvia"],
+"guidePreset":"Acros","panelPresets":["Acros","Velvia"],
+"decisions":{{"dscf0001":{{"key":"dscf0001","rating":5,"winnerPreset":"Velvia","reviewed":true}}}},
+"lastShotKey":"dscf0001","createdAt":"2025-01-10T09:00:00.000Z","updatedAt":"2025-01-11T10:30:00.000Z"}}"#
+        );
+        let file = f._tmp.path().join("dolomiti.fujiview");
+        fs::write(&file, &project).unwrap();
+        let opened = f.state.open_fujiview(&data, &file).unwrap();
+        assert_eq!(opened.session.name, "Dolomiti");
+        assert_eq!(opened.session.decisions["dscf0001"].rating, 5);
+        assert_eq!(opened.shots.len(), 2);
+        assert_eq!(fs::read_to_string(&file).unwrap(), project);
+        // Un file non valido è un errore, non una sessione.
+        let broken = f._tmp.path().join("rotto.fujiview");
+        fs::write(&broken, "{").unwrap();
+        assert!(f.state.open_fujiview(&data, &broken).is_err());
     }
 
     #[test]

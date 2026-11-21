@@ -221,6 +221,33 @@ export const commands = {
 	ignoreTzSuggestion: (group: number, offsetMin: number) => __TAURI_INVOKE<null>("ignore_tz_suggestion", { group, offsetMin }),
 	/**  Nomi dei fusi IANA per il selettore dell'ora locale. */
 	listTimezones: () => __TAURI_INVOKE<string[]>("list_timezones"),
+	/**
+	 *  Apre una cartella di foto per la revisione, senza importarla: scansiona, riprende la sessione
+	 *  salvata (o ne crea una) e rende servibili le anteprime. Una cartella senza foto è un errore che
+	 *  elenca le forme supportate.
+	 */
+	rawReviewOpen: (root: string) => __TAURI_INVOKE<OpenedReview>("raw_review_open", { root }),
+	/**
+	 *  Apre un progetto FujiView (`.fujiview`): riprende la sua cartella con scelte e valutazioni. Il
+	 *  file non viene modificato.
+	 */
+	rawReviewOpenFujiview: (path: string) => __TAURI_INVOKE<OpenedReview>("raw_review_open_fujiview", { path }),
+	/**  Sessioni recenti, dalla più recente. */
+	rawReviewRecent: () => __TAURI_INVOKE<RecentSession[]>("raw_review_recent"),
+	/**  Toglie una cartella dall'elenco delle recenti; la sessione salvata resta. */
+	rawReviewForget: (root: string) => __TAURI_INVOKE<null>("raw_review_forget", { root }),
+	/**  Imposta o toglie la variante migliore di uno scatto (l'anteprima RAW è rifiutata). */
+	rawReviewSetWinner: (sessionId: string, shotKey: string, preset: string | null) => __TAURI_INVOKE<ShotDecision>("raw_review_set_winner", { sessionId, shotKey, preset }),
+	/**  Imposta la valutazione (0-5) di uno scatto. */
+	rawReviewSetRating: (sessionId: string, shotKey: string, rating: number) => __TAURI_INVOKE<ShotDecision>("raw_review_set_rating", { sessionId, shotKey, rating }),
+	/**  Segna uno scatto come rivisto o da rivedere. */
+	rawReviewSetReviewed: (sessionId: string, shotKey: string, reviewed: boolean) => __TAURI_INVOKE<ShotDecision>("raw_review_set_reviewed", { sessionId, shotKey, reviewed }),
+	/**  Mostra o nasconde il pannello di un preset. */
+	rawReviewTogglePreset: (sessionId: string, preset: string) => __TAURI_INVOKE<PanelState>("raw_review_toggle_preset", { sessionId, preset }),
+	/**  Ricorda l'ultimo scatto visto. */
+	rawReviewSetLastShot: (sessionId: string, shotKey: string | null) => __TAURI_INVOKE<null>("raw_review_set_last_shot", { sessionId, shotKey }),
+	/**  Salva la sessione di revisione nei dati dell'app (mai nella cartella delle foto). */
+	rawReviewSave: (sessionId: string) => __TAURI_INVOKE<null>("raw_review_save", { sessionId }),
 	/**  Chiavi `review://` di tutte le varianti di uno scatto (il lato è limitato a 384–8192 px). */
 	rawReviewImageKeys: (sessionId: string, shotKey: string, maxEdge: number) => __TAURI_INVOKE<ReviewImageKey[]>("raw_review_image_keys", { sessionId, shotKey, maxEdge }),
 	/**
@@ -1433,10 +1460,20 @@ export type OpenTarget =
 /**  Azione del doppio clic scelta nelle impostazioni. */
 { kind: "double_click" };
 
-/**  Cartella aperta per la revisione: indice e sessione già fusi e salvati. */
-export type OpenedFolder = {
-	index: ReviewIndex,
+/**
+ *  Esito dell'apertura di una cartella o di un progetto: sessione registrata per `review://`,
+ *  scelte salvate e indice degli scatti.
+ */
+export type OpenedReview = {
+	/**  Identificatore opaco per `review://` e per i comandi di modifica. */
+	sessionId: string,
 	session: Session,
+	layout: ReviewLayoutKind,
+	presets: string[],
+	guidePreset: string | null,
+	shots: ReviewShotView[],
+	/**  Avvisi della scansione (file ignorati, duplicati, varianti mancanti). */
+	warnings: string[],
 };
 
 export type Organization = {
@@ -1477,6 +1514,12 @@ export type PageAt =
 { kind: "before"; cursor: Cursor } | 
 /**  Dalla posizione `offset` (salto con la barra di scorrimento). */
 { kind: "offset"; offset: number };
+
+/**  Pannelli di confronto dopo aver mostrato o nascosto un preset. */
+export type PanelState = {
+	panelPresets: string[],
+	hiddenPresets: string[],
+};
 
 /**  Sezione del modulo Persone. */
 export type PeopleSection = "review" | "people" | "ignored";
@@ -1593,6 +1636,17 @@ export type RatingFilter = {
 };
 
 export type RatingOp = "at_least" | "equal" | "at_most";
+
+/**  Voce dell'indice delle sessioni recenti. */
+export type RecentSession = {
+	sourceRoot: string,
+	name: string,
+	/**  Ultimo uso, ISO 8601 UTC. */
+	lastUsedAt: string,
+	shotCount: number,
+	/**  Scatti con una variante scelta. */
+	choiceCount: number,
+};
 
 export type Recipe = {
 	/**  Riga breve, per esempio "Classic Chrome · DR200 · Auto". */
@@ -1711,16 +1765,33 @@ export type ReviewImageKey = {
 	key: string,
 };
 
-export type ReviewIndex = {
-	/**  Percorso canonico della cartella aperta. */
-	root: string,
-	layout: Layout,
-	/**  Cartelle di preset reali, in ordine naturale (senza "Anteprima RAW"). */
-	presets: string[],
-	/**  Preset guida; `None` se non ci sono preset (solo RAF). */
-	guidePreset: string | null,
-	shots: Shot[],
-	warnings: string[],
+/**  Forma della cartella aperta, senza i percorsi del [`Layout`]. */
+export type ReviewLayoutKind = 
+/**  Solo RAF al primo livello. */
+"rafOnly" | 
+/**  RAF più sottocartella delle varianti già generate. */
+"rafWithVariants" | 
+/**  Una sottocartella per preset. */
+"presets";
+
+/**  Scatto della lista di revisione. */
+export type ReviewShotView = {
+	key: string,
+	displayName: string,
+	variants: ReviewVariantView[],
+};
+
+/**  Variante di uno scatto come la vede la UI: nessun percorso, il file si chiede a `review://`. */
+export type ReviewVariantView = {
+	preset: string,
+	fileName: string,
+	extension: string,
+	bytes: number,
+	kind: VariantKind,
+	/**  Si può scegliere come variante migliore (l'anteprima RAW no). */
+	selectable: boolean,
+	/**  Il file è un JPEG, quindi entra nell'export. */
+	exportable: boolean,
 };
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
@@ -1837,13 +1908,6 @@ export type SetTag = {
 	/**  Tasto rapido (1–9). */
 	key: number,
 	name: string,
-};
-
-export type Shot = {
-	/**  Nome base in minuscolo: chiave di abbinamento. */
-	key: string,
-	displayName: string,
-	variants: Variant[],
 };
 
 /**  Decisione su uno scatto. */
@@ -2157,16 +2221,6 @@ export type UpdateSummary = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
-
-export type Variant = {
-	preset: string,
-	path: string,
-	fileName: string,
-	/**  Estensione in minuscolo, senza punto. */
-	extension: string,
-	bytes: number,
-	kind: VariantKind,
-};
 
 /**  Natura di una variante. */
 export type VariantKind = 

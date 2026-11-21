@@ -48,6 +48,8 @@ import type {
   FaceCursor,
   LocateFaceRequest,
   LocatedFace,
+  OpenedReview,
+  RecentSession,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -312,6 +314,12 @@ export const commandsMock = {
     limitBytes: 20 * 1024 ** 3,
   })),
   rawReviewClearCache: vi.fn(async () => 0),
+  rawReviewOpen: vi.fn<(root: string) => Promise<OpenedReview>>(),
+  rawReviewOpenFujiview: vi.fn<(path: string) => Promise<OpenedReview>>(),
+  rawReviewRecent: vi.fn(async () => [] as RecentSession[]),
+  rawReviewForget: vi.fn(async () => null),
+  rawReviewSave: vi.fn(async () => null),
+  rawReviewClose: vi.fn(async () => true),
   saveSettings: vi.fn(async () => null),
   getTaxonomy: vi.fn(),
   addCategory: vi.fn(),
