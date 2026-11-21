@@ -117,6 +117,42 @@ pub async fn group_faces(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Base di "Seleziona tutto" sui volti di un ambito (stessi filtri di `group_faces`): numero di
+/// volti e id massimo in quell'istante, indipendenti da ordinamento e pagine caricate.
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+) -> AppResult<pc_store::query::SelectionBase> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_base(c, &scope, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Id dei volti selezionati (ambito meno eccezioni, solo volti con id <= `max_id`), per le
+/// correzioni che prendono un elenco di volti ("Assegna a…", "Sposta", "Separa", ...).
+#[tauri::command]
+#[specta::specta]
+pub async fn face_selection_ids(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+    max_id: i64,
+    except: Vec<i64>,
+) -> AppResult<Vec<i64>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::face_selection_ids(c, &scope, max_id, &except, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 /// Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo).
 #[tauri::command]
 #[specta::specta]

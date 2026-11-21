@@ -149,6 +149,32 @@ pub async fn sequence_ids(state: State<'_, AppState>, scope: SequenceScope) -> A
     blocking(move || Ok(db.read(move |c| sequence::ordered_ids(c, &scope))?)).await
 }
 
+/// Base di "Seleziona tutto" della Sequenza: numero di foto dell'ambito e id massimo in quell'istante.
+#[tauri::command]
+#[specta::specta]
+pub async fn sequence_selection(
+    state: State<'_, AppState>,
+    scope: SequenceScope,
+) -> AppResult<pc_store::query::SelectionBase> {
+    let db = state.store.clone();
+    blocking(move || Ok(db.read(move |c| sequence::selection_base(c, &scope))?)).await
+}
+
+/// Id delle foto selezionate nella Sequenza (base meno eccezioni, solo foto con id <= `max_id`),
+/// da usare come `Target::Ids` nelle azioni bulk.
+#[tauri::command]
+#[specta::specta]
+pub async fn sequence_selection_ids(
+    state: State<'_, AppState>,
+    scope: SequenceScope,
+    max_id: i64,
+    except: Vec<i64>,
+) -> AppResult<Vec<i64>> {
+    let db = state.store.clone();
+    blocking(move || Ok(db.read(move |c| sequence::selection_ids(c, &scope, max_id, &except))?))
+        .await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn set_session_gap(app: tauri::AppHandle, minutes: i64) -> AppResult<()> {

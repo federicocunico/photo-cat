@@ -1235,6 +1235,61 @@ pub fn group_face_years(
     Ok(rows)
 }
 
+/// Condizione SQL (alias `f`, persona in `?1`) di un ambito di volti: la stessa di `group_faces`.
+fn scope_filter(scope: &FaceScope, m: &FaceMatch) -> (String, Option<i64>) {
+    let discarded = discarded_sql(m);
+    match scope {
+        FaceScope::Group { group } => (
+            format!("f.person_id = ?1 AND NOT {discarded}"),
+            Some(*group),
+        ),
+        FaceScope::Singles => (format!("f.person_id IS NULL AND NOT {discarded}"), None),
+        FaceScope::Discarded { group: Some(g) } => {
+            (format!("f.person_id = ?1 AND {discarded}"), Some(*g))
+        }
+        FaceScope::Discarded { group: None } => (discarded, None),
+    }
+}
+
+/// Base di "Seleziona tutto" sui volti di un ambito: quanti sono e l'id massimo dei volti in
+/// quell'istante (`SelectionBase::max_id` è un id di volto). Non dipende da ordinamento né pagine.
+pub fn face_selection_base(
+    c: &Connection,
+    scope: &FaceScope,
+    m: &FaceMatch,
+) -> StoreResult<crate::query::SelectionBase> {
+    let (filter, bind) = scope_filter(scope, m);
+    let max_id: i64 = c.query_row("SELECT COALESCE(MAX(id), 0) FROM face", [], |r| r.get(0))?;
+    let count: i64 = c.query_row(
+        &format!("SELECT count(*) FROM face f WHERE {filter}"),
+        params![bind],
+        |r| r.get(0),
+    )?;
+    Ok(crate::query::SelectionBase { count, max_id })
+}
+
+/// Id dei volti selezionati: l'ambito meno le eccezioni, limitato ai volti con id fino a
+/// `max_id` (quelli presenti al momento di "Seleziona tutto"), in ordine di id.
+pub fn face_selection_ids(
+    c: &Connection,
+    scope: &FaceScope,
+    max_id: i64,
+    except: &[i64],
+    m: &FaceMatch,
+) -> StoreResult<Vec<i64>> {
+    let (filter, bind) = scope_filter(scope, m);
+    let mut st = c.prepare(&format!(
+        "SELECT f.id FROM face f WHERE {filter} AND f.id <= ?2 \
+         AND f.id NOT IN (SELECT value FROM json_each(?3)) ORDER BY f.id"
+    ))?;
+    let rows = st
+        .query_map(params![bind, max_id, serde_json::to_string(except)?], |r| {
+            r.get(0)
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
 /// Posizione di un volto (o del volto scelto su una foto) nell'ordinamento
 /// predefinito della relativa vista Persone, così la UI apre la pagina giusta.
 pub fn locate_face(

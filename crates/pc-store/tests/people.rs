@@ -1438,3 +1438,120 @@ fn face_years_count_manual_dates_and_undated() {
         people::group_face_years(&c, people::FaceScope::Discarded { group: Some(g) }, &m).unwrap();
     assert!(none.is_empty());
 }
+
+/// Persona con `n` volti utilizzabili, uno per foto.
+fn group_of(n: i64) -> (Connection, i64, Vec<i64>) {
+    let c = lib_with(n);
+    let g = people::create_person(&c, None).unwrap();
+    let mut faces = Vec::new();
+    for media in 1..=n {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(media)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        faces.push(fid);
+    }
+    (c, g, faces)
+}
+
+#[test]
+fn face_selection_covers_the_whole_person_regardless_of_pages() {
+    let (c, g, faces) = group_of(400);
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    // Una sola pagina da 120 volti: la base conta comunque tutti i 400.
+    let page = people::group_faces(
+        &c,
+        scope.clone(),
+        people::FaceSort::QualityDesc,
+        None,
+        120,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(page.items.len(), 120);
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    assert_eq!(base.count, 400);
+    assert_eq!(base.max_id, *faces.iter().max().unwrap());
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &[], &m).unwrap();
+    assert_eq!(ids.len(), 400);
+    // Stessa base con ogni ordinamento.
+    for sort in [
+        people::FaceSort::CapturedAsc,
+        people::FaceSort::CapturedDesc,
+    ] {
+        let p = people::group_faces(&c, scope.clone(), sort, None, 10, &m).unwrap();
+        assert_eq!(p.total, base.count);
+    }
+}
+
+#[test]
+fn face_selection_applies_exceptions_and_ignores_later_faces() {
+    let (c, g, faces) = group_of(10);
+    let m = people::default_face_match();
+    let scope = people::FaceScope::Group { group: g };
+    let base = people::face_selection_base(&c, &scope, &m).unwrap();
+    // Eccezioni: due volti tolti dalla selezione.
+    let except = [faces[1], faces[7]];
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &except, &m).unwrap();
+    assert_eq!(ids.len(), 8);
+    assert!(except.iter().all(|e| !ids.contains(e)));
+    // Un volto aggiunto dopo lo snapshot non entra nella selezione.
+    let extra = {
+        c.execute("INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at) VALUES (11,'t11.jpg','t','jpg',1,1,1,1)", []).unwrap();
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, 11, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(11)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        fid
+    };
+    assert!(extra > base.max_id);
+    let ids = people::face_selection_ids(&c, &scope, base.max_id, &except, &m).unwrap();
+    assert_eq!(ids.len(), 8);
+    assert!(!ids.contains(&extra));
+    // Una nuova base include il volto aggiunto.
+    assert_eq!(
+        people::face_selection_base(&c, &scope, &m).unwrap().count,
+        11
+    );
+}
+
+#[test]
+fn face_selection_follows_singles_and_discarded_scopes() {
+    let c = lib_with(3);
+    let m = people::default_face_match();
+    for media in 1..=3_i64 {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        // Il terzo volto e troppo piccolo: scartato.
+        if media == 3 {
+            f.size_px = Some(10);
+        }
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+    }
+    let singles = people::FaceScope::Singles;
+    let discarded = people::FaceScope::Discarded { group: None };
+    let sb = people::face_selection_base(&c, &singles, &m).unwrap();
+    let db = people::face_selection_base(&c, &discarded, &m).unwrap();
+    assert_eq!((sb.count, db.count), (2, 1));
+    assert_eq!(
+        people::face_selection_ids(&c, &singles, sb.max_id, &[], &m)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        people::face_selection_ids(&c, &discarded, db.max_id, &[], &m)
+            .unwrap()
+            .len(),
+        1
+    );
+}

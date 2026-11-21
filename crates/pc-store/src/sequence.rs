@@ -300,6 +300,53 @@ pub fn session_ids(
     Ok(rows)
 }
 
+/// Base di "Seleziona tutto" della Sequenza: foto datate (o collocate) dell'ambito e id massimo
+/// delle foto in quell'istante. Le foto senza data affidabile non fanno parte della sequenza.
+pub fn selection_base(
+    c: &Connection,
+    scope: &SequenceScope,
+) -> StoreResult<crate::query::SelectionBase> {
+    let (scope_sql, args) = scope_where(c, scope)?;
+    let max_id: MediaId = c.query_row("SELECT COALESCE(MAX(id), 0) FROM media_item", [], |r| {
+        r.get(0)
+    })?;
+    let count: i64 = c.query_row(
+        &format!(
+            "SELECT count(*) FROM media_item m JOIN media_dates d ON d.media_id = m.id
+             LEFT JOIN media_tech t ON t.media_id = m.id
+             WHERE {DATED} AND {scope_sql}"
+        ),
+        rusqlite::params_from_iter(args.iter()),
+        |r| r.get(0),
+    )?;
+    Ok(crate::query::SelectionBase { count, max_id })
+}
+
+/// Id della selezione: la sequenza dell'ambito meno le eccezioni, limitata alle foto con id fino
+/// a `max_id`, in ordine di istante.
+pub fn selection_ids(
+    c: &Connection,
+    scope: &SequenceScope,
+    max_id: MediaId,
+    except: &[MediaId],
+) -> StoreResult<Vec<MediaId>> {
+    let (scope_sql, mut args) = scope_where(c, scope)?;
+    args.push(Value::Integer(max_id));
+    args.push(Value::Text(serde_json::to_string(except)?));
+    let sql = format!(
+        "SELECT m.id FROM media_item m JOIN media_dates d ON d.media_id = m.id
+         LEFT JOIN media_tech t ON t.media_id = m.id
+         WHERE {DATED} AND {scope_sql} AND m.id <= ?
+           AND m.id NOT IN (SELECT value FROM json_each(?))
+         ORDER BY d.instant_utc, m.id"
+    );
+    let mut st = c.prepare(&sql)?;
+    let rows = st
+        .query_map(rusqlite::params_from_iter(args.iter()), |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
 /// Tutti gli id della sequenza in ordine (export e selezione dell'ambito).
 pub fn ordered_ids(c: &Connection, scope: &SequenceScope) -> StoreResult<Vec<MediaId>> {
     let (scope_sql, args) = scope_where(c, scope)?;
