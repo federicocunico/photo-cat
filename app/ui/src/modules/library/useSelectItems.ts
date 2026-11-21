@@ -3,22 +3,24 @@ import type { MenuItem } from "../../components/ui";
 import { commands } from "../../lib/ipc";
 import { selCount, useLibrary } from "../../store/library";
 import { notifyError } from "../../store/toasts";
+import { useLibrarySelection } from "./useLibrarySelection";
 
 /** Seleziona tutto, inverti, foto non principali dei simili: senza e con selezione. */
 export function useSelectItems(): MenuItem[] {
   const { t } = useTranslation();
-  const { filter, selection, setSelection, selectAll, invertSelection } = useLibrary();
+  const { filter, selection, setSelection } = useLibrary();
+  const grid = useLibrarySelection();
   const count = selCount(selection);
   const run = (fn: () => Promise<unknown>) => () => fn().catch((e) => notifyError(e));
   return [
     {
       label: t("selection.selectAll"),
       shortcut: "Ctrl+A",
-      onSelect: run(async () => selectAll(await commands.librarySelection(filter))),
+      onSelect: () => void grid.selectAll(),
     },
     {
       label: t("selection.invert"),
-      onSelect: run(async () => invertSelection(await commands.librarySelection(filter))),
+      onSelect: () => void grid.invert(),
     },
     {
       label: t("similar.nonCovers"),

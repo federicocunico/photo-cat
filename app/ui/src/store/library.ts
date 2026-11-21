@@ -34,31 +34,43 @@ export const emptyFilter = (): LibraryFilter => ({
  * (Seleziona tutto) meno le eccezioni. Con 100.000 risultati non si carica mai l'elenco degli id:
  * `maxId` limita la selezione agli elementi presenti in quell'istante, `total` è il loro numero.
  */
-export type Selection =
+export type Selection<F = LibraryFilter> =
   | { mode: "ids"; ids: ReadonlySet<number> }
   | {
       mode: "filter";
-      filter: LibraryFilter;
+      filter: F;
       maxId: number;
       total: number;
       except: ReadonlySet<number>;
     };
 
-export const idsSelection = (ids: Iterable<number> = []): Selection => ({
+export const idsSelection = <F = LibraryFilter>(ids: Iterable<number> = []): Selection<F> => ({
   mode: "ids",
   ids: new Set(ids),
 });
 
+/** "Seleziona tutto": l'insieme definito dal backend (`base`), senza eccezioni. */
+export function selectAllOf<F>(filter: F, base: SelectionBase): Selection<F> {
+  return { mode: "filter", filter, maxId: base.maxId, total: base.count, except: new Set() };
+}
+
+/** Inversione: gli id scelti diventano le eccezioni dell'insieme completo e viceversa. */
+export function invertOf<F>(s: Selection<F>, filter: F, base: SelectionBase): Selection<F> {
+  return s.mode === "ids"
+    ? { mode: "filter", filter, maxId: base.maxId, total: base.count, except: s.ids }
+    : idsSelection<F>(s.except);
+}
+
 /** Numero di elementi selezionati. */
-export const selCount = (s: Selection) =>
+export const selCount = <F>(s: Selection<F>) =>
   s.mode === "ids" ? s.ids.size : Math.max(0, s.total - s.except.size);
 
 /** L'elemento è selezionato (O(1)). */
-export const selHas = (s: Selection, id: number) =>
+export const selHas = <F>(s: Selection<F>, id: number) =>
   s.mode === "ids" ? s.ids.has(id) : id <= s.maxId && !s.except.has(id);
 
 /** Id espliciti, o `null` per una selezione per filtro (va passata come `Target`). */
-export const selIds = (s: Selection): number[] | null => (s.mode === "ids" ? [...s.ids] : null);
+export const selIds = <F>(s: Selection<F>): number[] | null => (s.mode === "ids" ? [...s.ids] : null);
 
 /** Bersaglio dei comandi bulk: il backend risolve gli id a blocchi. */
 export const selTarget = (s: Selection): Target =>
@@ -67,7 +79,7 @@ export const selTarget = (s: Selection): Target =>
     : { kind: "filter", filter: s.filter, maxId: s.maxId, except: [...s.except] };
 
 /** Aggiunge (`on`) o toglie elementi dalla selezione, in entrambe le modalità. */
-export function selSet(s: Selection, ids: Iterable<number>, on: boolean): Selection {
+export function selSet<F>(s: Selection<F>, ids: Iterable<number>, on: boolean): Selection<F> {
   if (s.mode === "ids") {
     const next = new Set(s.ids);
     for (const id of ids) {
@@ -176,29 +188,9 @@ export const useLibrary = create<LibraryState>()(
         })),
       replaceSelection: (selection, focused) =>
         set((s) => ({ selection, focused: focused === undefined ? s.focused : focused })),
-      selectAll: (base) =>
-        set((s) => ({
-          selection: {
-            mode: "filter",
-            filter: s.filter,
-            maxId: base.maxId,
-            total: base.count,
-            except: new Set(),
-          },
-        })),
+      selectAll: (base) => set((s) => ({ selection: selectAllOf(s.filter, base) })),
       invertSelection: (base) =>
-        set((s) => ({
-          selection:
-            s.selection.mode === "ids"
-              ? {
-                  mode: "filter",
-                  filter: s.filter,
-                  maxId: base.maxId,
-                  total: base.count,
-                  except: s.selection.ids,
-                }
-              : idsSelection(s.selection.except),
-        })),
+        set((s) => ({ selection: invertOf(s.selection, s.filter, base) })),
       setScrollTop: (scrollTop) => set({ scrollTop }),
     }),
     {

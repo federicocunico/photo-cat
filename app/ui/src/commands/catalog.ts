@@ -29,6 +29,7 @@ export function entries(t: TFunction): Entry[] {
     e("library", "extend", "Maiusc+frecce"),
     e("library", "toggle", "Ctrl+Spazio"),
     e("library", "all", "Ctrl+A"),
+    e("library", "invert", "Ctrl+Maiusc+I"),
     e("library", "open", "Spazio, Invio"),
     e("library", "deselect", "Esc"),
     e("library", "tags", "1–9"),
