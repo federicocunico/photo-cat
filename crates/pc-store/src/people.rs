@@ -174,6 +174,17 @@ pub enum FaceSort {
     #[default]
     QualityDesc,
     CapturedDesc,
+    /// Dal più vecchio; i volti senza data restano comunque in fondo.
+    CapturedAsc,
+}
+
+/// Anno di scatto (ora locale) con il numero di volti; `year = None` è "Senza data".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct FaceYear {
+    pub year: Option<i32>,
+    pub count: i64,
 }
 
 /// Ambito dei volti richiesti con `group_faces`.
@@ -1065,57 +1076,55 @@ pub fn group_faces(
         }
     };
 
-    let instant_sql = "COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000, -9223372036854775807)";
+    // Istante materializzato (rispetta le date manuali). I volti senza data
+    // prendono un sentinella che li manda in fondo in entrambe le direzioni.
+    let instant_raw =
+        "COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000)";
+    let asc = sort == FaceSort::CapturedAsc;
+    let sentinel = if asc { i64::MAX } else { -i64::MAX };
+    let instant_sql = format!("COALESCE({instant_raw}, {sentinel})");
     let (order_sql, after_q, after_id, after_t) = match sort {
-        FaceSort::QualityDesc => match after {
-            Some(cur) => (
-                "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
-                Some(cur.quality_score),
-                Some(cur.id),
-                None::<i64>,
-            ),
-            None => (
-                "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
-                None,
-                None,
-                None,
-            ),
-        },
-        FaceSort::CapturedDesc => match after {
-            Some(cur) => {
-                let t: i64 = c
-                    .query_row(
-                        &format!(
-                            "SELECT {instant_sql} FROM face f \
-                             LEFT JOIN media_dates d ON d.media_id = f.media_id \
-                             WHERE f.id = ?1"
-                        ),
-                        [cur.id],
-                        |r| r.get(0),
-                    )
-                    .unwrap_or(i64::MIN);
-                (
-                    format!("{instant_sql} DESC, f.id DESC"),
-                    None,
-                    Some(cur.id),
-                    Some(t),
-                )
+        FaceSort::QualityDesc => (
+            "COALESCE(f.quality_score, f.quality) DESC, f.id DESC".to_string(),
+            after.map(|cur| cur.quality_score),
+            after.map(|cur| cur.id),
+            None::<i64>,
+        ),
+        FaceSort::CapturedDesc | FaceSort::CapturedAsc => {
+            let dir = if asc { "ASC" } else { "DESC" };
+            let order = format!("{instant_sql} {dir}, f.id {dir}");
+            match after {
+                Some(cur) => {
+                    let t: i64 = c
+                        .query_row(
+                            &format!(
+                                "SELECT {instant_sql} FROM face f \
+                                 LEFT JOIN media_dates d ON d.media_id = f.media_id \
+                                 WHERE f.id = ?1"
+                            ),
+                            [cur.id],
+                            |r| r.get(0),
+                        )
+                        .unwrap_or(sentinel);
+                    (order, None, Some(cur.id), Some(t))
+                }
+                None => (order, None, None, None),
             }
-            None => (format!("{instant_sql} DESC, f.id DESC"), None, None, None),
-        },
+        }
     };
 
+    let cmp = if asc { ">" } else { "<" };
     let after_clause = match sort {
         FaceSort::QualityDesc if after_q.is_some() => {
             "AND (COALESCE(f.quality_score, f.quality) < ?aq \
               OR (COALESCE(f.quality_score, f.quality) = ?aq AND f.id < ?aid))"
+                .to_string()
         }
-        FaceSort::CapturedDesc if after_t.is_some() => {
-            "AND ({instant} < ?at OR ({instant} = ?at AND f.id < ?aid))"
+        FaceSort::CapturedDesc | FaceSort::CapturedAsc if after_t.is_some() => {
+            format!("AND ({instant_sql} {cmp} ?at OR ({instant_sql} = ?at AND f.id {cmp} ?aid))")
         }
-        _ => "",
+        _ => String::new(),
     };
-    let after_clause = after_clause.replace("{instant}", instant_sql);
 
     let mut sql = format!(
         "SELECT {FACE_VIEW_COLS}, {instant_sql} FROM face f \
@@ -1169,7 +1178,7 @@ pub fn group_faces(
                 quality_score: f.quality_score,
                 id: f.id,
             },
-            FaceSort::CapturedDesc => FaceCursor {
+            FaceSort::CapturedDesc | FaceSort::CapturedAsc => FaceCursor {
                 quality_score: last_instant as f32,
                 id: f.id,
             },
@@ -1184,6 +1193,46 @@ pub fn group_faces(
         good_count,
         discarded_count,
     })
+}
+
+/// Conteggio dei volti per anno di scatto (ora locale), dal più recente;
+/// "Senza data" (`year = None`) per ultimo. Stessi filtri di `group_faces`.
+pub fn group_face_years(
+    c: &Connection,
+    scope: FaceScope,
+    m: &FaceMatch,
+) -> StoreResult<Vec<FaceYear>> {
+    let discarded = discarded_sql(m);
+    let (filter_sql, bind): (String, Option<i64>) = match &scope {
+        FaceScope::Group { group } => (
+            format!("f.person_id = ?1 AND NOT {discarded}"),
+            Some(*group),
+        ),
+        FaceScope::Singles => (format!("f.person_id IS NULL AND NOT {discarded}"), None),
+        FaceScope::Discarded { group: Some(g) } => {
+            (format!("f.person_id = ?1 AND {discarded}"), Some(*g))
+        }
+        FaceScope::Discarded { group: None } => (discarded.clone(), None),
+    };
+    let year_sql = crate::query::LOCAL_YEAR_SQL;
+    let sql = format!(
+        "SELECT {year_sql} AS y, count(*) FROM face f \
+         JOIN media_item m ON m.id = f.media_id \
+         LEFT JOIN media_dates d ON d.media_id = f.media_id \
+         WHERE {filter_sql} GROUP BY y ORDER BY (y IS NULL), y DESC"
+    );
+    let mut st = c.prepare(&sql)?;
+    let map = |r: &rusqlite::Row| {
+        Ok(FaceYear {
+            year: r.get::<_, Option<i32>>(0)?,
+            count: r.get(1)?,
+        })
+    };
+    let rows = match bind {
+        Some(b) => st.query_map([b], map)?.collect::<Result<Vec<_>, _>>()?,
+        None => st.query_map([], map)?.collect::<Result<Vec<_>, _>>()?,
+    };
+    Ok(rows)
 }
 
 /// Posizione di un volto (o del volto scelto su una foto) nell'ordinamento

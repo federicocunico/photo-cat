@@ -1315,3 +1315,126 @@ fn assign_to_identity_reuses_or_creates_the_linked_person() {
     );
     assert!(people::assign_to_identity(&c, &[], "uid-m", "Marco Russo").is_err());
 }
+
+/// Gruppo con sei volti: 2019, 2020 (data manuale: instant_utc vince sul vecchio
+/// captured_at), due nel 2021 e due senza data. Ritorna (conn, gruppo, id volti per media).
+fn dated_group() -> (Connection, i64, Vec<i64>) {
+    let c = lib_with(6);
+    let g = people::create_person(&c, None).unwrap();
+    let mut faces = Vec::new();
+    for media in 1..=6_i64 {
+        let mut f = face(0.1, 0);
+        f.quality_score = Some(f.quality);
+        f.sharpness = Some(0.9);
+        f.size_px = Some(120);
+        people::save_faces(&c, media, &[f], "sface", "det+sface", 0.363).unwrap();
+        let fid = people::records(&c, Some(media)).unwrap()[0].id;
+        people::assign(&c, &[fid], g).unwrap();
+        faces.push(fid);
+    }
+    let dated = [
+        (1_i64, "2019-05-01 12:00:00", 1_556_712_000_000_i64),
+        (2, "2021-01-01 12:00:00", 1_609_502_400_000),
+        (3, "2021-06-01 12:00:00", 1_622_548_800_000),
+        // Data manuale: il vecchio captured_at e diverso dall'istante materializzato.
+        (6, "2010-01-01 12:00:00", 1_583_236_800_000),
+    ];
+    for (media, text, ms) in dated {
+        c.execute(
+            "INSERT INTO media_dates(media_id, captured_at, instant_utc, local_offset_min) \
+             VALUES (?1, ?2, ?3, 0)",
+            rusqlite::params![media, text, ms],
+        )
+        .unwrap();
+    }
+    // Media 4 senza riga di date, media 5 con riga ma senza istante.
+    c.execute("INSERT INTO media_dates(media_id) VALUES (5)", [])
+        .unwrap();
+    (c, g, faces)
+}
+
+fn face_ids_paged(c: &Connection, g: i64, sort: people::FaceSort, limit: i64) -> Vec<i64> {
+    let m = people::default_face_match();
+    let mut out = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = people::group_faces(
+            c,
+            people::FaceScope::Group { group: g },
+            sort,
+            cursor.as_ref(),
+            limit,
+            &m,
+        )
+        .unwrap();
+        out.extend(page.items.iter().map(|f| f.id));
+        match page.next {
+            Some(n) => cursor = Some(n),
+            None => break,
+        }
+    }
+    out
+}
+
+#[test]
+fn faces_sort_by_captured_in_both_directions_with_undated_last() {
+    let (c, g, f) = dated_group();
+    // Ordine per istante: 1 (2019), 6 (2020 manuale), 2, 3 (2021), poi senza data 4, 5.
+    let asc = vec![f[0], f[5], f[1], f[2], f[3], f[4]];
+    // Decrescente: 3, 2, 6, 1, poi senza data (id decrescente: 5, 4).
+    let desc = vec![f[2], f[1], f[5], f[0], f[4], f[3]];
+    for limit in [1, 2, 4, 100] {
+        assert_eq!(
+            face_ids_paged(&c, g, people::FaceSort::CapturedAsc, limit),
+            asc,
+            "asc limit {limit}"
+        );
+        assert_eq!(
+            face_ids_paged(&c, g, people::FaceSort::CapturedDesc, limit),
+            desc,
+            "desc limit {limit}"
+        );
+    }
+}
+
+#[test]
+fn face_years_count_manual_dates_and_undated() {
+    let (c, g, _) = dated_group();
+    let m = people::default_face_match();
+    let years = people::group_face_years(&c, people::FaceScope::Group { group: g }, &m).unwrap();
+    assert_eq!(
+        years,
+        vec![
+            people::FaceYear {
+                year: Some(2021),
+                count: 2
+            },
+            people::FaceYear {
+                year: Some(2020),
+                count: 1
+            },
+            people::FaceYear {
+                year: Some(2019),
+                count: 1
+            },
+            people::FaceYear {
+                year: None,
+                count: 2
+            },
+        ]
+    );
+    // Gli scartati non entrano nei conteggi del gruppo e il totale coincide con i volti.
+    let page = people::group_faces(
+        &c,
+        people::FaceScope::Group { group: g },
+        people::FaceSort::CapturedAsc,
+        None,
+        100,
+        &m,
+    )
+    .unwrap();
+    assert_eq!(years.iter().map(|y| y.count).sum::<i64>(), page.total);
+    let none =
+        people::group_face_years(&c, people::FaceScope::Discarded { group: Some(g) }, &m).unwrap();
+    assert!(none.is_empty());
+}

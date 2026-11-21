@@ -117,6 +117,22 @@ pub async fn group_faces(
     .map_err(|e| AppError::internal(e.to_string()))?
 }
 
+/// Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo).
+#[tauri::command]
+#[specta::specta]
+pub async fn group_face_years(
+    state: State<'_, AppState>,
+    scope: FaceScope,
+) -> AppResult<Vec<people::FaceYear>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::group_face_years(c, scope, &m))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn locate_face(
