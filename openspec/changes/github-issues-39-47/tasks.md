@@ -37,8 +37,8 @@
 
 - [x] 3.1 Estrarre `useGridSelection` (D1) da `useLibrary`, portarvi la Libreria e i cataloghi senza cambiarne il comportamento. I test esistenti della selezione devono restare verdi.
 - [x] 3.2 Comandi `faceSelection` e `sequenceSelection` con snapshot e test Rust (400 volti con 120 caricati).
-- [ ] 3.3 Collegare FaceGrid, Sequenza, catalogo di sistema, escluse e sezioni AI. Voci "Seleziona tutto"/"Inverti selezione" in barra e menu contestuale. Scorciatoie Ctrl/Cmd+A, Ctrl+Maiusc+I ed Esc registrate nella shell e ignorate nei campi di testo. Test vitest per ogni vista e per il campo di ricerca.
-- [ ] 3.4 Revisione Opus della parte 3: coerenza della selezione tra viste, prestazioni con 100.000 elementi, accessibilità delle scorciatoie.
+- [x] 3.3 Collegare FaceGrid, Sequenza, catalogo di sistema, escluse e sezioni AI. Voci "Seleziona tutto"/"Inverti selezione" in barra e menu contestuale. Scorciatoie Ctrl/Cmd+A, Ctrl+Maiusc+I ed Esc registrate nella shell e ignorate nei campi di testo. Test vitest per ogni vista e per il campo di ricerca.
+- [x] 3.4 Revisione Opus della parte 3: coerenza della selezione tra viste, prestazioni con 100.000 elementi, accessibilità delle scorciatoie.
 
 ## 4. Persone: dal volto alla foto e ordinamento (#40, #42, #47)
 
@@ -55,7 +55,7 @@
 - [x] 5.2 Pagina Import: avvisi limitati all'ultimo aggiornamento, pulsante "Ignora", menu Ricollega/Rimuovi finché ci sono mancanti. Test vitest degli scenari di `media-ingestion`.
 - [x] 5.3 Errori archiviati (D7): `archive_errors` e `unarchive_errors`, `ErrorQuery.archived`, `errorCount` che conta solo le voci non archiviate. In Diagnostica: azioni "Archivia" su voce, gruppo e filtro, filtro "Archiviati" e "Ripristina". Test Rust e vitest: indicatore globale a zero, nuovo errore conteggiato, log intatto.
 - [x] 5.4 Monitoraggio (D8): etichetta "Aggiorna automaticamente", tooltip, voce della guida, stato per sorgente (attivo · ultimo alle HH:MM / non raggiungibile) e `last_auto_update_at`. Test vitest del tooltip e degli stati; test Rust dello stato "non raggiungibile".
-- [ ] 5.5 Revisione Opus delle parti 2, 4 e 5: aderenza alle spec delle issue e testi in italiano chiari per un utente non tecnico.
+- [x] 5.5 Revisione Opus delle parti 2, 4 e 5: aderenza alle spec delle issue e testi in italiano chiari per un utente non tecnico.
 
 ## 6. Verifica
 
