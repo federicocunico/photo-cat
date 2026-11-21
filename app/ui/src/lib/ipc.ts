@@ -52,6 +52,7 @@ export const EVENTS = {
   uiRecovered: "app://ui-recovered",
   trimCaches: "app://trim-caches",
   facesChanged: "faces://changed",
+  sourceWatchChanged: "sources://watch-changed",
 } as const;
 
 export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -72,4 +73,5 @@ export const events = {
   onUiRecovered: (cb: () => void) => on(EVENTS.uiRecovered, cb),
   onTrimCaches: (cb: () => void) => on(EVENTS.trimCaches, cb),
   onFacesChanged: (cb: () => void) => on(EVENTS.facesChanged, cb),
+  onSourceWatchChanged: (cb: () => void) => on(EVENTS.sourceWatchChanged, cb),
 };

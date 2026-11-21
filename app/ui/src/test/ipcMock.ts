@@ -42,6 +42,7 @@ import type {
   FacePage,
   FaceScope,
   FaceSort,
+  FaceYear,
   FaceCursor,
   LocateFaceRequest,
   LocatedFace,
@@ -59,6 +60,7 @@ export const emitters = {
   uiRecovered: [] as Cb<void>[],
   trimCaches: [] as Cb<void>[],
   facesChanged: [] as Cb<void>[],
+  sourceWatchChanged: [] as Cb<void>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -93,9 +95,14 @@ export const commandsMock = {
   startDemoJob: vi.fn(),
   queryErrors: vi.fn(async () => []),
   errorGroups: vi.fn(async () => []),
+  errorCount: vi.fn(async () => 0),
+  archiveErrors: vi.fn(async () => ({ affected: 0, activeCount: 0 })),
+  unarchiveErrors: vi.fn(async () => ({ affected: 0, activeCount: 0 })),
   logTail: vi.fn(async () => []),
   setLogLevel: vi.fn(async () => null),
   listSources: vi.fn(async () => [] as SourceSummary[]),
+  acknowledgeSourceWarnings: vi.fn(async () => null),
+  sourceWatchStatus: vi.fn(async () => [] as import("../bindings").SourceWatchStatus[]),
   addSource: vi.fn(),
   updateSource: vi.fn(),
   removeSource: vi.fn(),
@@ -161,6 +168,7 @@ export const commandsMock = {
     }
     return null;
   }),
+  groupFaceYears: vi.fn<(scope: FaceScope) => Promise<FaceYear[]>>(async () => []),
   groupFaces: vi.fn<
     (
       scope: FaceScope,
@@ -316,7 +324,7 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: { facesChanged: "faces://changed" },
+    EVENTS: { facesChanged: "faces://changed", sourceWatchChanged: "sources://watch-changed" },
     events: {
       onBootPhase: reg(emitters.boot),
       onBootReady: reg(emitters.boot),
@@ -328,6 +336,7 @@ export function ipcMockModule(tauri = false) {
       onUiRecovered: reg(emitters.uiRecovered),
       onTrimCaches: reg(emitters.trimCaches),
       onFacesChanged: reg(emitters.facesChanged),
+      onSourceWatchChanged: reg(emitters.sourceWatchChanged),
     },
   };
 }

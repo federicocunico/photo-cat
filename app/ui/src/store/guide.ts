@@ -12,7 +12,7 @@ export type TipId = "people" | "catalogs" | "tags" | "sequence" | "moved";
 
 /** Sezioni della guida (Aiuto › Guida e "Scopri di più"). */
 export type GuideSection =
-  "library" | "people" | "catalogs" | "tags" | "sequence" | "import" | "settings";
+  "library" | "people" | "catalogs" | "tags" | "sequence" | "import" | "autoUpdate" | "settings";
 
 type GuideState = {
   done: Partial<Record<GuideStep, true>>;

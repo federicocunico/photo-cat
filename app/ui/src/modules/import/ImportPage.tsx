@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Icon } from "../../components/icons";
@@ -16,7 +16,13 @@ import {
   PageHeader,
   type MenuItem,
 } from "../../components/ui";
-import { commands, isTauri, type SourceSummary } from "../../lib/ipc";
+import {
+  commands,
+  events,
+  isTauri,
+  type SourceSummary,
+  type SourceWatchStatus,
+} from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { activeJobs, useLive } from "../../store/live";
@@ -36,17 +42,69 @@ function notifyStarted(message: string, job: number, label: string) {
   notify({ tone: "ok", message, action: { label, run: () => follow(job) } });
 }
 
+/** Stato del monitoraggio per sorgente; si aggiorna a sources://watch-changed. */
+function useWatchStatus() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!isTauri()) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void events
+      .onSourceWatchChanged(() => void qc.invalidateQueries({ queryKey: ["source-watch-status"] }))
+      .then((fn) => (gone ? fn() : (off = fn)));
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, [qc]);
+  return useQuery({
+    queryKey: ["source-watch-status"],
+    queryFn: () => commands.sourceWatchStatus(),
+  });
+}
+
+function WatchStatusLine({ status }: { status: SourceWatchStatus }) {
+  const { t } = useTranslation();
+  const time =
+    status.lastAutoUpdateAt === null
+      ? null
+      : new Date(status.lastAutoUpdateAt).toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  const text =
+    status.state === "active"
+      ? time
+        ? t("sources.watchStatus.activeLast", { time })
+        : t("sources.watchStatus.active")
+      : status.state === "unreachable"
+        ? t("sources.watchStatus.unreachable")
+        : t("sources.watchStatus.error", { message: status.message ?? "" });
+  return (
+    <span
+      className={status.state === "active" ? "muted" : "import-warn"}
+      data-testid={`watch-status-${status.sourceId}`}
+    >
+      {text}
+    </span>
+  );
+}
+
 function FolderRow({
   summary,
+  watchStatus,
   onDialog,
 }: {
   summary: SourceSummary;
+  watchStatus?: SourceWatchStatus;
   onDialog: (d: DialogKind) => void;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const updates = useImportUpdates();
-  const { source, items, missing } = summary;
+  const { source, items, missing, failedWarning } = summary;
+  const newMissing = summary.newMissing ?? missing;
+  const warned = newMissing > 0 || failedWarning > 0;
   const last = (updates.data ?? []).find((u) => u.sourceId === source.id);
   const update = async () => {
     const job = await commands.startImport(source.id, null);
@@ -87,12 +145,36 @@ function FolderRow({
         <Icon.Import size={16} />
         <span className="mono import-path">{source.path}</span>
         <span className="muted">{t("import.itemsCount", { n: fmtInt(items) })}</span>
-        {missing > 0 && (
+        {newMissing > 0 && (
           <span className="import-warn">
-            <Icon.Alert size={14} /> {t("import.missing", { n: fmtInt(missing) })}
+            <Icon.Alert size={14} />{" "}
+            {t(newMissing < missing ? "sources.warn.newMissing" : "sources.warn.missing", {
+              count: newMissing,
+            })}
           </span>
         )}
-        <label className="import-check">
+        {failedWarning > 0 && (
+          <span className="import-warn">
+            <Icon.Alert size={14} /> {t("sources.warn.failed", { count: failedWarning })}
+          </span>
+        )}
+        {warned && (
+          <Button
+            size="sm"
+            aria-label={t("sources.warn.ignoreLabel", { name: source.path })}
+            onClick={async () => {
+              try {
+                await commands.acknowledgeSourceWarnings(source.id);
+                await qc.invalidateQueries({ queryKey: ["sources"] });
+              } catch (err) {
+                notifyError(err);
+              }
+            }}
+          >
+            {t("sources.warn.ignore")}
+          </Button>
+        )}
+        <label className="import-check" title={t("import.watchHint")}>
           <input
             type="checkbox"
             checked={source.watch}
@@ -100,6 +182,7 @@ function FolderRow({
               try {
                 await commands.updateSource({ ...source, watch: e.target.checked });
                 await qc.invalidateQueries({ queryKey: ["sources"] });
+                await qc.invalidateQueries({ queryKey: ["source-watch-status"] });
               } catch (err) {
                 notifyError(err);
               }
@@ -124,6 +207,7 @@ function FolderRow({
           />
         </div>
       </div>
+      {source.watch && watchStatus && <WatchStatusLine status={watchStatus} />}
       {last && (
         <div className="import-folder-summary">
           <span className="muted">{t("sources.summary.title")}:</span>
@@ -137,6 +221,7 @@ function FolderRow({
 function FoldersList({ sources }: { sources: SourceSummary[] }) {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const watch = useWatchStatus();
   const close = () => setDialog(null);
   return (
     <Card title={t("import.sources")}>
@@ -149,7 +234,12 @@ function FoldersList({ sources }: { sources: SourceSummary[] }) {
       ) : (
         <ul className="import-folders">
           {sources.map((summary) => (
-            <FolderRow key={summary.source.id} summary={summary} onDialog={setDialog} />
+            <FolderRow
+              key={summary.source.id}
+              summary={summary}
+              watchStatus={(watch.data ?? []).find((w) => w.sourceId === summary.source.id)}
+              onDialog={setDialog}
+            />
           ))}
         </ul>
       )}
@@ -293,7 +383,7 @@ export function ImportPage() {
                 />
                 {t("import.recursive")}
               </label>
-              <label className="import-check">
+              <label className="import-check" title={t("import.watchHint")}>
                 <input
                   type="checkbox"
                   checked={watch}

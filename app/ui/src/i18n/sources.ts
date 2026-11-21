@@ -3,6 +3,22 @@
 export const sources = {
   it: {
     sources: {
+      warn: {
+        missing_one: "{{count}} mancante",
+        missing_other: "{{count}} mancanti",
+        newMissing_one: "{{count}} nuovo mancante",
+        newMissing_other: "{{count}} nuovi mancanti",
+        failed_one: "{{count}} file non letto nell'ultimo aggiornamento",
+        failed_other: "{{count}} file non letti nell'ultimo aggiornamento",
+        ignore: "Ignora",
+        ignoreLabel: "Ignora gli avvisi di {{name}}",
+      },
+      watchStatus: {
+        active: "Aggiornamento automatico attivo",
+        activeLast: "Aggiornamento automatico attivo · ultimo alle {{time}}",
+        unreachable: "Aggiornamento automatico non disponibile: cartella non raggiungibile",
+        error: "Aggiornamento automatico non disponibile: {{message}}",
+      },
       menu: "Azioni su {{name}}",
       update: "Aggiorna",
       updateFolder: "Aggiorna cartella…",
@@ -76,6 +92,22 @@ export const sources = {
   },
   en: {
     sources: {
+      warn: {
+        missing_one: "{{count}} missing",
+        missing_other: "{{count}} missing",
+        newMissing_one: "{{count}} new missing",
+        newMissing_other: "{{count}} new missing",
+        failed_one: "{{count}} file not read in the last update",
+        failed_other: "{{count}} files not read in the last update",
+        ignore: "Dismiss",
+        ignoreLabel: "Dismiss the warnings of {{name}}",
+      },
+      watchStatus: {
+        active: "Automatic update on",
+        activeLast: "Automatic update on · last at {{time}}",
+        unreachable: "Automatic update unavailable: folder not reachable",
+        error: "Automatic update unavailable: {{message}}",
+      },
       menu: "Actions on {{name}}",
       update: "Update",
       updateFolder: "Update folder…",

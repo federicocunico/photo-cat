@@ -89,6 +89,10 @@ const it = {
         title: "Importa ed esporta",
         body: "Importa aggiunge cartelle senza spostare né modificare i file. Esporta copia o organizza le foto in nuove cartelle, con un'anteprima prima di scrivere.",
       },
+      autoUpdate: {
+        title: "Aggiornamento automatico",
+        body: "Con «Aggiorna automaticamente» su una cartella, finché photo-cat è aperto le foto aggiunte, spostate o cancellate in quella cartella vengono importate o aggiornate da sole. Lo stato (attivo, cartella non raggiungibile, errore) è mostrato sotto la cartella in Importa.",
+      },
       settings: {
         title: "Impostazioni",
         body: "Tema, lingua, riconoscimento AI, modelli e diagnostica. Se qualcosa non va, Aiuto › Segnala un problema prepara il pacchetto diagnostico.",
@@ -185,6 +189,10 @@ const en: typeof it = {
       import: {
         title: "Import and export",
         body: "Import adds folders without moving or modifying files. Export copies or organizes photos into new folders, with a preview before writing.",
+      },
+      autoUpdate: {
+        title: "Automatic update",
+        body: "With “Update automatically” on a folder, while photo-cat is open photos added, moved or deleted in that folder are imported or updated on their own. The status (on, folder not reachable, error) is shown under the folder in Import.",
       },
       settings: {
         title: "Settings",

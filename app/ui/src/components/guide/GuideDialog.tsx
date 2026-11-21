@@ -11,6 +11,7 @@ const SECTIONS: GuideSection[] = [
   "tags",
   "sequence",
   "import",
+  "autoUpdate",
   "settings",
 ];
 
