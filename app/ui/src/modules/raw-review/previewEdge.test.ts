@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewEdge } from "./previewEdge";
+import { maxEdgeFor, previewEdge } from "./previewEdge";
 
 describe("previewEdge", () => {
   it("usa il lato del precaricamento finché il pannello non ha bisogno di più pixel", () => {
@@ -17,5 +17,14 @@ describe("previewEdge", () => {
 
   it("ignora valori non validi", () => {
     expect(previewEdge(0, 0, 0, 0)).toBe(2048);
+  });
+
+  it("con molti pannelli si ferma a 4096 px per non esaurire la memoria delle immagini", () => {
+    expect(maxEdgeFor(1)).toBe(8192);
+    expect(maxEdgeFor(2)).toBe(8192);
+    expect(maxEdgeFor(3)).toBe(4096);
+    expect(maxEdgeFor(9)).toBe(4096);
+    expect(previewEdge(1000, 600, 2, 8, maxEdgeFor(9))).toBe(4096);
+    expect(previewEdge(640, 400, 1, 1, maxEdgeFor(9))).toBe(2048);
   });
 });

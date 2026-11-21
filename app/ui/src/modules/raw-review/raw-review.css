@@ -1,10 +1,16 @@
 /* Varianti RAW: pagina iniziale e riepilogo della cartella aperta. */
 .raw-review-page {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--pc-space-4);
-  min-height: 0;
   overflow: auto;
+  padding-bottom: var(--pc-space-5);
+}
+/* L'intestazione ha già i suoi margini: il resto della pagina si allinea a lei. */
+.raw-review-page > :not(.ui-page-header) {
+  margin-inline: var(--pc-space-5);
 }
 .raw-review-start {
   display: flex;
@@ -67,6 +73,7 @@
 /* Cartella aperta: la pagina diventa un'area di lavoro a tutta altezza. */
 .raw-review-page.is-open {
   overflow: hidden;
+  gap: var(--pc-space-2);
   padding-bottom: var(--pc-space-3);
 }
 .rr-review {
@@ -84,8 +91,7 @@
 }
 .rr-bar-name {
   margin: 0;
-  font-size: var(--pc-font-lg);
-  font-weight: var(--pc-weight-medium);
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
 }
 .rr-bar-close {
   margin-left: auto;
@@ -106,6 +112,13 @@
   grid-template-columns: 220px minmax(0, 1fr) 280px;
   gap: var(--pc-space-3);
 }
+/* Finestre di 1280 px: le colonne laterali cedono spazio ai pannelli. */
+@media (max-width: 1440px) {
+  .rr-workspace {
+    grid-template-columns: 184px minmax(0, 1fr) 232px;
+    gap: var(--pc-space-2);
+  }
+}
 .rr-main {
   min-width: 0;
   min-height: 0;
@@ -116,7 +129,9 @@
 .rr-footer {
   display: flex;
   align-items: center;
-  gap: var(--pc-space-3);
+  flex-wrap: wrap;
+  gap: var(--pc-space-1) var(--pc-space-3);
+  min-width: 0;
 }
 .rr-footer-pos {
   min-width: 12ch;
@@ -125,6 +140,14 @@
 }
 .rr-footer-hint {
   margin-left: auto;
+  font: var(--pc-font-sm) var(--pc-font-ui);
+}
+/* Il suggerimento del mouse sta anche nel foglio delle scorciatoie: nelle finestre strette si
+   toglie per non mandare il piede a capo. */
+@media (max-width: 1600px) {
+  .rr-footer-hint {
+    display: none;
+  }
 }
 
 /* Elenco degli scatti. */
@@ -150,7 +173,7 @@
   background: var(--pc-panel);
 }
 .rr-shots-scroll:focus-visible {
-  outline: 2px solid var(--pc-accent);
+  outline: 2px solid var(--pc-focus);
   outline-offset: -2px;
 }
 .rr-shots-inner {
@@ -177,7 +200,11 @@
 }
 .rr-shot.is-current {
   border-left-color: var(--pc-accent);
-  font-weight: var(--pc-weight-medium);
+  background: var(--pc-raised);
+}
+/* L'elenco ha il fuoco: lo scatto corrente (`aria-activedescendant`) mostra l'anello. */
+.rr-shots-scroll:focus-visible .rr-shot.is-current {
+  box-shadow: inset 0 0 0 2px var(--pc-focus);
 }
 .rr-shot-thumb {
   flex: 0 0 auto;
@@ -203,13 +230,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--pc-font-sm, 13px);
+  font: var(--pc-font-md) var(--pc-font-ui);
+}
+.rr-shot.is-current .rr-shot-name {
+  font-weight: var(--pc-weight-medium);
 }
 .rr-shot-meta {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--pc-space-1);
-  font-size: var(--pc-font-xs, 11px);
+  font: var(--pc-font-xs) var(--pc-font-ui);
   color: var(--pc-text-soft);
 }
 .rr-shot-stars {
@@ -236,6 +267,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  container: rr-panel / size;
   background: var(--pc-thumb-bg);
   border: 1px solid var(--pc-border);
   border-radius: var(--pc-radius-md);
@@ -251,6 +283,7 @@
 .rr-panel-head {
   display: flex;
   align-items: center;
+  min-height: 36px;
   gap: var(--pc-space-2);
   padding: var(--pc-space-1) var(--pc-space-2);
   background: var(--pc-panel);
@@ -289,7 +322,24 @@
 }
 .rr-panel-recipe {
   color: var(--pc-text-secondary);
-  font-size: 11px;
+  font: var(--pc-font-xs) var(--pc-font-ui);
+}
+/* Pannelli piccoli (3×3 in una finestra di 1280×720): intestazione su una riga, numero e nome
+   prima di tutto; la ricetta resta nel suggerimento e nella barra dei preset. */
+@container rr-panel (max-height: 240px) or (max-width: 240px) {
+  .rr-panel-head {
+    min-height: 30px;
+    gap: var(--pc-space-1);
+    padding: 2px var(--pc-space-1);
+  }
+  .rr-panel-recipe {
+    display: none;
+  }
+}
+@container rr-panel (max-width: 200px) {
+  .rr-panel-hide {
+    display: none;
+  }
 }
 .rr-panel-actions {
   flex: 0 0 auto;
@@ -317,11 +367,17 @@
 .rr-viewport[data-zoomed="true"]:active {
   cursor: grabbing;
 }
+/* Ogni immagine riempie il suo pannello con `object-fit`: la stessa trasformazione mostra così
+   lo stesso dettaglio in tutti i pannelli (come in FujiView). */
 .rr-image {
-  max-width: 100%;
-  max-height: 100%;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  transform-origin: center;
   will-change: transform;
+  backface-visibility: hidden;
 }
 .rr-empty,
 .rr-error {
@@ -346,9 +402,8 @@
   padding: 4px 10px;
   border-radius: var(--pc-radius-sm);
   background: var(--pc-accent);
-  color: var(--pc-on-accent, #fff);
-  font-size: 11px;
-  font-weight: var(--pc-weight-bold);
+  color: var(--pc-on-accent);
+  font: var(--pc-weight-bold) var(--pc-font-xs) var(--pc-font-ui);
   pointer-events: none;
 }
 .rr-recipe-tip {
@@ -427,14 +482,12 @@
 }
 .rr-info-rows {
   margin: 0 0 var(--pc-space-2);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px var(--pc-space-2);
 }
 .rr-info-rows div {
-  display: grid;
-  grid-template-columns: 9ch minmax(0, 1fr);
-  gap: var(--pc-space-2);
+  display: contents;
 }
 .rr-info-rows dt {
   color: var(--pc-text-secondary);
@@ -445,10 +498,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 900px) {
+/* Finestre strette: pannelli sopra, elenco degli scatti e informazioni affiancati sotto. */
+@media (max-width: 1000px) {
   .rr-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 220px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 200px;
+  }
+  .rr-main {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .rr-shots {
+    grid-row: 2;
+  }
+  .rr-info {
+    grid-row: 2;
   }
 }
 
@@ -456,4 +520,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--pc-space-1);
+  white-space: nowrap;
+}
+.rr-rating .inspector-rating {
+  flex-wrap: nowrap;
+}
+.rr-preset-name > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

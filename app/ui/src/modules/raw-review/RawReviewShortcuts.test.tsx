@@ -216,6 +216,50 @@ describe("scorciatoie della revisione", () => {
     position("1 / 3 · DSCF0001");
   });
 
+  it("dopo un clic sull'elenco degli scatti Spazio e Invio restano al modulo, le frecce all'elenco", async () => {
+    await openReview();
+    const list = screen.getByRole("listbox", { name: "Elenco degli scatti" });
+    fireEvent.click(screen.getByRole("option", { name: /^DSCF0002/ }));
+    list.focus();
+    position("2 / 3 · DSCF0002");
+    const space = fireEvent.keyDown(list, { key: " " });
+    // Spazio non scorre l'elenco: passa allo scatto successivo.
+    expect(space).toBe(false);
+    position("3 / 3 · DSCF0003");
+    fireEvent.keyDown(list, { key: "ArrowUp" });
+    position("2 / 3 · DSCF0002");
+    // La freccia era dell'elenco: il pannello a fuoco non si è spostato.
+    expect(panel("Acros")).toHaveAttribute("data-focused", "true");
+    fireEvent.keyDown(list, { key: "Enter" });
+    await waitFor(() =>
+      expect(commandsMock.rawReviewSetWinner).toHaveBeenCalledWith("s1", "dscf0002", "Acros"),
+    );
+  });
+
+  it("Tab su un pannello lo rende il pannello di Invio", async () => {
+    await openReview();
+    const title = panel("Provia").querySelector(".rr-panel-title") as HTMLElement;
+    act(() => title.focus());
+    expect(panel("Provia")).toHaveAttribute("data-focused", "true");
+    fireEvent.keyDown(title, { key: "Enter" });
+    await waitFor(() =>
+      expect(commandsMock.rawReviewSetWinner).toHaveBeenCalledWith("s1", "dscf0001", "Provia"),
+    );
+  });
+
+  it("scelta e stelle date da tastiera sono annunciate", async () => {
+    await openReview();
+    const status = screen.getByTestId("rr-announce");
+    expect(status).toHaveTextContent("");
+    shiftDigit(2);
+    await waitFor(() => expect(status).toHaveTextContent("variante migliore Velvia"));
+    press("4");
+    await waitFor(() => expect(status).toHaveTextContent("4 stelle, variante migliore Velvia"));
+    // Cambiare scatto non ripete l'annuncio dello scatto precedente.
+    press(" ");
+    expect(status).toHaveTextContent("");
+  });
+
   it("Maiusc+N sull'Anteprima RAW avvisa senza chiamare il backend; oltre i pannelli non fa nulla", async () => {
     const opened = review();
     opened.layout = "rafWithVariants";
@@ -305,9 +349,7 @@ describe("scorciatoie della revisione", () => {
     await waitFor(() => expect(commandsMock.rawReviewSave).toHaveBeenCalledWith("s1"));
     // La modifica è arrivata al backend prima del salvataggio.
     const order = (m: { mock: { invocationCallOrder: number[] } }) => m.mock.invocationCallOrder[0];
-    expect(order(commandsMock.rawReviewSetRating)).toBeLessThan(
-      order(commandsMock.rawReviewSave),
-    );
+    expect(order(commandsMock.rawReviewSetRating)).toBeLessThan(order(commandsMock.rawReviewSave));
     expect(commandsMock.rawReviewSave).toHaveBeenCalledTimes(1);
     expect(useRawReview.getState().opened?.sessionId).toBe("s1");
     // Il salvataggio automatico in attesa è stato annullato dal salvataggio immediato.
@@ -327,9 +369,9 @@ describe("scorciatoie della revisione", () => {
 
   it("fuori dal modulo le scorciatoie non sono registrate", async () => {
     const view = await openReview();
-    expect(
-      useCommandStore.getState().commands.some((c) => c.id.startsWith("rawReview.")),
-    ).toBe(true);
+    expect(useCommandStore.getState().commands.some((c) => c.id.startsWith("rawReview."))).toBe(
+      true,
+    );
     useLayout.setState({ module: "catalogs" });
     view.rerender(
       <QueryClientProvider client={new QueryClient()}>
@@ -337,9 +379,9 @@ describe("scorciatoie della revisione", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(
-        useCommandStore.getState().commands.some((c) => c.id.startsWith("rawReview.")),
-      ).toBe(false),
+      expect(useCommandStore.getState().commands.some((c) => c.id.startsWith("rawReview."))).toBe(
+        false,
+      ),
     );
   });
 
@@ -410,4 +452,3 @@ describe("salvataggio automatico", () => {
     });
   });
 });
-

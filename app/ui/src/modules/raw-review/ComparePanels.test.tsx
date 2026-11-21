@@ -128,6 +128,33 @@ describe("anteprime", () => {
     expect(edges[0]).toBe(2048);
     expect(edges[edges.length - 1]).toBeGreaterThan(2048);
   });
+
+  it("tornando alla vista adattata tiene le anteprime grandi già chieste", async () => {
+    mount({ panels: ["a"] });
+    await screen.findAllByRole("img");
+    const viewport = document.querySelector(".rr-viewport") as HTMLElement;
+    for (let i = 0; i < 9; i += 1) fireEvent.wheel(viewport, { deltaY: -100 });
+    await act(async () => {});
+    const asked = commandsMock.rawReviewImageKeys.mock.calls.length;
+    for (let i = 0; i < 30; i += 1) fireEvent.wheel(viewport, { deltaY: 100 });
+    await act(async () => {});
+    expect(transforms()).toEqual(["translate3d(0px, 0px, 0) scale(1)"]);
+    expect(commandsMock.rawReviewImageKeys.mock.calls.length).toBe(asked);
+  });
+
+  it("con nove pannelli lo zoom non chiede anteprime oltre 4096 px", async () => {
+    const panels = Array.from({ length: 9 }, (_, i) => `p${i}`);
+    commandsMock.rawReviewImageKeys.mockImplementation(async (_s: string, shot: string) =>
+      panels.map((preset) => ({ preset, key: `${shot}-${preset}` })),
+    );
+    mount({ panels });
+    await screen.findAllByRole("img");
+    const viewport = document.querySelector(".rr-viewport") as HTMLElement;
+    for (let i = 0; i < 20; i += 1) fireEvent.wheel(viewport, { deltaY: -100 });
+    await act(async () => {});
+    const edges = commandsMock.rawReviewImageKeys.mock.calls.map((c) => c[2]);
+    expect(Math.max(...edges)).toBe(4096);
+  });
 });
 
 describe("zoom e spostamento sincronizzati", () => {

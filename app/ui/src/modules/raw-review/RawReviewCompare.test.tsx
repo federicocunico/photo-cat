@@ -271,7 +271,12 @@ describe("confronto nel modulo", () => {
     ]);
     await openReview(opened);
     const panel = screen.getByRole("region", { name: "Anteprima RAW" });
-    fireEvent.click(within(panel).getByRole("button", { name: /Scegli «Anteprima RAW»/ }));
+    // Il pulsante della scelta è disattivato con il motivo; Invio sul pannello lo spiega.
+    const choose = within(panel).getByRole("button", { name: /Scegli «Anteprima RAW»/ });
+    expect(choose).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(choose);
+    expect(useToast.getState().notices).toHaveLength(0);
+    fireEvent.keyDown(window, { key: "Enter" });
     expect(commandsMock.rawReviewSetWinner).not.toHaveBeenCalled();
     expect(useToast.getState().notices[0].message).toContain("sviluppa lo scatto");
     expect(panel).not.toHaveClass("is-winner");

@@ -13,7 +13,7 @@ import { canChoose } from "./choose";
 import { metaLabel, metaValue, recipeSummary } from "./metaText";
 import { panelGrid } from "./project";
 import { presetLabel } from "./presetLabel";
-import { previewEdge } from "./previewEdge";
+import { maxEdgeFor, previewEdge } from "./previewEdge";
 import { FIT, panBy, toggleZoom, viewportTransform, zoomBy } from "./viewport";
 import type { Viewport } from "./viewport";
 
@@ -60,11 +60,23 @@ export function ComparePanels({
   }
 
   const area = useAreaSize();
-  const edge = previewEdge(
+  const cap = maxEdgeFor(panels.length);
+  const needed = previewEdge(
     area.size.width / grid.columns,
     area.size.height / grid.rows,
     typeof window === "undefined" ? 1 : window.devicePixelRatio || 1,
     viewport.scale,
+    cap,
+  );
+  // Il lato non scende finché lo scatto resta lo stesso: tornando alla vista adattata dopo uno
+  // zoom si tengono le anteprime più grandi, senza richiedere e decodificare tutto di nuovo.
+  const [edgeState, setEdgeState] = useState({ shot: shot.key, edge: needed });
+  if (edgeState.shot !== shot.key || needed > edgeState.edge) {
+    setEdgeState({ shot: shot.key, edge: needed });
+  }
+  const edge = Math.min(
+    cap,
+    edgeState.shot === shot.key ? Math.max(edgeState.edge, needed) : needed,
   );
   const urls = useImageUrls(sessionId, shot.key, edge);
   usePrefetch(sessionId, shot.key, panels);
@@ -97,6 +109,9 @@ export function ComparePanels({
           focused={position === focusedIndex}
           metadata={metadata[preset]}
           canHide={panels.length > 1}
+          onFocusIn={() => {
+            if (position !== focusedIndex) onFocusPanel?.(position);
+          }}
           onChoose={() => {
             onFocusPanel?.(position);
             choose(preset);
@@ -178,6 +193,8 @@ type PanelProps = {
   focused: boolean;
   metadata: ImageMetadata | undefined;
   canHide: boolean;
+  /** Il fuoco della tastiera entra nel pannello (Tab sull'intestazione o sui pulsanti). */
+  onFocusIn: () => void;
   onChoose: () => void;
   onHide: () => void;
 };
@@ -193,6 +210,7 @@ function Panel({
   focused,
   metadata,
   canHide,
+  onFocusIn,
   onChoose,
   onHide,
 }: PanelProps) {
@@ -255,6 +273,7 @@ function Panel({
       }`}
       data-focused={focused ? "true" : undefined}
       aria-label={name}
+      onFocus={onFocusIn}
     >
       <header className="rr-panel-head">
         <span
@@ -290,6 +309,9 @@ function Panel({
               aria-pressed={winner}
               icon={<Icon.Trophy size={16} />}
               className={winner ? "is-on" : ""}
+              disabledReason={
+                variant.selectable ? undefined : t("rawReviewCompare.rawNotChoosable")
+              }
               onClick={onChoose}
             />
           )}
@@ -297,6 +319,7 @@ function Panel({
             size="sm"
             label={t("rawReviewCompare.hide", { name })}
             icon={<Icon.Close size={16} />}
+            className="rr-panel-hide"
             disabledReason={canHide ? undefined : t("rawReviewCompare.lastPanel")}
             onClick={onHide}
           />

@@ -14,7 +14,7 @@ import {
   PageHeader,
   chooseFolder,
 } from "../../components/ui";
-import { commands, type OpenedReview } from "../../lib/ipc";
+import { commands, type OpenedReview, type ShotDecision } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import {
@@ -33,6 +33,7 @@ import { ComparePanels } from "./ComparePanels";
 import { InfoSidebar } from "./InfoSidebar";
 import { RatingRow } from "../library/InspectorQuality";
 import { focusedPanel } from "./panelFocus";
+import { presetLabel } from "./presetLabel";
 import { chooseProject } from "./pickers";
 import { ShotList } from "./ShotList";
 import { useRawReviewShortcuts } from "./useRawReviewShortcuts";
@@ -141,10 +142,11 @@ export function RawReviewPage() {
   );
 
   return (
-    <div className={`module-placeholder raw-review-page${opened ? " is-open" : ""}`}>
+    <div className={`raw-review-page${opened ? " is-open" : ""}`}>
+      {/* Con una cartella aperta l'intestazione perde la descrizione: l'altezza va ai pannelli. */}
       <PageHeader
         title={t("modules.raw-review")}
-        description={t("rawReviewPage.subtitle")}
+        description={opened ? undefined : t("rawReviewPage.subtitle")}
         actions={actions}
       />
       {error && (
@@ -240,14 +242,16 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
 
   // Pannello a fuoco per Invio e frecce: quello scelto, altrimenti la variante migliore o il primo.
   // Un altro scatto riparte da capo.
-  const [panelChoice, setPanelChoice] = useState<{ shot: string | undefined; index: number | null }>(
-    { shot: shot?.key, index: null },
-  );
+  const [panelChoice, setPanelChoice] = useState<{
+    shot: string | undefined;
+    index: number | null;
+  }>({ shot: shot?.key, index: null });
   const chosenPanel = panelChoice.shot === shot?.key ? panelChoice.index : null;
   const focused = focusedPanel(panels, chosenPanel, decision?.winnerPreset ?? null);
   const focusPanel = (index: number) => setPanelChoice({ shot: shot?.key, index });
 
   useRawReviewShortcuts({ shot, panels, focused, onFocus: focusPanel }, true);
+  const announcement = useDecisionAnnouncement(shot?.key, decision);
 
   return (
     <div className="rr-review">
@@ -320,13 +324,18 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
                 <RatingRow
                   rating={decision?.rating ?? 0}
                   apply={async (operation) => {
-                    if (operation.action === "set_rating") void setRating(shot.key, operation.rating ?? 0);
+                    if (operation.action === "set_rating")
+                      void setRating(shot.key, operation.rating ?? 0);
                   }}
                 />
               </div>
             )}
             <span className="muted">{t("rawReviewCompare.decided", { count: decided })}</span>
             <span className="muted rr-footer-hint">{t("rawReviewCompare.hint")}</span>
+            {/* Scelta e stelle date da tastiera si leggono anche senza guardare i pannelli. */}
+            <span className="visually-hidden" role="status" data-testid="rr-announce">
+              {announcement}
+            </span>
           </nav>
         </div>
         <InfoSidebar
@@ -342,4 +351,28 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
       </div>
     </div>
   );
+}
+
+/**
+ * Testo per gli screen reader quando cambiano la variante migliore o le stelle dello scatto
+ * mostrato. Passare a un altro scatto non annuncia nulla qui: lo annuncia già la posizione.
+ */
+function useDecisionAnnouncement(
+  shotKey: string | undefined,
+  decision: ShotDecision | undefined,
+): string {
+  const { t } = useTranslation();
+  const rating = decision?.rating ?? 0;
+  const winner = decision?.winnerPreset ?? null;
+  const [state, setState] = useState({ shotKey, rating, winner, text: "" });
+  if (state.shotKey !== shotKey) {
+    setState({ shotKey, rating, winner, text: "" });
+  } else if (state.rating !== rating || state.winner !== winner) {
+    const parts = [
+      rating > 0 ? t("rawReviewShots.stars", { count: rating }) : t("rawReviewCompare.noStars"),
+    ];
+    if (winner) parts.push(t("rawReviewShots.best", { name: presetLabel(t, winner) }));
+    setState({ shotKey, rating, winner, text: parts.join(", ") });
+  }
+  return state.text;
 }

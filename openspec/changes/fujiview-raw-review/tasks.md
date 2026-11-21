@@ -51,7 +51,7 @@
   - Maiusc+2 e poi 4 non fanno avanzare;
   - Ctrl+3 apre Cataloghi;
   - la sessione viene salvata.
-- [ ] 3.5 Revisione Opus della parte 3: aderenza alla spec `raw-review`, accessibilità da tastiera, fluidità con 160 scatti × 8 preset.
+- [x] 3.5 Revisione Opus della parte 3: aderenza alla spec `raw-review`, accessibilità da tastiera, fluidità con 160 scatti × 8 preset.
 
 ## 4. Export in un nuovo catalogo
 

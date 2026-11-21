@@ -162,6 +162,7 @@ export const rawReview = {
       decided_one: "{{count}} scelta",
       decided_other: "{{count}} scelte",
       hint: "Rotellina per ingrandire, trascina per spostare, doppio clic per adattare.",
+      noStars: "nessuna stella",
     },
     rawReviewInfo: {
       region: "Preset e informazioni dello scatto",
@@ -288,6 +289,7 @@ export const rawReview = {
       decided_one: "{{count}} pick",
       decided_other: "{{count}} picks",
       hint: "Wheel to zoom, drag to pan, double-click to fit.",
+      noStars: "no stars",
     },
     rawReviewInfo: {
       region: "Presets and shot information",

@@ -18,12 +18,16 @@ type Context = {
 
 /**
  * Il fuoco è su un controllo che usa già Spazio, Invio o le frecce (pulsante, collegamento,
- * riepilogo, elenco degli scatti): lì la tastiera è del controllo. Un pulsante toccato col
- * mouse non conta (non è `:focus-visible`), così Spazio continua a scorrere gli scatti.
+ * riepilogo): lì la tastiera è del controllo. Un pulsante toccato col mouse non conta (non è
+ * `:focus-visible`), così Spazio continua a scorrere gli scatti. L'elenco degli scatti usa solo
+ * le frecce (`arrows`): Spazio e Invio restano al modulo anche lì, dopo un clic su uno scatto.
  */
-export function focusOwnsKeys(active: Element | null = document.activeElement): boolean {
+export function focusOwnsKeys(
+  active: Element | null = document.activeElement,
+  arrows = false,
+): boolean {
   if (!(active instanceof HTMLElement) || active === document.body) return false;
-  if (active.closest("[data-rr-shots]")) return true;
+  if (active.closest("[data-rr-shots]")) return arrows;
   if (!active.matches("button, a[href], summary, input, [role='checkbox']")) return false;
   try {
     return active.matches(":focus-visible");
@@ -54,16 +58,14 @@ export function useRawReviewShortcuts(context: Context, enabled: boolean) {
   const base = { group: "rawReview" as const, palette: false };
 
   const commands: Command[] = [
-    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(
-      (n): Command => ({
-        ...base,
-        id: `rawReview.choose.${n}`,
-        label: t("rawReviewShortcuts.choose", { n }),
-        shortcut: { key: String(n), shift: true },
-        when: ready,
-        run: () => chooseAt(n - 1),
-      }),
-    ),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n): Command => ({
+      ...base,
+      id: `rawReview.choose.${n}`,
+      label: t("rawReviewShortcuts.choose", { n }),
+      shortcut: { key: String(n), shift: true },
+      when: ready,
+      run: () => chooseAt(n - 1),
+    })),
     {
       ...base,
       id: "rawReview.chooseFocused",
@@ -106,19 +108,17 @@ export function useRawReviewShortcuts(context: Context, enabled: boolean) {
       when: () => !focusOwnsKeys(),
       run: () => go(-1),
     },
-    ...(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as Arrow[]).map(
-      (key): Command => ({
-        ...base,
-        id: `rawReview.focus.${key}`,
-        label: t("rawReviewShortcuts.focusPanel"),
-        shortcut: { key },
-        when: () => ready() && !focusOwnsKeys(),
-        run: () => {
-          const { panels, focused, onFocus } = ref.current.context;
-          onFocus(moveFocus(focused, panels.length, key));
-        },
-      }),
-    ),
+    ...(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as Arrow[]).map((key): Command => ({
+      ...base,
+      id: `rawReview.focus.${key}`,
+      label: t("rawReviewShortcuts.focusPanel"),
+      shortcut: { key },
+      when: () => ready() && !focusOwnsKeys(document.activeElement, true),
+      run: () => {
+        const { panels, focused, onFocus } = ref.current.context;
+        onFocus(moveFocus(focused, panels.length, key));
+      },
+    })),
   ];
   useCommands(commands, enabled);
 }
