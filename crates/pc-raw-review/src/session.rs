@@ -334,6 +334,23 @@ impl Session {
         true
     }
 
+    /// Sposta il pannello di un preset visibile alla posizione `to` (0 = primo). Ritorna `false`
+    /// se il preset non è visibile o la posizione è fuori dai pannelli.
+    pub fn move_panel(&mut self, preset: &str, to: usize) -> bool {
+        let Some(from) = self.panel_presets.iter().position(|p| p == preset) else {
+            return false;
+        };
+        if to >= self.panel_presets.len() {
+            return false;
+        }
+        if from != to {
+            let moved = self.panel_presets.remove(from);
+            self.panel_presets.insert(to, moved);
+            self.touch();
+        }
+        true
+    }
+
     /// Mostra di nuovo tutti i preset (fino a [`MAX_PANELS`]).
     pub fn show_all_presets(&mut self) {
         let extra: Vec<String> = self
@@ -887,6 +904,22 @@ mod tests {
         // L'ultimo pannello visibile non si nasconde.
         let mut one = Session::create(&index("/r", &["C1"], 1));
         assert!(!one.toggle_preset_visibility("C1"));
+    }
+
+    #[test]
+    fn sposta_i_pannelli_senza_cambiare_quelli_visibili() {
+        let mut session = Session::create(&index("/r", &["C1", "C2", "C3"], 1));
+        assert_eq!(session.panel_presets, vec!["C1", "C2", "C3"]);
+        assert!(session.move_panel("C3", 0));
+        assert_eq!(session.panel_presets, vec!["C3", "C1", "C2"]);
+        assert!(session.move_panel("C3", 2));
+        assert_eq!(session.panel_presets, vec!["C1", "C2", "C3"]);
+        // Preset sconosciuto, nascosto o posizione fuori misura: nessun cambiamento.
+        assert!(!session.move_panel("C9", 0));
+        assert!(!session.move_panel("C1", 3));
+        session.toggle_preset_visibility("C2");
+        assert!(!session.move_panel("C2", 0));
+        assert_eq!(session.panel_presets, vec!["C1", "C3"]);
     }
 
     fn touch(path: &Path) {

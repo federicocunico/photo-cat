@@ -244,6 +244,12 @@ export const commands = {
 	rawReviewSetReviewed: (sessionId: string, shotKey: string, reviewed: boolean) => __TAURI_INVOKE<ShotDecision>("raw_review_set_reviewed", { sessionId, shotKey, reviewed }),
 	/**  Mostra o nasconde il pannello di un preset. */
 	rawReviewTogglePreset: (sessionId: string, preset: string) => __TAURI_INVOKE<PanelState>("raw_review_toggle_preset", { sessionId, preset }),
+	/**  Sposta il pannello di un preset visibile alla posizione indicata (0 = primo). */
+	rawReviewMovePreset: (sessionId: string, preset: string, to: number) => __TAURI_INVOKE<PanelState>("raw_review_move_preset", { sessionId, preset, to }),
+	/**  Mostra di nuovo tutti i pannelli nascosti (fino a nove). */
+	rawReviewShowAllPresets: (sessionId: string) => __TAURI_INVOKE<PanelState>("raw_review_show_all_presets", { sessionId }),
+	/**  Metadati e ricetta Fujifilm di una variante della sessione aperta. */
+	rawReviewMetadata: (sessionId: string, shotKey: string, preset: string) => __TAURI_INVOKE<ImageMetadata>("raw_review_metadata", { sessionId, shotKey, preset }),
 	/**  Ricorda l'ultimo scatto visto. */
 	rawReviewSetLastShot: (sessionId: string, shotKey: string | null) => __TAURI_INVOKE<null>("raw_review_set_last_shot", { sessionId, shotKey }),
 	/**  Salva la sessione di revisione nei dati dell'app (mai nella cartella delle foto). */

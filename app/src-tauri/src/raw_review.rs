@@ -804,6 +804,56 @@ impl ReviewState {
         })
     }
 
+    /// Sposta il pannello di un preset visibile alla posizione `to`.
+    pub fn move_preset(&self, session_id: &str, preset: &str, to: usize) -> AppResult<PanelState> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        if !session.move_panel(preset, to) {
+            return Err(AppError::invalid_input(format!(
+                "Il pannello «{preset}» non è visibile o la posizione {to} non è valida."
+            )));
+        }
+        Ok(PanelState {
+            panel_presets: session.panel_presets.clone(),
+            hidden_presets: session.hidden_presets.clone(),
+        })
+    }
+
+    /// Mostra di nuovo tutti i pannelli (al massimo nove), mantenendo l'ordine attuale.
+    pub fn show_all_presets(&self, session_id: &str) -> AppResult<PanelState> {
+        let session = self.working_session(session_id)?;
+        let mut session = session.lock();
+        session.show_all_presets();
+        Ok(PanelState {
+            panel_presets: session.panel_presets.clone(),
+            hidden_presets: session.hidden_presets.clone(),
+        })
+    }
+
+    /// Metadati e ricetta di una variante. Il file viene dall'indice della sessione, mai dal
+    /// chiamante, e deve stare in una cartella ammessa (stesso controllo del protocollo).
+    pub fn metadata(
+        &self,
+        session_id: &str,
+        shot_key: &str,
+        preset: &str,
+    ) -> AppResult<pc_raw_review::metadata::ImageMetadata> {
+        let session = self.session(session_id)?;
+        let file = session.file(shot_key, preset).ok_or_else(|| {
+            AppError::new(
+                ErrorCode::NotFound,
+                format!("variante «{preset}» dello scatto «{shot_key}» sconosciuta"),
+            )
+        })?;
+        if !session.is_inside_allowed(file) {
+            return Err(AppError::new(
+                ErrorCode::NotFound,
+                "il file della variante non è disponibile",
+            ));
+        }
+        pc_raw_review::metadata::read_metadata(file)
+    }
+
     /// Ricorda l'ultimo scatto visto; lo scatto deve esistere nella sessione.
     pub fn set_last_shot(&self, session_id: &str, shot_key: Option<&str>) -> AppResult<()> {
         let session = self.working_session(session_id)?;
@@ -1254,6 +1304,51 @@ pub async fn raw_review_toggle_preset(
 ) -> AppResult<PanelState> {
     crate::state::blocking(app, move |_app, state| {
         state.raw_review.toggle_preset(&session_id, &preset)
+    })
+    .await
+}
+
+/// Sposta il pannello di un preset visibile alla posizione indicata (0 = primo).
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_move_preset(
+    app: tauri::AppHandle,
+    session_id: String,
+    preset: String,
+    to: u32,
+) -> AppResult<PanelState> {
+    crate::state::blocking(app, move |_app, state| {
+        state
+            .raw_review
+            .move_preset(&session_id, &preset, to as usize)
+    })
+    .await
+}
+
+/// Mostra di nuovo tutti i pannelli nascosti (fino a nove).
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_show_all_presets(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> AppResult<PanelState> {
+    crate::state::blocking(app, move |_app, state| {
+        state.raw_review.show_all_presets(&session_id)
+    })
+    .await
+}
+
+/// Metadati e ricetta Fujifilm di una variante della sessione aperta.
+#[tauri::command]
+#[specta::specta]
+pub async fn raw_review_metadata(
+    app: tauri::AppHandle,
+    session_id: String,
+    shot_key: String,
+    preset: String,
+) -> AppResult<pc_raw_review::metadata::ImageMetadata> {
+    crate::state::blocking(app, move |_app, state| {
+        state.raw_review.metadata(&session_id, &shot_key, &preset)
     })
     .await
 }
@@ -1753,6 +1848,40 @@ mod tests {
         // Chiusa la sessione, i comandi di modifica la rifiutano.
         assert!(f.state.close(id));
         assert!(f.state.save(&data, id).is_err());
+    }
+
+    #[test]
+    fn panels_are_reordered_and_metadata_comes_only_from_the_session_index() {
+        let f = fixture(1, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        let id = opened.session_id.as_str();
+        let first = opened.session.panel_presets.clone();
+        assert_eq!(first.len(), 2);
+
+        let moved = f.state.move_preset(id, &first[1], 0).unwrap();
+        assert_eq!(
+            moved.panel_presets,
+            vec![first[1].clone(), first[0].clone()]
+        );
+        // Posizione fuori misura, preset sconosciuto o sessione chiusa.
+        assert!(f.state.move_preset(id, &first[0], 2).is_err());
+        assert!(f.state.move_preset(id, "Mai", 0).is_err());
+        assert!(f.state.move_preset("sconosciuta", &first[0], 0).is_err());
+        f.state.toggle_preset(id, &first[0]).unwrap();
+        assert!(f.state.move_preset(id, &first[0], 0).is_err());
+        let all = f.state.show_all_presets(id).unwrap();
+        assert!(all.hidden_presets.is_empty());
+        assert_eq!(all.panel_presets.len(), 2);
+
+        let meta = f.state.metadata(id, "dscf0001", "Velvia").unwrap();
+        assert!(meta.sections.iter().any(|s| s.title == "file"));
+        assert!(f.state.metadata(id, "dscf0001", "Mai").is_err());
+        assert!(f.state.metadata(id, "altro", "Velvia").is_err());
+        assert!(f
+            .state
+            .metadata("sconosciuta", "dscf0001", "Velvia")
+            .is_err());
     }
 
     #[test]

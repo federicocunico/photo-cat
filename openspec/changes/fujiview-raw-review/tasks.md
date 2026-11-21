@@ -46,7 +46,7 @@
 
 - [x] 3.1 Registrare il modulo "Varianti RAW (Fujifilm X-T5)" nel gruppo "Importa ed esporta" con Ctrl+9, `Destination` sulla sessione e comando di palette. i18n it/en. Test vitest: navigazione e scenari "Scorciatoia della revisione RAW" e "Gruppi della navigazione".
 - [x] 3.2 Pagina iniziale: scelta della cartella, sessioni recenti, apertura di `.fujiview` e messaggio per le cartelle non supportate. Comandi Tauri `raw_review_open`, `raw_review_recent` e `raw_review_save` con binding. Test vitest con comandi simulati.
-- [ ] 3.3 Porting di `project.ts` ed `export.ts` con i loro test. `ComparePanels` con griglia adattiva, zoom e spostamento sincronizzati, preset nascosti e ordinati, e stato "variante non disponibile". `InfoSidebar` con ricetta. Test vitest della sincronizzazione e della visibilità dei preset.
+- [x] 3.3 Porting di `project.ts` ed `export.ts` con i loro test. `ComparePanels` con griglia adattiva, zoom e spostamento sincronizzati, preset nascosti e ordinati, e stato "variante non disponibile". `InfoSidebar` con ricetta. Test vitest della sincronizzazione e della visibilità dei preset.
 - [ ] 3.4 `ShotList` virtualizzata con selezione multipla (`useGridSelection`). Scorciatoie del modulo (D5): Maiusc+1–9, Invio, 1–5/0, Alt+1–5/Alt+0, Spazio/Maiusc+Spazio, ignorate nei campi di testo. Salvataggio automatico con debounce. Test vitest:
   - Maiusc+2 e poi 4 non fanno avanzare;
   - Ctrl+3 apre Cataloghi;

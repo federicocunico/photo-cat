@@ -6,6 +6,7 @@ import "../../i18n";
 import type { OpenedReview, RecentSession } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
+import { useRawReview } from "../../store/rawReview";
 import { RawReviewPage } from "./RawReviewPage";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -50,7 +51,9 @@ const recentItem = (over: Partial<RecentSession> = {}): RecentSession => ({
 
 function mount() {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <RawReviewPage />
     </QueryClientProvider>,
   );
@@ -60,6 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   commandsMock.rawReviewRecent.mockResolvedValue([]);
   useLayout.setState({ rawReviewTarget: null });
+  useRawReview.getState().clear();
 });
 afterEach(cleanup);
 
@@ -160,9 +164,7 @@ describe("Varianti RAW", () => {
       .mockResolvedValue([] as RecentSession[]);
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "Rimuovi Roma dall'elenco" }));
-    await waitFor(() =>
-      expect(commandsMock.rawReviewForget).toHaveBeenCalledWith("D:/Foto/Roma"),
-    );
+    await waitFor(() => expect(commandsMock.rawReviewForget).toHaveBeenCalledWith("D:/Foto/Roma"));
     expect(await screen.findByText("Nessuna sessione recente.")).toBeInTheDocument();
     expect(commandsMock.rawReviewOpen).not.toHaveBeenCalled();
   });

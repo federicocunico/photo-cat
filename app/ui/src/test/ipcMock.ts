@@ -50,6 +50,11 @@ import type {
   LocatedFace,
   OpenedReview,
   RecentSession,
+  ShotDecision,
+  PanelState,
+  ReviewImageKey,
+  PrefetchReport,
+  ImageMetadata,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -192,9 +197,9 @@ export const commandsMock = {
     count: 0,
     maxId: 0,
   })),
-  faceSelectionIds: vi.fn<
-    (scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>
-  >(async () => []),
+  faceSelectionIds: vi.fn<(scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>>(
+    async () => [],
+  ),
   faceSelectionMedia: vi.fn<
     (scope: FaceScope, maxId: number, except: number[]) => Promise<FaceSelectionMedia>
   >(async () => ({ present: [], missing: [] })),
@@ -320,6 +325,25 @@ export const commandsMock = {
   rawReviewForget: vi.fn(async () => null),
   rawReviewSave: vi.fn(async () => null),
   rawReviewClose: vi.fn(async () => true),
+  rawReviewSetWinner:
+    vi.fn<(id: string, shot: string, preset: string | null) => Promise<ShotDecision>>(),
+  rawReviewSetReviewed:
+    vi.fn<(id: string, shot: string, reviewed: boolean) => Promise<ShotDecision>>(),
+  rawReviewSetLastShot: vi.fn(async () => null),
+  rawReviewTogglePreset: vi.fn<(id: string, preset: string) => Promise<PanelState>>(),
+  rawReviewMovePreset: vi.fn<(id: string, preset: string, to: number) => Promise<PanelState>>(),
+  rawReviewShowAllPresets: vi.fn<(id: string) => Promise<PanelState>>(),
+  rawReviewImageKeys: vi.fn<(id: string, shot: string, edge: number) => Promise<ReviewImageKey[]>>(
+    async () => [],
+  ),
+  rawReviewPrefetch: vi.fn<
+    (id: string, center: string, presets: string[]) => Promise<PrefetchReport>
+  >(async () => ({ queued: 0, cancelled: 0 })),
+  rawReviewMetadata: vi.fn(async (): Promise<ImageMetadata> => ({
+    sections: [],
+    gps: null,
+    recipe: null,
+  })),
   saveSettings: vi.fn(async () => null),
   getTaxonomy: vi.fn(),
   addCategory: vi.fn(),

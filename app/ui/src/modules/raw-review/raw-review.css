@@ -63,9 +63,292 @@
   margin: 0;
   padding-left: var(--pc-space-4);
 }
-.raw-review-compare {
-  padding: var(--pc-space-6) var(--pc-space-4);
-  border: 1px dashed var(--pc-border);
-  border-radius: var(--pc-radius-md);
+
+/* Cartella aperta: la pagina diventa un'area di lavoro a tutta altezza. */
+.raw-review-page.is-open {
+  overflow: hidden;
+  padding-bottom: var(--pc-space-3);
+}
+.rr-review {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.rr-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--pc-space-1) var(--pc-space-4);
+}
+.rr-bar-name {
+  margin: 0;
+  font-size: var(--pc-font-lg);
+  font-weight: var(--pc-weight-medium);
+}
+.rr-bar-close {
+  margin-left: auto;
+}
+.rr-warnings summary {
+  cursor: pointer;
+  color: var(--pc-warn);
+}
+.rr-warnings[open] {
+  flex-basis: 100%;
+  max-height: 120px;
+  overflow: auto;
+}
+.rr-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--pc-space-3);
+}
+.rr-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.rr-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-3);
+}
+.rr-footer-pos {
+  min-width: 12ch;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.rr-footer-hint {
+  margin-left: auto;
+}
+
+/* Griglia dei pannelli e singolo pannello. */
+.rr-compare {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: var(--pc-space-1);
+}
+.rr-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--pc-thumb-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+}
+.rr-panel.is-winner {
+  border-color: var(--pc-accent);
+  box-shadow: inset 0 0 0 3px var(--pc-accent);
+}
+.rr-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-1) var(--pc-space-2);
+  background: var(--pc-panel);
+  border-bottom: 1px solid var(--pc-border);
+}
+.rr-panel-number {
+  flex: 0 0 auto;
+  min-width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--pc-border-strong);
+  border-radius: var(--pc-radius-sm);
+  font: 700 12px var(--pc-font-mono);
+  color: var(--pc-text-soft);
+}
+.rr-panel-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--pc-radius-sm);
+}
+.rr-panel-title:focus-visible {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}
+.rr-panel-name,
+.rr-panel-recipe {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rr-panel-name {
+  font-weight: var(--pc-weight-medium);
+}
+.rr-panel-recipe {
+  color: var(--pc-text-secondary);
+  font-size: 11px;
+}
+.rr-panel-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 2px;
+}
+.rr-panel-actions .is-on {
+  color: var(--pc-accent);
+}
+.rr-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  contain: strict;
+}
+.rr-viewport[data-zoomed="true"] {
+  cursor: grab;
+}
+.rr-viewport[data-zoomed="true"]:active {
+  cursor: grabbing;
+}
+.rr-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  will-change: transform;
+}
+.rr-empty,
+.rr-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pc-space-2);
+  max-width: 80%;
+  color: var(--pc-text-secondary);
+  text-align: center;
+}
+.rr-error {
+  color: var(--pc-danger);
+}
+.rr-winner-badge {
+  position: absolute;
+  right: var(--pc-space-2);
+  bottom: var(--pc-space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  padding: 4px 10px;
+  border-radius: var(--pc-radius-sm);
+  background: var(--pc-accent);
+  color: var(--pc-on-accent, #fff);
+  font-size: 11px;
+  font-weight: var(--pc-weight-bold);
+  pointer-events: none;
+}
+.rr-recipe-tip {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px var(--pc-space-3);
+  margin: 0;
+}
+.rr-recipe-tip div {
+  display: contents;
+}
+.rr-recipe-tip dt {
+  color: var(--pc-text-secondary);
+}
+.rr-recipe-tip dd {
+  margin: 0;
+}
+
+/* Barra laterale: preset e informazioni dello scatto. */
+.rr-info {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-2);
+  background: var(--pc-panel);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+}
+.rr-info-count {
+  margin-left: var(--pc-space-2);
+}
+.rr-info-empty {
+  margin: 0;
+}
+.rr-presets {
+  list-style: none;
+  margin: 0 0 var(--pc-space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rr-preset {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  border-radius: var(--pc-radius-sm);
+}
+.rr-preset.is-shown {
+  background: var(--pc-accent-soft-bg);
+}
+.rr-preset-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-1) var(--pc-space-2);
+  cursor: pointer;
+}
+.rr-preset-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rr-preset-missing {
+  color: var(--pc-warn);
+}
+.rr-preset-order {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.rr-info-rows {
+  margin: 0 0 var(--pc-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rr-info-rows div {
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1fr);
+  gap: var(--pc-space-2);
+}
+.rr-info-rows dt {
+  color: var(--pc-text-secondary);
+}
+.rr-info-rows dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .rr-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 220px;
+  }
 }

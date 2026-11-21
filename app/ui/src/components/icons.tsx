@@ -5,6 +5,7 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  ArrowDown,
   ArrowRight,
   ArrowUp,
   Camera,
@@ -44,6 +45,7 @@ import {
   Stethoscope,
   Tags,
   Trash2,
+  Trophy,
   TriangleAlert,
   Undo2,
   Users,
@@ -120,6 +122,8 @@ export const Icon = {
   Play: wrap(Play),
   Stop: wrap(Square),
   Close: wrap(X),
+  Trophy: wrap(Trophy),
+  ArrowDown: wrap(ArrowDown),
   Edit: wrap(Pencil),
   Refresh: wrap(RefreshCw),
   Plus: wrap(Plus),

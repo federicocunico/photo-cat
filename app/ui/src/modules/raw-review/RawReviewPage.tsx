@@ -1,6 +1,6 @@
 // Modulo "Varianti RAW (Fujifilm X-T5)": apertura di una cartella o di un progetto FujiView,
-// sessioni recenti e, a cartella aperta, il riepilogo della scansione. Il confronto delle
-// varianti arriva con i task 3.3 e 3.4.
+// sessioni recenti e, a cartella aperta, il confronto delle varianti. La sessione aperta sta in
+// `useRawReview`: smontare il modulo non la chiude.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,8 +17,21 @@ import {
 import { commands, type OpenedReview } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
 import { useLayout } from "../../store/layout";
+import {
+  candidatesOf,
+  chooseWinner,
+  movePreset,
+  saveOpenReview,
+  selectShot,
+  showAllPresets,
+  toggleVisible,
+  useRawReview,
+} from "../../store/rawReview";
 import { notifyError } from "../../store/toasts";
+import { ComparePanels } from "./ComparePanels";
+import { InfoSidebar } from "./InfoSidebar";
 import { chooseProject } from "./pickers";
+import { forgetMetadata, useShotMetadata } from "./useShotMetadata";
 import "./raw-review.css";
 
 type OpenFailure = { kind: "unsupported" | "failed"; detail: string };
@@ -39,7 +52,7 @@ export function RawReviewPage() {
   const qc = useQueryClient();
   const target = useLayout((s) => s.rawReviewTarget);
   const clearTarget = useLayout((s) => s.clearRawReviewTarget);
-  const [opened, setOpened] = useState<OpenedReview | null>(null);
+  const opened = useRawReview((s) => s.opened);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<OpenFailure | null>(null);
 
@@ -53,7 +66,11 @@ export function RawReviewPage() {
       setBusy(true);
       setError(null);
       try {
-        setOpened(await open());
+        // Riaprire la stessa cartella riparte dai dati salvati: prima si salva la sessione attuale.
+        await saveOpenReview();
+        const next = await open();
+        await leaveCurrent(next.sessionId);
+        useRawReview.getState().setOpened(next);
       } catch (e) {
         setError(failure(e, folder));
       } finally {
@@ -95,16 +112,14 @@ export function RawReviewPage() {
     }
   };
 
+  // Lasciando il modulo la sessione resta aperta nello store (Ctrl+9 la ritrova): si salvano
+  // solo le scelte, così nulla va perso cambiando modulo.
+  useEffect(() => () => void saveOpenReview(), []);
+
   const close = async () => {
     if (!opened) return;
-    const { sessionId } = opened;
-    setOpened(null);
-    try {
-      await commands.rawReviewSave(sessionId);
-      await commands.rawReviewClose(sessionId);
-    } catch {
-      // La sessione è già chiusa o non salvabile: la prossima apertura riparte dai dati salvati.
-    }
+    useRawReview.getState().clear();
+    await leaveCurrent(null, opened);
     void qc.invalidateQueries({ queryKey: RECENT_KEY });
   };
 
@@ -120,7 +135,7 @@ export function RawReviewPage() {
   );
 
   return (
-    <div className="module-placeholder raw-review-page">
+    <div className={`module-placeholder raw-review-page${opened ? " is-open" : ""}`}>
       <PageHeader
         title={t("modules.raw-review")}
         description={t("rawReviewPage.subtitle")}
@@ -140,7 +155,7 @@ export function RawReviewPage() {
         </InlineAlert>
       )}
       {opened ? (
-        <OpenedSummary opened={opened} onClose={close} />
+        <Review opened={opened} onClose={close} />
       ) : (
         <div className="raw-review-start">
           <EmptyState
@@ -187,34 +202,108 @@ export function RawReviewPage() {
   );
 }
 
-/** Riepilogo della cartella aperta, con il segnaposto del confronto (task 3.3). */
-function OpenedSummary({ opened, onClose }: { opened: OpenedReview; onClose: () => void }) {
+/**
+ * Salva e chiude la sessione aperta nel backend, a meno che non sia quella appena aperta
+ * (`keep`): riaprire la stessa cartella la sostituisce già da sola.
+ */
+async function leaveCurrent(keep: string | null, current?: OpenedReview): Promise<void> {
+  const previous = current ?? useRawReview.getState().opened;
+  if (!previous || previous.sessionId === keep) return;
+  try {
+    await commands.rawReviewSave(previous.sessionId);
+    await commands.rawReviewClose(previous.sessionId);
+  } catch {
+    // La sessione è già chiusa o non salvabile: la prossima apertura riparte dai dati salvati.
+  }
+  forgetMetadata(previous.sessionId);
+}
+
+/** Barra della cartella aperta e confronto delle varianti. */
+function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void }) {
   const { t } = useTranslation();
+  const shotIndex = useRawReview((s) => s.shotIndex);
+  const shot = opened.shots[shotIndex];
+  const metadata = useShotMetadata(opened.sessionId, shot);
+  const panels = opened.session.panelPresets;
+  const candidates = candidatesOf(opened);
+  const decision = shot ? opened.session.decisions?.[shot.key] : undefined;
+  const decided = Object.values(opened.session.decisions ?? {}).filter(
+    (d) => d.winnerPreset,
+  ).length;
+  const total = opened.shots.length;
+
   return (
-    <Card
-      title={opened.session.name}
-      actions={
-        <Button variant="ghost" onClick={onClose}>
+    <div className="rr-review">
+      <div className="rr-bar">
+        <h2 className="rr-bar-name">{opened.session.name}</h2>
+        <span className="muted">{t(`rawReviewPage.layout.${opened.layout}`)}</span>
+        <span className="muted">{t("rawReviewPage.shotCount", { count: total })}</span>
+        {opened.warnings.length > 0 && (
+          <details className="rr-warnings">
+            <summary>
+              {t("rawReviewPage.warningsTitle")} ({opened.warnings.length})
+            </summary>
+            <ul className="raw-review-warnings">
+              {opened.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <Button className="rr-bar-close" variant="ghost" onClick={onClose}>
           {t("rawReviewPage.closeSession")}
         </Button>
-      }
-    >
-      <dl className="raw-review-facts">
-        <dt>{t("rawReviewPage.layoutLabel")}</dt>
-        <dd>{t(`rawReviewPage.layout.${opened.layout}`)}</dd>
-        <dt>{t("rawReviewPage.shotsLabel")}</dt>
-        <dd>{t("rawReviewPage.shotCount", { count: opened.shots.length })}</dd>
-      </dl>
-      {opened.warnings.length > 0 && (
-        <InlineAlert tone="warn" title={t("rawReviewPage.warningsTitle")}>
-          <ul className="raw-review-warnings">
-            {opened.warnings.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
-        </InlineAlert>
-      )}
-      <div className="raw-review-compare muted">{t("rawReviewPage.compareSoon")}</div>
-    </Card>
+      </div>
+      <div className="rr-workspace">
+        <div className="rr-main">
+          {shot ? (
+            <ComparePanels
+              sessionId={opened.sessionId}
+              shot={shot}
+              panels={panels}
+              winnerPreset={decision?.winnerPreset ?? null}
+              metadata={metadata}
+              onChoose={(preset) => void chooseWinner(shot.key, preset)}
+              onHide={(preset) => void toggleVisible(preset)}
+            />
+          ) : (
+            <p className="muted rr-info-empty">{t("rawReviewInfo.noShot")}</p>
+          )}
+          <nav className="rr-footer" aria-label={t("rawReviewCompare.shotNav")}>
+            <IconButton
+              label={t("rawReviewCompare.previousShot")}
+              icon={<Icon.ChevronLeft size={18} />}
+              disabled={shotIndex <= 0}
+              onClick={() => selectShot(shotIndex - 1)}
+            />
+            <strong className="rr-footer-pos" aria-live="polite">
+              {t("rawReviewCompare.position", {
+                current: total ? shotIndex + 1 : 0,
+                total,
+                name: shot?.displayName ?? "",
+              })}
+            </strong>
+            <IconButton
+              label={t("rawReviewCompare.nextShot")}
+              icon={<Icon.ChevronRight size={18} />}
+              disabled={shotIndex >= total - 1}
+              onClick={() => selectShot(shotIndex + 1)}
+            />
+            <span className="muted">{t("rawReviewCompare.decided", { count: decided })}</span>
+            <span className="muted rr-footer-hint">{t("rawReviewCompare.hint")}</span>
+          </nav>
+        </div>
+        <InfoSidebar
+          candidates={candidates}
+          panels={panels}
+          guidePreset={opened.guidePreset}
+          shot={shot}
+          metadata={metadata}
+          onToggle={(preset) => void toggleVisible(preset)}
+          onMove={(preset, to) => void movePreset(preset, to)}
+          onShowAll={() => void showAllPresets()}
+        />
+      </div>
+    </div>
   );
 }
