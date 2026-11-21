@@ -272,6 +272,7 @@ export const en: Messages = {
         exif_original: "EXIF (shot)",
         exif_create: "EXIF (created)",
         file_system: "File system",
+        manual: "Manual",
       },
       placeSources: { gps: "GPS EXIF", directory: "Folder name", manual: "Manual" },
       bits: "{{n}} bits per channel",

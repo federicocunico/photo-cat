@@ -555,7 +555,7 @@ export type Cursor = {
 	id: number,
 };
 
-export type DateSource = "exif_original" | "exif_create" | "file_system";
+export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
 
 /**  Motivo per cui un volto è scartato per qualità dal raggruppamento e dai suggerimenti. */
 export type DiscardReason = "blurred" | "too_small" | "non_frontal" | "low_confidence";

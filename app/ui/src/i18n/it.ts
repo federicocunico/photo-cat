@@ -273,6 +273,7 @@ export const it = {
         exif_original: "EXIF (scatto)",
         exif_create: "EXIF (creazione)",
         file_system: "File system",
+        manual: "Manuale",
       },
       placeSources: { gps: "GPS EXIF", directory: "Nome cartella", manual: "Manuale" },
       bits: "{{n}} bit per canale",

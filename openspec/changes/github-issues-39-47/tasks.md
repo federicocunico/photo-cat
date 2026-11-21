@@ -4,7 +4,7 @@
 
 ## 1. Schema e dati di libreria
 
-- [ ] 1.1 Migrazione v14 (D2, D3, D6, D7):
+- [x] 1.1 Migrazione v14 (D2, D3, D6, D7):
   - `media_item.rating` e `color_trait`, con indici;
   - `media_dates.manual_at` e `manual_precision`, con `DateSource::Manual`;
   - `media_item.missing_since`, valorizzato all'ora della migrazione per i mancanti esistenti;

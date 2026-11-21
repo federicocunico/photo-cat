@@ -129,6 +129,7 @@ pub enum DateSource {
     ExifOriginal,
     ExifCreate,
     FileSystem,
+    Manual,
 }
 
 impl DateSource {
@@ -137,6 +138,7 @@ impl DateSource {
             Self::ExifOriginal => "exif_original",
             Self::ExifCreate => "exif_create",
             Self::FileSystem => "file_system",
+            Self::Manual => "manual",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
@@ -144,6 +146,7 @@ impl DateSource {
             "exif_original" => Self::ExifOriginal,
             "exif_create" => Self::ExifCreate,
             "file_system" => Self::FileSystem,
+            "manual" => Self::Manual,
             _ => return None,
         })
     }
