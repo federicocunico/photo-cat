@@ -3618,6 +3618,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
+ "tempfile",
  "turbojpeg",
  "windows 0.62.2",
 ]

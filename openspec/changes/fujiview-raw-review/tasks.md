@@ -10,7 +10,7 @@
   - feature `simd-jpeg` (turbojpeg) e `fake-camera`.
 
   Verifica: `cargo check -p pc-raw-review` su Windows e nel container Linux.
-- [ ] 1.2 Porting di `scan_library_impl` in `scan.rs` con le tre forme di cartella e la pseudo-variante "Anteprima RAW" (D2). Porting dei test di FujiView più nuovi test:
+- [x] 1.2 Porting di `scan_library_impl` in `scan.rs` con le tre forme di cartella e la pseudo-variante "Anteprima RAW" (D2). Porting dei test di FujiView più nuovi test:
   - solo RAF;
   - RAF con `FujiView varianti/`;
   - variante mancante;

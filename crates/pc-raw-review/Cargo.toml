@@ -36,3 +36,6 @@ specta = ["dep:specta", "pc-core/specta"]
 simd-jpeg = ["dep:turbojpeg"]
 # Simulatore di fotocamera per test e demo, al posto della fotocamera reale.
 fake-camera = []
+
+[dev-dependencies]
+tempfile.workspace = true
