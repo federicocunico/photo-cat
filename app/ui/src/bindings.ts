@@ -35,6 +35,12 @@ export const commands = {
 	queryErrors: (query: ErrorQuery) => __TAURI_INVOKE<ErrorEntry[]>("query_errors", { query }),
 	/**  Errori raggruppati per job, fase e codice (vista "per codice" della Diagnostica). */
 	errorGroups: (query: ErrorQuery) => __TAURI_INVOKE<ErrorGroup[]>("error_groups", { query }),
+	/**  Archivia voci singole, un gruppo o tutto il filtro corrente. Non cancella nulla. */
+	archiveErrors: (target: ArchiveTarget) => __TAURI_INVOKE<ArchiveOutcome>("archive_errors", { target }),
+	/**  Ripristina voci archiviate. */
+	unarchiveErrors: (ids: number[]) => __TAURI_INVOKE<ArchiveOutcome>("unarchive_errors", { ids }),
+	/**  Conteggio iniziale dell'indicatore globale: errori non archiviati. */
+	errorCount: () => __TAURI_INVOKE<number>("error_count"),
 	logTail: () => __TAURI_INVOKE<LogLine[]>("log_tail"),
 	setLogLevel: (level: LogLevel) => __TAURI_INVOKE<null>("set_log_level", { level }),
 	listSources: () => __TAURI_INVOKE<SourceSummary[]>("list_sources"),
@@ -57,6 +63,13 @@ export const commands = {
 	moveSource: (id: number, path: string) => __TAURI_INVOKE<null>("move_source", { id, path }),
 	/**  Cartella comune più profonda dei mancanti (proposta per "Ricollega"). */
 	missingFolder: (sourceId: number) => __TAURI_INVOKE<string | null>("missing_folder", { sourceId }),
+	/**
+	 *  Chiude gli avvisi della sorgente (mancanti nuovi ed errori dell'ultimo
+	 *  aggiornamento) senza toccare i file mancanti.
+	 */
+	acknowledgeSourceWarnings: (sourceId: number) => __TAURI_INVOKE<null>("acknowledge_source_warnings", { sourceId }),
+	/**  Una voce per ogni sorgente monitorata. */
+	sourceWatchStatus: () => __TAURI_INVOKE<SourceWatchStatus[]>("source_watch_status"),
 	/**  Riepiloghi dell'ultimo aggiornamento di ogni sorgente. */
 	importUpdates: () => __TAURI_INVOKE<UpdateSummary[]>("import_updates"),
 	/**  Esito dell'ultimo ricollegamento della sorgente. */
@@ -97,6 +110,18 @@ export const commands = {
 	/**  Un singolo gruppo, in qualunque sezione: `None` se non esiste più. */
 	getGroup: (id: number) => __TAURI_INVOKE<GroupRow | null>("get_group", { id }),
 	groupFaces: (scope: FaceScope, sort: FaceSort, after: FaceCursor | null, limit: number | null) => __TAURI_INVOKE<FacePage>("group_faces", { scope, sort, after, limit }),
+	/**  Anni di scatto dei volti di un ambito, con conteggio ("Senza data" = anno nullo). */
+	groupFaceYears: (scope: FaceScope) => __TAURI_INVOKE<FaceYear[]>("group_face_years", { scope }),
+	/**
+	 *  Base di "Seleziona tutto" sui volti di un ambito (stessi filtri di `group_faces`): numero di
+	 *  volti e id massimo in quell'istante, indipendenti da ordinamento e pagine caricate.
+	 */
+	faceSelection: (scope: FaceScope) => __TAURI_INVOKE<SelectionBase>("face_selection", { scope }),
+	/**
+	 *  Id dei volti selezionati (ambito meno eccezioni, solo volti con id <= `max_id`), per le
+	 *  correzioni che prendono un elenco di volti ("Assegna a…", "Sposta", "Separa", ...).
+	 */
+	faceSelectionIds: (scope: FaceScope, maxId: number, except: number[]) => __TAURI_INVOKE<number[]>("face_selection_ids", { scope, maxId, except }),
 	locateFace: (request: LocateFaceRequest) => __TAURI_INVOKE<LocatedFace>("locate_face", { request }),
 	faceCount: () => __TAURI_INVOKE<number>("face_count"),
 	personFaces: (person: number | null, limit: number | null) => __TAURI_INVOKE<FaceView[]>("person_faces", { person, limit }),
@@ -169,6 +194,13 @@ export const commands = {
 	sequencePage: (scope: SequenceScope, after: SequenceCursor | null, limit: number) => __TAURI_INVOKE<SequencePage>("sequence_page", { scope, after, limit }),
 	sequenceSessionIds: (scope: SequenceScope, session: number) => __TAURI_INVOKE<number[]>("sequence_session_ids", { scope, session }),
 	sequenceIds: (scope: SequenceScope) => __TAURI_INVOKE<number[]>("sequence_ids", { scope }),
+	/**  Base di "Seleziona tutto" della Sequenza: numero di foto dell'ambito e id massimo in quell'istante. */
+	sequenceSelection: (scope: SequenceScope) => __TAURI_INVOKE<SelectionBase>("sequence_selection", { scope }),
+	/**
+	 *  Id delle foto selezionate nella Sequenza (base meno eccezioni, solo foto con id <= `max_id`),
+	 *  da usare come `Target::Ids` nelle azioni bulk.
+	 */
+	sequenceSelectionIds: (scope: SequenceScope, maxId: number, except: number[]) => __TAURI_INVOKE<number[]>("sequence_selection_ids", { scope, maxId, except }),
 	setSessionGap: (minutes: number) => __TAURI_INVOKE<null>("set_session_gap", { minutes }),
 	setGroupDisplay: (group: number, tz: string | null, offsetMin: number | null) => __TAURI_INVOKE<number>("set_group_display", { group, tz, offsetMin }),
 	setGroupShift: (group: number, shiftS: number) => __TAURI_INVOKE<number>("set_group_shift", { group, shiftS }),
@@ -377,6 +409,22 @@ export type AppInfo = {
 	logsDir: string,
 	previousCrash: CrashInfo | null,
 };
+
+/**  Esito di un'archiviazione/ripristino: voci toccate e nuovo valore dell'indicatore globale. */
+export type ArchiveOutcome = {
+	affected: number,
+	/**  Errori (ERROR) non archiviati: sostituisce `errorCount` nello store live. */
+	activeCount: number,
+};
+
+/**  Destinazione di un'archiviazione. */
+export type ArchiveTarget = 
+/**  Voci singole. */
+{ kind: "ids"; ids: number[] } | 
+/**  Un gruppo (codice + fase, anche assenti) con gli altri filtri di `query`. */
+{ kind: "group"; code: string | null; phase: string | null; query: ErrorQuery } | 
+/**  Tutte le voci che corrispondono al filtro corrente. */
+{ kind: "query"; query: ErrorQuery };
 
 /**  Classe dell'istogramma: `[from, to)` (l'ultima include 1,0). */
 export type Bin = {
@@ -652,6 +700,8 @@ export type ErrorQuery = {
 	jobId?: number | null,
 	code?: string | null,
 	text?: string | null,
+	/**  `None`/`Some(false)`: solo le voci non archiviate (predefinito); `Some(true)`: solo quelle archiviate. */
+	archived?: boolean | null,
 	limit?: number | null,
 	offset?: number | null,
 };
@@ -757,7 +807,9 @@ export type FacePage = {
 export type FaceScope = { kind: "group"; group: number } | { kind: "singles" } | { kind: "discarded"; group: number | null };
 
 /**  Ordinamento dei volti in `group_faces`. */
-export type FaceSort = "quality_desc" | "captured_desc";
+export type FaceSort = "quality_desc" | "captured_desc" | 
+/**  Dal più vecchio; i volti senza data restano comunque in fondo. */
+"captured_asc";
 
 export type FaceView = {
 	id: number,
@@ -772,6 +824,12 @@ export type FaceView = {
 	year: number | null,
 	thumb: string | null,
 	personId: number | null,
+};
+
+/**  Anno di scatto (ora locale) con il numero di volti; `year = None` è "Senza data". */
+export type FaceYear = {
+	year: number | null,
+	count: number,
 };
 
 /**  Una lista di filtro. */
@@ -1677,7 +1735,21 @@ export type SourceGroupView = {
 export type SourceSummary = {
 	source: Source,
 	items: number,
+	/**  Mancanti vivi (restano per Ricollega/Rimuovi). */
 	missing: number,
+	/**  Mancanti diventati tali dopo l'ultimo riconoscimento degli avvisi. */
+	newMissing: number,
+	/**  File non letti nell'ultimo aggiornamento, se non ancora riconosciuti. */
+	failedWarning: number,
+};
+
+/**  Stato del monitoraggio di una sorgente per la UI. */
+export type SourceWatchStatus = {
+	sourceId: number,
+	state: WatchState,
+	/**  Ultimo aggiornamento automatico avviato dal monitoraggio (ms dall'epoca Unix). */
+	lastAutoUpdateAt: number | null,
+	message: string | null,
 };
 
 export type Stage = "classification" | "persons" | "faces" | "similar" | "phash";
@@ -1889,4 +1961,13 @@ export type UpdateSummary = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  Stato del monitoraggio di una sorgente. */
+export type WatchState = 
+/**  La cartella è sorvegliata. */
+"active" | 
+/**  La cartella non è raggiungibile (es. disco scollegato). */
+"unreachable" | 
+/**  Il sistema ha rifiutato la sorveglianza (vedi `message`). */
+"error";
 
