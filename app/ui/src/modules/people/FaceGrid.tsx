@@ -18,9 +18,12 @@ import {
   isTauri,
   type Correction,
   type FaceScope,
+  type FaceSort,
   type FaceView,
   type GroupRow,
 } from "../../lib/ipc";
+import { FACE_SORTS, usePeoplePrefs } from "../../store/peoplePrefs";
+import { buildFaceRows, orderYears, rectangleSelectRows } from "./faceLayout";
 import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { clickSelect, rectangleSelect } from "../../store/library";
@@ -48,6 +51,7 @@ const GAP = 10;
 const PAD = 12;
 const META = 22;
 const CELL_MIN = 96;
+const HEAD = 32;
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -133,12 +137,24 @@ export const FaceGrid = forwardRef<
     return { kind: "group", group: target.id };
   }, [target, discardedOnly]);
 
+  const sort = usePeoplePrefs((p) => p.faceSort);
+  const setSort = usePeoplePrefs((p) => p.setFaceSort);
+  const byDate = sort !== "quality_desc";
+
   const faces = useInfiniteQuery({
-    queryKey: ["group-faces", scope],
-    queryFn: ({ pageParam }) => commands.groupFaces(scope!, "quality_desc", pageParam, PAGE),
+    queryKey: ["group-faces", scope, sort],
+    queryFn: ({ pageParam }) => commands.groupFaces(scope!, sort, pageParam, PAGE),
     initialPageParam: null as { qualityScore: number | null; id: number } | null,
     getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && scope != null,
+    placeholderData: (prev) => prev,
+  });
+
+  // Anni con i conteggi del backend: le intestazioni valgono anche per le pagine non caricate.
+  const yearsQ = useQuery({
+    queryKey: ["group-face-years", scope],
+    queryFn: () => commands.groupFaceYears(scope!),
+    enabled: isTauri() && scope != null && byDate,
     placeholderData: (prev) => prev,
   });
 
@@ -184,12 +200,20 @@ export const FaceGrid = forwardRef<
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL_MIN + GAP)));
   const cell = Math.max(CELL_MIN, Math.floor((width - PAD * 2 - (cols - 1) * GAP) / cols));
   const rowHeight = cell + META + GAP;
-  const rows = Math.ceil(items.length / cols) || 0;
+  // Con l'ordinamento per data le righe seguono i conteggi per anno (intestazioni incluse);
+  // se i conteggi non coincidono con il totale (dati in aggiornamento) si resta senza intestazioni.
+  const faceRows = useMemo(() => {
+    if (!byDate || !yearsQ.data || !meta) return null;
+    const years = orderYears(yearsQ.data, sort as "captured_asc" | "captured_desc");
+    if (years.reduce((n, y) => n + y.count, 0) !== meta.total) return null;
+    return buildFaceRows(years, cols);
+  }, [byDate, yearsQ.data, meta, sort, cols]);
+  const rows = faceRows ? faceRows.length : Math.ceil(items.length / cols) || 0;
 
   const virt = useVirtualizer({
     count: rows,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize: (i) => (faceRows?.[i]?.kind === "head" ? HEAD : rowHeight),
     overscan: 4,
     initialRect: { width: width || 640, height: 600 },
     observeElementRect: (_instance, cb) => {
@@ -207,14 +231,19 @@ export const FaceGrid = forwardRef<
     },
   });
 
-  useEffect(() => virt.measure(), [rowHeight, cols, virt]);
+  useEffect(() => virt.measure(), [rowHeight, cols, virt, faceRows]);
 
   const vitems = virt.getVirtualItems();
   const lastRow = vitems[vitems.length - 1]?.index ?? 0;
+  // Con le intestazioni le righe coprono anche i volti non caricati: si carica
+  // finché la riga più bassa visibile (più un margine) è oltre l'ultimo volto in memoria.
+  const reach = faceRows
+    ? Math.max(0, ...faceRows.slice(0, lastRow + 4).map((r) => (r.kind === "faces" ? r.to : 0)))
+    : 0;
   useEffect(() => {
-    if (lastRow >= rows - 3 && faces.hasNextPage && !faces.isFetchingNextPage)
-      void faces.fetchNextPage();
-  }, [lastRow, rows, faces]);
+    const needMore = faceRows ? reach > items.length - cols : lastRow >= rows - 3;
+    if (needMore && faces.hasNextPage && !faces.isFetchingNextPage) void faces.fetchNextPage();
+  }, [lastRow, rows, faces, faceRows, reach, items.length, cols]);
 
   // Carica pagine finché l'indice del volto evidenziato è in memoria, poi scorre.
   useEffect(() => {
@@ -573,6 +602,28 @@ export const FaceGrid = forwardRef<
           </Button>
         )}
         <span aria-hidden className="people-toolbar-sep" />
+        <label className="muted" htmlFor="people-face-sort">
+          {t("people.faceSortLabel")}
+        </label>
+        <select
+          id="people-face-sort"
+          className="field"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as FaceSort)}
+        >
+          {FACE_SORTS.map((o) => (
+            <option key={o} value={o}>
+              {t(
+                o === "quality_desc"
+                  ? "people.faceSortQuality"
+                  : o === "captured_asc"
+                    ? "people.faceSortDateAsc"
+                    : "people.faceSortDateDesc",
+              )}
+            </option>
+          ))}
+        </select>
+        <span aria-hidden className="people-toolbar-sep" />
         <span className="muted">{t("people.showLabel")}</span>
         <button
           type="button"
@@ -759,13 +810,21 @@ export const FaceGrid = forwardRef<
             setSelection([
               ...new Set([
                 ...d.initial,
-                ...rectangleSelect(order, b, {
-                  cols,
-                  cell,
-                  rowHeight,
-                  gap: GAP,
-                  pad: PAD,
-                }),
+                ...(faceRows
+                  ? rectangleSelectRows(order, b, faceRows, {
+                      cell,
+                      rowHeight,
+                      headHeight: HEAD,
+                      gap: GAP,
+                      pad: PAD,
+                    })
+                  : rectangleSelect(order, b, {
+                      cols,
+                      cell,
+                      rowHeight,
+                      gap: GAP,
+                      pad: PAD,
+                    })),
               ]),
             ]);
           }}
@@ -804,57 +863,77 @@ export const FaceGrid = forwardRef<
                       }}
                     />
                   )}
-                  {vitems.map((row) => (
-                    <div
-                      key={row.key}
-                      className="people-virt-cells"
-                      style={{ top: row.start + PAD }}
-                    >
-                      {items.slice(row.index * cols, row.index * cols + cols).map((face) => {
-                        const sel = selected.includes(face.id);
-                        const lit = highlight?.faceId === face.id;
-                        const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
-                        return (
-                          <button
-                            key={face.id}
-                            type="button"
-                            data-testid={`face-${face.id}`}
-                            data-face-tile
-                            data-face-id={face.id}
-                            onDoubleClick={() => openViewerAt(face.id)}
-                            onKeyDown={onTileKey(face.id)}
-                            data-highlighted={lit || undefined}
-                            aria-pressed={sel}
-                            title={tip}
-                            onClick={onFaceClick(face.id)}
-                            className="people-face-tile"
-                            style={{
-                              width: cell,
-                              border: `2px solid ${
-                                lit
-                                  ? "var(--pc-warn)"
-                                  : sel
-                                    ? "var(--pc-accent)"
-                                    : "var(--pc-raised)"
-                              }`,
-                              opacity: face.discardReason ? 0.72 : 1,
-                            }}
-                          >
-                            <FaceCrop face={face} size={cell - 4} />
-                            {tip && <span className="visually-hidden">{tip}</span>}
-                            <span className="people-face-meta">
-                              <span className="mono">
-                                {face.year != null ? String(face.year) : ""}
+                  {vitems.map((row) => {
+                    const fr = faceRows?.[row.index];
+                    if (fr?.kind === "head")
+                      return (
+                        <div
+                          key={row.key}
+                          role="heading"
+                          aria-level={3}
+                          data-testid={`year-${fr.year ?? "none"}`}
+                          className="people-year-head"
+                          style={{ top: row.start + PAD, height: HEAD }}
+                        >
+                          {fr.year != null
+                            ? t("people.yearHeading", { year: fr.year, count: fr.count })
+                            : t("people.noDateHeading", { count: fr.count })}
+                        </div>
+                      );
+                    const from = fr ? fr.from : row.index * cols;
+                    const to = fr ? fr.to : from + cols;
+                    return (
+                      <div
+                        key={row.key}
+                        className="people-virt-cells"
+                        style={{ top: row.start + PAD }}
+                      >
+                        {items.slice(from, to).map((face) => {
+                          const sel = selected.includes(face.id);
+                          const lit = highlight?.faceId === face.id;
+                          const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
+                          return (
+                            <button
+                              key={face.id}
+                              type="button"
+                              data-testid={`face-${face.id}`}
+                              data-face-tile
+                              data-face-id={face.id}
+                              onDoubleClick={() => openViewerAt(face.id)}
+                              onKeyDown={onTileKey(face.id)}
+                              data-highlighted={lit || undefined}
+                              aria-pressed={sel}
+                              title={tip}
+                              onClick={onFaceClick(face.id)}
+                              className="people-face-tile"
+                              style={{
+                                width: cell,
+                                border: `2px solid ${
+                                  lit
+                                    ? "var(--pc-warn)"
+                                    : sel
+                                      ? "var(--pc-accent)"
+                                      : "var(--pc-raised)"
+                                }`,
+                                opacity: face.discardReason ? 0.72 : 1,
+                              }}
+                            >
+                              <FaceCrop face={face} size={cell - 4} />
+                              {tip && <span className="visually-hidden">{tip}</span>}
+                              <span className="people-face-meta">
+                                <span className="mono">
+                                  {face.year != null ? String(face.year) : ""}
+                                </span>
+                                {face.qualityScore != null && (
+                                  <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
+                                )}
                               </span>
-                              {face.qualityScore != null && (
-                                <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -863,7 +942,13 @@ export const FaceGrid = forwardRef<
       </ContextMenu>
 
       <div className="muted people-grid-foot">
-        <span>{t("people.facesSortHint")}</span>
+        <span>
+          {byDate
+            ? t("people.faceSortLabel") +
+              ": " +
+              t(sort === "captured_asc" ? "people.faceSortDateAsc" : "people.faceSortDateDesc")
+            : t("people.facesSortHint")}
+        </span>
         <span className="mono">
           {fmtInt(items.length)}
           {meta?.total ? ` / ${fmtInt(meta.total)}` : ""}
