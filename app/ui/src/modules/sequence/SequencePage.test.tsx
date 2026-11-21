@@ -1,13 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import "../../test/layoutMock";
 import type { SequenceItem, SequenceOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { parseShift, shiftText, useSequence } from "../../store/sequence";
-import { useLibrary } from "../../store/library";
+import { idsSelection, selCount, selHas, useLibrary } from "../../store/library";
 import { SequencePage } from "./SequencePage";
+import { sequenceTarget } from "./sequenceTarget";
+import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
@@ -102,16 +105,24 @@ function renderPage() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <SequencePage />
+      <Shell />
     </QueryClientProvider>,
   );
+}
+
+/** Come AppShell: le scorciatoie di selezione sono registrate una volta sola, fuori dalla vista. */
+function Shell() {
+  useGridShortcuts();
+  return <SequencePage />;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   useSequence.setState({
     scope: { scope: "library" },
+    selection: idsSelection(),
     selected: [],
+    anchor: null,
     focused: null,
     view: "sequence",
   });
@@ -288,4 +299,51 @@ it("Spazio apre il visualizzatore condiviso; le frecce scorrono, Esc torna sulla
   fireEvent.keyDown(viewer, { key: "Escape" });
   await waitFor(() => expect(screen.queryByTestId("viewer")).not.toBeInTheDocument());
   expect(useSequence.getState().focused).toBe(3);
+});
+
+it("Ctrl+A seleziona tutte le 310 foto della Sequenza, anche quelle non caricate", async () => {
+  commandsMock.sequenceSelection.mockResolvedValue({ count: 310, maxId: 400 });
+  renderPage();
+  await screen.findByTestId("seq-1");
+  fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+  await waitFor(() => expect(selCount(useSequence.getState().selection)).toBe(310));
+  expect(commandsMock.sequenceSelection).toHaveBeenCalledWith({ scope: "library" });
+  expect(screen.getByTestId("seq-1")).toHaveAttribute("aria-pressed", "true");
+  // Ctrl+clic toglie una foto: diventa un'eccezione, il conteggio scende.
+  fireEvent.click(screen.getByTestId("seq-2"), { ctrlKey: true });
+  expect(selCount(useSequence.getState().selection)).toBe(309);
+  expect(selHas(useSequence.getState().selection, 2)).toBe(false);
+  // Esc svuota la selezione (scorciatoia centralizzata della shell).
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(selCount(useSequence.getState().selection)).toBe(0);
+});
+
+it("Inverti selezione dalla barra: le scelte diventano eccezioni", async () => {
+  commandsMock.sequenceSelection.mockResolvedValue({ count: 310, maxId: 400 });
+  renderPage();
+  fireEvent.click(await screen.findByTestId("seq-3"));
+  await userEvent.setup().click(screen.getByRole("button", { name: "Seleziona" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Inverti la selezione/ }));
+  await waitFor(() => expect(selCount(useSequence.getState().selection)).toBe(309));
+  expect(selHas(useSequence.getState().selection, 3)).toBe(false);
+});
+
+it("Ctrl+A nel campo della pausa non cambia la selezione", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByTestId("seq-3"));
+  const field = screen.getByRole("spinbutton");
+  field.focus();
+  fireEvent.keyDown(field, { key: "a", ctrlKey: true });
+  expect(commandsMock.sequenceSelection).not.toHaveBeenCalled();
+  expect(useSequence.getState().selected).toEqual([3]);
+});
+
+it("le azioni bulk risolvono gli id dal backend: ambito meno eccezioni", async () => {
+  commandsMock.sequenceSelectionIds.mockResolvedValue([1, 3, 4]);
+  const target = await sequenceTarget(
+    { scope: "library" },
+    { mode: "filter", filter: { scope: "library" }, maxId: 400, total: 4, except: new Set([2]) },
+  );
+  expect(commandsMock.sequenceSelectionIds).toHaveBeenCalledWith({ scope: "library" }, 400, [2]);
+  expect(target).toEqual({ kind: "ids", ids: [1, 3, 4] });
 });

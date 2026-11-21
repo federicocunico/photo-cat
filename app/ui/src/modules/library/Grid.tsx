@@ -400,6 +400,28 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const cursor = cursorState.key === viewKey ? Math.min(cursorState.at, Math.max(0, total - 1)) : 0;
   const setCursor = (at: number) => setCursorState({ key: viewKey, at });
   const cursorItem = total > 0 ? at_(cursor).item : undefined;
+  // Arrivo con una foto in focus ("Mostra in Libreria" da Persone): la griglia scorre fino a
+  // lei se è tra gli elementi caricati e fuori vista, e la tastiera riparte da lì. Una volta
+  // per foto; con uno scorrimento già ripristinato al montaggio non si interviene.
+  const revealed = useRef<number | null | undefined>(undefined);
+  const focusedId = useLibrary((s) => s.focused);
+  useEffect(() => {
+    if (revealed.current === undefined) {
+      revealed.current = useLibrary.getState().scrollTop > 0 ? focusedId : null;
+    }
+    if (focusedId == null || revealed.current === focusedId) return;
+    const i = items.findIndex((x) => x.id === focusedId);
+    if (i < 0) return;
+    revealed.current = focusedId;
+    const b = start + i;
+    const d = b + expansions.reduce((n, e) => (e.base < b ? n + e.members.length : n), 0);
+    const row = Math.floor(d / cols);
+    const top = row * rowHeight;
+    const view = virt.scrollOffset ?? 0;
+    const height = virt.scrollRect?.height ?? 0;
+    if (top < view || top + rowHeight > view + height) virt.scrollToIndex(row, { align: "center" });
+    setCursorState({ key: viewKey, at: d });
+  }, [focusedId, items, start, expansions, cols, rowHeight, virt, viewKey]);
   const moveCursor = (to: number, extend: boolean) => {
     const n = Math.max(0, Math.min(total - 1, to));
     setCursor(n);
@@ -768,6 +790,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           onAddToCatalog={addToCatalog}
           onOpen={(ids, target) => void openWith.open(ids, target)}
           onPlace={(target, p) => void place.apply(target, p)}
+          onSelectAll={() => void grid.selectAll()}
+          onInvert={() => void grid.invert()}
           onBulk={(target, operation, n) =>
             void bulk.start(
               target,

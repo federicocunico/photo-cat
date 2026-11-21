@@ -7,7 +7,7 @@ import { useCommands } from "../../commands/registry";
 import { useBulkJob } from "./bulkJob";
 
 export function useRatingHotkeys(
-  selection: () => { target: Target; count: number },
+  selection: () => { target: Target; count: number; resolve?: () => Promise<Target> },
   enabled = true,
 ) {
   const { t } = useTranslation();
@@ -24,12 +24,14 @@ export function useRatingHotkeys(
       palette: false,
       when: () => ref.current.selection().count > 0,
       run: () => {
-        const { target, count } = ref.current.selection();
-        return ref.current.bulk.start(
-          target,
-          { action: "set_rating", rating: n === 0 ? null : n },
-          ref.current.t("selection.done.set_rating", { count }),
-        );
+        const { target, count, resolve } = ref.current.selection();
+        const start = (x: Target) =>
+          ref.current.bulk.start(
+            x,
+            { action: "set_rating", rating: n === 0 ? null : n },
+            ref.current.t("selection.done.set_rating", { count }),
+          );
+        return resolve ? resolve().then(start) : start(target);
       },
     })),
     enabled,

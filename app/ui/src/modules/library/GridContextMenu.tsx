@@ -35,6 +35,8 @@ export function GridContextMenu({
   onPlace,
   onAddToCatalog,
   onBulk,
+  onSelectAll,
+  onInvert,
   onClose,
 }: {
   x: number;
@@ -51,6 +53,9 @@ export function GridContextMenu({
   onAddToCatalog: (target: Target, count: number, catalog: number, name: string) => void;
   /** Valutazione, colore e data di scatto sul bersaglio (avviso e annullamento a cura di chi chiama). */
   onBulk?: (target: Target, operation: BulkAction, count: number) => void;
+  /** "Seleziona tutto" e "Inverti selezione" sull'insieme della vista (selezione di D1). */
+  onSelectAll?: () => void;
+  onInvert?: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -462,6 +467,27 @@ export function GridContextMenu({
         >
           {t("externalApps.reanalyze")}
         </BusyButton>
+        {(onSelectAll || onInvert) && <hr className="grid-menu-sep" />}
+        {onSelectAll && (
+          <BusyButton
+            type="button"
+            role="menuitem"
+            className="grid-menu-item"
+            onClick={act(onSelectAll)}
+          >
+            {t("selection.selectAll")}
+          </BusyButton>
+        )}
+        {onInvert && (
+          <BusyButton
+            type="button"
+            role="menuitem"
+            className="grid-menu-item"
+            onClick={act(onInvert)}
+          >
+            {t("selection.invert")}
+          </BusyButton>
+        )}
       </div>
       <ManualDateDialog
         open={dating}

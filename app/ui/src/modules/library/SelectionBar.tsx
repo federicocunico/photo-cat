@@ -45,22 +45,6 @@ type DoneKind =
   | "assign_person"
   | "remove_library";
 
-/** Esc svuota la selezione, salvo nei campi di testo e con menu o dialoghi aperti. */
-function useEscapeToClear(clear: () => void) {
-  const { t } = useTranslation();
-  useCommands([
-    {
-      id: "selection.clear",
-      label: t("commands.clearSelection"),
-      group: "selection",
-      shortcut: { key: "Escape" },
-      // Un menu o un selettore aperto si chiude prima con il suo Esc.
-      when: () => !document.querySelector("[data-radix-popper-content-wrapper]"),
-      run: clear,
-    },
-  ]);
-}
-
 export function SelectMenu() {
   const { t } = useTranslation();
   const items = useSelectItems();
@@ -145,8 +129,8 @@ export function SelectionBar() {
   const [assigning, setAssigning] = useState<{ id: number; name: string } | null>(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [removeTagOpen, setRemoveTagOpen] = useState(false);
+  // Esc è registrato una sola volta dalla shell (useGridShortcuts, griglia attiva).
   const clear = () => setSelection([]);
-  useEscapeToClear(clear);
   const picker = useSelectionPicker();
   useCommands([
     {

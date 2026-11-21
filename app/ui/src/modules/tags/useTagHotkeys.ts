@@ -29,7 +29,10 @@ export function hotkeyAction(
  * della pressione, così vale anche "tutti i risultati" non visibili).
  * Al termine del job aggiorna le viste senza ricaricare.
  */
-export function useTagHotkeys(selection: () => { target: Target; count: number }, enabled = true) {
+export function useTagHotkeys(
+  selection: () => { target: Target; count: number; resolve?: () => Promise<Target> },
+  enabled = true,
+) {
   const { t } = useTranslation();
   const set = activeSet(useTagOverview().data);
   // Esito, "Annulla operazione" ed eventuali errori nell'unico ToastHost.
@@ -53,12 +56,14 @@ export function useTagHotkeys(selection: () => { target: Target; count: number }
         when: () => action != null && ref.current.selection().count > 0,
         run: () => {
           if (!action) return;
-          const { target, count } = ref.current.selection();
+          const { target, count, resolve } = ref.current.selection();
           if (action.action === "add_tag") useGuide.getState().complete("tags");
           const message =
             action.action === "add_tag"
               ? t("selection.done.add_tag", { name: action.name, count })
               : t("selection.done.remove_tags", { count });
+          // `resolve`: selezione "tutti" che il backend trasforma in id al momento dell'azione.
+          if (resolve) return resolve().then((x) => ref.current.bulk.start(x, action, message));
           return ref.current.bulk.start(target, action, message);
         },
       };
