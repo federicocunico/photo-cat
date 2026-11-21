@@ -18,7 +18,7 @@
   - cartella vuota con errore spiegato;
   - ordine naturale;
   - "Anteprima RAW" rifiutata come variante migliore (`set_winner`).
-- [ ] 1.3 Porting di `metadata.rs` (EXIF e ricetta MakerNote). I test di FujiView devono passare invariati.
+- [x] 1.3 Porting di `metadata.rs` (EXIF e ricetta MakerNote). I test di FujiView devono passare invariati.
 - [ ] 1.4 `session.rs` (D4): schema v2, lettura di v1 e dei file `.fujiview`, `merge`, scrittura atomica con `.bak`, indice delle sessioni recenti in `<app data>/raw-review/`. Test Rust:
   - riapertura con 80 scelte;
   - nuovo preset che non tocca le scelte;
