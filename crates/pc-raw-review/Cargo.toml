@@ -8,6 +8,8 @@ authors.workspace = true
 
 [dependencies]
 pc-core.workspace = true
+pc-governor.workspace = true
+pc-ingest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 specta = { workspace = true, optional = true }

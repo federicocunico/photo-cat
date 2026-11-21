@@ -27,7 +27,7 @@
 
 ## 2. Anteprime
 
-- [ ] 2.1 `preview.rs` (D3): decodifica ridotta (turbojpeg con `simd-jpeg`, altrimenti `image`), orientamento EXIF, cache con indice SQLite e LRU con limite configurabile, coalescenza delle richieste doppie. Test:
+- [x] 2.1 `preview.rs` (D3): decodifica ridotta (turbojpeg con `simd-jpeg`, altrimenti `image`), orientamento EXIF, cache con indice SQLite e LRU con limite configurabile, coalescenza delle richieste doppie. Test:
   - anteprima limitata;
   - eviction oltre il limite;
   - chiave invalidata quando il file cambia.

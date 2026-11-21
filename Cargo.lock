@@ -3614,6 +3614,8 @@ dependencies = [
  "kamadak-exif",
  "natord",
  "pc-core",
+ "pc-governor",
+ "pc-ingest",
  "rusqlite",
  "serde",
  "serde_json",
