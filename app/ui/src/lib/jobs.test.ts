@@ -15,6 +15,11 @@ describe("titoli delle attività", () => {
       { options: { destination: "/media/seq" } },
       "Esportazione della sequenza in /media/seq",
     ],
+    [
+      "raw_review_export",
+      { options: { destination: "/media/dolomiti" } },
+      "Esportazione in un catalogo in /media/dolomiti",
+    ],
     ["bulk", { ids: [1, 2, 3] }, "Modifica di 3 foto"],
     ["analysis", {}, "Analisi AI"],
     ["models", {}, "Verifica dei modelli AI"],

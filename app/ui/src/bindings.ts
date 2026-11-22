@@ -272,6 +272,21 @@ export const commands = {
 	 *  byte liberati. Sessioni, scelte e foto non cambiano.
 	 */
 	rawReviewClearCache: () => __TAURI_INVOKE<number>("raw_review_clear_cache"),
+	/**  Conteggi, esclusioni, anteprima dei nomi e conflitti, mentre si cambiano i filtri. */
+	rawReviewExportPreflight: (request: RawReviewExportRequest) => __TAURI_INVOKE<RawReviewExportPreflight>("raw_review_export_preflight", { request }),
+	/**  Nomi dei primi scatti da esportare mentre si scrive il modello (`null` = nomi originali). */
+	rawReviewPreviewNames: (request: RawReviewExportRequest, limit: number) => __TAURI_INVOKE<NamePreviewResult>("raw_review_preview_names", { request, limit }),
+	/**
+	 *  Avvia l'esportazione come attività (copia, import, catalogo). Il conflitto sul nome del
+	 *  catalogo e il modello dei nomi si controllano prima di copiare: in caso contrario l'avvio
+	 *  fallisce senza toccare il disco. Restituisce l'id dell'attività.
+	 */
+	startRawReviewExport: (request: RawReviewExportRequest) => __TAURI_INVOKE<number>("start_raw_review_export", { request }),
+	/**
+	 *  Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo).
+	 *  `null` finché l'attività non ha finito o se l'app è stata riavviata.
+	 */
+	rawReviewExportReport: (jobId: number) => __TAURI_INVOKE<RawExportReport | null>("raw_review_export_report", { jobId }),
 	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
 	/**  Nomi delle prime foto mentre si scrive il modello. */
 	sequenceExportPreview: (options: SequenceExportOptions, limit: number) => __TAURI_INVOKE<NamePreviewResult>("sequence_export_preview", { options, limit }),
@@ -556,6 +571,14 @@ export type Catalog = {
 	system?: string | null,
 };
 
+/**  Conflitto di nome con un catalogo esistente (per il dialogo). */
+export type CatalogConflict = {
+	id: number,
+	name: string,
+	/**  Se si può aggiungere (catalogo manuale e non di sistema). */
+	canAdd: boolean,
+};
+
 export type CatalogCount = {
 	catalogId: number,
 	name: string,
@@ -799,6 +822,28 @@ export type ExifInfo = {
 	/**  Tutti i tag letti, come oggetto JSON. */
 	raw: Value | null,
 };
+
+/**  Cosa fare se esiste già un catalogo con il nome indicato. */
+export type ExistingCatalog = 
+/**  Aggiunge le foto al catalogo manuale esistente. */
+"add" | 
+/**  Crea un catalogo nuovo con un nome reso unico (`Nome (2)`). */
+"rename";
+
+/**  Perché l'esportazione non può partire. */
+export type ExportBlock = 
+/**  Nessuno scatto da esportare con questi filtri. */
+"no_photos" | 
+/**  Modello dei nomi non valido (vedi `templateErrors`). */
+"template_invalid" | 
+/**  Nome del catalogo mancante. */
+"catalog_name_empty" | 
+/**  Il nome esiste già e non si è scelto cosa fare (vedi `catalogConflict`). */
+"catalog_name_taken" | 
+/**  Il catalogo esistente non accetta foto aggiunte a mano. */
+"catalog_not_addable" | 
+/**  Destinazione mancante o non utilizzabile. */
+"destination_invalid";
 
 export type ExportDefaults = {
 	template: string,
@@ -1137,6 +1182,16 @@ export type ImportPreview = {
 	conflicts: ImportConflict[],
 	faces: number,
 };
+
+/**  Cosa farà la fase di import con la destinazione. */
+export type ImportTarget = 
+/**
+ *  La destinazione non è in libreria: diventa una nuova sorgente (senza sottocartelle né
+ *  monitoraggio).
+ */
+{ kind: "newSource"; path: string } | 
+/**  La destinazione è dentro una sorgente: si aggiorna solo quella cartella. */
+{ kind: "updateFolder"; sourceId: number; sourcePath: string; folder: string };
 
 export type JobRow = {
 	id: number,
@@ -1642,6 +1697,83 @@ export type RatingFilter = {
 };
 
 export type RatingOp = "at_least" | "equal" | "at_most";
+
+/**  Il catalogo risultante. */
+export type RawExportCatalog = {
+	id: number,
+	name: string,
+	/**  `true` se il catalogo è stato creato, `false` se si è aggiunto a uno esistente. */
+	created: boolean,
+	/**  Foto messe nel catalogo. */
+	photos: number,
+};
+
+/**  Un file con errore e il suo motivo. */
+export type RawExportError = {
+	/**  Nome previsto nella destinazione. */
+	name: string,
+	sourcePath: string,
+	/**  Codice stabile (`errors.<codice>` per il testo localizzato). */
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+/**  Riepilogo finale dell'esportazione. */
+export type RawExportReport = {
+	jobId: number,
+	exported: number,
+	skipped: number,
+	failed: number,
+	errors: RawExportError[],
+	/**  L'attività è stata annullata (i file già copiati restano, senza catalogo). */
+	cancelled: boolean,
+	import: ImportTarget | null,
+	catalog: RawExportCatalog | null,
+	/**  File della destinazione che non si sono trovati in libreria dopo l'import. */
+	unresolved: number,
+};
+
+/**  Dati del dialogo: conteggi, esclusioni, nomi, conflitti e cosa farà l'import. */
+export type RawReviewExportPreflight = {
+	/**  Scatti che verranno esportati con i filtri attuali. */
+	total: number,
+	/**  Scatti esportabili per valutazione (indice 0-5), prima della valutazione minima. */
+	byRating: number[],
+	/**  Esclusi perché senza una variante scelta. */
+	noChoice: number,
+	/**  Esclusi perché la variante scelta non è un JPEG. */
+	notJpeg: number,
+	/**  Esclusi perché la variante scelta non esiste più. */
+	missing: number,
+	templateErrors: TemplateError[],
+	/**  Primi nomi in ordine di scatto. */
+	preview: NamePreview[],
+	/**  File che hanno già il nome finale nella destinazione (saltati, o sovrascritti). */
+	existingFiles: number,
+	catalogConflict: CatalogConflict | null,
+	/**  Cosa farà l'import: nuova sorgente o aggiornamento di una cartella. */
+	import: ImportTarget | null,
+	canStart: boolean,
+	block: ExportBlock | null,
+};
+
+/**  Opzioni scelte nel dialogo di esportazione. */
+export type RawReviewExportRequest = {
+	sessionId: string,
+	destination: string,
+	/**  Valutazione minima (0-5). */
+	minRating?: number,
+	/**  Solo i preset indicati; assente = tutti. */
+	presets?: string[] | null,
+	/**  Modello dei nomi; `null` mantiene i nomi originali. */
+	template?: string | null,
+	catalogName: string,
+	/**  Se il catalogo esiste già: `add` aggiunge le foto, `rename` ne crea uno con nome unico. */
+	existingCatalog?: ExistingCatalog | null,
+	overwrite?: boolean,
+	presetAsTag?: boolean,
+};
 
 /**  Voce dell'indice delle sessioni recenti. */
 export type RecentSession = {

@@ -19,6 +19,7 @@ mod organize;
 mod people;
 mod places;
 mod raw_review;
+mod raw_review_export;
 mod recovery;
 mod sequence;
 mod settings;
@@ -226,6 +227,10 @@ pub fn bindings() -> Builder<tauri::Wry> {
             raw_review::raw_review_close,
             raw_review::raw_review_cache_info,
             raw_review::raw_review_clear_cache,
+            raw_review_export::raw_review_export_preflight,
+            raw_review_export::raw_review_preview_names,
+            raw_review_export::start_raw_review_export,
+            raw_review_export::raw_review_export_report,
             sequence::sequence_export_defaults,
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
@@ -634,15 +639,34 @@ fn initialize(
         decode_workers: recommended_workers(budget.budget_mb, 160, cores),
     };
     // Dopo l'import (senza analisi AI accodata) i gruppi partono dalle impronte percettive.
+    let raw_export_phases = import::phases(&import_deps);
+    let import_factory: pc_jobs::JobFactory = Arc::new(move |p| {
+        let plan = import::plan(import_deps.clone(), p)?;
+        let plan = pc_ai::place_geo::with_place_geo_after(import_similar_deps.clone(), plan);
+        Ok(pc_ai::similar::with_similar_followup(
+            import_similar_deps.clone(),
+            plan,
+        ))
+    });
+    jobs.register(import::JOB_KIND, import_factory.clone());
+    // Varianti RAW: copia, import (le stesse fasi dell'import) e catalogo in un'unica attività.
+    let raw_export_reports = pc_organize::raw_export::RawExportReports::default();
+    let raw_export_hook = pc_organize::raw_export::ImportHook {
+        phases: raw_export_phases,
+        factory: import_factory,
+    };
+    let (raw_export_store, raw_export_app, raw_export_sink) =
+        (store.clone(), app_store.clone(), raw_export_reports.clone());
     jobs.register(
-        import::JOB_KIND,
+        pc_organize::raw_export::JOB_KIND,
         Arc::new(move |p| {
-            let plan = import::plan(import_deps.clone(), p)?;
-            let plan = pc_ai::place_geo::with_place_geo_after(import_similar_deps.clone(), plan);
-            Ok(pc_ai::similar::with_similar_followup(
-                import_similar_deps.clone(),
-                plan,
-            ))
+            pc_organize::raw_export::plan(
+                raw_export_store.clone(),
+                raw_export_app.clone(),
+                raw_export_hook.clone(),
+                raw_export_sink.clone(),
+                p,
+            )
         }),
     );
     let relink_store = store.clone();
@@ -718,6 +742,7 @@ fn initialize(
     ));
     handle.manage(AppState {
         raw_review,
+        raw_export_reports,
         paths: paths.clone(),
         config: shared_config,
         face_policy,

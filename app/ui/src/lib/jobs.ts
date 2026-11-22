@@ -17,6 +17,7 @@ export const JOB_KINDS = [
   "export",
   "organize",
   "sequence_export",
+  "raw_review_export",
   "bulk",
   "analysis",
   "models",
@@ -33,6 +34,7 @@ export const FILE_WRITING_KINDS: ReadonlySet<string> = new Set([
   "export",
   "organize",
   "sequence_export",
+  "raw_review_export",
 ]);
 
 type Params = Record<string, unknown> | null | undefined;
@@ -53,6 +55,7 @@ export function jobObject(
     case "export":
     case "organize":
       return typeof p.destination === "string" ? p.destination : undefined;
+    case "raw_review_export":
     case "sequence_export": {
       const options = p.options as Record<string, unknown> | undefined;
       return typeof options?.destination === "string" ? options.destination : undefined;

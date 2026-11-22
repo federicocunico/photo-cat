@@ -82,6 +82,8 @@ export const en: Messages = {
       organize_of: "Organizing into folders in {{object}}",
       sequence_export: "Sequence export",
       sequence_export_of: "Exporting the sequence to {{object}}",
+      raw_review_export: "Export to a catalog",
+      raw_review_export_of: "Exporting to a catalog in {{object}}",
       bulk: "Editing photos",
       bulk_of: "Editing {{object}} photos",
       analysis: "AI analysis",
@@ -139,6 +141,8 @@ export const en: Messages = {
       per_tag: "Per-tag folders",
       manifest: "Manifest",
       archivi: "Zip archives",
+      copia: "Copying files",
+      catalogo: "Catalog",
     },
     states: {
       queued: "Queued",

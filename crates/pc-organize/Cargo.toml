@@ -21,6 +21,7 @@ natord = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 pc-ingest.workspace = true
 pc-governor.workspace = true
+parking_lot = "0.12"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 jpeg-encoder = "0.6"
 kamadak-exif = "0.6"

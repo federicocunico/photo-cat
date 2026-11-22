@@ -59,7 +59,7 @@
   - numerazione per data di scatto ("Dolomiti_0001…");
   - suffisso per i nomi uguali;
   - modello non valido segnalato.
-- [ ] 4.2 Job `raw_review_export` (D7):
+- [x] 4.2 Job `raw_review_export` (D7):
   - fase di copia (porting di `export_winners`) con la whitelist JPEG, con test di hash identico, file saltati, nessun file parziale, nessun `.RAF` nella destinazione e TIFF esclusi;
   - fase di import (sorgente nuova o aggiornamento della cartella);
   - fase del catalogo (nuovo o esistente, valutazioni, tag del set "Preset Fujifilm"), con annullamento unico.

@@ -67,7 +67,7 @@ const dynamic: Record<string, string[]> = {
   "shell.models": ["ready", "missing", "update", "error"],
   "jobs.kinds": [
     "other",
-    ...["import", "relink", "export", "organize", "sequence_export", "bulk", "analysis"].flatMap(
+    ...["import", "relink", "export", "organize", "sequence_export", "raw_review_export", "bulk", "analysis"].flatMap(
       (k) => [k, `${k}_of`],
     ),
     ...[
@@ -115,7 +115,16 @@ const dynamic: Record<string, string[]> = {
     "place",
     "orig",
   ],
-  "jobs.phases": ["orari", "preparazione", "codifica", "per_tag", "manifest", "archivi"],
+  "jobs.phases": [
+    "orari",
+    "preparazione",
+    "codifica",
+    "per_tag",
+    "manifest",
+    "archivi",
+    "copia",
+    "catalogo",
+  ],
   // Diagnostica: livelli degli errori e del log (errors.ts).
   "diag.levels": ["error", "warn"],
   "diag.levelFilter": ["error", "warn"],

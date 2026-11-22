@@ -56,6 +56,9 @@ import type {
   ThumbnailKey,
   PrefetchReport,
   ImageMetadata,
+  RawReviewExportRequest,
+  RawReviewExportPreflight,
+  RawExportReport,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -320,6 +323,12 @@ export const commandsMock = {
     limitBytes: 20 * 1024 ** 3,
   })),
   rawReviewClearCache: vi.fn(async () => 0),
+  rawReviewExportPreflight: vi.fn<(request: RawReviewExportRequest) => Promise<RawReviewExportPreflight>>(),
+  rawReviewPreviewNames: vi.fn<(request: RawReviewExportRequest, limit: number) => Promise<NamePreviewResult>>(
+    async () => ({ names: [], errors: [] }),
+  ),
+  startRawReviewExport: vi.fn<(request: RawReviewExportRequest) => Promise<number>>(async () => 88),
+  rawReviewExportReport: vi.fn<(jobId: number) => Promise<RawExportReport | null>>(async () => null),
   rawReviewOpen: vi.fn<(root: string) => Promise<OpenedReview>>(),
   rawReviewOpenFujiview: vi.fn<(path: string) => Promise<OpenedReview>>(),
   rawReviewRecent: vi.fn(async () => [] as RecentSession[]),

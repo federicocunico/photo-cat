@@ -82,6 +82,8 @@ export const it = {
       organize_of: "Organizzazione in cartelle in {{object}}",
       sequence_export: "Esportazione della sequenza",
       sequence_export_of: "Esportazione della sequenza in {{object}}",
+      raw_review_export: "Esportazione in un catalogo",
+      raw_review_export_of: "Esportazione in un catalogo in {{object}}",
       bulk: "Modifica di foto",
       bulk_of: "Modifica di {{object}} foto",
       analysis: "Analisi AI",
@@ -139,6 +141,8 @@ export const it = {
       per_tag: "Cartelle per tag",
       manifest: "Manifest",
       archivi: "Archivi zip",
+      copia: "Copia dei file",
+      catalogo: "Catalogo",
     },
     states: {
       queued: "In coda",

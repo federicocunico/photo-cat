@@ -206,6 +206,8 @@ pub struct OpenSession {
     /// Per scatto: preset -> file ammesso (dall'indice, mai dall'URL).
     files: HashMap<String, HashMap<String, PathBuf>>,
     guide_preset: Option<String>,
+    /// Indice della scansione: l'export sceglie le varianti da qui, mai da percorsi del chiamante.
+    index: ReviewIndex,
 }
 
 impl OpenSession {
@@ -241,6 +243,7 @@ impl OpenSession {
             position,
             files,
             guide_preset: index.guide_preset.clone(),
+            index: index.clone(),
         })
     }
 
@@ -250,7 +253,7 @@ impl OpenSession {
     }
 
     /// Radice canonica della cartella aperta.
-    #[allow(dead_code)] // usato dall'export (task 4.2)
+    #[allow(dead_code)]
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -828,6 +831,38 @@ impl ReviewState {
             panel_presets: session.panel_presets.clone(),
             hidden_presets: session.hidden_presets.clone(),
         })
+    }
+
+    /// Scatti da esportare ora: le scelte vive della sessione (non ancora salvate comprese) sulle
+    /// varianti dell'indice, solo JPEG esistenti e dentro le cartelle ammesse della sessione.
+    pub fn export_selection(
+        &self,
+        session_id: &str,
+        filter: &pc_raw_review::export::ExportFilter,
+    ) -> AppResult<pc_raw_review::export::ExportSelection> {
+        let open = self.session(session_id)?;
+        let decisions = self.working_session(session_id)?.lock().clone();
+        let everything = pc_raw_review::export::ExportFilter {
+            min_rating: 0,
+            presets: filter.presets.clone(),
+        };
+        let mut selection = pc_raw_review::export::select(&open.index, &decisions, &everything);
+        // Un collegamento simbolico verso fuori dalla sessione non si esporta.
+        let before = selection.items.len();
+        selection
+            .items
+            .retain(|item| open.is_inside_allowed(Path::new(&item.source_path)));
+        selection.missing += u32::try_from(before - selection.items.len()).unwrap_or(u32::MAX);
+        // I conteggi per valutazione non dipendono dalla valutazione minima.
+        let mut by_rating = vec![0; 6];
+        for item in &selection.items {
+            by_rating[usize::from(item.rating.min(5))] += 1;
+        }
+        selection.by_rating = by_rating;
+        selection
+            .items
+            .retain(|item| item.rating >= filter.min_rating);
+        Ok(selection)
     }
 
     /// Metadati e ricetta di una variante. Il file viene dall'indice della sessione, mai dal
@@ -1906,6 +1941,34 @@ mod tests {
         let broken = f._tmp.path().join("rotto.fujiview");
         fs::write(&broken, "{").unwrap();
         assert!(f.state.open_fujiview(&data, &broken).is_err());
+    }
+
+    #[test]
+    fn export_selection_uses_live_choices_of_the_open_session_only() {
+        let f = fixture(3, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        let id = opened.session_id.as_str();
+        f.state.set_winner(id, "dscf0001", Some("Velvia")).unwrap();
+        f.state.set_rating(id, "dscf0001", 5).unwrap();
+        f.state.set_winner(id, "dscf0002", Some("Acros")).unwrap();
+        f.state.set_rating(id, "dscf0002", 2).unwrap();
+        f.state.set_rating(id, "dscf0003", 4).unwrap();
+        let filter = pc_raw_review::export::ExportFilter {
+            min_rating: 3,
+            presets: None,
+        };
+        let selection = f.state.export_selection(id, &filter).unwrap();
+        assert_eq!(selection.total(), 1);
+        assert_eq!(selection.items[0].preset, "Velvia");
+        assert_eq!(selection.no_choice, 1);
+        // I conteggi per valutazione ignorano la valutazione minima.
+        assert_eq!(selection.by_rating[2], 1);
+        assert_eq!(selection.by_rating[5], 1);
+        assert!(f.state.export_selection("sconosciuta", &filter).is_err());
+        // Una sessione chiusa non esporta più nulla.
+        assert!(f.state.close(id));
+        assert!(f.state.export_selection(id, &filter).is_err());
     }
 
     #[test]

@@ -15,6 +15,8 @@ use std::sync::Arc;
 pub struct AppState {
     /// Varianti RAW: cache delle anteprime, sessioni aperte e precaricamento.
     pub raw_review: Arc<crate::raw_review::ReviewState>,
+    /// Riepiloghi delle esportazioni delle Varianti RAW in nuovi cataloghi.
+    pub raw_export_reports: pc_organize::raw_export::RawExportReports,
     pub paths: AppPaths,
     pub config: Arc<RwLock<Config>>,
     pub face_policy: Arc<pc_ai::face_policy::FacePolicy>,

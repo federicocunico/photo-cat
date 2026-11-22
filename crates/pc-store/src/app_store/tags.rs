@@ -369,11 +369,24 @@ struct Snapshot {
     names: Vec<String>,
     items: Vec<ItemRow>,
     styles: Vec<StyleRow>,
+    /// Set creati dall'operazione: `restore` li elimina se sono rimasti vuoti.
+    #[serde(default)]
+    created_sets: Vec<i64>,
 }
 
 /// Fotografa le righe di `app.db` che riguardano i tag indicati (prima di
 /// rinomina, unione o eliminazione), per l'annullamento.
 pub fn snapshot(c: &Connection, names: &[&str]) -> StoreResult<serde_json::Value> {
+    snapshot_created(c, names, &[])
+}
+
+/// Come [`snapshot`], ricordando anche i set creati dall'operazione: `restore`
+/// li elimina se non contengono più tag.
+pub fn snapshot_created(
+    c: &Connection,
+    names: &[&str],
+    created_sets: &[i64],
+) -> StoreResult<serde_json::Value> {
     let mut items = Vec::new();
     let mut styles = Vec::new();
     let mut it = c.prepare(
@@ -403,6 +416,7 @@ pub fn snapshot(c: &Connection, names: &[&str]) -> StoreResult<serde_json::Value
         names: names.iter().map(|n| n.trim().to_string()).collect(),
         items,
         styles,
+        created_sets: created_sets.to_vec(),
     })?)
 }
 
@@ -425,6 +439,14 @@ pub fn restore(c: &Connection, payload: &serde_json::Value) -> StoreResult<()> {
         c.execute(
             "INSERT OR REPLACE INTO tag_style (tag_name, color) VALUES (?1, ?2)",
             params![s.tag_name, s.color],
+        )?;
+    }
+    for id in &snap.created_sets {
+        // Solo se nessuno ci ha messo altri tag nel frattempo.
+        c.execute(
+            "DELETE FROM tag_set WHERE id = ?1 AND is_base = 0
+             AND NOT EXISTS (SELECT 1 FROM tag_set_item WHERE set_id = ?1)",
+            [id],
         )?;
     }
     Ok(())
