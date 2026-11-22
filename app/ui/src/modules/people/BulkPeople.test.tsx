@@ -113,6 +113,8 @@ beforeEach(() => {
     identities: 340,
     photos: 512,
     referenceFaces: 40,
+    withoutPhotos: 0,
+    names: ["Sconosciuto 0", "Sconosciuto 1", "Sconosciuto 2", "Sconosciuto 3", "Sconosciuto 4"],
   });
   commandsMock.mergeIdentitiesMany.mockImplementation(
     (async (from: string[]) => from.length) as never,
@@ -168,9 +170,16 @@ describe("Persone: unione di più identità", () => {
     expect(await within(dialog).findByText("Unire 340 identità in «Sconosciuti»?")).toBeVisible();
     expect(
       within(dialog).getByText(
-        "512 foto e 40 volti di riferimento passeranno a «Sconosciuti». L'operazione non si può annullare.",
+        /^512 foto in questa libreria e 40 volti di riferimento passeranno a «Sconosciuti»\. Le identità selezionate verranno eliminate: i loro nomi resteranno come alias di «Sconosciuti».*L'operazione non si può annullare\.$/,
       ),
     ).toBeVisible();
+    // Chi sparisce, non solo quante.
+    expect(
+      within(dialog).getByText(
+        "Verranno unite: Sconosciuto 0, Sconosciuto 1, Sconosciuto 2, Sconosciuto 3, Sconosciuto 4 e altre 335.",
+      ),
+    ).toBeVisible();
+    expect(within(dialog).queryByText(/non hanno foto in questa libreria/)).not.toBeInTheDocument();
     // Senza il pulsante esplicito non succede nulla.
     expect(commandsMock.mergeIdentitiesMany).not.toHaveBeenCalled();
 
@@ -206,6 +215,8 @@ describe("Persone: unione di più identità", () => {
       identities: 2,
       photos: 10,
       referenceFaces: 1,
+      withoutPhotos: 0,
+      names: ["G. Bianchi", "Giulia B."],
     });
     renderModule();
     fireEvent.click(await screen.findByText("G. Bianchi"));
@@ -257,6 +268,56 @@ describe("Persone: unione di più identità", () => {
     expect(await within(dialog).findByText("Archivio bloccato")).toBeVisible();
     expect(screen.queryByText(/identità unit/)).not.toBeInTheDocument();
   });
+
+  it("avvisa se tra le identità unite ce ne sono senza foto in questa libreria", async () => {
+    commandsMock.mergeIdentitiesPreview.mockResolvedValue({
+      identities: 3,
+      photos: 2,
+      referenceFaces: 0,
+      withoutPhotos: 2,
+      names: ["Sconosciuto 1", "Sconosciuto 2", "Sconosciuto 3"],
+    });
+    renderModule();
+    fireEvent.click(await screen.findByText("Sconosciuto 1"));
+    fireEvent.click(screen.getByText("Sconosciuto 3"), { shiftKey: true });
+    const dialog = await openMergeDialog();
+    await chooseDestination(dialog, "Sconos", "^Sconosciuti");
+    expect(
+      await within(dialog).findByText(
+        /^2 di queste identità non hanno foto in questa libreria: se usi altre librerie/,
+      ),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByText("Verranno unite: Sconosciuto 1, Sconosciuto 2, Sconosciuto 3."),
+    ).toBeVisible();
+  });
+
+  it("cambiare il filtro azzera la selezione: nessuna riga nascosta resta selezionata", async () => {
+    renderModule();
+    fireEvent.click(await screen.findByText("Sconosciuto 1"));
+    fireEvent.click(screen.getByText("Sconosciuto 3"), { shiftKey: true });
+    await screen.findByText("3 selezionati");
+    pickFilter("2");
+    await waitFor(() => expect(screen.queryByText("3 selezionati")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Unisci in…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+  });
+
+  it("l'elenco è virtualizzato: con 3000 identità ne disegna poche ma Ctrl+A le seleziona tutte", async () => {
+    const MANY = Array.from({ length: 3000 }, (_, i) => identity(`m${i}`, `Persona ${i}`));
+    commandsMock.listIdentities.mockResolvedValue(view(MANY));
+    commandsMock.identitySelectionUids.mockResolvedValue(MANY.map((i) => i.uid));
+    renderModule();
+    const first = await screen.findByText("Persona 0");
+    const list = screen.getByRole("list", { name: "Identità" });
+    expect(within(list).getAllByRole("listitem").length).toBeLessThan(100);
+    expect(screen.queryByText("Persona 2999")).not.toBeInTheDocument();
+    first.closest("button")!.focus();
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    expect(await screen.findByText("3000 selezionati")).toBeInTheDocument();
+  });
 });
 
 describe("Da rivedere: assegnazione in blocco", () => {
@@ -279,8 +340,15 @@ describe("Da rivedere: assegnazione in blocco", () => {
     } as never);
   });
 
+  /** Le righe dei gruppi (non le voci del filtro per numero di foto, anch'esse "option"). */
+  const groupRows = async () =>
+    within(await screen.findByRole("listbox", { name: "Elenco persone e gruppi" })).findAllByRole(
+      "option",
+      { name: /1 foto/ },
+    );
+
   async function selectAllOnes() {
-    await screen.findAllByRole("option", { name: /1 foto/ });
+    await groupRows();
     pickFilter("1");
     await waitFor(() =>
       expect(commandsMock.listGroups).toHaveBeenCalledWith(
@@ -292,7 +360,7 @@ describe("Da rivedere: assegnazione in blocco", () => {
         1,
       ),
     );
-    const first = (await screen.findAllByRole("option", { name: /1 foto/ }))[0]!;
+    const first = (await groupRows())[0]!;
     first.focus();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
     await screen.findByText("420 selezionati");
@@ -372,6 +440,67 @@ describe("Da rivedere: assegnazione in blocco", () => {
         /3 volti erano stati indicati come non di questa persona e restano da rivedere\./,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("nuova persona: se l'assegnazione fallisce l'identità appena creata viene eliminata", async () => {
+    commandsMock.saveIdentity.mockResolvedValue("nuova-uid");
+    commandsMock.assignGroups.mockRejectedValue({ detail: "Libreria bloccata" });
+    renderModule();
+    await selectAllOnes();
+    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
+    const dialog = await screen.findByRole("dialog");
+    await chooseDestination(dialog, "Vicino di casa", "Nuova persona «Vicino di casa»");
+    fireEvent.click(
+      await within(dialog).findByRole("button", { name: "Assegna a «Vicino di casa»" }),
+    );
+    expect(await within(dialog).findByText("Libreria bloccata")).toBeVisible();
+    await waitFor(() => expect(commandsMock.deleteIdentity).toHaveBeenCalledWith("nuova-uid"));
+  });
+
+  it("cambiare il filtro azzera la selezione dei gruppi", async () => {
+    renderModule();
+    await selectAllOnes();
+    pickFilter("2");
+    await waitFor(() => expect(screen.queryByText("420 selezionati")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Assegna a…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+  });
+
+  it("oltre 10.000 gruppi spiega il limite prima della conferma", async () => {
+    const HUGE = Array.from({ length: 10_001 }, (_, i) => i + 1);
+    commandsMock.groupSelectionIds.mockResolvedValue(HUGE);
+    renderModule();
+    const first = (await groupRows())[0]!;
+    first.focus();
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await screen.findByText("10001 selezionati");
+    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
+    const dialog = await screen.findByRole("dialog");
+    await chooseDestination(dialog, "Nonno", "Nonno Piero");
+    expect(await within(dialog).findByText(/al massimo 10\.000 gruppi alla volta/)).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: /^Assegna a «/ })).not.toBeInTheDocument();
+    expect(commandsMock.assignGroups).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+A segue la vista su cui si lavora: volti del gruppo aperto o elenco dei gruppi", async () => {
+    commandsMock.faceSelection.mockResolvedValue({ count: 1, maxId: 1 });
+    renderModule();
+    const row = (await groupRows())[0]!;
+    fireEvent.pointerDown(row);
+    fireEvent.click(row);
+    const tile = await screen.findByTestId("face-1");
+    // Ultimo clic sui volti: Ctrl+A seleziona i volti, non i gruppi.
+    fireEvent.pointerDown(tile);
+    fireEvent.click(tile);
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await waitFor(() => expect(commandsMock.faceSelection).toHaveBeenCalled());
+    expect(commandsMock.groupSelectionIds).not.toHaveBeenCalled();
+    // Di nuovo sull'elenco: Ctrl+A seleziona i gruppi.
+    (await groupRows())[1]!.focus();
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await waitFor(() => expect(commandsMock.groupSelectionIds).toHaveBeenCalled());
   });
 
   it("senza selezione Assegna a… spiega perché non è disponibile", async () => {

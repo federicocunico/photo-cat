@@ -611,6 +611,44 @@ fn relink_identities_follows_the_destination_person() {
 }
 
 #[test]
+fn relink_identities_prefers_a_person_that_is_not_ignored() {
+    // La destinazione non è collegata e la prima sorgente è una persona ignorata: diventa della
+    // destinazione la seconda, così i volti uniti non finiscono tra gli "Ignorati".
+    let c = empty_library();
+    let mut media = 0;
+    let mut linked = |uid: &str, axis: usize| -> i64 {
+        let p = people::create_person(&c, Some(uid)).unwrap();
+        c.execute(
+            "UPDATE person SET identity_uid=?2 WHERE id=?1",
+            params![p, uid],
+        )
+        .unwrap();
+        media += 1;
+        add_face(&c, media, Some(p), axis);
+        p
+    };
+    let (pa, pb) = (linked("a", 0), linked("b", 1));
+    c.execute("UPDATE person SET ignored_at=1 WHERE id=?1", [pa])
+        .unwrap();
+    let out = people::relink_identities(&c, &["a".into(), "b".into()], "dest", "Dest").unwrap();
+    assert_eq!(out, Some(pb));
+    assert!(!exists(&c, pa));
+    let ignored: Option<i64> = c
+        .query_row("SELECT ignored_at FROM person WHERE id=?1", [pb], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(ignored, None);
+    assert_eq!(
+        count(
+            &c,
+            &format!("SELECT count(*) FROM face WHERE person_id={pb}")
+        ),
+        2
+    );
+}
+
+#[test]
 fn relink_identities_with_unlinked_sources_changes_nothing() {
     let c = empty_library();
     let p = people::create_person(&c, Some("x")).unwrap();
@@ -657,6 +695,44 @@ fn bulk_assignment_is_fast_on_a_large_library() {
         "PERF 420 gruppi su 4470 volti: selezione {t_ids:?}, assegnazione {t_assign:?}, annulla {t_undo:?}"
     );
     assert!(t_assign.as_secs() < 10 && t_undo.as_secs() < 10);
+}
+
+/// Il limite di una sola operazione: 10.000 gruppi riescono (con un solo annullamento), uno in
+/// più è rifiutato prima di toccare qualcosa.
+#[test]
+fn bulk_assignment_limit_is_ten_thousand_groups() {
+    let mut layout = vec![1; people::MAX_BULK_GROUPS];
+    layout.push(3);
+    let (c, groups, _) = library(&layout);
+    let target = *groups.last().unwrap();
+    let sources = &groups[..people::MAX_BULK_GROUPS];
+
+    let mut too_many = sources.to_vec();
+    too_many.push(target + 1_000_000);
+    let before = dump(&c);
+    assert!(matches!(
+        people::assign_groups(&c, &too_many, &AssignTarget::Person { id: target }),
+        Err(pc_store::StoreError::Invalid(_))
+    ));
+    assert_eq!(dump(&c), before);
+
+    let t = Instant::now();
+    let out = people::assign_groups(&c, sources, &AssignTarget::Person { id: target }).unwrap();
+    let t_assign = t.elapsed();
+    assert_eq!(
+        (out.groups, out.faces),
+        (
+            people::MAX_BULK_GROUPS as i64,
+            people::MAX_BULK_GROUPS as i64
+        )
+    );
+    assert_eq!(count(&c, "SELECT count(*) FROM person"), 1);
+    assert_eq!(count(&c, "SELECT count(*) FROM undo_log"), 1);
+    let t = Instant::now();
+    bulk::undo_last_people(&c).unwrap();
+    let t_undo = t.elapsed();
+    assert_eq!(dump(&c), before);
+    eprintln!("PERF 10.000 gruppi: assegnazione {t_assign:?}, annulla {t_undo:?}");
 }
 
 #[test]

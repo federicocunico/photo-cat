@@ -321,11 +321,6 @@
   min-height: 0;
   padding: 6px;
 }
-.people-id-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 .people-list-item {
   display: grid;
   gap: 10px;

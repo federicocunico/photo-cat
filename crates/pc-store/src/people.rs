@@ -3131,11 +3131,19 @@ pub fn assign_groups(
             _ => {}
         }
     }
+    // Insiemi per le ricerche: con migliaia di gruppi e volti un `Vec::contains` per riga
+    // diventerebbe quadratico.
+    let full_set: HashSet<i64> = full.iter().copied().collect();
+    let partial_set: HashSet<i64> = partial.iter().copied().collect();
     let moved_partial: Vec<&(i64, i64, i64, String)> = rows
         .iter()
-        .filter(|(id, g, ..)| partial.contains(g) && !blocked.contains(id))
+        .filter(|(id, g, ..)| partial_set.contains(g) && !blocked.contains(id))
         .collect();
-    let faces_full = rows.iter().filter(|(_, g, ..)| full.contains(g)).count();
+    let moved_ids: HashSet<i64> = moved_partial.iter().map(|(id, ..)| *id).collect();
+    let faces_full = rows
+        .iter()
+        .filter(|(_, g, ..)| full_set.contains(g))
+        .count();
     let skipped = blocked.len() as i64;
     if faces_full == 0 && moved_partial.is_empty() {
         return Ok(AssignOutcome {
@@ -3159,7 +3167,7 @@ pub fn assign_groups(
     let mut covers: Vec<(i64, i64)> = Vec::new();
     for g in &partial {
         if let Some(f) = cover_face_id(c, *g)? {
-            if moved_partial.iter().any(|(id, ..)| *id == f) {
+            if moved_ids.contains(&f) {
                 covers.push((*g, f));
             }
         }
@@ -3461,7 +3469,8 @@ pub fn relink_identity(c: &Connection, from: &str, to: &str, name: &str) -> Stor
 /// alla persona collegata a `to`, con un solo ricalcolo dei centroidi.
 ///
 /// Se `to` ha già una persona collegata, le altre vi vengono unite; altrimenti la prima
-/// (nell'ordine di `from`, poi per id) diventa la persona di `to` e le altre vi vengono unite.
+/// (nell'ordine di `from`, poi per id, preferendo una persona non ignorata) diventa la persona
+/// di `to` e le altre vi vengono unite.
 /// Restituisce la persona collegata a `to` dopo l'operazione (`None` se nessuna persona della
 /// libreria era collegata né a `to` né alle sorgenti).
 pub fn relink_identities(
@@ -3487,7 +3496,21 @@ pub fn relink_identities(
     let target = match person_for_identity(c, to)? {
         Some(t) => t,
         None => {
-            let first = linked.remove(0);
+            // Diventa della destinazione la prima persona non ignorata (se lo sono tutte, la
+            // prima): altrimenti tutti i volti uniti finirebbero tra gli "Ignorati".
+            let mut pos = 0;
+            for (i, p) in linked.iter().enumerate() {
+                let ignored: bool = c.query_row(
+                    "SELECT ignored_at IS NOT NULL FROM person WHERE id=?1",
+                    [*p],
+                    |r| r.get(0),
+                )?;
+                if !ignored {
+                    pos = i;
+                    break;
+                }
+            }
+            let first = linked.remove(pos);
             c.execute(
                 "UPDATE person SET identity_uid=?2,name=?3 WHERE id=?1",
                 params![first, to, name],

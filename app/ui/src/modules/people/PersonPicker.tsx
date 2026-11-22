@@ -13,7 +13,14 @@ export type PickerChoice =
   | { kind: "identity"; uid: string; name: string }
   | { kind: "new"; name: string };
 
-export type PickerConfirm = { title: string; body: string };
+export type PickerConfirm = {
+  title: string;
+  body: string;
+  /** Righe in più sotto il testo (es. chi verrà unito). */
+  details?: string[];
+  /** Avviso evidenziato prima del pulsante di conferma. */
+  warning?: string;
+};
 
 const errorText = (e: unknown) =>
   (e as { detail?: string }).detail ?? (e instanceof Error ? e.message : String(e));
@@ -148,7 +155,17 @@ export function PersonPicker({
 
   let body: ReactNode;
   if (stage.kind === "confirm") {
-    body = <p className="people-merge-body">{stage.text.body}</p>;
+    body = (
+      <div className="people-stack people-stack--gap-sm">
+        <p className="people-merge-body">{stage.text.body}</p>
+        {stage.text.details?.map((d) => (
+          <p key={d} className="muted people-merge-body">
+            {d}
+          </p>
+        ))}
+        {stage.text.warning && <InlineAlert tone="warn">{stage.text.warning}</InlineAlert>}
+      </div>
+    );
   } else if (dest.isError) {
     body = (
       <InlineAlert tone="danger" title={t("people.failed")}>

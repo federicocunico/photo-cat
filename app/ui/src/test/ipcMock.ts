@@ -289,7 +289,13 @@ export const commandsMock = {
     async (from) => from.length,
   ),
   mergeIdentitiesPreview: vi.fn<(from: string[], into: string) => Promise<MergePreview>>(
-    async (from) => ({ identities: from.length, photos: 0, referenceFaces: 0 }),
+    async (from) => ({
+      identities: from.length,
+      photos: 0,
+      referenceFaces: 0,
+      withoutPhotos: 0,
+      names: [],
+    }),
   ),
   identityFaces: vi.fn(async (): Promise<RefFaceView[]> => []),
   identityFaceImage: vi.fn(async () => "data:image/png;base64,"),

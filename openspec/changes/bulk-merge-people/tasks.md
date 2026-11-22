@@ -19,7 +19,12 @@
 ## 2. Interfaccia
 
 - [x] 2.1 Sezione "Persone": selezione multipla delle identità con le scorciatoie di selezione, filtro "con al massimo N foto" e dialogo "Unisci in…" con ricerca e conferma con i conteggi. In "Da rivedere" e "Singoli": filtro per numero di foto, "Seleziona tutto" e dialogo "Assegna a…" con ricerca, includendo "Nuova persona…", e avviso con "Annulla". i18n it/en. Test vitest sugli scenari delle spec.
-- [ ] 2.2 Revisione Opus: aderenza alle spec, prestazioni con centinaia di elementi, sicurezza dell'unione non annullabile (conferma chiara), testi per un utente non tecnico.
+- [x] 2.2 Revisione Opus: aderenza alle spec, prestazioni con centinaia di elementi, sicurezza dell'unione non annullabile (conferma chiara), testi per un utente non tecnico.
+  - Unione di identità: `app.db` ora scrive dentro la scrittura della libreria, dopo il riallineamento delle persone (un errore di `app.db` annulla anche la libreria); resta solo la finestra di un commit della libreria fallito dopo quello di `app.db`, documentata in `merge_many`. Anche `merge_identities` (singola) usa lo stesso percorso. Adottando una persona per una destinazione non collegata si preferisce una persona non ignorata.
+  - Conferma dell'unione: oltre ai conteggi mostra i primi nomi che spariranno e avvisa se alcune identità non hanno foto in questa libreria (potrebbero averne in altre); la selezione è fissata all'apertura del dialogo e cambiare il filtro per numero di foto azzera la selezione.
+  - Scorciatoie: una vista con `hasFocus` (l'elenco Persone) è attiva solo mentre l'utente ci lavora (ultimo clic o focus), indipendentemente dall'ordine di registrazione; Libreria, Sequenza e volti invariati.
+  - Prestazioni: elenco delle identità virtualizzato, ricerche per insiemi in UI e in `assign_groups`; test con 10.000 gruppi (limite) e rifiuto oltre il limite già nel dialogo.
+  - "Nuova persona…": se l'assegnazione fallisce l'identità appena creata viene eliminata.
 
 ## 3. Verifica
 

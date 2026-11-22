@@ -14,18 +14,30 @@ export interface ActiveGrid {
   /** Elementi selezionati ora: Esc passa alla griglia solo se c'è qualcosa da togliere. */
   count: () => number;
   /**
-   * Vero quando il focus è dentro la vista: tra più viste montate insieme (elenco e griglia dei
-   * volti) vince quella con il focus, altrimenti l'ultima registrata.
+   * Per una vista secondaria montata accanto alla griglia principale (l'elenco delle persone
+   * accanto ai volti): la vista è attiva **solo** mentre questa funzione è vera, cioè quando
+   * l'utente ci sta lavorando. Le griglie senza `hasFocus` (Libreria, Sequenza, volti) restano
+   * le uniche candidate quando nessuna vista secondaria ha il focus, nell'ordine di sempre:
+   * così l'ordine in cui le viste si registrano non decide più chi riceve Ctrl+A.
    */
   hasFocus?: () => boolean;
 }
 
-const active: ActiveGrid[] = [];
+type Entry = ActiveGrid & { focusOnly: boolean };
 
-/** La griglia attiva: quella con il focus, altrimenti l'ultima registrata (montata più di recente). */
+const active: Entry[] = [];
+
+/**
+ * La griglia attiva: una vista secondaria con il focus, altrimenti l'ultima griglia principale
+ * registrata (montata più di recente).
+ */
 export function activeGrid(): ActiveGrid | undefined {
-  for (let i = active.length - 1; i >= 0; i--) if (active[i]!.hasFocus?.()) return active[i];
-  return active[active.length - 1];
+  for (let i = active.length - 1; i >= 0; i--) {
+    const e = active[i]!;
+    if (e.focusOnly && e.hasFocus?.()) return e;
+  }
+  for (let i = active.length - 1; i >= 0; i--) if (!active[i]!.focusOnly) return active[i];
+  return undefined;
 }
 
 /** Rende `grid` la griglia attiva finché il componente è montato. */
@@ -34,12 +46,13 @@ export function useActiveGrid(grid: ActiveGrid, enabled = true) {
   latest.current = grid;
   useEffect(() => {
     if (!enabled) return;
-    const entry: ActiveGrid = {
+    const entry: Entry = {
       selectAll: () => latest.current.selectAll(),
       invert: () => latest.current.invert(),
       clear: () => latest.current.clear(),
       count: () => latest.current.count(),
       hasFocus: () => latest.current.hasFocus?.() ?? false,
+      focusOnly: typeof latest.current.hasFocus === "function",
     };
     active.push(entry);
     return () => {

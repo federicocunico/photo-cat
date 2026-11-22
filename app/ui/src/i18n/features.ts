@@ -218,7 +218,16 @@ export const features = {
         mergeTitle_one: "Unire {{count}} identità in «{{name}}»?",
         mergeTitle_other: "Unire {{count}} identità in «{{name}}»?",
         mergeBody:
-          "{{photos}} e {{refs}} passeranno a «{{name}}». L'operazione non si può annullare.",
+          "{{photos}} in questa libreria e {{refs}} passeranno a «{{name}}». Le identità selezionate verranno eliminate: i loro nomi resteranno come alias di «{{name}}», così cercandoli la troverai ancora. L'operazione non si può annullare.",
+        mergeNames: "Verranno unite: {{names}}.",
+        mergeNamesMore_one: "Verranno unite: {{names}} e un'altra.",
+        mergeNamesMore_other: "Verranno unite: {{names}} e altre {{count}}.",
+        mergeWithoutPhotos_one:
+          "{{count}} di queste identità non ha foto in questa libreria: se usi altre librerie, potrebbe averne lì. Uniscila solo se sei sicuro che sia la stessa persona.",
+        mergeWithoutPhotos_other:
+          "{{count}} di queste identità non hanno foto in questa libreria: se usi altre librerie, potrebbero averne lì. Uniscile solo se sei sicuro che siano la stessa persona.",
+        tooMany:
+          "Puoi assegnare al massimo {{max}} gruppi alla volta. Restringi il filtro o la selezione e ripeti.",
         mergeConfirm: "Unisci in «{{name}}»",
         mergedDone_one: "{{count}} identità unita in «{{name}}»",
         mergedDone_other: "{{count}} identità unite in «{{name}}»",
@@ -540,7 +549,17 @@ export const features = {
           "There is nothing to merge: the only selected identity is «{{name}}». Choose another identity.",
         mergeTitle_one: "Merge {{count}} identity into «{{name}}»?",
         mergeTitle_other: "Merge {{count}} identities into «{{name}}»?",
-        mergeBody: "{{photos}} and {{refs}} will move to «{{name}}». This cannot be undone.",
+        mergeBody:
+          "{{photos}} in this library and {{refs}} will move to «{{name}}». The selected identities will be deleted: their names will stay as aliases of «{{name}}», so searching for them still finds it. This cannot be undone.",
+        mergeNames: "To be merged: {{names}}.",
+        mergeNamesMore_one: "To be merged: {{names}} and one more.",
+        mergeNamesMore_other: "To be merged: {{names}} and {{count}} more.",
+        mergeWithoutPhotos_one:
+          "{{count}} of these identities has no photos in this library: if you use other libraries, it may have some there. Merge it only if you are sure it is the same person.",
+        mergeWithoutPhotos_other:
+          "{{count}} of these identities have no photos in this library: if you use other libraries, they may have some there. Merge them only if you are sure they are the same person.",
+        tooMany:
+          "You can assign at most {{max}} groups at a time. Narrow the filter or the selection and try again.",
         mergeConfirm: "Merge into «{{name}}»",
         mergedDone_one: "{{count}} identity merged into «{{name}}»",
         mergedDone_other: "{{count}} identities merged into «{{name}}»",

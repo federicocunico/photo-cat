@@ -232,13 +232,7 @@ pub async fn merge_identities(
     into: String,
 ) -> AppResult<()> {
     let (db, app) = (state.store.clone(), state.app_store.clone());
-    blocking(move || {
-        let target = app.with(|c| ids::get(c, &into))?;
-        app.tx(|c| ids::merge(c, &from, &into))?;
-        db.write(move |c| people::relink_identity(c, &from, &target.uid, &target.name))?;
-        Ok(())
-    })
-    .await
+    blocking(move || merge_many(&db, &app, &[from], &into).map(|_| ())).await
 }
 
 /// Quanto verrebbe unito da `merge_identities_many`, per la conferma (l'unione non si annulla).
@@ -251,7 +245,16 @@ pub struct MergePreview {
     pub photos: i64,
     /// Volti di riferimento che passerebbero alla destinazione.
     pub reference_faces: i64,
+    /// Identità senza foto nella libreria aperta: potrebbero averne in altre librerie, e la
+    /// conferma lo segnala (un filtro "al massimo N foto" le include sempre).
+    pub without_photos: i64,
+    /// I primi nomi delle identità che verrebbero unite (al massimo [`PREVIEW_NAMES`]), perché
+    /// la conferma mostri chi sparisce e non solo quante.
+    pub names: Vec<String>,
 }
+
+/// Nomi mostrati nella conferma dell'unione.
+pub const PREVIEW_NAMES: usize = 5;
 
 pub fn merge_preview(
     db: &Store,
@@ -261,11 +264,30 @@ pub fn merge_preview(
 ) -> AppResult<MergePreview> {
     let (identities, reference_faces) = app.with(|c| ids::merge_counts(c, from, into))?;
     let sources = ids::merge_sources(from, into);
-    let photos = db.read(move |c| people::photos_of_identities(c, &sources))?;
+    let names = app.with(|c| {
+        sources
+            .iter()
+            .take(PREVIEW_NAMES)
+            .map(|u| ids::get(c, u).map(|i| i.name))
+            .collect::<Result<Vec<_>, _>>()
+    })?;
+    let s = sources.clone();
+    let (photos, per_identity) = db.read(move |c| {
+        Ok((
+            people::photos_of_identities(c, &s)?,
+            people::identity_photos(c)?,
+        ))
+    })?;
+    let without_photos = sources
+        .iter()
+        .filter(|u| per_identity.get(*u).copied().unwrap_or(0) == 0)
+        .count() as i64;
     Ok(MergePreview {
         identities,
         photos,
         reference_faces,
+        without_photos,
+        names,
     })
 }
 
@@ -281,12 +303,29 @@ pub async fn merge_identities_preview(
     blocking(move || merge_preview(&db, &app, &from, &into)).await
 }
 
-/// Core di `merge_identities_many`: archivio identità in una transazione, poi persone collegate.
+/// Core di `merge_identities_many` (e di `merge_identities`): unisce le identità e riallinea le
+/// persone collegate nella libreria aperta.
+///
+/// Ordine delle scritture, per non lasciare le due basi dati disallineate: tutto avviene dentro
+/// la scrittura della libreria. Prima si riallineano le persone (non ancora committate), poi si
+/// uniscono le identità in una transazione di `app.db`; se questa fallisce, l'errore annulla
+/// anche il riallineamento della libreria e nulla cambia. Resta solo la finestra, remota, in cui
+/// `app.db` ha già committato e il commit della libreria fallisce (disco pieno, file bloccato):
+/// le persone restano collegate a identità che non esistono più e alla prossima apertura della
+/// libreria `on_library_open` le scollega mantenendo il nome, senza perdere volti; l'unione si
+/// può completare collegandole di nuovo con "Chi è?". Lo stesso accade nelle altre librerie,
+/// che non sono aperte durante l'unione.
 pub fn merge_many(db: &Store, app: &AppStore, from: &[String], into: &str) -> AppResult<u32> {
     let target = app.with(|c| ids::get(c, into))?;
-    let merged = app.tx(|c| ids::merge_many(c, from, into))?;
-    let (uids, name) = (merged.clone(), target.name);
-    db.write(move |c| people::relink_identities(c, &uids, &target.uid, &name))?;
+    let sources = ids::merge_sources(from, into);
+    let (app, from, into) = (app.clone(), from.to_vec(), into.to_string());
+    let merged = db.write(move |c| {
+        people::relink_identities(c, &sources, &target.uid, &target.name)?;
+        // Stesso ordine dei blocchi di `on_library_open` e dei tag: libreria, poi `app.db`.
+        let merged = app.tx(|a| ids::merge_many(a, &from, &into))?;
+        debug_assert_eq!(merged, sources);
+        Ok(merged)
+    })?;
     Ok(merged.len() as u32)
 }
 
@@ -843,7 +882,9 @@ mod tests {
             MergePreview {
                 identities: 3,
                 photos: 3,
-                reference_faces: 0
+                reference_faces: 0,
+                without_photos: 1,
+                names: vec!["Uno".into(), "Due".into(), "Senza persona".into()],
             }
         );
         assert_eq!(
@@ -869,6 +910,37 @@ mod tests {
         assert_eq!(v.identities[0].photos, 6);
         assert_eq!(v.identities[0].identity.aliases.len(), 3);
         assert!(merge_many(&db, &app, std::slice::from_ref(&dest), &dest).is_err());
+    }
+
+    #[test]
+    fn merge_many_failing_in_the_app_store_leaves_the_library_unchanged() {
+        // L'archivio delle identità fallisce dopo che le persone della libreria sono già state
+        // riallineate (nella stessa scrittura): anche la libreria deve tornare com'era.
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let app = AppStore::open(&tmp.path().join("app.db")).unwrap();
+        let dest = linked(&db, &app, "Sconosciuti", 2, 1);
+        let one = linked(&db, &app, "Uno", 1, 2);
+        let two = linked(&db, &app, "Due", 1, 3);
+        app.with(|c| {
+            c.execute_batch(
+                "CREATE TRIGGER blocca BEFORE DELETE ON identity WHEN old.name = 'Due' \
+                 BEGIN SELECT RAISE(ABORT, 'archivio bloccato'); END;",
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        let err = merge_many(&db, &app, &[one.clone(), two.clone()], &dest).unwrap_err();
+        assert!(format!("{err:?}").contains("archivio bloccato"), "{err:?}");
+        assert_eq!(app.with(ids::list).unwrap().len(), 3);
+        assert_eq!(linked_count(&db, &one), (1, 1));
+        assert_eq!(linked_count(&db, &two), (1, 1));
+        assert_eq!(linked_count(&db, &dest), (1, 2));
+        // Tolto il blocco, la stessa unione riesce.
+        app.with(|c| Ok(c.execute_batch("DROP TRIGGER blocca")?))
+            .unwrap();
+        assert_eq!(merge_many(&db, &app, &[one, two], &dest).unwrap(), 2);
+        assert_eq!(linked_count(&db, &dest), (1, 4));
     }
 
     #[test]

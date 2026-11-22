@@ -1647,6 +1647,16 @@ export type MergePreview = {
 	photos: number,
 	/**  Volti di riferimento che passerebbero alla destinazione. */
 	referenceFaces: number,
+	/**
+	 *  Identità senza foto nella libreria aperta: potrebbero averne in altre librerie, e la
+	 *  conferma lo segnala (un filtro "al massimo N foto" le include sempre).
+	 */
+	withoutPhotos: number,
+	/**
+	 *  I primi nomi delle identità che verrebbero unite (al massimo [`PREVIEW_NAMES`]), perché
+	 *  la conferma mostri chi sparisce e non solo quante.
+	 */
+	names: string[],
 };
 
 export type MetaRow = {

@@ -44,6 +44,7 @@ import "./people.css";
 import { FaceCrop } from "./FaceCrop";
 import { MergeDialog } from "./MergeDialog";
 import { PersonPicker, type PickerChoice } from "./PersonPicker";
+import { withNewIdentity } from "./newIdentity";
 import { discardReasonLabel } from "./discardReason";
 import { Spinner } from "../../components/feedback/Spinner";
 import type { GroupListTarget } from "./GroupList";
@@ -824,22 +825,12 @@ export const FaceGrid = forwardRef<
           confirmLabel={(c: PickerChoice) => t("people.bulk.assignConfirm", { name: c.name })}
           run={async (c: PickerChoice) => {
             const faces = await resolveFaceIds();
-            let correction: Correction;
-            if (c.kind === "person") correction = { action: "assign", person: c.person, faces };
-            else if (c.kind === "identity")
-              correction = { action: "assign_identity", identity: c.uid, faces };
-            else {
-              // Come "Chi è?": prima l'identità, così la persona compare anche in "Persone".
-              const uid = await commands.saveIdentity(null, {
-                name: c.name,
-                shortName: null,
-                group: null,
-                threshold: null,
-                aliases: [],
-              });
-              correction = { action: "assign_identity", identity: uid, faces };
-            }
-            await commands.correctPerson(correction);
+            const toIdentity = (identity: string) =>
+              commands.correctPerson({ action: "assign_identity", identity, faces });
+            if (c.kind === "person")
+              await commands.correctPerson({ action: "assign", person: c.person, faces });
+            else if (c.kind === "identity") await toIdentity(c.uid);
+            else await withNewIdentity(c.name, toIdentity);
             sel.clear();
             notifyPeopleUndo(
               qc,
