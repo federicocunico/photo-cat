@@ -6,6 +6,7 @@ import "../../i18n";
 import type { OpenedReview, RecentSession } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
+import { useGuide } from "../../store/guide";
 import { useRawReview } from "../../store/rawReview";
 import { RawReviewPage } from "./RawReviewPage";
 
@@ -92,6 +93,14 @@ describe("Varianti RAW", () => {
     expect(screen.getByText("2 scatti")).toBeInTheDocument();
     expect(screen.getByText("Una sottocartella per preset")).toBeInTheDocument();
     expect(screen.getByText("Duplicato ignorato")).toBeInTheDocument();
+  });
+
+  it("il pulsante Guida apre la guida sulla sezione Varianti RAW", async () => {
+    mount();
+    expect(useGuide.getState().guide).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Guida" }));
+    expect(useGuide.getState().guide).toBe("rawReview");
+    useGuide.getState().openGuide(null);
   });
 
   it("non apre nulla se il dialogo viene annullato", async () => {

@@ -432,6 +432,7 @@ export const rawReview = {
       emptyTitle: "Nessuna cartella aperta",
       emptyHint:
         "Scegli una cartella di RAW Fujifilm, o con una sottocartella per ogni preset, per iniziare la revisione. Le foto non vengono importate né modificate.",
+      guide: "Guida",
       openFolder: "Apri cartella…",
       openProject: "Apri progetto FujiView (.fujiview)…",
       recentTitle: "Sessioni recenti",
@@ -736,7 +737,8 @@ export const rawReview = {
         withErrors:
           "Development finished with errors: {{converted}} variants created, {{failed}} failed.",
         cancelled: "Development cancelled: {{converted}} variants created before it stopped.",
-        stopped: "Development stopped: {{reason}} {{converted}} variants created before it stopped.",
+        stopped:
+          "Development stopped: {{reason}} {{converted}} variants created before it stopped.",
         refreshed: "The new variants are in the comparison.",
         refreshError:
           "The development finished, but the review could not be updated: close and reopen the folder. ({{error}})",
@@ -882,6 +884,7 @@ export const rawReview = {
       emptyTitle: "No folder open",
       emptyHint:
         "Choose a folder of Fujifilm RAW files, or one with a subfolder per preset, to start the review. Photos are neither imported nor modified.",
+      guide: "Guide",
       openFolder: "Open folder…",
       openProject: "Open FujiView project (.fujiview)…",
       recentTitle: "Recent sessions",

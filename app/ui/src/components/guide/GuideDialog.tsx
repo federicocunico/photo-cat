@@ -12,6 +12,7 @@ const SECTIONS: GuideSection[] = [
   "sequence",
   "import",
   "autoUpdate",
+  "rawReview",
   "settings",
 ];
 
@@ -46,7 +47,11 @@ export function GuideDialog() {
             data-current={s === section || undefined}
           >
             <h3 id={`guide-${s}-title`}>{t(`guide.sections.${s}.title`)}</h3>
-            <p>{t(`guide.sections.${s}.body`)}</p>
+            {t(`guide.sections.${s}.body`)
+              .split("\n\n")
+              .map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
           </section>
         ))}
       </div>

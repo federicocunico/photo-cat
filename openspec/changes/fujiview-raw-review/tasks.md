@@ -93,7 +93,7 @@
 ## 6. Verifica
 
 - [ ] 6.1 `cargo test` del workspace (con `fake-camera` nei test), typecheck, lint e test UI, poi `make test-linux` con i nuovi file in stage. Correggere ogni errore.
-- [ ] 6.2 Documentare il modulo nella guida in app e nel README (forme di cartella, sviluppo solo su Windows, export in catalogo). Verificare che la guida si apra dal modulo.
+- [x] 6.2 Documentare il modulo nella guida in app e nel README (forme di cartella, sviluppo solo su Windows, export in catalogo). Verificare che la guida si apra dal modulo.
 - [ ] 6.3 Prova manuale nell'app (skill `run`) su Windows con una X-T5 reale: apertura di una cartella RAF, sviluppo di 5 RAF × 3 preset, confronto, valutazione, export in "Prova Dolomiti" e verifica del catalogo, delle stelle e dei tag in Libreria. Annotare i tempi.
 
 ## Workflow follow-up

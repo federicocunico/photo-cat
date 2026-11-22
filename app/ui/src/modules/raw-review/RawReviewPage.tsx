@@ -16,6 +16,7 @@ import {
 } from "../../components/ui";
 import { commands, type OpenedReview, type ShotDecision } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
+import { useGuide } from "../../store/guide";
 import { useLayout } from "../../store/layout";
 import {
   candidatesOf,
@@ -135,6 +136,13 @@ export function RawReviewPage() {
 
   const actions = (
     <>
+      <Button
+        variant="ghost"
+        icon={<Icon.Help size={16} />}
+        onClick={() => useGuide.getState().openGuide("rawReview")}
+      >
+        {t("rawReviewPage.guide")}
+      </Button>
       <Button icon={<Icon.Import size={16} />} busy={busy} onClick={pickFolder}>
         {t("rawReviewPage.openFolder")}
       </Button>
