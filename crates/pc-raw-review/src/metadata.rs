@@ -865,40 +865,6 @@ mod tests {
         mn
     }
 
-    /// Valori della proprietà D192 (FilmSimulation) della fotocamera.
-    ///
-    /// TODO(task 5.1): copia locale di `camera::banks::film_simulation_name` di
-    /// FujiView (a798987, `src-tauri/src/camera/banks.rs`), qui non ancora
-    /// portato perché `banks` dipende da `camera::profile` e `camera::ptp`. Con
-    /// il porting di `camera/` sostituire la chiamata qui sotto con
-    /// `crate::camera::banks::film_simulation_name(film as i32)`, come nel test
-    /// originale, e togliere questa funzione.
-    fn film_simulation_prop_name(value: i64) -> Option<&'static str> {
-        Some(match value {
-            1 => "Provia",
-            2 => "Velvia",
-            3 => "Astia",
-            4 => "Pro Neg. Hi",
-            5 => "Pro Neg. Std",
-            6 => "Monocromatico",
-            7 => "Monocromatico + Ye",
-            8 => "Monocromatico + R",
-            9 => "Monocromatico + G",
-            10 => "Seppia",
-            11 => "Classic Chrome",
-            12 => "Acros",
-            13 => "Acros + Ye",
-            14 => "Acros + R",
-            15 => "Acros + G",
-            16 => "Eterna",
-            17 => "Classic Neg.",
-            18 => "Eterna Bleach Bypass",
-            19 => "Nostalgic Neg.",
-            20 => "Reala Ace",
-            _ => return None,
-        })
-    }
-
     #[test]
     fn parses_makernote_and_builds_recipe() {
         let mn = makernote(&[
@@ -1030,7 +996,7 @@ mod tests {
             let get = |tag: &str| mn[tag].as_i64();
             let props = &case["props"];
             if let Some(film) = props["D192"].as_i64() {
-                let expected = film_simulation_prop_name(film).unwrap();
+                let expected = crate::camera::banks::film_simulation_name(film as i32).unwrap();
                 let got = film_name(get("0x1401"), get("0x1003")).unwrap();
                 assert_eq!(
                     got.replace("Monocromatico", "Mono"),
