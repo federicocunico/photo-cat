@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Assegnazione in blocco dei gruppi
-Nelle sezioni "Da rivedere" e "Singoli" del modulo Persone l'utente SHALL poter filtrare i gruppi per numero di foto ("1 foto", "fino a 2 foto", "fino a N foto"), selezionarli tutti e, con "Assegna a…", spostare tutti i loro volti in una persona o identità scelta con ricerca, anche non selezionata, oppure in una nuova persona con nome. L'assegnazione SHALL essere un'unica operazione con un solo "Annulla" e SHALL funzionare con centinaia di gruppi.
+In "Da rivedere" l'utente SHALL poter filtrare i gruppi per numero di foto ("1 foto", "fino a 2 foto", "fino a N foto") e selezionarli tutti; in "Singoli" SHALL poter selezionare tutti i volti. Con "Assegna a…" SHALL poter spostare i volti selezionati in una persona o identità scelta con ricerca, anche non selezionata, oppure in una nuova persona con nome, in un'unica operazione con un solo "Annulla", anche con centinaia di gruppi.
 
 #### Scenario: Gruppi con una foto assegnati a una persona
 - **WHEN** l'utente filtra "1 foto" in "Da rivedere", preme Ctrl+A sui 420 gruppi e sceglie "Assegna a…" › "Nonno Piero"
@@ -20,6 +20,10 @@ Nelle sezioni "Da rivedere" e "Singoli" del modulo Persone l'utente SHALL poter 
 #### Scenario: Nuova persona
 - **WHEN** l'utente assegna 5 gruppi a "Nuova persona…" e scrive "Vicino di casa"
 - **THEN** i 5 gruppi diventano un'unica persona "Vicino di casa"
+
+#### Scenario: Volti singoli
+- **WHEN** in "Singoli" l'utente preme Ctrl+A sui 230 volti e sceglie "Assegna a…" › "Sconosciuti"
+- **THEN** i 230 volti risultano di "Sconosciuti" e un avviso offre "Annulla"
 
 #### Scenario: Correzioni rispettate
 - **WHEN** un volto di un gruppo assegnato era stato rifiutato per la persona di destinazione
