@@ -65,7 +65,7 @@
   - fase del catalogo (nuovo o esistente, valutazioni, tag del set "Preset Fujifilm"), con annullamento unico.
 
   Test Rust degli scenari di `raw-review-export`: destinazione già nella libreria, file saltati nel catalogo, errore su un file, annullamento dopo la copia.
-- [ ] 4.3 `ExportToCatalogDialog`:
+- [x] 4.3 `ExportToCatalogDialog`:
   - conteggi per valutazione;
   - conteggio degli esclusi perché "non JPEG";
   - filtro per preset;

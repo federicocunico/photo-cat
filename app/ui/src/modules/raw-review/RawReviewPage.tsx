@@ -30,6 +30,7 @@ import {
 } from "../../store/rawReview";
 import { notifyError } from "../../store/toasts";
 import { ComparePanels } from "./ComparePanels";
+import { ExportToCatalogDialog } from "./ExportToCatalogDialog";
 import { InfoSidebar } from "./InfoSidebar";
 import { RatingRow } from "../library/InspectorQuality";
 import { focusedPanel } from "./panelFocus";
@@ -239,6 +240,7 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
     (d) => d.winnerPreset,
   ).length;
   const total = opened.shots.length;
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Pannello a fuoco per Invio e frecce: quello scelto, altrimenti la variante migliore o il primo.
   // Un altro scatto riparte da capo.
@@ -271,10 +273,24 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
             </ul>
           </details>
         )}
+        <Button
+          className="rr-bar-export"
+          icon={<Icon.Export size={16} />}
+          onClick={() => setExportOpen(true)}
+        >
+          {t("rawExport.open")}
+        </Button>
         <Button className="rr-bar-close" variant="ghost" onClick={onClose}>
           {t("rawReviewPage.closeSession")}
         </Button>
       </div>
+      <ExportToCatalogDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        sessionId={opened.sessionId}
+        sessionName={opened.session.name}
+        presets={opened.presets}
+      />
       <div className="rr-workspace">
         <ShotList
           sessionId={opened.sessionId}

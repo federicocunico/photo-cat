@@ -93,7 +93,7 @@
   margin: 0;
   font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
 }
-.rr-bar-close {
+.rr-bar-export {
   margin-left: auto;
 }
 .rr-warnings summary {
@@ -529,4 +529,119 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Dialogo "Esporta in un nuovo catalogo". */
+.rx-form,
+.rx-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.rx-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  margin: 0;
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  min-width: 0;
+}
+.rx-group > legend,
+.rx-presets > legend {
+  padding: 0 var(--pc-space-1);
+  font-weight: var(--pc-weight-medium);
+}
+.rx-presets {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rx-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-1) var(--pc-space-4);
+}
+.rx-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-2);
+}
+.rx-check input {
+  margin-top: 3px;
+}
+.rx-select {
+  max-width: 260px;
+}
+.rx-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-1) var(--pc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rx-counts li {
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.rx-count-off {
+  opacity: 0.5;
+}
+.rx-total {
+  margin: 0;
+  font-weight: var(--pc-weight-medium);
+}
+.rx-excluded ul,
+.rx-report-list,
+.rx-errors {
+  margin: var(--pc-space-1) 0 0;
+  padding-left: var(--pc-space-5);
+}
+.rx-errors {
+  max-height: 180px;
+  overflow: auto;
+}
+.rx-note {
+  margin: 0;
+  color: var(--pc-text-muted, inherit);
+}
+.rx-small {
+  font-size: var(--pc-font-sm);
+}
+.rx-error {
+  margin: 0;
+  color: var(--pc-danger);
+}
+.rx-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-1);
+}
+.rx-preview {
+  width: 100%;
+}
+.rx-conflict-actions,
+.rx-final {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+  justify-content: flex-end;
+}
+.rx-conflict-actions {
+  justify-content: flex-start;
+  margin-top: var(--pc-space-2);
+}
+.rx-bar {
+  width: 100%;
+}
+.rx-report-title {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+.rx-block {
+  margin: 0;
+  color: var(--pc-warn);
+  font-weight: var(--pc-weight-medium);
 }
