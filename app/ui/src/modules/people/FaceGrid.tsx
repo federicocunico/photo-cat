@@ -165,7 +165,7 @@ export const FaceGrid = forwardRef<
     queryFn: async () => {
       const [people, ids] = await Promise.all([
         listAllGroups("people", "name_asc"),
-        commands.listIdentities(null),
+        commands.listIdentities(null, null),
       ]);
       return { people, identities: ids.identities.filter((i) => i.person == null) };
     },

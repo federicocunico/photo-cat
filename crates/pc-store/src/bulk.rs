@@ -193,6 +193,10 @@ pub enum UndoAction {
 impl UndoAction {
     /// `true` per le correzioni del modulo Persone: Ctrl+Z lì annulla solo queste.
     pub fn is_people(&self) -> bool {
+        // Un gruppo vale se lo sono tutte le sue azioni (es. "Assegna gruppi").
+        if let UndoAction::Group { actions } = self {
+            return !actions.is_empty() && actions.iter().all(UndoAction::is_people);
+        }
         matches!(
             self,
             UndoAction::PersonNotSame { .. }

@@ -4,14 +4,14 @@
 
 ## 1. Backend
 
-- [ ] 1.1 `identities::merge_many(from: &[uid], into)` in una sola transazione dell'archivio delle identità, seguita dal riallineamento delle persone nella libreria aperta (`people::relink_identity` per ciascuna, o una variante a lista). Comportamento richiesto:
+- [x] 1.1 `identities::merge_many(from: &[uid], into)` in una sola transazione dell'archivio delle identità, seguita dal riallineamento delle persone nella libreria aperta (`people::relink_identity` per ciascuna, o una variante a lista). Comportamento richiesto:
   - una persona collegata alla destinazione esiste già: le altre vi vengono unite;
   - non esiste: la prima diventa la sua e le altre vi vengono unite;
   - la destinazione tra le selezionate viene ignorata come sorgente;
   - un errore a metà non modifica nessuna identità.
 
   Comando `merge_identities_many` e un'anteprima dei conteggi (identità, foto, volti di riferimento) per la conferma. Test Rust su ogni scenario di `identity-registry` "Unione di più identità".
-- [ ] 1.2 Assegnazione in blocco dei gruppi in `people.rs`: verso una persona esistente, un'identità (che crea o riusa la persona collegata) o una nuova persona con nome. Usa `merge_many`, rispetta i rifiuti ("non è questa persona": i volti rifiutati restano da rivedere) e registra un solo annullamento.
+- [x] 1.2 Assegnazione in blocco dei gruppi in `people.rs`: verso una persona esistente, un'identità (che crea o riusa la persona collegata) o una nuova persona con nome. Usa `merge_many`, rispetta i rifiuti ("non è questa persona": i volti rifiutati restano da rivedere) e registra un solo annullamento.
   - Aggiunge il filtro per numero di foto nell'elenco dei gruppi e delle identità, e la base di selezione completa dell'elenco filtrato, per "Seleziona tutto" su centinaia di righe.
   - Comandi Tauri e binding.
   - Test Rust: 420 gruppi in una chiamata con un solo annullamento, identità non collegata, nuova persona, rifiuti rispettati, filtro per numero di foto.

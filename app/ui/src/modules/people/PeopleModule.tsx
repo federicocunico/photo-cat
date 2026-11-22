@@ -302,7 +302,7 @@ export function PeopleModule() {
         setTarget({ kind: "group", id: person });
         setSelectedIds([person]);
         setSelectedFaceIds([]);
-        const identities = await commands.listIdentities(null);
+        const identities = await commands.listIdentities(null, null);
         if (cancelled) return;
         const row = identities.identities.find((r) => r.person === person) ?? null;
         setIdentity(row);
@@ -330,7 +330,7 @@ export function PeopleModule() {
         setTarget({ kind: "group", id: located.groupId });
         setSelectedIds([located.groupId]);
         if (located.section === "people") {
-          const identities = await commands.listIdentities(null);
+          const identities = await commands.listIdentities(null, null);
           if (cancelled) return;
           const row = identities.identities.find((r) => r.person === located.groupId) ?? null;
           setIdentity(row);
@@ -447,7 +447,7 @@ export function PeopleModule() {
             onLinked={advanceAfterLink}
             onIdentitySaved={(uid) => {
               setCreating(false);
-              void commands.listIdentities(null).then((v) => {
+              void commands.listIdentities(null, null).then((v) => {
                 const row = v.identities.find((r) => r.uid === uid) ?? null;
                 setIdentity(row);
                 if (row?.person != null) {

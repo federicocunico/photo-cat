@@ -314,6 +314,78 @@ pub fn merge(c: &Connection, from: &str, into: &str) -> StoreResult<()> {
     set_aliases(c, into, &target.name, &aliases)
 }
 
+/// Sorgenti effettive di un'unione in `into`: senza doppioni e senza `into` stessa, nell'ordine
+/// dato.
+pub fn merge_sources(from: &[String], into: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    from.iter()
+        .filter(|u| u.as_str() != into && seen.insert(u.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Unisce più identità in `into` con la stessa semantica di [`merge`] (alias, nome delle
+/// sorgenti come alias, volti di riferimento, gruppo), in un'unica operazione tutto-o-niente:
+/// se una sorgente o la destinazione non esiste, o un passo fallisce, nessuna identità cambia.
+/// `into` tra le sorgenti viene ignorata; i doppioni contano una volta. Restituisce le sorgenti
+/// effettivamente unite (da passare a `people::relink_identities`).
+pub fn merge_many(c: &Connection, from: &[String], into: &str) -> StoreResult<Vec<String>> {
+    let sources = merge_sources(from, into);
+    if sources.is_empty() {
+        return Err(StoreError::Invalid("nessuna identità da unire".into()));
+    }
+    // Tutto-o-niente anche se chi chiama non ha aperto una transazione.
+    c.execute_batch("SAVEPOINT merge_identities")?;
+    match merge_many_inner(c, &sources, into) {
+        Ok(()) => {
+            c.execute_batch("RELEASE merge_identities")?;
+            Ok(sources)
+        }
+        Err(e) => {
+            c.execute_batch("ROLLBACK TO merge_identities; RELEASE merge_identities")?;
+            Err(e)
+        }
+    }
+}
+
+fn merge_many_inner(c: &Connection, sources: &[String], into: &str) -> StoreResult<()> {
+    let target = get(c, into)?;
+    let mut group = target.group.clone();
+    let mut aliases = target.aliases.clone();
+    for uid in sources {
+        let source = get(c, uid)?;
+        c.execute(
+            "UPDATE identity_face SET uid = ?2 WHERE uid = ?1",
+            params![uid, into],
+        )?;
+        aliases.extend(source.aliases);
+        aliases.push(source.name);
+        if group.is_none() {
+            group = source.group;
+        }
+        c.execute("DELETE FROM identity WHERE uid = ?1", [uid])?;
+    }
+    if group != target.group {
+        c.execute(
+            "UPDATE identity SET grp = ?2 WHERE uid = ?1",
+            params![into, group],
+        )?;
+    }
+    set_aliases(c, into, &target.name, &aliases)
+}
+
+/// Quanto verrebbe unito da [`merge_many`] (per la conferma): identità sorgenti e loro volti di
+/// riferimento. Una sorgente inesistente è un errore.
+pub fn merge_counts(c: &Connection, from: &[String], into: &str) -> StoreResult<(i64, i64)> {
+    get(c, into)?;
+    let sources = merge_sources(from, into);
+    let mut faces = 0;
+    for uid in &sources {
+        faces += get(c, uid)?.faces;
+    }
+    Ok((sources.len() as i64, faces))
+}
+
 /// Gruppi usati, in ordine alfabetico.
 pub fn groups(c: &Connection) -> StoreResult<Vec<String>> {
     let mut st = c.prepare(
@@ -634,6 +706,160 @@ mod tests {
             assert_eq!(g.aliases, vec!["G. Bianchi", "Giuly"]);
             assert_eq!(g.group.as_deref(), Some("Amici"));
             assert_eq!(list(c)?.len(), 1);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn snapshot(c: &Connection) -> Vec<String> {
+        list(c)
+            .unwrap()
+            .into_iter()
+            .map(|i| format!("{:?}", (i.uid, i.name, i.aliases, i.faces, i.group)))
+            .collect()
+    }
+
+    #[test]
+    fn merge_many_moves_hundreds_of_small_identities() {
+        let s = AppStore::open_in_memory().unwrap();
+        s.tx(|c| {
+            let into = create(c, &input("Sconosciuti"))?;
+            let keep = create(c, &input("Giulia Bianchi"))?;
+            let mut from = Vec::new();
+            for i in 0..340 {
+                let uid = create(
+                    c,
+                    &IdentityInput {
+                        name: format!("Persona {i}"),
+                        aliases: vec![format!("P{i}")],
+                        group: (i == 7).then(|| "Amici".to_string()),
+                        ..Default::default()
+                    },
+                )?;
+                add_face(c, &uid, b"png", "sface", Some(&axis(i % 128)), "file:a.jpg")?;
+                if i % 2 == 0 {
+                    add_face(c, &uid, b"png", "sface", Some(&axis(1)), "file:b.jpg")?;
+                }
+                from.push(uid);
+            }
+            add_face(c, &into, b"png", "sface", Some(&axis(2)), "file:c.jpg")?;
+            let merged = merge_many(c, &from, &into)?;
+            assert_eq!(merged, from);
+            let all = list(c)?;
+            assert_eq!(all.len(), 2, "restano solo la destinazione e un'altra");
+            assert!(get(c, &keep).is_ok());
+            let t = get(c, &into)?;
+            assert_eq!(t.faces, 1 + 340 + 170);
+            assert_eq!(t.aliases.len(), 680);
+            assert!(t.aliases.contains(&"Persona 12".to_string()));
+            assert!(t.aliases.contains(&"P339".to_string()));
+            assert_eq!(t.group.as_deref(), Some("Amici"));
+            assert!(from.iter().all(|u| get(c, u).is_err()));
+            assert_eq!(
+                search(c, "persona 200")?.len(),
+                1,
+                "cercando un alias si trova la destinazione"
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn merge_many_ignores_the_destination_and_duplicates() {
+        let s = AppStore::open_in_memory().unwrap();
+        s.with(|c| {
+            let g = create(c, &input("Giulia Bianchi"))?;
+            let a = create(c, &input("G. Bianchi"))?;
+            let b = create(c, &input("Giulia B."))?;
+            let merged = merge_many(c, &[a.clone(), g.clone(), b.clone(), a.clone()], &g)?;
+            assert_eq!(merged, vec![a.clone(), b]);
+            let all = list(c)?;
+            assert_eq!(all.len(), 1);
+            assert_eq!(all[0].uid, g);
+            assert_eq!(all[0].aliases, vec!["G. Bianchi", "Giulia B."]);
+            // Solo la destinazione: niente da unire.
+            assert!(matches!(
+                merge_many(c, std::slice::from_ref(&g), &g),
+                Err(StoreError::Invalid(_))
+            ));
+            assert!(matches!(
+                merge_many(c, &[], &g),
+                Err(StoreError::Invalid(_))
+            ));
+            assert!(matches!(
+                merge_many(c, &[a], "nessuna"),
+                Err(StoreError::NotFound(_))
+            ));
+            assert_eq!(
+                merge_sources(std::slice::from_ref(&g), &g),
+                Vec::<String>::new()
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn merge_many_error_midway_changes_nothing() {
+        let s = AppStore::open_in_memory().unwrap();
+        let (into, mut from) = s
+            .with(|c| {
+                let into = create(c, &input("Sconosciuti"))?;
+                add_face(c, &into, b"png", "sface", Some(&axis(0)), "file:t.jpg")?;
+                let mut from = Vec::new();
+                for i in 0..50 {
+                    let uid = create(
+                        c,
+                        &IdentityInput {
+                            name: format!("Persona {i}"),
+                            aliases: vec![format!("P{i}")],
+                            group: Some("Gruppo".into()),
+                            ..Default::default()
+                        },
+                    )?;
+                    add_face(c, &uid, b"png", "sface", Some(&axis(i % 128)), "file:a.jpg")?;
+                    from.push(uid);
+                }
+                Ok((into, from))
+            })
+            .unwrap();
+        // La trentesima non esiste: le prime 29 sono già state spostate quando si scopre.
+        from[29] = "inesistente".into();
+        let before = s.with(|c| Ok(snapshot(c))).unwrap();
+        // Sia con una transazione esterna (come il comando) sia senza.
+        let err = s.tx(|c| merge_many(c, &from, &into)).unwrap_err();
+        assert!(matches!(err, StoreError::NotFound(_)), "{err:?}");
+        assert_eq!(s.with(|c| Ok(snapshot(c))).unwrap(), before);
+        let err = s.with(|c| merge_many(c, &from, &into)).unwrap_err();
+        assert!(matches!(err, StoreError::NotFound(_)), "{err:?}");
+        assert_eq!(s.with(|c| Ok(snapshot(c))).unwrap(), before);
+        // Il collegamento resta utilizzabile: senza l'errore l'unione riesce.
+        from.remove(29);
+        s.with(|c| merge_many(c, &from, &into)).unwrap();
+        assert_eq!(
+            s.with(list).unwrap().len(),
+            2,
+            "resta la trentesima, mai inclusa"
+        );
+        assert_eq!(s.with(|c| get(c, &into)).unwrap().faces, 50);
+    }
+
+    #[test]
+    fn merge_counts_report_identities_and_reference_faces() {
+        let s = AppStore::open_in_memory().unwrap();
+        s.with(|c| {
+            let into = create(c, &input("Dest"))?;
+            let a = create(c, &input("A"))?;
+            let b = create(c, &input("B"))?;
+            add_face(c, &into, b"png", "sface", Some(&axis(0)), "file:t.jpg")?;
+            add_face(c, &a, b"png", "sface", Some(&axis(1)), "file:a.jpg")?;
+            add_face(c, &a, b"png", "sface", Some(&axis(2)), "file:a2.jpg")?;
+            add_face(c, &b, b"png", "sface", Some(&axis(3)), "file:b.jpg")?;
+            let counts = merge_counts(c, &[a.clone(), b, into.clone(), a.clone()], &into)?;
+            assert_eq!(counts, (2, 3), "la destinazione e i doppioni non contano");
+            assert!(merge_counts(c, &[a, "x".into()], &into).is_err());
+            assert_eq!(list(c)?.len(), 3, "l'anteprima non modifica nulla");
             Ok(())
         })
         .unwrap();

@@ -916,24 +916,61 @@ pub fn list_groups(
     limit: i64,
     m: &FaceMatch,
 ) -> StoreResult<GroupPage> {
-    let limit = clamp_limit(limit);
+    list_groups_filtered(c, section, query, None, sort, after, limit, m)
+}
+
+/// Definizione `g` (un gruppo per riga, con volti, foto e scartati) della sezione, con la
+/// ricerca in `?1` e il massimo di foto in `?2` (`NULL` = nessun limite).
+fn groups_cte(section: PeopleSection, m: &FaceMatch) -> String {
     let discarded = discarded_sql(m);
     let section_sql = section_where(section);
-    let qnorm = query
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_lowercase());
     // `?1` compare sempre, così il numero di parametri non dipende dalla ricerca.
     let search_sql = "AND (?1 IS NULL \
               OR lower(COALESCE(p.name,'')) LIKE '%' || ?1 || '%' \
               OR lower(COALESCE(p.identity_uid,'')) LIKE '%' || ?1 || '%')";
     let having = match section {
-        PeopleSection::People => {
-            "HAVING faces > 0 OR p.name IS NOT NULL OR p.identity_uid IS NOT NULL"
-        }
-        PeopleSection::Ignored => "HAVING faces > 0 OR p.ignored_at IS NOT NULL",
-        PeopleSection::Review => "HAVING faces > 0",
+        PeopleSection::People => "faces > 0 OR p.name IS NOT NULL OR p.identity_uid IS NOT NULL",
+        PeopleSection::Ignored => "faces > 0 OR p.ignored_at IS NOT NULL",
+        PeopleSection::Review => "faces > 0",
     };
+    format!(
+        "WITH g AS ( \
+           SELECT p.id, p.name, p.identity_uid, p.ignored_at, p.ignored_faces, p.cover_face_id, \
+                  count(f.id) AS faces, \
+                  count(DISTINCT f.media_id) AS photos, \
+                  COALESCE(sum(CASE WHEN {discarded} THEN 1 ELSE 0 END), 0) AS discarded_faces, \
+                  (p.name IS NULL) AS unnamed, \
+                  COALESCE(lower(p.name), '') AS lname \
+           FROM person p \
+           LEFT JOIN face f ON f.person_id = p.id \
+           WHERE {section_sql} {search_sql} \
+           GROUP BY p.id HAVING ({having}) AND (?2 IS NULL OR photos <= ?2))"
+    )
+}
+
+fn search_term(query: Option<&str>) -> Option<String> {
+    query
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_lowercase())
+}
+
+/// Come [`list_groups`], con in più il filtro "al massimo `max_photos` foto" (un gruppo con
+/// volti ha almeno una foto: `Some(1)` vuol dire "esattamente 1 foto").
+#[allow(clippy::too_many_arguments)]
+pub fn list_groups_filtered(
+    c: &Connection,
+    section: PeopleSection,
+    query: Option<&str>,
+    max_photos: Option<u32>,
+    sort: GroupSort,
+    after: Option<i64>,
+    limit: i64,
+    m: &FaceMatch,
+) -> StoreResult<GroupPage> {
+    let limit = clamp_limit(limit);
+    let qnorm = search_term(query);
+    let max_photos = max_photos.map(i64::from);
     // Chiave d'ordinamento come tupla SQL: il cursore `after` riparte dalla riga successiva
     // a quella con quell'id, senza caricare né ordinare tutti i gruppi in memoria.
     let (order, cmp) = match sort {
@@ -950,34 +987,22 @@ pub fn list_groups(
             "(g.unnamed, g.lname, g.id) > (k.unnamed, k.lname, k.id)",
         ),
     };
-    let base = format!(
-        "WITH g AS ( \
-           SELECT p.id, p.name, p.identity_uid, p.ignored_at, p.ignored_faces, p.cover_face_id, \
-                  count(f.id) AS faces, \
-                  count(DISTINCT f.media_id) AS photos, \
-                  COALESCE(sum(CASE WHEN {discarded} THEN 1 ELSE 0 END), 0) AS discarded_faces, \
-                  (p.name IS NULL) AS unnamed, \
-                  COALESCE(lower(p.name), '') AS lname \
-           FROM person p \
-           LEFT JOIN face f ON f.person_id = p.id \
-           WHERE {section_sql} {search_sql} \
-           GROUP BY p.id {having})"
-    );
+    let base = groups_cte(section, m);
     let total: i64 = c.query_row(
         &format!("{base} SELECT count(*) FROM g"),
-        params![qnorm.as_deref()],
+        params![qnorm.as_deref(), max_photos],
         |r| r.get(0),
     )?;
     let page_sql = format!(
         "{base} SELECT g.id, g.name, g.identity_uid, g.ignored_at, g.ignored_faces, \
                 g.cover_face_id, g.faces, g.photos, g.discarded_faces \
-         FROM g LEFT JOIN g AS k ON k.id = ?2 \
-         WHERE ?2 IS NULL OR k.id IS NULL OR {cmp} \
-         ORDER BY {order} LIMIT ?3"
+         FROM g LEFT JOIN g AS k ON k.id = ?3 \
+         WHERE ?3 IS NULL OR k.id IS NULL OR {cmp} \
+         ORDER BY {order} LIMIT ?4"
     );
     let mut st = c.prepare(&page_sql)?;
     let page: Vec<GroupTuple> = st
-        .query_map(params![qnorm.as_deref(), after, limit], |r| {
+        .query_map(params![qnorm.as_deref(), max_photos, after, limit], |r| {
             Ok((
                 r.get::<_, i64>(0)?,
                 r.get::<_, Option<String>>(1)?,
@@ -1002,6 +1027,29 @@ pub fn list_groups(
         None
     };
     Ok(GroupPage { items, next, total })
+}
+
+/// Id di tutti i gruppi dell'elenco filtrato (stessi criteri di [`list_groups_filtered`], senza
+/// pagine), per "Seleziona tutto" su centinaia di righe. Ordinati per foto decrescenti.
+pub fn group_selection_ids(
+    c: &Connection,
+    section: PeopleSection,
+    query: Option<&str>,
+    max_photos: Option<u32>,
+    m: &FaceMatch,
+) -> StoreResult<Vec<i64>> {
+    let qnorm = search_term(query);
+    let sql = format!(
+        "{} SELECT g.id FROM g ORDER BY g.photos DESC, g.id DESC",
+        groups_cte(section, m)
+    );
+    let mut st = c.prepare(&sql)?;
+    let rows = st
+        .query_map(params![qnorm.as_deref(), max_photos.map(i64::from)], |r| {
+            r.get(0)
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
 }
 
 /// Pagina di volti per gruppo, singoli o scartati.
@@ -2805,6 +2853,386 @@ pub fn merge(c: &Connection, from: i64, to: i64) -> StoreResult<()> {
     refresh_centroids(c)?;
     refresh_media(c, &media)
 }
+/// Massimo di gruppi per una sola operazione in blocco (i parametri SQL sono limitati).
+pub const MAX_BULK_GROUPS: usize = 10_000;
+
+/// Unione di più gruppi in `to` con un solo passaggio sulle tabelle: stessa semantica di
+/// `merge_rows` ripetuta per ogni gruppo (nome e identità, rifiuti, "persone diversi"), ma senza
+/// una scansione dei volti per gruppo. `from` non contiene `to` né doppioni; i gruppi devono
+/// esistere. Restituisce i media da aggiornare (centroidi e FTS li ricalcola chi chiama).
+fn merge_rows_many(c: &Connection, from: &[i64], to: i64) -> StoreResult<HashSet<i64>> {
+    if from.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let list = serde_json::to_string(from)?;
+    let sources: HashSet<i64> = from.iter().copied().collect();
+    let found: i64 = c.query_row(
+        "SELECT count(*) FROM person WHERE id IN (SELECT value FROM json_each(?1))",
+        [&list],
+        |r| r.get(0),
+    )?;
+    let target_exists: bool = c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+        [to],
+        |r| r.get(0),
+    )?;
+    if found != from.len() as i64 || !target_exists {
+        return Err(StoreError::NotFound("persona".into()));
+    }
+    let mut media: HashSet<i64> = HashSet::new();
+    {
+        let mut q = c.prepare(
+            "SELECT DISTINCT media_id FROM face \
+             WHERE person_id=?2 OR person_id IN (SELECT value FROM json_each(?1))",
+        )?;
+        for row in q.query_map(params![list, to], |r| r.get::<_, i64>(0))? {
+            media.insert(row?);
+        }
+    }
+    // Nome e identità: se `to` non li ha, passano quelli del primo gruppo che li ha.
+    let mut names: std::collections::HashMap<i64, (Option<String>, Option<String>)> =
+        std::collections::HashMap::new();
+    {
+        let mut q = c.prepare(
+            "SELECT id, name, identity_uid FROM person \
+             WHERE id IN (SELECT value FROM json_each(?1))",
+        )?;
+        for row in q.query_map([&list], |r| {
+            Ok((r.get::<_, i64>(0)?, (r.get(1)?, r.get(2)?)))
+        })? {
+            let (id, v) = row?;
+            names.insert(id, v);
+        }
+    }
+    let name = from.iter().find_map(|id| names[id].0.clone());
+    let uid = from.iter().find_map(|id| names[id].1.clone());
+    if name.is_some() || uid.is_some() {
+        c.execute(
+            "UPDATE person SET name = COALESCE(name, ?2), \
+             identity_uid = COALESCE(identity_uid, ?3) WHERE id=?1",
+            params![to, name, uid],
+        )?;
+    }
+    c.execute(
+        "UPDATE face SET person_id=?2,assigned_by='manual' \
+         WHERE person_id IN (SELECT value FROM json_each(?1))",
+        params![list, to],
+    )?;
+    // Solo i volti che rifiutano uno dei gruppi o appartengono a `to` cambiano i rifiuti.
+    let touched: Vec<(i64, Option<i64>, String)> = {
+        let mut q = c.prepare(
+            "SELECT id, person_id, rejected FROM face WHERE person_id=?2 \
+             OR EXISTS (SELECT 1 FROM json_each(face.rejected) j \
+                        WHERE j.value IN (SELECT value FROM json_each(?1)))",
+        )?;
+        let rows = q
+            .query_map(params![list, to], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        rows
+    };
+    for (id, person_id, rejected) in touched {
+        let before: Vec<i64> = serde_json::from_str(&rejected)?;
+        let mut after: Vec<i64> = before
+            .iter()
+            .map(|p| if sources.contains(p) { to } else { *p })
+            .collect();
+        after.sort();
+        after.dedup();
+        if person_id == Some(to) {
+            after.retain(|p| *p != to);
+        }
+        if after != before {
+            c.execute(
+                "UPDATE face SET rejected=?2 WHERE id=?1",
+                params![id, serde_json::to_string(&after)?],
+            )?;
+        }
+    }
+    // Propaga i vincoli "persone diverse" a `to`; quelli tra gruppi uniti spariscono.
+    let ns_rows: Vec<(i64, i64, i64)> = {
+        let mut q = c.prepare(
+            "SELECT a, b, created_at FROM person_not_same \
+             WHERE a IN (SELECT value FROM json_each(?1)) \
+                OR b IN (SELECT value FROM json_each(?1))",
+        )?;
+        let rows = q
+            .query_map([&list], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        rows
+    };
+    c.execute(
+        "DELETE FROM person_not_same WHERE a IN (SELECT value FROM json_each(?1)) \
+         OR b IN (SELECT value FROM json_each(?1))",
+        [&list],
+    )?;
+    for (a, b, ts) in ns_rows {
+        let other = match (sources.contains(&a), sources.contains(&b)) {
+            (true, false) => b,
+            (false, true) => a,
+            _ => continue,
+        };
+        if other != to {
+            c.execute(
+                "INSERT OR IGNORE INTO person_not_same(a, b, created_at) VALUES (?1, ?2, ?3)",
+                params![to.min(other), to.max(other), ts],
+            )?;
+        }
+    }
+    c.execute(
+        "DELETE FROM person_suggestion WHERE a IN (SELECT value FROM json_each(?1)) \
+         OR b IN (SELECT value FROM json_each(?1))",
+        [&list],
+    )?;
+    c.execute(
+        "DELETE FROM person WHERE id IN (SELECT value FROM json_each(?1))",
+        [&list],
+    )?;
+    Ok(media)
+}
+
+/// Destinazione di [`assign_groups`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AssignTarget {
+    /// Un gruppo o una persona già esistente.
+    Person { id: i64 },
+    /// Un'identità dell'app: usa la persona collegata in questa libreria o, se non c'è,
+    /// ne crea una collegata (col nome dell'identità).
+    Identity { uid: String, name: String },
+    /// Una nuova persona con nome (senza identità).
+    NewPerson { name: String },
+}
+
+/// Esito di [`assign_groups`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct AssignOutcome {
+    /// Persona di destinazione (`None` se non è stato assegnato nulla e non ne è stata creata).
+    pub person: Option<i64>,
+    /// `true` se la persona di destinazione è stata creata da questa operazione.
+    pub created: bool,
+    /// Gruppi interamente uniti nella destinazione (non esistono più).
+    pub groups: i64,
+    /// Volti spostati nella destinazione.
+    pub faces: i64,
+    /// Volti rifiutati per la destinazione ("non è questa persona"): non assegnati, restano in
+    /// un gruppo da rivedere.
+    pub skipped_faces: i64,
+}
+
+fn person_exists(c: &Connection, id: i64) -> StoreResult<bool> {
+    Ok(c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM person WHERE id=?1)",
+        [id],
+        |r| r.get(0),
+    )?)
+}
+
+fn valid_person_name(name: &str) -> StoreResult<&str> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 256 {
+        return Err(StoreError::Invalid("nome persona non valido".into()));
+    }
+    Ok(name)
+}
+
+/// Sposta tutti i volti dei `groups` nella destinazione con una sola operazione e **una sola**
+/// voce di annullamento ("Assegna gruppi"), che ripristina gruppi, volti, rifiuti e vincoli.
+///
+/// - I gruppi interamente assegnabili vengono uniti nella destinazione ed eliminati.
+/// - I volti che avevano rifiutato la destinazione ("non è questa persona") non vengono
+///   assegnati: un gruppo con solo volti rifiutati resta com'è, uno con volti misti resta con i
+///   soli volti rifiutati (e la sua copertina, se era un volto spostato, torna automatica).
+/// - `Identity` senza persona collegata e `NewPerson` creano la persona di destinazione, ma solo
+///   se c'è almeno un volto da assegnare. Una destinazione tra i gruppi viene ignorata come
+///   sorgente.
+///
+/// Un errore (gruppo inesistente, nome non valido) non lascia modifiche se chi chiama usa una
+/// transazione, come fa `Store::write`.
+pub fn assign_groups(
+    c: &Connection,
+    groups: &[i64],
+    target: &AssignTarget,
+) -> StoreResult<AssignOutcome> {
+    use crate::bulk::{record_undo, UndoAction};
+    if groups.len() > MAX_BULK_GROUPS {
+        return Err(StoreError::Invalid(format!(
+            "troppi gruppi in una volta (massimo {MAX_BULK_GROUPS})"
+        )));
+    }
+    let mut seen = HashSet::new();
+    let groups: Vec<i64> = groups.iter().copied().filter(|g| seen.insert(*g)).collect();
+    if groups.is_empty() {
+        return Err(StoreError::Invalid("nessun gruppo da assegnare".into()));
+    }
+    // Destinazione esistente (se c'è) e nome da usare se va creata.
+    let (existing, new_name, new_uid): (Option<i64>, Option<&str>, Option<&str>) = match target {
+        AssignTarget::Person { id } => {
+            if !person_exists(c, *id)? {
+                return Err(StoreError::NotFound("persona".into()));
+            }
+            (Some(*id), None, None)
+        }
+        AssignTarget::Identity { uid, name } => (
+            person_for_identity(c, uid)?,
+            Some(valid_person_name(name)?),
+            Some(uid.as_str()),
+        ),
+        AssignTarget::NewPerson { name } => (None, Some(valid_person_name(name)?), None),
+    };
+    let sources: Vec<i64> = groups
+        .iter()
+        .copied()
+        .filter(|g| Some(*g) != existing)
+        .collect();
+    let list = serde_json::to_string(&sources)?;
+    let found: i64 = c.query_row(
+        "SELECT count(*) FROM person WHERE id IN (SELECT value FROM json_each(?1))",
+        [&list],
+        |r| r.get(0),
+    )?;
+    if found != sources.len() as i64 {
+        return Err(StoreError::NotFound("gruppo".into()));
+    }
+
+    // Volti dei gruppi, con i rifiuti: quelli che rifiutano la destinazione restano dove sono.
+    let rows: Vec<(i64, i64, i64, String)> = {
+        let mut q = c.prepare(
+            "SELECT id, person_id, media_id, rejected FROM face \
+             WHERE person_id IN (SELECT value FROM json_each(?1)) ORDER BY id",
+        )?;
+        let rows = q
+            .query_map([&list], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        rows
+    };
+    let mut per_group: std::collections::HashMap<i64, (usize, usize)> =
+        std::collections::HashMap::new();
+    let mut blocked: HashSet<i64> = HashSet::new();
+    for (id, person, _, rejected) in &rows {
+        let entry = per_group.entry(*person).or_default();
+        entry.0 += 1;
+        if let Some(to) = existing {
+            if serde_json::from_str::<Vec<i64>>(rejected)?.contains(&to) {
+                blocked.insert(*id);
+                entry.1 += 1;
+            }
+        }
+    }
+    let (mut full, mut partial) = (Vec::new(), Vec::new());
+    for g in &sources {
+        match per_group.get(g).copied().unwrap_or((0, 0)) {
+            (_, 0) => full.push(*g),
+            (total, refused) if refused < total => partial.push(*g),
+            _ => {}
+        }
+    }
+    let moved_partial: Vec<&(i64, i64, i64, String)> = rows
+        .iter()
+        .filter(|(id, g, ..)| partial.contains(g) && !blocked.contains(id))
+        .collect();
+    let faces_full = rows.iter().filter(|(_, g, ..)| full.contains(g)).count();
+    let skipped = blocked.len() as i64;
+    if faces_full == 0 && moved_partial.is_empty() {
+        return Ok(AssignOutcome {
+            person: existing,
+            skipped_faces: skipped,
+            ..Default::default()
+        });
+    }
+
+    // Stato prima della modifica, per l'annullamento.
+    let snapshots = full
+        .iter()
+        .map(|g| person_snapshot(c, *g))
+        .collect::<StoreResult<Vec<_>>>()?;
+    let target_snapshot = existing.map(|t| person_snapshot(c, t)).transpose()?;
+    let faces_before = faces_of_persons(c, &full)?;
+    let mut scope: Vec<i64> = sources.clone();
+    scope.extend(existing);
+    let states = face_states(c, &faces_touching(c, &scope)?)?;
+    let not_same = not_same_rows(c, &scope)?;
+    let mut covers: Vec<(i64, i64)> = Vec::new();
+    for g in &partial {
+        if let Some(f) = cover_face_id(c, *g)? {
+            if moved_partial.iter().any(|(id, ..)| *id == f) {
+                covers.push((*g, f));
+            }
+        }
+    }
+
+    let (to, created) = match existing {
+        Some(t) => (t, false),
+        None => {
+            let id = create_person(c, new_name)?;
+            if let Some(uid) = new_uid {
+                c.execute(
+                    "UPDATE person SET identity_uid=?2 WHERE id=?1",
+                    params![id, uid],
+                )?;
+            }
+            (id, true)
+        }
+    };
+
+    let mut media = merge_rows_many(c, &full, to)?;
+    // Gruppi con volti rifiutati: si spostano solo gli altri, come "Sposta" (il gruppo di
+    // partenza viene rifiutato dai volti spostati, così non vi tornano da soli).
+    for (id, from, media_id, rejected) in &moved_partial {
+        let mut reject: Vec<i64> = serde_json::from_str(rejected)?;
+        reject.retain(|p| *p != to);
+        if !reject.contains(from) {
+            reject.push(*from);
+        }
+        c.execute(
+            "UPDATE face SET person_id=?2,assigned_by='manual',rejected=?3 WHERE id=?1",
+            params![id, to, serde_json::to_string(&reject)?],
+        )?;
+        media.insert(*media_id);
+    }
+    for (group, _) in &covers {
+        clear_cover(c, *group)?;
+    }
+    refresh_centroids(c)?;
+    refresh_media(c, &media)?;
+
+    let mut actions = Vec::new();
+    if created {
+        actions.push(UndoAction::FacesRestored {
+            states: Vec::new(),
+            created: Some(to),
+        });
+    }
+    for (group, face) in covers {
+        actions.push(UndoAction::PersonCover {
+            group,
+            prev: Some(face),
+        });
+    }
+    actions.push(UndoAction::PersonsMerged {
+        from: snapshots,
+        faces: faces_before,
+        to,
+        states,
+        target: target_snapshot,
+        not_same,
+    });
+    // Annullando si procede dall'ultima azione alla prima: prima si rimettono i volti e i
+    // gruppi, poi le copertine e infine si elimina la persona creata (ormai vuota).
+    record_undo(c, "Assegna gruppi", &UndoAction::Group { actions })?;
+    Ok(AssignOutcome {
+        person: Some(to),
+        created,
+        groups: full.len() as i64,
+        faces: (faces_full + moved_partial.len()) as i64,
+        skipped_faces: skipped,
+    })
+}
+
 pub fn remove_face(c: &Connection, id: i64) -> StoreResult<()> {
     remove_faces(c, &[id])
 }
@@ -3027,6 +3455,61 @@ pub fn relink_identity(c: &Connection, from: &str, to: &str, name: &str) -> Stor
         link_identity(c, p, Some((to, name)))?;
     }
     Ok(())
+}
+
+/// Dopo l'unione di più identità in `to`: le persone collegate alle identità `from` passano
+/// alla persona collegata a `to`, con un solo ricalcolo dei centroidi.
+///
+/// Se `to` ha già una persona collegata, le altre vi vengono unite; altrimenti la prima
+/// (nell'ordine di `from`, poi per id) diventa la persona di `to` e le altre vi vengono unite.
+/// Restituisce la persona collegata a `to` dopo l'operazione (`None` se nessuna persona della
+/// libreria era collegata né a `to` né alle sorgenti).
+pub fn relink_identities(
+    c: &Connection,
+    from: &[String],
+    to: &str,
+    name: &str,
+) -> StoreResult<Option<i64>> {
+    let mut linked: Vec<i64> = Vec::new();
+    let mut q = c.prepare("SELECT id FROM person WHERE identity_uid=?1 ORDER BY id")?;
+    for uid in from.iter().filter(|u| u.as_str() != to) {
+        for row in q.query_map([uid], |r| r.get::<_, i64>(0))? {
+            linked.push(row?);
+        }
+    }
+    drop(q);
+    let mut seen = HashSet::new();
+    linked.retain(|p| seen.insert(*p));
+    if linked.is_empty() {
+        return person_for_identity(c, to);
+    }
+    let mut media = HashSet::new();
+    let target = match person_for_identity(c, to)? {
+        Some(t) => t,
+        None => {
+            let first = linked.remove(0);
+            c.execute(
+                "UPDATE person SET identity_uid=?2,name=?3 WHERE id=?1",
+                params![first, to, name],
+            )?;
+            media.extend(person_media(c, first)?);
+            first
+        }
+    };
+    media.extend(merge_rows_many(c, &linked, target)?);
+    refresh_centroids(c)?;
+    refresh_media(c, &media)?;
+    Ok(Some(target))
+}
+
+/// Foto distinte delle persone collegate alle identità indicate, nella libreria aperta.
+pub fn photos_of_identities(c: &Connection, uids: &[String]) -> StoreResult<i64> {
+    Ok(c.query_row(
+        "SELECT count(DISTINCT f.media_id) FROM person p JOIN face f ON f.person_id=p.id \
+         WHERE p.identity_uid IN (SELECT value FROM json_each(?1))",
+        [serde_json::to_string(uids)?],
+        |r| r.get(0),
+    )?)
 }
 
 /// Foto per identità collegata nella libreria aperta (`uid` → foto).

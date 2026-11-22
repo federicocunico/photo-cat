@@ -105,7 +105,12 @@ pub fn on_library_open(store: &Store, app: &AppStore) {
     }
 }
 
-pub fn view(db: &Store, app: &AppStore, query: Option<&str>) -> AppResult<IdentitiesView> {
+pub fn view(
+    db: &Store,
+    app: &AppStore,
+    query: Option<&str>,
+    max_photos: Option<u32>,
+) -> AppResult<IdentitiesView> {
     let (list, groups) =
         app.with(|c| Ok((ids::search(c, query.unwrap_or(""))?, ids::groups(c)?)))?;
     let photos = db.read(people::identity_photos)?;
@@ -125,6 +130,7 @@ pub fn view(db: &Store, app: &AppStore, query: Option<&str>) -> AppResult<Identi
                 photos: photos.get(&i.uid).copied().unwrap_or(0),
                 identity: i,
             })
+            .filter(|r| max_photos.is_none_or(|m| r.photos <= i64::from(m)))
             .collect(),
         groups,
         store_path: app
@@ -135,14 +141,44 @@ pub fn view(db: &Store, app: &AppStore, query: Option<&str>) -> AppResult<Identi
     })
 }
 
+/// Elenco delle identità, con ricerca e filtro "al massimo `max_photos` foto" (foto della
+/// persona collegata nella libreria aperta; senza collegamento sono 0).
 #[tauri::command]
 #[specta::specta]
 pub async fn list_identities(
     state: State<'_, AppState>,
     query: Option<String>,
+    max_photos: Option<u32>,
 ) -> AppResult<IdentitiesView> {
     let (db, app) = (state.store.clone(), state.app_store.clone());
-    blocking(move || view(&db, &app, query.as_deref())).await
+    blocking(move || view(&db, &app, query.as_deref(), max_photos)).await
+}
+
+/// Uid di tutte le identità dell'elenco filtrato (stessi criteri di `list_identities`), per
+/// "Seleziona tutto" su centinaia di righe.
+pub fn selection_uids(
+    db: &Store,
+    app: &AppStore,
+    query: Option<&str>,
+    max_photos: Option<u32>,
+) -> AppResult<Vec<String>> {
+    Ok(view(db, app, query, max_photos)?
+        .identities
+        .into_iter()
+        .map(|r| r.identity.uid)
+        .collect())
+}
+
+/// Uid di tutte le identità dell'elenco filtrato (per "Seleziona tutto" su centinaia di righe).
+#[tauri::command]
+#[specta::specta]
+pub async fn identity_selection_uids(
+    state: State<'_, AppState>,
+    query: Option<String>,
+    max_photos: Option<u32>,
+) -> AppResult<Vec<String>> {
+    let (db, app) = (state.store.clone(), state.app_store.clone());
+    blocking(move || selection_uids(&db, &app, query.as_deref(), max_photos)).await
 }
 
 /// Riallinea il nome delle persone collegate dopo una modifica alle identità.
@@ -203,6 +239,72 @@ pub async fn merge_identities(
         Ok(())
     })
     .await
+}
+
+/// Quanto verrebbe unito da `merge_identities_many`, per la conferma (l'unione non si annulla).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePreview {
+    /// Identità che verrebbero unite (la destinazione e i doppioni non contano).
+    pub identities: i64,
+    /// Foto distinte delle loro persone collegate nella libreria aperta.
+    pub photos: i64,
+    /// Volti di riferimento che passerebbero alla destinazione.
+    pub reference_faces: i64,
+}
+
+pub fn merge_preview(
+    db: &Store,
+    app: &AppStore,
+    from: &[String],
+    into: &str,
+) -> AppResult<MergePreview> {
+    let (identities, reference_faces) = app.with(|c| ids::merge_counts(c, from, into))?;
+    let sources = ids::merge_sources(from, into);
+    let photos = db.read(move |c| people::photos_of_identities(c, &sources))?;
+    Ok(MergePreview {
+        identities,
+        photos,
+        reference_faces,
+    })
+}
+
+/// Conteggi per la conferma dell'unione (identità, foto, volti di riferimento): non modifica nulla.
+#[tauri::command]
+#[specta::specta]
+pub async fn merge_identities_preview(
+    state: State<'_, AppState>,
+    from: Vec<String>,
+    into: String,
+) -> AppResult<MergePreview> {
+    let (db, app) = (state.store.clone(), state.app_store.clone());
+    blocking(move || merge_preview(&db, &app, &from, &into)).await
+}
+
+/// Core di `merge_identities_many`: archivio identità in una transazione, poi persone collegate.
+pub fn merge_many(db: &Store, app: &AppStore, from: &[String], into: &str) -> AppResult<u32> {
+    let target = app.with(|c| ids::get(c, into))?;
+    let merged = app.tx(|c| ids::merge_many(c, from, into))?;
+    let (uids, name) = (merged.clone(), target.name);
+    db.write(move |c| people::relink_identities(c, &uids, &target.uid, &name))?;
+    Ok(merged.len() as u32)
+}
+
+/// Unisce più identità in `into` in un'unica operazione tutto-o-niente (alias, volti di
+/// riferimento) e riallinea le persone collegate nella libreria aperta. Non si annulla.
+/// Restituisce quante identità sono state unite.
+#[tauri::command]
+#[specta::specta]
+pub async fn merge_identities_many(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    from: Vec<String>,
+    into: String,
+) -> AppResult<u32> {
+    let (db, store) = (state.store.clone(), state.app_store.clone());
+    let n = blocking(move || merge_many(&db, &store, &from, &into)).await?;
+    crate::events::faces_changed(&app);
+    Ok(n)
 }
 
 #[tauri::command]
@@ -607,17 +709,211 @@ mod tests {
         assert!(s[0].score.unwrap() > 0.99);
         assert_eq!(suggestions(&db, &app, person, "peppe").unwrap().len(), 1);
 
-        let v = view(&db, &app, None).unwrap();
+        let v = view(&db, &app, None, None).unwrap();
         assert_eq!(v.identities.len(), 3);
         assert!(v.identities.iter().all(|r| r.person.is_none()));
         db.write(move |c| {
             people::link_identity(c, person, Some((&giulia, "Giulia Bianchi"))).map(|_| ())
         })
         .unwrap();
-        let v = view(&db, &app, Some("giulia")).unwrap();
+        let v = view(&db, &app, Some("giulia"), None).unwrap();
         assert_eq!(v.identities[0].person, Some(person));
         assert_eq!(v.identities[0].photos, 1);
         assert!(v.store_path.ends_with("app.db"));
+    }
+
+    /// Identità con una persona collegata che ha `photos` foto (un volto per foto).
+    fn linked(db: &Store, app: &AppStore, name: &str, photos: usize, axis: usize) -> String {
+        let uid = app
+            .with(|c| {
+                ids::create(
+                    c,
+                    &IdentityInput {
+                        name: name.into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+        let (u, n) = (uid.clone(), name.to_string());
+        db.write(move |c| {
+            let p = people::ensure_identity_person(c, &u, &n)?;
+            for i in 0..photos {
+                let id = pc_store::repo::media::upsert(
+                    c,
+                    &NewMedia {
+                        path: format!("{n}-{i}.jpg"),
+                        name: format!("{n}-{i}.jpg"),
+                        ext: "jpg".into(),
+                        ..Default::default()
+                    },
+                )?;
+                people::save_faces(c, id, &[face(axis)], "sface", "det+sface", 0.363)?;
+                let f = people::records(c, Some(id))?[0].id;
+                people::assign(c, &[f], p)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        uid
+    }
+
+    fn linked_count(db: &Store, uid: &str) -> (i64, i64) {
+        let u = uid.to_string();
+        db.read(move |c| {
+            Ok((
+                c.query_row(
+                    "SELECT count(*) FROM person WHERE identity_uid=?1",
+                    [&u],
+                    |r| r.get(0),
+                )?,
+                c.query_row(
+                    "SELECT count(*) FROM face f JOIN person p ON p.id=f.person_id WHERE p.identity_uid=?1",
+                    [&u],
+                    |r| r.get(0),
+                )?,
+            ))
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn merge_many_realigns_linked_people_and_filters_by_photos() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let app = AppStore::open(&tmp.path().join("app.db")).unwrap();
+        // Destinazione collegata (3 foto), due sorgenti collegate (1 e 2 foto), una non collegata.
+        let dest = linked(&db, &app, "Sconosciuti", 3, 1);
+        let one = linked(&db, &app, "Uno", 1, 2);
+        let two = linked(&db, &app, "Due", 2, 3);
+        let loose = app
+            .with(|c| {
+                ids::create(
+                    c,
+                    &IdentityInput {
+                        name: "Senza persona".into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        // Filtro per numero di foto e base di selezione dell'elenco filtrato.
+        let names = |max| {
+            let mut v: Vec<_> = view(&db, &app, None, max)
+                .unwrap()
+                .identities
+                .into_iter()
+                .map(|r| (r.identity.name, r.photos))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(names(None).len(), 4);
+        assert_eq!(
+            names(Some(2)),
+            vec![
+                ("Due".to_string(), 2),
+                ("Senza persona".to_string(), 0),
+                ("Uno".to_string(), 1)
+            ]
+        );
+        assert_eq!(names(Some(1)).len(), 2);
+        let mut sel = selection_uids(&db, &app, None, Some(2)).unwrap();
+        sel.sort();
+        let mut want = vec![one.clone(), two.clone(), loose.clone()];
+        want.sort();
+        assert_eq!(sel, want);
+        assert_eq!(
+            selection_uids(&db, &app, Some("uno"), Some(2)).unwrap(),
+            vec![one.clone()]
+        );
+
+        // Anteprima: due identità collegate più una senza persona, 3 foto, 0 volti di riferimento.
+        let from = vec![
+            one.clone(),
+            two.clone(),
+            loose.clone(),
+            dest.clone(),
+            one.clone(),
+        ];
+        let p = merge_preview(&db, &app, &from, &dest).unwrap();
+        assert_eq!(
+            p,
+            MergePreview {
+                identities: 3,
+                photos: 3,
+                reference_faces: 0
+            }
+        );
+        assert_eq!(
+            app.with(ids::list).unwrap().len(),
+            4,
+            "l'anteprima non cambia nulla"
+        );
+
+        // Errore a metà: né l'archivio né la libreria cambiano.
+        let bad = vec![one.clone(), "inesistente".to_string(), two.clone()];
+        assert!(merge_many(&db, &app, &bad, &dest).is_err());
+        assert!(merge_many(&db, &app, &from, "inesistente").is_err());
+        assert_eq!(app.with(ids::list).unwrap().len(), 4);
+        assert_eq!(linked_count(&db, &one), (1, 1));
+        assert!(merge_preview(&db, &app, &bad, &dest).is_err());
+
+        // Unione: la destinazione, già collegata, riceve le persone delle altre.
+        assert_eq!(merge_many(&db, &app, &from, &dest).unwrap(), 3);
+        assert_eq!(app.with(ids::list).unwrap().len(), 1);
+        assert_eq!(linked_count(&db, &dest), (1, 6));
+        assert_eq!(linked_count(&db, &one), (0, 0));
+        let v = view(&db, &app, None, None).unwrap();
+        assert_eq!(v.identities[0].photos, 6);
+        assert_eq!(v.identities[0].identity.aliases.len(), 3);
+        assert!(merge_many(&db, &app, std::slice::from_ref(&dest), &dest).is_err());
+    }
+
+    #[test]
+    fn merge_many_into_an_unlinked_destination_adopts_the_first_person() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let app = AppStore::open(&tmp.path().join("app.db")).unwrap();
+        let a = linked(&db, &app, "A", 1, 4);
+        let b = linked(&db, &app, "B", 2, 5);
+        let c = linked(&db, &app, "C", 1, 6);
+        let dest = app
+            .with(|c| {
+                ids::create(
+                    c,
+                    &IdentityInput {
+                        name: "Giulia".into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            merge_many(&db, &app, &[a.clone(), b, c, dest.clone()], &dest).unwrap(),
+            3
+        );
+        // Tre persone diventano una sola, collegata alla destinazione, col nome dell'identità.
+        assert_eq!(linked_count(&db, &dest), (1, 4));
+        let name: String = db
+            .read(|c| {
+                Ok(c.query_row(
+                    "SELECT name FROM person WHERE identity_uid IS NOT NULL",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(name, "Giulia");
+        assert_eq!(
+            db.read(
+                |c| Ok(c.query_row("SELECT count(*) FROM person", [], |r| r.get::<_, i64>(0))?)
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(linked_count(&db, &a), (0, 0));
     }
 
     #[test]

@@ -157,14 +157,14 @@ export const GroupList = forwardRef<
 
   const identities = useQuery({
     queryKey: ["identities", debouncedQuery.trim()],
-    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null),
+    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null, null),
     enabled: isTauri() && section === "people",
   });
 
   const groups = useInfiniteQuery({
     queryKey: ["people-groups", section, debouncedQuery, sort],
     queryFn: ({ pageParam }) =>
-      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE),
+      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE, null),
     initialPageParam: null as number | null,
     getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && section !== "people",
