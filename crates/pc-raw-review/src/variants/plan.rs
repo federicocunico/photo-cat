@@ -4,6 +4,7 @@
 use super::estimate::{self, FreeSpace};
 use super::types::{PlannedPreset, VariantPlan, VariantRequest};
 use crate::camera::banks::{folder_name, Bank};
+use pc_core::{AppError, AppResult, ErrorCode};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -290,13 +291,160 @@ fn resolve_folder(output: &Path, preset: &PresetDef, taken: &[String]) -> (Strin
     unreachable!()
 }
 
-pub fn build_plan(request: &VariantRequest, presets: &[PresetDef]) -> Result<Plan, String> {
-    let (source_root, rafs) = collect_rafs(&request.sources)?;
+/// Il percorso con l'antenato esistente più vicino reso canonico (collegamenti risolti, maiuscole
+/// reali su Windows) e il resto aggiunto così com'è: confrontabile anche se non esiste ancora.
+fn normalized(path: &Path) -> PathBuf {
+    use std::path::Component;
+    // Prima `.` e `..` (lessicalmente: la parte che non esiste non si può risolvere).
+    let mut lexical = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                lexical.pop();
+            }
+            other => lexical.push(other.as_os_str()),
+        }
+    }
+    let path = lexical.as_path();
+    let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(canonical) = current.canonicalize() {
+            return rest
+                .iter()
+                .rev()
+                .fold(canonical, |acc, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name);
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Cartelle di sistema in cui lo sviluppo non scrive mai (né dentro).
+fn system_dirs() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        [
+            "SystemRoot",
+            "windir",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "ProgramW6432",
+            "ProgramData",
+        ]
+        .iter()
+        .filter_map(std::env::var_os)
+        .map(PathBuf::from)
+        .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        [
+            "/bin",
+            "/boot",
+            "/dev",
+            "/etc",
+            "/lib",
+            "/lib32",
+            "/lib64",
+            "/libx32",
+            "/proc",
+            "/run",
+            "/sbin",
+            "/snap",
+            "/sys",
+            "/usr",
+            "/System",
+            "/Library",
+            "/Applications",
+            "/private/etc",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect()
+    }
+}
+
+/// Cartelle che contengono le cartelle degli utenti o dei dischi: vietate come cartella di
+/// output, ma non le loro sottocartelle.
+fn container_dirs() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("SystemDrive")
+            .map(|drive| vec![PathBuf::from(format!(r"{}\Users", drive.to_string_lossy()))])
+            .unwrap_or_default()
+    }
+    #[cfg(not(windows))]
+    {
+        ["/home", "/Users", "/Volumes", "/media", "/mnt"]
+            .iter()
+            .map(PathBuf::from)
+            .collect()
+    }
+}
+
+/// Regole della cartella di output dello sviluppo (spec variant-generation, "Protezione dei file
+/// originali"). Le cartelle dei preset vanno dentro `output`, quindi `output` non può essere:
+/// - un percorso relativo, o un file;
+/// - la radice di un disco (`C:\`, `/`, `\\server\share`);
+/// - la cartella dei RAF, né una cartella che la contiene: una cartella di preset potrebbe
+///   coincidere con quella dei RAF o con una vicina, e la revisione leggerebbe come preset le
+///   cartelle delle foto;
+/// - una cartella di sistema o una sua sottocartella, o la cartella che contiene gli utenti.
+///
+/// Una sottocartella della cartella dei RAF (come la predefinita `FujiView varianti`), una
+/// cartella accanto o su un altro disco vanno bene.
+pub fn check_output_dir(source_root: &Path, output: &Path) -> AppResult<()> {
+    let reject = |reason: &str| {
+        Err(AppError::new(
+            ErrorCode::OutputFolderRejected,
+            format!(
+                "{reason}: {}. Scegli un'altra cartella, per esempio «{DEFAULT_OUTPUT_DIR}» accanto ai RAF.",
+                output.display()
+            ),
+        ))
+    };
+    if !output.is_absolute() {
+        return reject("La cartella di output deve essere un percorso completo");
+    }
+    if output.exists() && !output.is_dir() {
+        return reject("La cartella di output è un file");
+    }
+    let out = normalized(output);
+    let source = normalized(source_root);
+    if out.parent().is_none() {
+        return reject("La cartella di output non può essere la radice di un disco");
+    }
+    if out == source {
+        return reject("La cartella di output non può essere la cartella dei RAF");
+    }
+    if source.starts_with(&out) {
+        return reject("La cartella di output non può contenere la cartella dei RAF");
+    }
+    if system_dirs()
+        .iter()
+        .any(|dir| out.starts_with(normalized(dir)))
+        || container_dirs().iter().any(|dir| out == normalized(dir))
+    {
+        return reject("La cartella di output non può essere una cartella di sistema");
+    }
+    Ok(())
+}
+
+pub fn build_plan(request: &VariantRequest, presets: &[PresetDef]) -> AppResult<Plan> {
+    let (source_root, rafs) = collect_rafs(&request.sources).map_err(AppError::invalid_input)?;
     let mut warnings = Vec::new();
     let output_dir = match request
         .output_dir
         .as_deref()
-        .filter(|s| !s.trim().is_empty())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
     {
         Some(dir) => {
             let (dir, note) = resolve_output_dir(Path::new(dir));
@@ -305,6 +453,7 @@ pub fn build_plan(request: &VariantRequest, presets: &[PresetDef]) -> Result<Pla
         }
         None => source_root.join(DEFAULT_OUTPUT_DIR),
     };
+    check_output_dir(&source_root, &output_dir)?;
     let mut targets: Vec<PresetTarget> = Vec::new();
     for id in &request.preset_ids {
         let Some(preset) = presets.iter().find(|p| &p.id == id) else {
@@ -328,7 +477,7 @@ pub fn build_plan(request: &VariantRequest, presets: &[PresetDef]) -> Result<Pla
         });
     }
     if targets.is_empty() {
-        return Err("Nessun preset selezionato.".into());
+        return Err(AppError::invalid_input("Nessun preset selezionato."));
     }
     let mut plan = Plan {
         source_root,
@@ -452,6 +601,51 @@ mod tests {
         let mut again = request(dir.path(), &["C1"]);
         again.overwrite = true;
         assert_eq!(build_plan(&again, &presets()).unwrap().pending.len(), 2);
+    }
+
+    #[test]
+    fn the_output_folder_is_validated() {
+        let dir = setup(&["DSCF0001.RAF"]);
+        let photos = dir.path().join("shooting");
+        fs::create_dir_all(&photos).unwrap();
+        fs::write(photos.join("DSCF0001.RAF"), b"raf").unwrap();
+        let with_output = |output: &Path| {
+            let mut req = request(&photos, &["asshot"]);
+            req.output_dir = Some(output.to_string_lossy().into_owned());
+            build_plan(&req, &presets())
+        };
+        let rejected = |output: &Path, why: &str| {
+            let error = with_output(output).unwrap_err();
+            assert_eq!(error.code, ErrorCode::OutputFolderRejected, "{output:?}");
+            assert!(error.detail.contains(why), "{output:?}: {}", error.detail);
+            assert!(!error.retriable);
+        };
+        // La cartella dei RAF (anche scritta in un altro modo) e chi la contiene.
+        rejected(&photos, "cartella dei RAF");
+        rejected(&photos.join("sub").join(".."), "cartella dei RAF");
+        rejected(dir.path(), "contenere la cartella dei RAF");
+        // La radice del disco.
+        let root: PathBuf = photos.ancestors().last().unwrap().to_path_buf();
+        rejected(&root, "radice");
+        // Un percorso relativo o un file.
+        rejected(Path::new("varianti"), "percorso completo");
+        rejected(&photos.join("DSCF0001.RAF"), "è un file");
+        // Le cartelle di sistema e le loro sottocartelle.
+        #[cfg(windows)]
+        let system = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("Varianti");
+        #[cfg(not(windows))]
+        let system = PathBuf::from("/usr/share/varianti");
+        rejected(&system, "cartella di sistema");
+        // Vanno bene: la predefinita, una sottocartella qualsiasi, una cartella accanto, un
+        // altro disco (qui: un'altra cartella temporanea), anche se non esiste ancora.
+        assert!(with_output(&photos.join(DEFAULT_OUTPUT_DIR)).is_ok());
+        assert!(with_output(&photos.join("a").join("b")).is_ok());
+        assert!(with_output(&dir.path().join("varianti")).is_ok());
+        let elsewhere = tempfile::tempdir().unwrap();
+        assert!(with_output(&elsewhere.path().join("nuova")).is_ok());
+        // Niente è stato scritto: la pianificazione non crea cartelle.
+        assert!(!elsewhere.path().join("nuova").exists());
+        assert!(!photos.join(DEFAULT_OUTPUT_DIR).exists());
     }
 
     #[test]

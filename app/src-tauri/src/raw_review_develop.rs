@@ -17,7 +17,7 @@ use pc_raw_review::variants::plan::{build_plan, PresetDef};
 use pc_raw_review::variants::prefs;
 use pc_raw_review::variants::service::status_error;
 use pc_raw_review::variants::types::{
-    CameraPresets, CameraStatus, DevelopReport, VariantPlan, VariantRequest,
+    CameraPresets, CameraStatus, DevelopReport, DevelopStop, VariantPlan, VariantRequest,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -60,6 +60,8 @@ pub struct RawReviewDeveloped {
     pub skipped: u32,
     pub failed: u32,
     pub cancelled: bool,
+    /// Perché lo sviluppo si è fermato prima della fine (fotocamera bloccata, cartella rifiutata…).
+    pub stopped: Option<DevelopStop>,
     /// La sessione riletta dal disco (scatti e preset aggiornati, scelte intatte). `None` se la
     /// sessione è stata chiusa nel frattempo o la rilettura non è riuscita (vedi `refreshError`).
     pub opened: Option<OpenedReview>,
@@ -93,6 +95,7 @@ pub fn on_develop_finished(app: &tauri::AppHandle, state: &AppState, report: &De
             skipped: report.skipped,
             failed: report.failed,
             cancelled: report.cancelled,
+            stopped: report.stopped.clone(),
             opened,
             refresh_error,
         },
@@ -167,9 +170,7 @@ fn resolve(raw_review: &ReviewState, request: &RawReviewDevelopRequest) -> AppRe
 }
 
 fn plan_of(resolved: &Resolved, presets: &[PresetDef]) -> AppResult<VariantPlan> {
-    build_plan(&resolved.request, presets)
-        .map(|plan| plan.summary())
-        .map_err(AppError::invalid_input)
+    build_plan(&resolved.request, presets).map(|plan| plan.summary())
 }
 
 /// Stato della fotocamera, senza bloccarsi su una fotocamera appesa. Con `available: false` (Linux

@@ -132,6 +132,16 @@ export const en: Messages = {
       output_write: "Writing to the output folder failed",
       other: "Task paused",
     },
+    // What to do to resume a task that stopped by itself.
+    pauseHints: {
+      camera_disconnected:
+        "Reconnect the USB cable and turn the camera on; when it shows as ready, press “Resume”.",
+      camera_busy: "Close X RAW Studio and the other Fujifilm programs, then press “Resume”.",
+      camera_not_ready: "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then press “Resume”.",
+      disk_space: "Free some space on the output folder's drive, then press “Resume”.",
+      output_write:
+        "Check that the output folder is reachable and writable (drive connected, permissions), then press “Resume”.",
+    },
     phases: {
       qualita_foto: "Photo quality",
       scansione: "Scan",
@@ -513,6 +523,8 @@ export const en: Messages = {
     camera_busy: "Camera in use by another program.",
     camera_unresponsive: "The camera is not responding.",
     raw_camera_rejected: "RAF not shot with this camera.",
+    camera_not_ready: "The camera is not in RAW conversion mode.",
+    output_folder_rejected: "Output folder not allowed.",
   },
   hints: {
     access_denied: "Check the folder permissions or run the app as a user with access.",
@@ -529,5 +541,9 @@ export const en: Messages = {
     camera_unresponsive: "Turn the camera off and on again, then restart the development.",
     raw_camera_rejected:
       "The file was skipped: develop this RAF with the camera it was shot with.",
+    camera_not_ready:
+      "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then try again.",
+    output_folder_rejected:
+      "Choose a folder other than the RAF folder or one that contains it, not the root of a drive and not a system folder. The default “FujiView varianti” is always fine.",
   },
 };

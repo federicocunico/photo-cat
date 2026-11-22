@@ -132,6 +132,17 @@ export const it = {
       output_write: "Scrittura nella cartella di output non riuscita",
       other: "Attività in pausa",
     },
+    // Cosa fare per riprendere un'attività che si è fermata da sola.
+    pauseHints: {
+      camera_disconnected:
+        "Ricollega il cavo USB e accendi la fotocamera; quando risulta pronta premi «Riprendi».",
+      camera_busy: "Chiudi X RAW Studio e gli altri programmi Fujifilm, poi premi «Riprendi».",
+      camera_not_ready:
+        "Imposta USB RAW CONV./BACKUP RESTORE nel menu della fotocamera, poi premi «Riprendi».",
+      disk_space: "Libera spazio sul disco della cartella di output, poi premi «Riprendi».",
+      output_write:
+        "Controlla che la cartella di output sia raggiungibile e scrivibile (disco collegato, permessi), poi premi «Riprendi».",
+    },
     phases: {
       qualita_foto: "Qualità delle foto",
       scansione: "Scansione",
@@ -514,6 +525,8 @@ export const it = {
     camera_busy: "Fotocamera occupata da un altro programma.",
     camera_unresponsive: "La fotocamera non risponde.",
     raw_camera_rejected: "RAF non scattato da questa fotocamera.",
+    camera_not_ready: "La fotocamera non è in modalità conversione RAW.",
+    output_folder_rejected: "Cartella di output non ammessa.",
   },
   hints: {
     access_denied:
@@ -532,6 +545,10 @@ export const it = {
     camera_unresponsive: "Spegni e riaccendi la fotocamera, poi riavvia lo sviluppo.",
     raw_camera_rejected:
       "Il file è stato saltato: sviluppa questo RAF con la fotocamera con cui è stato scattato.",
+    camera_not_ready:
+      "Imposta USB RAW CONV./BACKUP RESTORE nel menu della fotocamera, poi riprova.",
+    output_folder_rejected:
+      "Scegli una cartella diversa da quella dei RAF e da una che la contiene, non la radice di un disco né una cartella di sistema. La predefinita «FujiView varianti» va sempre bene.",
   },
 };
 

@@ -32,17 +32,27 @@ export function onDeveloped(payload: RawReviewDeveloped): void {
     });
     return;
   }
+  const stopped = payload.stopped;
+  // Fermato da un errore (fotocamera bloccata, cartella rifiutata…): il motivo tradotto e cosa fare.
+  const reason = stopped
+    ? [`errors.${stopped.code.toLowerCase()}`, `hints.${stopped.code.toLowerCase()}`]
+        .filter((key) => i18n.exists(key))
+        .map((key) => t(key))
+        .join(" ") || stopped.reason
+    : "";
   const result = t(
-    payload.cancelled
-      ? "rawDevelop.event.cancelled"
-      : payload.failed > 0
-        ? "rawDevelop.event.withErrors"
-        : "rawDevelop.event.done",
-    { converted: payload.converted, skipped: payload.skipped, failed: payload.failed },
+    stopped
+      ? "rawDevelop.event.stopped"
+      : payload.cancelled
+        ? "rawDevelop.event.cancelled"
+        : payload.failed > 0
+          ? "rawDevelop.event.withErrors"
+          : "rawDevelop.event.done",
+    { converted: payload.converted, skipped: payload.skipped, failed: payload.failed, reason },
   );
   notify({
     key: "raw-review-developed",
-    tone: payload.failed > 0 ? "error" : "info",
+    tone: stopped || payload.failed > 0 ? "error" : "info",
     message: refreshed ? `${result} ${t("rawDevelop.event.refreshed")}` : result,
     action: refreshed ? undefined : { label: t("rawDevelop.event.open"), run: open },
   });

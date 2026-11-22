@@ -215,6 +215,19 @@ describe("Sviluppa dalla fotocamera", () => {
     expect(await screen.findByText("Disattivalo.")).toBeInTheDocument();
   });
 
+  it("una cartella di output rifiutata mostra il motivo tradotto e cosa fare", async () => {
+    commandsMock.rawReviewDevelopPlan.mockRejectedValue({
+      code: "OUTPUT_FOLDER_REJECTED",
+      message_key: "errors.output_folder_rejected",
+      detail: "La cartella di output non può essere la cartella dei RAF: D:\\foto.",
+    });
+    mount();
+    expect(await screen.findByText("Cartella di output non ammessa.")).toBeInTheDocument();
+    expect(screen.getByText(/La predefinita «FujiView varianti» va sempre bene/)).toBeInTheDocument();
+    expect(screen.getByText(/non può essere la cartella dei RAF/)).toBeInTheDocument();
+    await waitFor(() => expect(startButton()).toHaveAttribute("aria-disabled", "true"));
+  });
+
   it("blocca l'avvio se lo spazio non basta e mostra spazio richiesto e libero", async () => {
     commandsMock.rawReviewDevelopPlan.mockResolvedValue(
       plan({ enoughSpace: false, estimatedBytes: 30 * GB, freeBytes: 20 * GB }),
@@ -313,6 +326,10 @@ describe("Sviluppa dalla fotocamera", () => {
     expect(await screen.findByText("Sviluppo in pausa")).toBeInTheDocument();
     expect(screen.getByText("Fotocamera scollegata")).toBeInTheDocument();
     expect(screen.getByText("Ricollega il cavo USB.")).toBeInTheDocument();
+    // Il suggerimento tradotto del motivo della pausa.
+    expect(
+      screen.getByText(/Ricollega il cavo USB e accendi la fotocamera; quando risulta pronta/),
+    ).toBeInTheDocument();
     // Finché la fotocamera non è pronta non si riprende.
     expect(screen.getByRole("button", { name: "Riprendi" })).toHaveAttribute(
       "aria-disabled",
@@ -522,6 +539,7 @@ describe("Fine dello sviluppo", () => {
     skipped: 2,
     failed: 0,
     cancelled: false,
+    stopped: null,
     opened: reviewed({
       presets: ["Acros", "C1 Kodachrome 64"],
       session: {
@@ -585,5 +603,28 @@ describe("Fine dello sviluppo", () => {
     expect(useToast.getState().notices[0].tone).toBe("error");
     act(() => emit("rawReviewDeveloped", developed({ cancelled: true })));
     expect(useToast.getState().notices[0].message).toContain("annullato");
+  });
+
+  it("uno sviluppo fermato da un errore lo dice con il motivo tradotto e cosa fare", () => {
+    render(<Host />);
+    act(() =>
+      emit(
+        "rawReviewDeveloped",
+        developed({
+          converted: 3,
+          stopped: {
+            code: "CAMERA_UNRESPONSIVE",
+            messageKey: "errors.camera_unresponsive",
+            reason: "dettaglio tecnico",
+          },
+        }),
+      ),
+    );
+    const [notice] = useToast.getState().notices;
+    expect(notice.tone).toBe("error");
+    expect(notice.message).toContain("Sviluppo fermato");
+    expect(notice.message).toContain("La fotocamera non risponde.");
+    expect(notice.message).toContain("Spegni e riaccendi la fotocamera");
+    expect(notice.message).not.toContain("Sviluppo finito");
   });
 });

@@ -38,6 +38,10 @@ pub enum ErrorCode {
     CameraUnresponsive,
     /// La fotocamera ha rifiutato il RAF (altro corpo macchina o file non convertibile).
     RawCameraRejected,
+    /// La fotocamera è collegata ma non in modalità USB RAW CONV./BACKUP RESTORE.
+    CameraNotReady,
+    /// Cartella di output dello sviluppo non ammessa (cartella dei RAF, radice, cartella di sistema).
+    OutputFolderRejected,
 }
 
 impl ErrorCode {
@@ -64,6 +68,8 @@ impl ErrorCode {
             Self::CameraBusy => "CAMERA_BUSY",
             Self::CameraUnresponsive => "CAMERA_UNRESPONSIVE",
             Self::RawCameraRejected => "RAW_CAMERA_REJECTED",
+            Self::CameraNotReady => "CAMERA_NOT_READY",
+            Self::OutputFolderRejected => "OUTPUT_FOLDER_REJECTED",
         }
     }
 
@@ -83,6 +89,7 @@ impl ErrorCode {
                 | Self::CameraDisconnected
                 | Self::CameraBusy
                 | Self::CameraUnresponsive
+                | Self::CameraNotReady
         )
     }
 }
@@ -235,6 +242,18 @@ mod tests {
                 ErrorCode::RawCameraRejected,
                 "RAW_CAMERA_REJECTED",
                 "errors.raw_camera_rejected",
+                false,
+            ),
+            (
+                ErrorCode::CameraNotReady,
+                "CAMERA_NOT_READY",
+                "errors.camera_not_ready",
+                true,
+            ),
+            (
+                ErrorCode::OutputFolderRejected,
+                "OUTPUT_FOLDER_REJECTED",
+                "errors.output_folder_rejected",
                 false,
             ),
         ] {

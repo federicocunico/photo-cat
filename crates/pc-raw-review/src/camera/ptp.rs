@@ -152,6 +152,12 @@ impl From<PtpError> for AppError {
             PtpError::Disconnected => ErrorCode::CameraDisconnected,
             PtpError::Timeout(_) => ErrorCode::CameraUnresponsive,
             PtpError::Protocol(_) => ErrorCode::Internal,
+            // Operazioni che la fotocamera offre solo in USB RAW CONV./BACKUP RESTORE.
+            PtpError::Response {
+                code:
+                    rc::OPERATION_NOT_SUPPORTED | rc::DEVICE_PROP_NOT_SUPPORTED | rc::SESSION_NOT_OPEN,
+                ..
+            } => ErrorCode::CameraNotReady,
             PtpError::Transport { .. } | PtpError::Response { .. } => ErrorCode::Io,
         };
         let retriable = !matches!(error, PtpError::Protocol(_));
@@ -394,6 +400,12 @@ mod tests {
         assert_eq!(gone.code, ErrorCode::CameraDisconnected);
         let hung: AppError = PtpError::Timeout("x".into()).into();
         assert_eq!(hung.code, ErrorCode::CameraUnresponsive);
+        let wrong_mode: AppError = PtpError::Response {
+            op: op::GET_DEVICE_PROP_VALUE,
+            code: rc::DEVICE_PROP_NOT_SUPPORTED,
+        }
+        .into();
+        assert_eq!(wrong_mode.code, ErrorCode::CameraNotReady);
         let bad: AppError = PtpError::Protocol("x".into()).into();
         assert_eq!(bad.code, ErrorCode::Internal);
         assert!(!bad.retriable);

@@ -86,11 +86,9 @@ impl Meter {
     }
 
     pub fn average_bytes(&self) -> u64 {
-        if self.files == 0 {
-            DEFAULT_VARIANT_BYTES
-        } else {
-            self.total_bytes / self.files
-        }
+        self.total_bytes
+            .checked_div(self.files)
+            .unwrap_or(DEFAULT_VARIANT_BYTES)
     }
 
     pub fn eta_seconds(&self, remaining: usize) -> u64 {

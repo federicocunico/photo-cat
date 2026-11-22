@@ -126,7 +126,7 @@ export function JobCard({
   title?: string;
   object?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
   const name = title ?? jobTitle(t, job.kind, null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -241,7 +241,14 @@ export function JobCard({
             defaultValue: t("jobs.pauseReasons.other"),
           })}
         >
-          <span data-testid={`pause-reason-${job.id}`}>{job.pauseReason.detail}</span>
+          {i18n.exists(`jobs.pauseHints.${job.pauseReason.code}`) && (
+            <p data-testid={`pause-hint-${job.id}`}>
+              {t(`jobs.pauseHints.${job.pauseReason.code}`)}
+            </p>
+          )}
+          <span className="muted" data-testid={`pause-reason-${job.id}`}>
+            {job.pauseReason.detail}
+          </span>
         </InlineAlert>
       )}
       {job.failed > 0 && (

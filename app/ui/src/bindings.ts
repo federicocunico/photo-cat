@@ -887,7 +887,11 @@ export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INV
 /**  La fotocamera non risponde (da spegnere e riaccendere). */
 "CAMERA_UNRESPONSIVE" | 
 /**  La fotocamera ha rifiutato il RAF (altro corpo macchina o file non convertibile). */
-"RAW_CAMERA_REJECTED";
+"RAW_CAMERA_REJECTED" | 
+/**  La fotocamera è collegata ma non in modalità USB RAW CONV./BACKUP RESTORE. */
+"CAMERA_NOT_READY" | 
+/**  Cartella di output dello sviluppo non ammessa (cartella dei RAF, radice, cartella di sistema). */
+"OUTPUT_FOLDER_REJECTED";
 
 export type ErrorCount = {
 	jobId: number | null,
@@ -1931,6 +1935,8 @@ export type RawReviewDeveloped = {
 	skipped: number,
 	failed: number,
 	cancelled: boolean,
+	/**  Perché lo sviluppo si è fermato prima della fine (fotocamera bloccata, cartella rifiutata…). */
+	stopped: DevelopStop | null,
 	/**
 	 *  La sessione riletta dal disco (scatti e preset aggiornati, scelte intatte). `None` se la
 	 *  sessione è stata chiusa nel frattempo o la rilettura non è riuscita (vedi `refreshError`).

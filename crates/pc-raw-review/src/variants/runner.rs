@@ -54,6 +54,13 @@ pub struct RunOptions {
     pub disk_check_every: usize,
     /// Come si legge lo spazio libero (sostituibile nei test).
     pub free_space: FreeSpace,
+    /// Durante una pausa decisa dal job, ogni quanto si ricontrolla la fotocamera: lo stato
+    /// mostrato dall'app (e il pulsante "Riprendi" del dialogo) segue il ricollegamento anche se
+    /// il job tiene la sessione esclusiva.
+    pub pause_poll: Duration,
+    /// Dopo l'annullamento, quanto si aspetta un runner fermo dentro una chiamata alla
+    /// fotocamera prima di abbandonarlo (`CameraService::run_exclusive_until`).
+    pub cancel_grace: Duration,
 }
 
 impl Default for RunOptions {
@@ -64,6 +71,8 @@ impl Default for RunOptions {
             busy_backoff: Duration::from_millis(750),
             disk_check_every: estimate::DISK_CHECK_EVERY,
             free_space: Arc::new(|path: &Path| estimate::free_bytes(path)),
+            pause_poll: Duration::from_secs(5),
+            cancel_grace: Duration::from_secs(30),
         }
     }
 }
@@ -109,7 +118,9 @@ fn prepare_targets(plan: &Plan, guard: &OutputGuard) -> Result<(), String> {
         if !manifest.exists() {
             let text = serde_json::to_string_pretty(&target.preset.manifest())
                 .map_err(|e| e.to_string())?;
-            fs::write(&manifest, text).map_err(|e| e.to_string())?;
+            // Anche il manifesto passa da `.part`: uno troncato da un crash farebbe sembrare la
+            // cartella "di qualcun altro" e il prossimo sviluppo ne aprirebbe una nuova.
+            write_atomic(guard, &manifest, text.as_bytes())?;
         }
         // Residui di un'esecuzione interrotta: solo i `*.part`, solo direttamente dentro le
         // nostre cartelle dei preset.
@@ -242,7 +253,16 @@ fn retry_busy<R>(
 }
 
 /// Mette il job in pausa con un motivo e attende "Riprendi". `false` se è stato annullato.
-fn pause_and_wait(ctx: &JobContext, reason: PauseReason) -> bool {
+///
+/// Mentre aspetta ricontrolla la fotocamera ogni `options.pause_poll`: il job ha la sessione
+/// esclusiva, quindi le richieste di stato dell'app ricevono lo stato in cache, ed è questo
+/// controllo a dire che la fotocamera è stata ricollegata (il dialogo abilita "Riprendi").
+fn pause_and_wait(
+    ctx: &JobContext,
+    worker: &mut Worker,
+    options: &RunOptions,
+    reason: PauseReason,
+) -> bool {
     tracing::warn!(
         code = reason.code.as_str(),
         job_id = ctx.job_id,
@@ -251,7 +271,12 @@ fn pause_and_wait(ctx: &JobContext, reason: PauseReason) -> bool {
         "sviluppo in pausa"
     );
     ctx.control.pause_for(reason);
-    ctx.control.checkpoint()
+    loop {
+        if let Some(go_on) = ctx.control.checkpoint_timeout(options.pause_poll) {
+            return go_on;
+        }
+        worker.refresh();
+    }
 }
 
 /// Lo stato della fotocamera mostrato dall'app segue il motivo della pausa (mentre il job ha la
@@ -400,6 +425,8 @@ impl Runner<'_> {
             );
             if !pause_and_wait(
                 self.ctx,
+                self.worker,
+                &self.options,
                 PauseReason {
                     code: pause::DISK_SPACE.into(),
                     detail,
@@ -524,7 +551,7 @@ impl Runner<'_> {
     /// `Ok(false)` se il job è stato annullato.
     fn wait_and_reopen(&mut self, mut reason: PauseReason) -> Result<bool, AppError> {
         loop {
-            if !pause_and_wait(self.ctx, reason) {
+            if !pause_and_wait(self.ctx, self.worker, &self.options, reason) {
                 return Ok(false);
             }
             match open_session(self.worker, &self.options) {
@@ -557,10 +584,6 @@ pub fn run_develop(
     result
 }
 
-fn invalid(message: String) -> AppError {
-    AppError::invalid_input(message)
-}
-
 fn develop(
     worker: &mut Worker,
     ctx: &JobContext,
@@ -576,21 +599,28 @@ fn develop(
         })
     };
 
-    // Sessione nuova con la fotocamera; un guasto qui mette in pausa invece di fallire.
-    loop {
-        match open_session(worker, &options) {
-            Ok(()) => break,
+    // Sessione nuova con la fotocamera e lettura dei banchi; un guasto qui (fotocamera spenta,
+    // scollegata, occupata) mette in pausa invece di fallire. I banchi si leggono una volta
+    // all'avvio: questa istantanea è ciò che si applica.
+    let presets = loop {
+        let attempt = open_session(worker, &options).and_then(|()| {
+            worker.read_presets().map_err(|error| {
+                classify(&error).unwrap_or_else(|| Stop::Fail(AppError::from(error)))
+            })
+        });
+        match attempt {
+            Ok(presets) => break presets,
             Err(Stop::Fail(error)) => return Err(error),
             Err(Stop::Pause(reason)) => {
-                if !pause_and_wait(ctx, reason) {
+                worker.close_session();
+                publish_pause(worker, &reason);
+                if !pause_and_wait(ctx, worker, &options, reason) {
                     return cancelled(report);
                 }
             }
         }
-    }
-    // I banchi si leggono una volta all'avvio: questa istantanea è ciò che si applica.
-    let presets = worker.read_presets().map_err(AppError::from)?;
-    let plan = super::plan::build_plan(request, &presets).map_err(invalid)?;
+    };
+    let plan = super::plan::build_plan(request, &presets)?;
     report.output_dir = plan.output_dir.to_string_lossy().into_owned();
     let guard = OutputGuard::new(&plan.output_dir)
         .and_then(|guard| prepare_targets(&plan, &guard).map(|()| guard))

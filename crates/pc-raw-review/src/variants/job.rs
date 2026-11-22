@@ -122,11 +122,20 @@ pub fn plan(deps: DevelopDeps, params: &serde_json::Value) -> AppResult<JobPlan>
             let options = deps.options.clone();
             let session_id = params.session_id.clone();
             let task_session = session_id.clone();
-            let outcome = deps.service.run_exclusive(move |worker| {
-                let mut report = DevelopReport::new(job_id, &task_session);
-                let result = runner::run_develop(worker, &ctx, &request, options, &mut report);
-                (result, report)
-            });
+            let control = ctx.control.clone();
+            let grace = options.cancel_grace;
+            // Con la fotocamera bloccata dentro una chiamata l'annullamento non arriverebbe mai al
+            // runner: dopo `cancel_grace` il job smette di aspettarlo (spec variant-generation,
+            // "l'annullamento termina entro la conversione in corso").
+            let outcome = deps.service.run_exclusive_until(
+                move |worker| {
+                    let mut report = DevelopReport::new(job_id, &task_session);
+                    let result = runner::run_develop(worker, &ctx, &request, options, &mut report);
+                    (result, report)
+                },
+                move || control.is_cancelled(),
+                grace,
+            );
             // Se la sessione esclusiva non si è nemmeno ottenuta, il riepilogo è vuoto.
             let (result, mut report) = match outcome {
                 Ok(done) => done,
@@ -225,10 +234,10 @@ mod tests {
     }
 
     fn env() -> Env {
-        env_with(1)
+        env_with(1, Duration::from_secs(30))
     }
 
-    fn env_with(max_concurrent: usize) -> Env {
+    fn env_with(max_concurrent: usize, cancel_grace: Duration) -> Env {
         let tmp = tempfile::tempdir().unwrap();
         let store = Store::open(&tmp.path().join("catalog.db"), Default::default()).unwrap();
         let sink = Arc::new(Last::default());
@@ -268,6 +277,8 @@ mod tests {
                 busy_backoff: Duration::from_millis(1),
                 disk_check_every: 2,
                 free_space,
+                pause_poll: Duration::from_millis(20),
+                cancel_grace,
                 ..RunOptions::default()
             },
         };
@@ -680,7 +691,7 @@ mod tests {
 
     #[test]
     fn only_one_develop_at_a_time() {
-        let e = env_with(2);
+        let e = env_with(2, Duration::from_secs(30));
         let rafs = e.rafs(6, &[]);
         e.sim.lock().unwrap().conversion_delay = Duration::from_millis(30);
         let id = e.start(&e.params(rafs.clone(), &["asshot", "C1"], false));
@@ -802,5 +813,89 @@ mod tests {
         assert!(error.detail.contains("1.0 GB"), "{}", error.detail);
         let big: super::super::estimate::FreeSpace = Arc::new(|_| Some(100 * GB));
         assert!(check_space(&plan.summary_with(&big)).is_ok());
+    }
+
+    /// Il job in pausa tiene la sessione esclusiva: è lui a ricontrollare la fotocamera, così lo
+    /// stato mostrato (e "Riprendi" nel dialogo) segue il ricollegamento.
+    #[test]
+    fn while_paused_the_camera_status_follows_the_reconnection() {
+        let e = env();
+        let rafs = e.rafs(2, &[]);
+        e.sim.lock().unwrap().disconnect_after = Some(1);
+        let id = e.start(&e.params(rafs, &["asshot", "C1"], false));
+        let paused = e.wait_for(id, |s| s.state == JobState::Paused);
+        assert_eq!(paused.pause_reason.unwrap().code, "camera_disconnected");
+        assert_eq!(e.service.status().state, CameraState::Disconnected);
+        assert!(e.service.is_running(), "la sessione esclusiva resta al job");
+        e.sim.lock().unwrap().reconnect();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while e.service.status().state != CameraState::Ready {
+            assert!(Instant::now() < deadline, "lo stato non è tornato pronto");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Ancora in pausa: si riprende solo con "Riprendi".
+        assert_eq!(e.mgr.snapshot(id).unwrap().state, JobState::Paused);
+        e.mgr.resume(id).unwrap();
+        let (snap, report) = e.finish(id);
+        assert_eq!(snap.state, JobState::Completed, "{snap:?}");
+        assert_eq!(report.converted, 4);
+        no_part_files(&e.output());
+    }
+
+    #[test]
+    fn an_output_folder_that_is_the_raf_folder_is_refused_without_writing() {
+        let e = env();
+        let rafs = e.rafs(2, &[]);
+        let before = walk(&e.dir());
+        let mut params = e.params(rafs, &["asshot"], false);
+        params.output_dir = Some(e.dir().display().to_string());
+        let (snap, report) = e.run(&params);
+        assert_eq!(snap.state, JobState::Failed, "{snap:?}");
+        let stopped = report.stopped.expect("motivo");
+        assert_eq!(stopped.code, "OUTPUT_FOLDER_REJECTED");
+        assert_eq!(stopped.message_key, "errors.output_folder_rejected");
+        assert!(
+            stopped.reason.contains("cartella dei RAF"),
+            "{}",
+            stopped.reason
+        );
+        // Nessuna cartella di preset, nessun manifesto, nessun JPEG: la cartella è com'era.
+        assert_eq!(walk(&e.dir()), before);
+        assert!(!e.output().exists());
+        assert_eq!(e.sim.lock().unwrap().uploads, 0);
+        assert!(!e.service.is_running());
+    }
+
+    /// Fotocamera bloccata dentro una chiamata: l'annullamento non può raggiungere il runner, e
+    /// dopo il tempo di grazia il job termina comunque con l'invito a spegnere e riaccendere.
+    #[test]
+    fn cancelling_with_a_frozen_camera_ends_the_job_after_the_grace_period() {
+        let e = env_with(1, Duration::from_millis(150));
+        let rafs = e.rafs(2, &[]);
+        e.sim.lock().unwrap().conversion_delay = Duration::from_millis(2500);
+        let id = e.start(&e.params(rafs, &["asshot"], false));
+        // Si attende che la prima conversione sia partita (il simulatore è dentro la chiamata).
+        e.wait_for(id, |s| {
+            s.phases[0]
+                .current
+                .as_deref()
+                .is_some_and(|c| c.contains('·'))
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        let cancelled_at = Instant::now();
+        e.mgr.cancel(id).unwrap();
+        assert!(e.mgr.wait_finished(&[id], Duration::from_secs(2)));
+        assert!(cancelled_at.elapsed() < Duration::from_millis(2000));
+        let snap = e.mgr.snapshot(id).unwrap();
+        assert_eq!(snap.state, JobState::Failed, "{snap:?}");
+        let report = e.reports.get(id).unwrap();
+        let stopped = report.stopped.expect("motivo");
+        assert_eq!(stopped.code, "CAMERA_UNRESPONSIVE");
+        assert!(stopped.reason.contains("spegnila e riaccendila"));
+        assert!(!e.service.is_running());
+        // Quando la chiamata ritorna il runner si accorge dell'annullamento: nessun file parziale.
+        std::thread::sleep(Duration::from_millis(2800));
+        no_part_files(&e.output());
+        assert!(jpgs(&e.output()).len() <= 1);
     }
 }

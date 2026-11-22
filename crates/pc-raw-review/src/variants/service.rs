@@ -120,9 +120,13 @@ pub fn status_error(status: &CameraStatus) -> AppError {
             ErrorCode::CameraUnresponsive,
             message("La fotocamera non risponde: spegnila e riaccendila."),
         ),
-        CameraState::NotReady | CameraState::Error | CameraState::Ready => AppError::new(
+        CameraState::NotReady => AppError::new(
+            ErrorCode::CameraNotReady,
+            message("La fotocamera non è in modalità conversione RAW: imposta USB RAW CONV./BACKUP RESTORE nel menu della fotocamera."),
+        ),
+        CameraState::Error | CameraState::Ready => AppError::new(
             ErrorCode::Io,
-            message("Nessuna fotocamera pronta per la conversione."),
+            message("Nessuna fotocamera pronta per la conversione: premi «Ripeti verifica»; se non basta, spegni e riaccendi la fotocamera."),
         ),
     }
 }
@@ -371,7 +375,10 @@ impl Worker {
                 Request::Diagnostics(_) => "diagnostica",
             };
             *lock(&self.activity) = Some((what, Instant::now()));
-            match request {
+            // Un panico (in un compito o nel codice della fotocamera) non deve uccidere il thread:
+            // chi aspettava riceve un errore (la sua risposta cade), la connessione, in uno stato
+            // ignoto, si chiude e il servizio resta disponibile.
+            let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| match request {
                 Request::Status(reply) => {
                     let _ = reply.send(self.refresh());
                 }
@@ -382,9 +389,26 @@ impl Worker {
                 Request::Diagnostics(reply) => {
                     let _ = reply.send(self.diagnose());
                 }
+            }));
+            if outcome.is_err() {
+                self.recover_from_panic(what);
             }
             *lock(&self.activity) = None;
         }
+    }
+
+    /// Dopo un panico: sessione chiusa (si riapre alla prossima richiesta) e traccia nel registro.
+    fn recover_from_panic(&mut self, what: &str) {
+        self.close_session();
+        *lock(&self.diag_progress) = None;
+        self.log.error(format!(
+            "Errore interno durante «{what}»: la sessione con la fotocamera è stata chiusa"
+        ));
+        tracing::error!(
+            code = ErrorCode::Internal.as_str(),
+            operation = what,
+            "panico nel thread della fotocamera"
+        );
     }
 }
 
@@ -640,6 +664,20 @@ impl CameraService {
         &self,
         task: impl FnOnce(&mut Worker) -> R + Send + 'static,
     ) -> AppResult<R> {
+        self.run_exclusive_until(task, || false, Duration::MAX)
+    }
+
+    /// Come [`CameraService::run_exclusive`], ma smette di aspettare se `abandon` resta vero per
+    /// più di `grace`: serve all'annullamento di un job quando la fotocamera si è bloccata dentro
+    /// una chiamata di sistema (WPD non ha timeout) e il compito non può accorgersene. Il compito
+    /// resta sul thread della fotocamera e finirà da solo quando la chiamata ritorna; la sessione
+    /// esclusiva si libera subito e lo stato dice "la fotocamera non risponde".
+    pub fn run_exclusive_until<R: Send + 'static>(
+        &self,
+        task: impl FnOnce(&mut Worker) -> R + Send + 'static,
+        abandon: impl Fn() -> bool,
+        grace: Duration,
+    ) -> AppResult<R> {
         if !self.is_available() {
             return Err(Self::unavailable_error());
         }
@@ -650,6 +688,9 @@ impl CameraService {
         let (done, finished) = channel();
         let wrapped: Task = Box::new(move |worker| {
             let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| task(worker)));
+            if outcome.is_err() {
+                worker.recover_from_panic("sviluppo");
+            }
             let _ = done.send(outcome);
         });
         lock(&self.tx)
@@ -657,12 +698,41 @@ impl CameraService {
             .ok_or_else(Self::unavailable_error)?
             .send(Request::Run(wrapped))
             .map_err(|_| AppError::internal("servizio della fotocamera non disponibile"))?;
-        match finished.recv() {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(_)) => Err(AppError::internal("panico nello sviluppo dalla fotocamera")),
-            Err(_) => Err(AppError::internal(
-                "servizio della fotocamera non disponibile",
-            )),
+        let mut abandon_since: Option<Instant> = None;
+        loop {
+            match finished.recv_timeout(Duration::from_millis(200)) {
+                Ok(Ok(result)) => return Ok(result),
+                Ok(Err(_)) => {
+                    return Err(AppError::internal(
+                        "errore interno nello sviluppo dalla fotocamera: la sessione è stata chiusa, riprova",
+                    ))
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(AppError::internal(
+                        "servizio della fotocamera non disponibile",
+                    ))
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    if !abandon() {
+                        abandon_since = None;
+                        continue;
+                    }
+                    let since = *abandon_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= grace {
+                        self.log.error(format!(
+                            "La fotocamera non risponde da {} s dopo l'annullamento: sviluppo abbandonato",
+                            since.elapsed().as_secs()
+                        ));
+                        let status = unresponsive_status(Some(self.cached_status()));
+                        *lock(&self.status) = status.clone();
+                        (self.sink)(CameraEvent::Status(status));
+                        return Err(AppError::new(
+                            ErrorCode::CameraUnresponsive,
+                            "La fotocamera non risponde e lo sviluppo è stato interrotto: spegnila e riaccendila, poi riavvia lo sviluppo (le varianti già pronte si saltano).",
+                        ));
+                    }
+                }
+            }
         }
     }
 }
@@ -750,9 +820,86 @@ mod tests {
         let error = service
             .run_exclusive(|_| -> () { panic!("prova") })
             .unwrap_err();
-        assert!(error.detail.contains("panico"), "{}", error.detail);
+        assert!(error.detail.contains("errore interno"), "{}", error.detail);
         assert!(!service.is_running());
         assert_eq!(service.status().state, CameraState::Ready);
         assert_eq!(service.run_exclusive(|_| 5).unwrap(), 5);
+    }
+
+    #[test]
+    fn a_panic_while_reading_the_status_keeps_the_service_alive() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let opener: Opener = {
+            let calls = calls.clone();
+            Arc::new(move || {
+                if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    panic!("guasto nel driver");
+                }
+                Ok(Some(FujiCamera::new(Box::new(SimulatedCamera::new()))))
+            })
+        };
+        let service = CameraService::start(CameraBackend::Custom(opener), sink());
+        // La prima richiesta perde la risposta ma non il thread.
+        assert_ne!(service.status().state, CameraState::Ready);
+        assert_eq!(service.status().state, CameraState::Ready);
+        assert!(service
+            .log
+            .snapshot()
+            .iter()
+            .any(|l| l.message.contains("Errore interno")));
+        assert_eq!(service.presets_view().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn a_task_that_panics_closes_the_session() {
+        let service = simulated();
+        assert_eq!(service.status().state, CameraState::Ready);
+        let error = service
+            .run_exclusive(|worker| -> () {
+                assert!(worker.camera().is_some());
+                panic!("prova")
+            })
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Internal);
+        assert!(service
+            .run_exclusive(|worker| worker.camera().is_none())
+            .unwrap());
+    }
+
+    #[test]
+    fn a_cancelled_task_stuck_on_the_camera_is_abandoned_after_the_grace_period() {
+        let service = simulated();
+        let started = Instant::now();
+        let error = service
+            .run_exclusive_until(
+                |_| std::thread::sleep(Duration::from_millis(1500)),
+                || true,
+                Duration::from_millis(100),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::CameraUnresponsive);
+        assert!(
+            error.detail.contains("spegnila e riaccendila"),
+            "{}",
+            error.detail
+        );
+        assert!(started.elapsed() < Duration::from_millis(1200));
+        // La sessione esclusiva è libera e lo stato dice che la fotocamera non risponde.
+        assert!(!service.is_running());
+        assert_eq!(service.cached_status().state, CameraState::Unresponsive);
+        // Il compito successivo aspetta che quello bloccato finisca, poi gira.
+        assert_eq!(service.run_exclusive(|_| 7).unwrap(), 7);
+        // Senza annullamento non si abbandona niente.
+        let waited = service
+            .run_exclusive_until(
+                |_| {
+                    std::thread::sleep(Duration::from_millis(300));
+                    1
+                },
+                || false,
+                Duration::from_millis(1),
+            )
+            .unwrap();
+        assert_eq!(waited, 1);
     }
 }

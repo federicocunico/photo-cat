@@ -67,7 +67,7 @@ impl CameraLog {
             message: message.into(),
         };
         {
-            let mut lines = self.lines.lock().unwrap();
+            let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
             if lines.len() >= LOG_CAPACITY {
                 lines.pop_front();
             }
@@ -89,7 +89,12 @@ impl CameraLog {
     }
 
     pub fn snapshot(&self) -> Vec<CameraLogLine> {
-        self.lines.lock().unwrap().iter().cloned().collect()
+        self.lines
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 

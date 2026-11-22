@@ -284,6 +284,7 @@ export const rawReview = {
         withErrors:
           "Sviluppo finito con errori: {{converted}} varianti create, {{failed}} non riuscite.",
         cancelled: "Sviluppo annullato: {{converted}} varianti create prima dello stop.",
+        stopped: "Sviluppo fermato: {{reason}} {{converted}} varianti create prima dello stop.",
         refreshed: "Le nuove varianti sono nel confronto.",
         refreshError:
           "Lo sviluppo è finito, ma non riesco ad aggiornare la revisione: chiudi e riapri la cartella. ({{error}})",
@@ -735,6 +736,7 @@ export const rawReview = {
         withErrors:
           "Development finished with errors: {{converted}} variants created, {{failed}} failed.",
         cancelled: "Development cancelled: {{converted}} variants created before it stopped.",
+        stopped: "Development stopped: {{reason}} {{converted}} variants created before it stopped.",
         refreshed: "The new variants are in the comparison.",
         refreshError:
           "The development finished, but the review could not be updated: close and reopen the folder. ({{error}})",

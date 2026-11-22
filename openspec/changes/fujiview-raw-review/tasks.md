@@ -88,7 +88,7 @@
   - spazio insufficiente che blocca l'avvio;
   - RAF con hash invariato.
 - [x] 5.3 `DevelopDialog` (tutti gli scatti o i selezionati, preset ricordati, stima di spazio e tempo, cartella di output, "Sovrascrivi") e `CameraCheck`. Su Linux e macOS la voce è disattivata con "Disponibile solo su Windows". Al termine la sessione si aggiorna da sola con i nuovi pannelli. Test vitest con comandi simulati, incluso il caso non Windows.
-- [ ] 5.4 Revisione Opus della parte 5: sicurezza dei file, gestione della sessione esclusiva, messaggi d'errore comprensibili.
+- [x] 5.4 Revisione Opus della parte 5: sicurezza dei file, gestione della sessione esclusiva, messaggi d'errore comprensibili.
 
 ## 6. Verifica
 

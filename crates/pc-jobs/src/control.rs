@@ -84,6 +84,23 @@ impl JobControl {
         }
         !f.cancelled
     }
+
+    /// Come [`JobControl::checkpoint`], ma attende al massimo `timeout`: `Some(true)` se il job
+    /// può proseguire, `Some(false)` se è stato annullato, `None` se è ancora in pausa (chi
+    /// aspetta può fare altro, per esempio ricontrollare una periferica, e riprovare).
+    pub fn checkpoint_timeout(&self, timeout: Duration) -> Option<bool> {
+        let (lock, cv) = &*self.inner;
+        let deadline = std::time::Instant::now() + timeout;
+        let mut f = lock.lock();
+        while f.paused && !f.cancelled {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            cv.wait_for(&mut f, (deadline - now).min(Duration::from_millis(500)));
+        }
+        Some(!f.cancelled)
+    }
 }
 
 #[cfg(test)]
@@ -113,6 +130,24 @@ mod tests {
         std::thread::sleep(Duration::from_millis(30));
         c.cancel();
         assert!(!t.join().unwrap());
+    }
+
+    #[test]
+    fn checkpoint_timeout_returns_while_still_paused() {
+        let c = JobControl::new();
+        assert_eq!(c.checkpoint_timeout(Duration::from_millis(10)), Some(true));
+        c.pause();
+        let start = Instant::now();
+        assert_eq!(c.checkpoint_timeout(Duration::from_millis(40)), None);
+        assert!(start.elapsed() >= Duration::from_millis(30));
+        let c2 = c.clone();
+        let t = std::thread::spawn(move || c2.checkpoint_timeout(Duration::from_secs(10)));
+        std::thread::sleep(Duration::from_millis(30));
+        c.resume();
+        assert_eq!(t.join().unwrap(), Some(true));
+        c.pause();
+        c.cancel();
+        assert_eq!(c.checkpoint_timeout(Duration::from_secs(10)), Some(false));
     }
 
     #[test]

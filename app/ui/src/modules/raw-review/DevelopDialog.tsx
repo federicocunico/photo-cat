@@ -20,6 +20,7 @@ import { useLayout } from "../../store/layout";
 import { useLive } from "../../store/live";
 import { CameraCheck } from "./CameraCheck";
 import { effectiveSelection, startBlock, togglePreset } from "./develop";
+import { codeView, errorView, pauseHint, type ErrorView } from "./errorView";
 import { useCameraMonitor } from "./useCamera";
 
 const DEBOUNCE_MS = 300;
@@ -36,7 +37,21 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-const detailOf = (e: unknown) => (e as { detail?: string } | null)?.detail ?? String(e);
+/** Errore del backend: messaggio tradotto, azione suggerita e dettaglio tecnico. */
+function ErrorBody({ view }: { view: ErrorView }) {
+  return (
+    <>
+      {view.title && <p>{view.title}</p>}
+      {view.hint && <p>{view.hint}</p>}
+      <p className="muted dv-small">{view.detail}</p>
+    </>
+  );
+}
+
+function useErrorView() {
+  const { t, i18n } = useTranslation();
+  return (e: unknown) => errorView(e, t, (k) => i18n.exists(k));
+}
 
 export function DevelopDialog({
   open,
@@ -51,6 +66,7 @@ export function DevelopDialog({
   selectedKeys: string[];
 }) {
   const { t } = useTranslation();
+  const viewOf = useErrorView();
   const [jobId, setJobId] = useState<number | null>(null);
   const job: JobSnapshot | undefined = useLive((s) => (jobId === null ? undefined : s.jobs[jobId]));
   const setup = open && jobId === null;
@@ -68,7 +84,7 @@ export function DevelopDialog({
   const [scopeChoice, setScopeChoice] = useState<Scope | null>(null);
   const [outputDir, setOutputDir] = useState("");
   const [overwrite, setOverwrite] = useState(false);
-  const [startError, setStartError] = useState("");
+  const [startError, setStartError] = useState<ErrorView | null>(null);
 
   const cameraReady = status?.available === true && status.state === "ready";
   const presetsQuery = useQuery({
@@ -125,17 +141,17 @@ export function DevelopDialog({
   });
 
   const start = async () => {
-    setStartError("");
+    setStartError(null);
     try {
       setJobId(await commands.startRawReviewDevelop(request));
     } catch (e) {
-      setStartError(detailOf(e));
+      setStartError(viewOf(e));
     }
   };
 
   const again = () => {
     setJobId(null);
-    setStartError("");
+    setStartError(null);
     setTouched(null);
   };
 
@@ -185,7 +201,7 @@ export function DevelopDialog({
             {!cameraReady && <p className="muted">{t("rawDevelop.presetsWaiting")}</p>}
             {presetsQuery.isError && (
               <InlineAlert tone="danger" title={t("rawDevelop.presetsFailed")}>
-                {detailOf(presetsQuery.error)}
+                <ErrorBody view={viewOf(presetsQuery.error)} />
               </InlineAlert>
             )}
             <ul className="dv-preset-list">
@@ -282,12 +298,12 @@ export function DevelopDialog({
           <PlanSummary
             planning={planning}
             enabled={planEnabled}
-            error={planQuery.isError ? detailOf(planQuery.error) : null}
+            error={planQuery.isError ? viewOf(planQuery.error) : null}
             plan={plan}
           />
           {startError && (
             <InlineAlert tone="danger" title={t("rawDevelop.startFailed")}>
-              {startError}
+              <ErrorBody view={startError} />
             </InlineAlert>
           )}
           <p className="muted dv-small">{t("rawDevelop.safety")}</p>
@@ -307,7 +323,7 @@ function PlanSummary({
   plan: Awaited<ReturnType<typeof commands.rawReviewDevelopPlan>> | undefined;
   planning: boolean;
   enabled: boolean;
-  error: string | null;
+  error: ErrorView | null;
 }) {
   const { t } = useTranslation();
   if (!enabled) return null;
@@ -321,7 +337,7 @@ function PlanSummary({
       <h3 id="dv-summary">{t("rawDevelop.plan.title")}</h3>
       {error && (
         <InlineAlert tone="danger" title={t("rawDevelop.plan.failed")}>
-          {error}
+          <ErrorBody view={error} />
         </InlineAlert>
       )}
       {planning && <p role="status">{t("rawDevelop.plan.computing")}</p>}
@@ -388,6 +404,7 @@ function Progress({
   const [report, setReport] = useState<DevelopReport | null>(null);
   const [gaveUp, setGaveUp] = useState(false);
   const [controlError, setControlError] = useState("");
+  const viewOf = useErrorView();
 
   // Il riepilogo esiste solo a lavoro finito: si chiede appena lo stato lo dice, con un po' di
   // pazienza se il backend lo scrive un istante dopo.
@@ -424,7 +441,8 @@ function Progress({
     try {
       await run();
     } catch (e) {
-      setControlError(detailOf(e));
+      const view = viewOf(e);
+      setControlError([view.title, view.hint, view.detail].filter(Boolean).join(" "));
     }
   };
 
@@ -481,8 +499,11 @@ function Progress({
                 : t("rawDevelop.progress.pausedTitle")
             }
           >
-            {reason?.detail && <p>{reason.detail}</p>}
-            <p>{t("rawDevelop.progress.pausedHelp")}</p>
+            <p>
+              {pauseHint(reason?.code, t, (k) => i18n.exists(k)) ??
+                t("rawDevelop.progress.pausedHelp")}
+            </p>
+            {reason?.detail && <p className="muted dv-small">{reason.detail}</p>}
           </InlineAlert>
         )}
         <progress
@@ -559,7 +580,12 @@ function Progress({
       </h3>
       {report.stopped && (
         <InlineAlert tone="danger" title={reasonOf(report.stopped.code, report.stopped.reason)}>
-          {report.stopped.reason}
+          <ErrorBody
+            view={{
+              ...codeView(report.stopped.code, report.stopped.reason, t, (k) => i18n.exists(k)),
+              title: undefined,
+            }}
+          />
         </InlineAlert>
       )}
       <ul className="dv-report-list">
