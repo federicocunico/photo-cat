@@ -28,7 +28,7 @@
 
 ## 3. Verifica
 
-- [ ] 3.1 Verifica completa locale: fmt, clippy, test Rust, typecheck, lint e test UI, `make test-linux` e la build NSIS. Poi PR con CI verde.
+- [x] 3.1 Verifica completa locale: fmt, clippy, test Rust, typecheck, lint e test UI, `make test-linux` e la build NSIS. Poi PR con CI verde.
 
 ## Workflow follow-up
 
