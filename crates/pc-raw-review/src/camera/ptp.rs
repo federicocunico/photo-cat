@@ -148,12 +148,11 @@ impl PtpError {
 impl From<PtpError> for AppError {
     fn from(error: PtpError) -> Self {
         let code = match &error {
-            PtpError::Busy => ErrorCode::AccessDenied,
+            PtpError::Busy => ErrorCode::CameraBusy,
+            PtpError::Disconnected => ErrorCode::CameraDisconnected,
+            PtpError::Timeout(_) => ErrorCode::CameraUnresponsive,
             PtpError::Protocol(_) => ErrorCode::Internal,
-            PtpError::Disconnected
-            | PtpError::Timeout(_)
-            | PtpError::Transport { .. }
-            | PtpError::Response { .. } => ErrorCode::Io,
+            PtpError::Transport { .. } | PtpError::Response { .. } => ErrorCode::Io,
         };
         let retriable = !matches!(error, PtpError::Protocol(_));
         AppError::new(code, error.user_message()).with_retriable(retriable)
@@ -388,11 +387,13 @@ mod tests {
     #[test]
     fn converts_into_app_errors() {
         let busy: AppError = PtpError::Busy.into();
-        assert_eq!(busy.code, ErrorCode::AccessDenied);
+        assert_eq!(busy.code, ErrorCode::CameraBusy);
         assert!(busy.retriable);
         assert!(busy.detail.contains("occupata"));
         let gone: AppError = PtpError::Disconnected.into();
-        assert_eq!(gone.code, ErrorCode::Io);
+        assert_eq!(gone.code, ErrorCode::CameraDisconnected);
+        let hung: AppError = PtpError::Timeout("x".into()).into();
+        assert_eq!(hung.code, ErrorCode::CameraUnresponsive);
         let bad: AppError = PtpError::Protocol("x".into()).into();
         assert_eq!(bad.code, ErrorCode::Internal);
         assert!(!bad.retriable);

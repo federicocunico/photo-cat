@@ -6,7 +6,7 @@ pub mod persist;
 pub mod pipeline;
 pub mod progress;
 
-pub use control::JobControl;
+pub use control::{JobControl, PauseReason};
 pub use manager::{JobContext, JobFactory, JobManager, JobPlan, JobSnapshot, ProgressSink};
 pub use persist::JobState;
 pub use pipeline::{Emitter, ItemState, Journal, Pipeline, RunSummary, StageCtx, StageOutcome};

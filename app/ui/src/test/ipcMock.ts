@@ -59,6 +59,14 @@ import type {
   RawReviewExportRequest,
   RawReviewExportPreflight,
   RawExportReport,
+  CameraStatus,
+  CameraPresets,
+  CameraDiagnostics,
+  CameraLogLine,
+  RawReviewDevelopRequest,
+  RawReviewDeveloped,
+  VariantPlan,
+  DevelopReport,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -74,6 +82,10 @@ export const emitters = {
   trimCaches: [] as Cb<void>[],
   facesChanged: [] as Cb<void>[],
   sourceWatchChanged: [] as Cb<void>[],
+  rawReviewCameraStatus: [] as Cb<CameraStatus>[],
+  rawReviewCameraLog: [] as Cb<CameraLogLine>[],
+  rawReviewCameraDiagnostics: [] as Cb<CameraDiagnostics>[],
+  rawReviewDeveloped: [] as Cb<RawReviewDeveloped>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -329,6 +341,28 @@ export const commandsMock = {
   ),
   startRawReviewExport: vi.fn<(request: RawReviewExportRequest) => Promise<number>>(async () => 88),
   rawReviewExportReport: vi.fn<(jobId: number) => Promise<RawExportReport | null>>(async () => null),
+  // Sviluppo dalla fotocamera: di norma "non disponibile" (Linux/macOS); i test lo cambiano.
+  rawReviewCameraStatus: vi.fn<() => Promise<CameraStatus>>(async () => ({
+    available: false,
+    state: "disconnected",
+    model: null,
+    firmware: null,
+    message: "Disponibile solo su Windows",
+    simulated: false,
+  })),
+  rawReviewCameraPresets: vi.fn<() => Promise<CameraPresets>>(async () => ({
+    presets: [],
+    selectedIds: [],
+  })),
+  rawReviewCameraDiagnostics: vi.fn<() => Promise<CameraDiagnostics>>(),
+  rawReviewCameraLog: vi.fn(async () => [] as CameraLogLine[]),
+  rawReviewDevelopPlan: vi.fn<(request: RawReviewDevelopRequest) => Promise<VariantPlan>>(),
+  startRawReviewDevelop: vi.fn<(request: RawReviewDevelopRequest) => Promise<number>>(
+    async () => 90,
+  ),
+  rawReviewDevelopReport: vi.fn<(jobId: number) => Promise<DevelopReport | null>>(
+    async () => null,
+  ),
   rawReviewOpen: vi.fn<(root: string) => Promise<OpenedReview>>(),
   rawReviewOpenFujiview: vi.fn<(path: string) => Promise<OpenedReview>>(),
   rawReviewRecent: vi.fn(async () => [] as RecentSession[]),
@@ -397,7 +431,14 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: { facesChanged: "faces://changed", sourceWatchChanged: "sources://watch-changed" },
+    EVENTS: {
+      facesChanged: "faces://changed",
+      sourceWatchChanged: "sources://watch-changed",
+      rawReviewCameraStatus: "raw-review://camera-status",
+      rawReviewCameraLog: "raw-review://camera-log",
+      rawReviewCameraDiagnostics: "raw-review://camera-diagnostics",
+      rawReviewDeveloped: "raw-review://developed",
+    },
     events: {
       onBootPhase: reg(emitters.boot),
       onBootReady: reg(emitters.boot),
@@ -410,6 +451,10 @@ export function ipcMockModule(tauri = false) {
       onTrimCaches: reg(emitters.trimCaches),
       onFacesChanged: reg(emitters.facesChanged),
       onSourceWatchChanged: reg(emitters.sourceWatchChanged),
+      onRawReviewCameraStatus: reg(emitters.rawReviewCameraStatus),
+      onRawReviewCameraLog: reg(emitters.rawReviewCameraLog),
+      onRawReviewCameraDiagnostics: reg(emitters.rawReviewCameraDiagnostics),
+      onRawReviewDeveloped: reg(emitters.rawReviewDeveloped),
     },
   };
 }
@@ -423,6 +468,7 @@ export function job(partial: Partial<JobSnapshot> & { id: number }): JobSnapshot
     failed: 0,
     error: null,
     memoryPaused: false,
+    pauseReason: null,
     phases: [],
     ...partial,
   };

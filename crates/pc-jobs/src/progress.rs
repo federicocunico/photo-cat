@@ -104,6 +104,8 @@ pub struct PhaseCounters {
     total_known: AtomicBool,
     /// I worker attendono che la memoria torni disponibile (pressione critica).
     memory_paused: AtomicBool,
+    /// Elemento in lavorazione, in parole (es. "DSCF0001.RAF · C1 Kodachrome").
+    current: Mutex<Option<String>>,
     timing: Mutex<Timing>,
 }
 
@@ -116,6 +118,7 @@ impl PhaseCounters {
             total: AtomicI64::new(0),
             total_known: AtomicBool::new(false),
             memory_paused: AtomicBool::new(false),
+            current: Mutex::new(None),
             timing: Mutex::new(Timing {
                 started: None,
                 finished: None,
@@ -174,6 +177,11 @@ impl PhaseCounters {
 
     pub fn memory_paused(&self) -> bool {
         self.memory_paused.load(Ordering::Acquire)
+    }
+
+    /// Descrive l'elemento in lavorazione (`None` quando non ce n'è uno).
+    pub fn set_current(&self, current: Option<String>) {
+        *self.current.lock() = current;
     }
 
     /// Ripristina i contatori (ripresa di un job persistito).
@@ -258,6 +266,11 @@ impl PhaseCounters {
             rate: (state == PhaseState::Running).then_some((t.rate * 10.0).round() / 10.0),
             eta_secs,
             memory_paused: state == PhaseState::Running && self.memory_paused(),
+            current: if state == PhaseState::Running {
+                self.current.lock().clone()
+            } else {
+                None
+            },
         }
     }
 }
@@ -280,6 +293,9 @@ pub struct PhaseSnapshot {
     /// In pausa per memoria insufficiente (pressione critica).
     #[serde(default)]
     pub memory_paused: bool,
+    /// Elemento in lavorazione, se la fase lo dichiara.
+    #[serde(default)]
+    pub current: Option<String>,
 }
 
 /// Progresso di un job: una serie ordinata di fasi.

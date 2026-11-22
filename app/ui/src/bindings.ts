@@ -272,6 +272,39 @@ export const commands = {
 	 *  byte liberati. Sessioni, scelte e foto non cambiano.
 	 */
 	rawReviewClearCache: () => __TAURI_INVOKE<number>("raw_review_clear_cache"),
+	/**
+	 *  Stato della fotocamera, senza bloccarsi su una fotocamera appesa. Con `available: false` (Linux
+	 *  e macOS) `message` dice "Disponibile solo su Windows".
+	 */
+	rawReviewCameraStatus: () => __TAURI_INVOKE<CameraStatus>("raw_review_camera_status"),
+	/**
+	 *  Banchi C1-C7 e "Come scattato" con riepilogo e impostazioni non applicabili, più i preset da
+	 *  preselezionare (l'ultima scelta, o tutti i banchi la prima volta).
+	 */
+	rawReviewCameraPresets: () => __TAURI_INVOKE<CameraPresets>("raw_review_camera_presets"),
+	/**
+	 *  Verifica della fotocamera: l'esito di ogni controllo con il suggerimento. `ready` è vero solo
+	 *  se nessun controllo è fallito: solo allora "Avvia" è possibile.
+	 */
+	rawReviewCameraDiagnostics: () => __TAURI_INVOKE<CameraDiagnostics>("raw_review_camera_diagnostics"),
+	/**  Registro recente della fotocamera (per l'assistenza). */
+	rawReviewCameraLog: () => __TAURI_INVOKE<CameraLogLine[]>("raw_review_camera_log"),
+	/**
+	 *  Piano dello sviluppo: RAF, conversioni totali, già presenti (saltate), da fare, spazio e tempo
+	 *  stimati, avvisi. Non scrive nulla e non occupa la fotocamera se i preset sono già noti.
+	 */
+	rawReviewDevelopPlan: (request: RawReviewDevelopRequest) => __TAURI_INVOKE<VariantPlan>("raw_review_develop_plan", { request }),
+	/**
+	 *  Avvia lo sviluppo come attività. Rifiuta l'avvio se la fotocamera non è pronta, se non c'è
+	 *  spazio sufficiente sul disco di output (con il margine), se non c'è niente da fare o se un
+	 *  altro sviluppo è in corso. Ricorda i preset scelti. Restituisce l'id dell'attività.
+	 */
+	startRawReviewDevelop: (request: RawReviewDevelopRequest) => __TAURI_INVOKE<number>("start_raw_review_develop", { request }),
+	/**
+	 *  Riepilogo di uno sviluppo concluso (convertite, saltate, errori per RAF con il motivo, o il
+	 *  motivo per cui si è fermato). `null` finché l'attività non ha finito o dopo un riavvio.
+	 */
+	rawReviewDevelopReport: (jobId: number) => __TAURI_INVOKE<DevelopReport | null>("raw_review_develop_report", { jobId }),
 	/**  Conteggi, esclusioni, anteprima dei nomi e conflitti, mentre si cambiano i filtri. */
 	rawReviewExportPreflight: (request: RawReviewExportRequest) => __TAURI_INVOKE<RawReviewExportPreflight>("raw_review_export_preflight", { request }),
 	/**  Nomi dei primi scatti da esportare mentre si scrive il modello (`null` = nomi originali). */
@@ -559,6 +592,63 @@ export type BulkOutcome = {
 	requested: number,
 };
 
+export type CameraDiagnostics = {
+	checks: DiagnosticCheck[],
+	model: string | null,
+	firmware: string | null,
+	simulated: boolean,
+	checkedAt: number,
+	/**  Nessun controllo è fallito o saltato: lo sviluppo può partire. */
+	ready: boolean,
+	/**  A step hung or failed in a way that points to a frozen camera. */
+	unresponsive: boolean,
+	/**  Still running (some checks pending). */
+	running: boolean,
+};
+
+export type CameraLogLine = {
+	/**  Milliseconds since the Unix epoch. */
+	at: number,
+	/**  "info" | "warn" | "error" */
+	level: string,
+	message: string,
+};
+
+export type CameraPreset = {
+	/**  `asshot` oppure `C1`..`C7`. */
+	id: string,
+	bank: number | null,
+	name: string,
+	folderName: string,
+	filmSimulation: string | null,
+	summary: string,
+	/**  Impostazioni del banco che la conversione in fotocamera non può applicare. */
+	unappliedProperties: string[],
+};
+
+/**  Preset della fotocamera e quelli da preselezionare (l'ultima scelta, o tutti i banchi). */
+export type CameraPresets = {
+	presets: CameraPreset[],
+	selectedIds: string[],
+};
+
+export type CameraState = "disconnected" | "notReady" | "busy" | "ready" | "error" | 
+/**  Una chiamata alla fotocamera è bloccata (fotocamera congelata): si attende che torni. */
+"unresponsive";
+
+export type CameraStatus = {
+	/**
+	 *  `false` dove lo sviluppo dalla fotocamera non esiste (Linux e macOS, senza simulatore):
+	 *  `message` dice "Disponibile solo su Windows".
+	 */
+	available: boolean,
+	state: CameraState,
+	model: string | null,
+	firmware: string | null,
+	message: string | null,
+	simulated: boolean,
+};
+
 export type Catalog = {
 	id: number,
 	name: string,
@@ -650,6 +740,8 @@ export type ChangeGroup = {
 	ids: number[],
 };
 
+export type CheckStatus = "ok" | "warning" | "error" | "pending" | "skipped" | "info";
+
 /**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
 export type ClockPreview = {
 	mediaId: number,
@@ -709,6 +801,50 @@ export type DatePrecision = "day" | "month" | "year";
 
 export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
 
+/**  Un RAF che la fotocamera ha rifiutato o che non si è potuto leggere. */
+export type DevelopFailure = {
+	/**  Nome del file RAF. */
+	raf: string,
+	/**  Cartelle dei preset non sviluppate per questo RAF. */
+	presets: string[],
+	/**  Codice stabile (`errors.<codice>` per il testo localizzato). */
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+/**  Riepilogo finale di uno sviluppo (in memoria, per il dialogo). */
+export type DevelopReport = {
+	jobId: number,
+	sessionId: string,
+	outputDir: string,
+	/**  Conversioni scritte in questa esecuzione. */
+	converted: number,
+	/**  Varianti già presenti e complete, o già concluse in un'esecuzione precedente. */
+	skipped: number,
+	/**  Conversioni non riuscite (un RAF rifiutato conta una per preset). */
+	failed: number,
+	failures: DevelopFailure[],
+	cancelled: boolean,
+	/**  Errore che ha fermato l'attività (fotocamera bloccata, scrittura rifiutata…). */
+	stopped: DevelopStop | null,
+};
+
+/**  Perché lo sviluppo si è fermato prima della fine. */
+export type DevelopStop = {
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+export type DiagnosticCheck = {
+	id: string,
+	label: string,
+	status: CheckStatus,
+	detail: string | null,
+	hint: string | null,
+};
+
 /**  Motivo per cui un volto è scartato per qualità dal raggruppamento e dai suggerimenti. */
 export type DiscardReason = "blurred" | "too_small" | "non_frontal" | "low_confidence";
 
@@ -743,7 +879,15 @@ export type ErrorBatch = {
  *  Codici errore stabili: compaiono nei log, nel registro errori e nell'export
  *  diagnostico, quindi non vanno rinominati.
  */
-export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED";
+export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED" | 
+/**  La fotocamera non è collegata o è stata scollegata. */
+"CAMERA_DISCONNECTED" | 
+/**  La fotocamera è usata da un altro programma. */
+"CAMERA_BUSY" | 
+/**  La fotocamera non risponde (da spegnere e riaccendere). */
+"CAMERA_UNRESPONSIVE" | 
+/**  La fotocamera ha rifiutato il RAF (altro corpo macchina o file non convertibile). */
+"RAW_CAMERA_REJECTED";
 
 export type ErrorCount = {
 	jobId: number | null,
@@ -1217,6 +1361,8 @@ export type JobSnapshot = {
 	error: string | null,
 	/**  Il job è fermo in attesa di memoria ("in pausa per memoria"). */
 	memoryPaused?: boolean,
+	/**  Perché il job si è fermato da solo (es. fotocamera scollegata, disco pieno). */
+	pauseReason?: PauseReason | null,
 };
 
 export type JobState = "queued" | "running" | "paused" | "completed" | "completed_with_errors" | "cancelled" | "interrupted" | "failed";
@@ -1585,6 +1731,14 @@ export type PanelState = {
 	hiddenPresets: string[],
 };
 
+/**  Perché un job si è fermato da solo (la UI lo mostra accanto allo stato "In pausa"). */
+export type PauseReason = {
+	/**  Codice stabile, tradotto dalla UI (`jobs.pauseReasons.<codice>`). */
+	code: string,
+	/**  Dettaglio per l'utente (causa e azione suggerita), già in italiano. */
+	detail: string,
+};
+
 /**  Sezione del modulo Persone. */
 export type PeopleSection = "review" | "people" | "ignored";
 
@@ -1620,6 +1774,8 @@ export type PhaseSnapshot = {
 	etaSecs: number | null,
 	/**  In pausa per memoria insufficiente (pressione critica). */
 	memoryPaused?: boolean,
+	/**  Elemento in lavorazione, se la fase lo dichiara. */
+	current?: string | null,
 };
 
 export type PhaseState = "pending" | "running" | "done";
@@ -1653,6 +1809,11 @@ export type PlaceSuggestion = {
 	lon: number | null,
 	/**  Già presente in libreria (altrimenti dal dataset geografico). */
 	inLibrary: boolean,
+};
+
+export type PlannedPreset = {
+	id: string,
+	folderName: string,
 };
 
 export type Postprocessing = "normalized_embedding512" | "token_ids" | "person_nms" | "face_landmarks_nms" | "normalized_embedding128" | "city_index";
@@ -1747,6 +1908,35 @@ export type RawExportReport = {
 	 *  i conteggi dicono fin dove si è arrivati, il catalogo non è stato creato.
 	 */
 	failure: RawExportFailure | null,
+};
+
+/**  Cosa sviluppare, scelto nel dialogo. */
+export type RawReviewDevelopRequest = {
+	sessionId: string,
+	/**  Solo questi scatti; assente = tutti gli scatti con un RAF. */
+	shotKeys?: string[] | null,
+	/**  Preset scelti: `asshot` e `C1`..`C7`. */
+	presetIds: string[],
+	/**  Cartella di output; assente = quella predefinita della sessione. */
+	outputDir?: string | null,
+	/**  Rigenera anche le varianti già presenti e complete. */
+	overwrite?: boolean,
+};
+
+/**  Evento di fine sviluppo: riepilogo e sessione aggiornata con i nuovi preset. */
+export type RawReviewDeveloped = {
+	jobId: number,
+	sessionId: string,
+	converted: number,
+	skipped: number,
+	failed: number,
+	cancelled: boolean,
+	/**
+	 *  La sessione riletta dal disco (scatti e preset aggiornati, scelte intatte). `None` se la
+	 *  sessione è stata chiusa nel frattempo o la rilettura non è riuscita (vedi `refreshError`).
+	 */
+	opened: OpenedReview | null,
+	refreshError: string | null,
 };
 
 /**  Dati del dialogo: conteggi, esclusioni, nomi, conflitti e cosa farà l'import. */
@@ -2381,6 +2571,28 @@ export type VariantKind =
 "image" | 
 /**  Anteprima incorporata nel RAF ("Anteprima RAW"). */
 "raw_preview";
+
+/**  Quello che farà lo sviluppo: conteggi, spazio e tempo stimati. */
+export type VariantPlan = {
+	sourceRoot: string,
+	outputDir: string,
+	rafCount: number,
+	presets: PlannedPreset[],
+	/**  RAF × preset. */
+	totalConversions: number,
+	/**  Conversioni ancora da fare. */
+	pendingConversions: number,
+	/**  Varianti già presenti e complete (saltate). */
+	alreadyDone: number,
+	estimatedBytes: number,
+	/**  `None` se non si riesce a leggere lo spazio libero (non blocca l'avvio). */
+	freeBytes: number | null,
+	/**  Margine che deve restare libero dopo lo sviluppo. */
+	safetyMarginBytes: number,
+	enoughSpace: boolean,
+	estimatedSeconds: number,
+	warnings: string[],
+};
 
 /**  Stato del monitoraggio di una sorgente. */
 export type WatchState = 

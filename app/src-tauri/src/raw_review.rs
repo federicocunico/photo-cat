@@ -145,6 +145,13 @@ pub struct OpenedReview {
     pub warnings: Vec<String>,
 }
 
+/// RAF di una sessione da sviluppare e cartella di output predefinita.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DevelopSources {
+    pub rafs: Vec<String>,
+    pub default_output_dir: String,
+}
+
 /// Pannelli di confronto dopo aver mostrato o nascosto un preset.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -670,7 +677,6 @@ impl ReviewState {
     /// Aggiorna l'indice di una sessione aperta mantenendo il suo id, per esempio dopo uno
     /// sviluppo che ha creato nuovi preset: le chiavi già date alla UI restano valide per i file
     /// ancora presenti. La radice deve essere la stessa.
-    #[allow(dead_code)] // usato alla fine dello sviluppo (task 5.3)
     pub fn refresh(&self, session_id: &str, index: &ReviewIndex) -> AppResult<Arc<OpenSession>> {
         let current = self.session(session_id)?;
         let next = Arc::new(OpenSession::from_index(current.id.clone(), index)?);
@@ -681,6 +687,112 @@ impl ReviewState {
         }
         self.sessions.write().insert(next.id.clone(), next.clone());
         Ok(next)
+    }
+
+    /// Rilegge dal disco la cartella di una sessione aperta (dopo uno sviluppo che ha creato nuovi
+    /// preset): nuovi scatti e preset si uniscono alle scelte vive senza toccarle, l'id della
+    /// sessione e le chiavi già date alla UI restano valide, e la sessione si salva. `output_dir`
+    /// è la cartella delle varianti usata dallo sviluppo: se non è quella predefinita diventa
+    /// quella della sessione.
+    pub fn refresh_from_disk(
+        &self,
+        data_dir: &Path,
+        session_id: &str,
+        output_dir: Option<&str>,
+    ) -> AppResult<OpenedReview> {
+        let open = self.session(session_id)?;
+        let working = self.working_session(session_id)?;
+        let variants_dir = {
+            let mut session = working.lock();
+            if let Some(dir) = output_dir.filter(|d| !d.trim().is_empty()) {
+                let default = open.root.join(pc_raw_review::scan::VARIANTS_DIR_NAME);
+                if !pc_organize::paths::same(Path::new(dir), &default) {
+                    session.variants_output_dir = Some(dir.to_string());
+                }
+            }
+            session.variants_output_dir.clone()
+        };
+        let index = pc_raw_review::scan::scan(&open.root, variants_dir.as_deref().map(Path::new))?;
+        let snapshot = {
+            let mut session = working.lock();
+            session.merge(&index);
+            session.clone()
+        };
+        self.refresh(session_id, &index)?;
+        if let Err(e) = pc_raw_review::session::save(data_dir, &snapshot) {
+            tracing::warn!(
+                code = e.code.as_str(),
+                detail = e.detail.as_str(),
+                "sessione non salvata dopo lo sviluppo"
+            );
+        }
+        Ok(opened_review(session_id, snapshot, &index))
+    }
+
+    /// RAF da sviluppare: quelli degli scatti indicati (tutti se `shot_keys` è `None`), presi
+    /// dall'indice della sessione e mai da percorsi del chiamante, con la cartella di output
+    /// predefinita (quella già scelta per la sessione, altrimenti `FujiView varianti` accanto ai
+    /// RAF).
+    pub fn develop_sources(
+        &self,
+        session_id: &str,
+        shot_keys: Option<&[String]>,
+    ) -> AppResult<DevelopSources> {
+        let open = self.session(session_id)?;
+        if !matches!(
+            open.index.layout,
+            Layout::RafOnly | Layout::RafWithVariants { .. }
+        ) {
+            return Err(AppError::invalid_input(
+                "la cartella non contiene file RAF da sviluppare",
+            ));
+        }
+        let raf_of = |shot: &pc_raw_review::scan::Shot| {
+            shot.variants
+                .iter()
+                .find(|v| v.kind == VariantKind::RawPreview)
+                .map(|v| v.path.clone())
+        };
+        let rafs: Vec<String> = match shot_keys {
+            None => open.index.shots.iter().filter_map(raf_of).collect(),
+            Some(keys) => {
+                let mut rafs = Vec::new();
+                for key in keys {
+                    let shot =
+                        open.index
+                            .shots
+                            .iter()
+                            .find(|s| &s.key == key)
+                            .ok_or_else(|| {
+                                AppError::new(
+                                    ErrorCode::NotFound,
+                                    format!("scatto «{key}» sconosciuto"),
+                                )
+                            })?;
+                    if let Some(raf) = raf_of(shot) {
+                        if !rafs.contains(&raf) {
+                            rafs.push(raf);
+                        }
+                    }
+                }
+                rafs
+            }
+        };
+        if rafs.is_empty() {
+            return Err(AppError::invalid_input("nessuno scatto da sviluppare"));
+        }
+        let working = self.working_session(session_id)?;
+        let saved = working.lock().variants_output_dir.clone();
+        let default_output_dir = saved.unwrap_or_else(|| {
+            open.root
+                .join(pc_raw_review::scan::VARIANTS_DIR_NAME)
+                .to_string_lossy()
+                .into_owned()
+        });
+        Ok(DevelopSources {
+            rafs,
+            default_output_dir,
+        })
     }
 
     /// Spazio occupato e limite della cache delle anteprime.

@@ -19,6 +19,7 @@ mod organize;
 mod people;
 mod places;
 mod raw_review;
+mod raw_review_develop;
 mod raw_review_export;
 mod recovery;
 mod sequence;
@@ -227,6 +228,13 @@ pub fn bindings() -> Builder<tauri::Wry> {
             raw_review::raw_review_close,
             raw_review::raw_review_cache_info,
             raw_review::raw_review_clear_cache,
+            raw_review_develop::raw_review_camera_status,
+            raw_review_develop::raw_review_camera_presets,
+            raw_review_develop::raw_review_camera_diagnostics,
+            raw_review_develop::raw_review_camera_log,
+            raw_review_develop::raw_review_develop_plan,
+            raw_review_develop::start_raw_review_develop,
+            raw_review_develop::raw_review_develop_report,
             raw_review_export::raw_review_export_preflight,
             raw_review_export::raw_review_preview_names,
             raw_review_export::start_raw_review_export,
@@ -296,6 +304,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_models::store::ModelStatus>()
         // Varianti RAW: tipi dei metadati (task 3.3).
         .typ::<pc_raw_review::metadata::ImageMetadata>()
+        .typ::<raw_review_develop::RawReviewDeveloped>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
         .disable_serde_phases()
@@ -669,6 +678,30 @@ fn initialize(
             )
         }),
     );
+    // Varianti RAW: sviluppo dalla fotocamera. Il servizio (thread con la sessione esclusiva) è
+    // uno solo e il job lo tiene per tutta la durata; alla fine la sessione si aggiorna.
+    let camera = Arc::new(pc_raw_review::variants::service::CameraService::start(
+        pc_raw_review::variants::diagnostics::CameraBackend::for_platform(),
+        raw_review_develop::camera_event_sink(handle.clone()),
+    ));
+    let develop_reports = pc_raw_review::variants::job::DevelopReports::default();
+    let develop_deps = pc_raw_review::variants::job::DevelopDeps {
+        service: camera.clone(),
+        reports: develop_reports.clone(),
+        on_finished: {
+            let handle = handle.clone();
+            Arc::new(move |report| {
+                if let Some(state) = handle.try_state::<AppState>() {
+                    raw_review_develop::on_develop_finished(&handle, &state, report);
+                }
+            })
+        },
+        options: Default::default(),
+    };
+    jobs.register(
+        pc_raw_review::variants::job::JOB_KIND,
+        Arc::new(move |p| pc_raw_review::variants::job::plan(develop_deps.clone(), p)),
+    );
     let relink_store = store.clone();
     jobs.register(
         pc_ingest::relink::JOB_KIND,
@@ -743,6 +776,8 @@ fn initialize(
     handle.manage(AppState {
         raw_review,
         raw_export_reports,
+        camera,
+        develop_reports,
         paths: paths.clone(),
         config: shared_config,
         face_policy,

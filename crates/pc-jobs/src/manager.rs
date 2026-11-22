@@ -61,6 +61,9 @@ pub struct JobSnapshot {
     /// Il job è fermo in attesa di memoria ("in pausa per memoria").
     #[serde(default)]
     pub memory_paused: bool,
+    /// Perché il job si è fermato da solo (es. fotocamera scollegata, disco pieno).
+    #[serde(default)]
+    pub pause_reason: Option<crate::control::PauseReason>,
 }
 
 pub trait ProgressSink: Send + Sync + 'static {
@@ -218,6 +221,11 @@ impl JobManager {
     pub fn resume(&self, id: i64) -> AppResult<()> {
         self.transition(id, |e| match e.state {
             JobState::Paused => {
+                e.control.resume();
+                Ok(JobState::Running)
+            }
+            // Pausa decisa dal job stesso: lo stato salvato resta "in corso".
+            JobState::Running if e.control.is_paused() => {
                 e.control.resume();
                 Ok(JobState::Running)
             }
@@ -513,19 +521,31 @@ impl Journal for NoJournal {
 
 fn snapshot_of(id: i64, e: &Entry, now: Instant) -> JobSnapshot {
     let (phases, overall, eta) = e.progress.sample(now);
+    // Un job che si è fermato da solo (`pause_for`) risulta "in pausa" anche se lo stato salvato
+    // è ancora "in corso".
+    let state = if e.state == JobState::Running && e.control.is_paused() {
+        JobState::Paused
+    } else {
+        e.state
+    };
     JobSnapshot {
         id,
         kind: e.kind.clone(),
-        state: e.state,
+        state,
         overall_percent: overall,
-        eta_secs: if e.state == JobState::Running {
+        eta_secs: if state == JobState::Running {
             eta
         } else {
             None
         },
         failed: e.progress.failed(),
         error: e.error.clone(),
-        memory_paused: e.state == JobState::Running && phases.iter().any(|p| p.memory_paused),
+        memory_paused: state == JobState::Running && phases.iter().any(|p| p.memory_paused),
+        pause_reason: if state == JobState::Paused {
+            e.control.pause_reason()
+        } else {
+            None
+        },
         phases,
     }
 }

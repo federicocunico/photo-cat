@@ -81,7 +81,7 @@
 ## 5. Sviluppo dalla fotocamera (Windows)
 
 - [x] 5.1 Porting di `camera/` (WPD, PTP, fuji, profile, banks) sotto `cfg(windows)` e di `sim.rs` dietro `fake-camera`. Test di `banks` e `profile` (nomi delle cartelle `C3 Neg-Hi- 2`, banco senza nome) eseguiti su tutte le piattaforme.
-- [ ] 5.2 Porting di `variants/` (plan, estimate, diagnostics) e conversione del runner in `JobPlan` di `pc-jobs` (D6): journal per `<raf>|<preset>`, pausa per disco o fotocamera, errori nel registro con fase `sviluppo_raw`. Test con il simulatore:
+- [x] 5.2 Porting di `variants/` (plan, estimate, diagnostics) e conversione del runner in `JobPlan` di `pc-jobs` (D6): journal per `<raf>|<preset>`, pausa per disco o fotocamera, errori nel registro con fase `sviluppo_raw`. Test con il simulatore:
   - ripresa che salta 400 conversioni;
   - annullamento senza file parziali;
   - RAF di un altro corpo saltato;

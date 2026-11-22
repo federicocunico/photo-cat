@@ -30,6 +30,14 @@ pub enum ErrorCode {
     Cancelled,
     InvalidInput,
     LinkUnsupported,
+    /// La fotocamera non è collegata o è stata scollegata.
+    CameraDisconnected,
+    /// La fotocamera è usata da un altro programma.
+    CameraBusy,
+    /// La fotocamera non risponde (da spegnere e riaccendere).
+    CameraUnresponsive,
+    /// La fotocamera ha rifiutato il RAF (altro corpo macchina o file non convertibile).
+    RawCameraRejected,
 }
 
 impl ErrorCode {
@@ -52,6 +60,10 @@ impl ErrorCode {
             Self::Cancelled => "CANCELLED",
             Self::InvalidInput => "INVALID_INPUT",
             Self::LinkUnsupported => "LINK_UNSUPPORTED",
+            Self::CameraDisconnected => "CAMERA_DISCONNECTED",
+            Self::CameraBusy => "CAMERA_BUSY",
+            Self::CameraUnresponsive => "CAMERA_UNRESPONSIVE",
+            Self::RawCameraRejected => "RAW_CAMERA_REJECTED",
         }
     }
 
@@ -64,7 +76,13 @@ impl ErrorCode {
     pub fn default_retriable(self) -> bool {
         matches!(
             self,
-            Self::Io | Self::Network | Self::Database | Self::InsufficientMemory
+            Self::Io
+                | Self::Network
+                | Self::Database
+                | Self::InsufficientMemory
+                | Self::CameraDisconnected
+                | Self::CameraBusy
+                | Self::CameraUnresponsive
         )
     }
 }
@@ -190,5 +208,40 @@ mod tests {
         let s = serde_json::to_string(&ErrorCode::ChecksumMismatch).unwrap();
         assert_eq!(s, "\"CHECKSUM_MISMATCH\"");
         assert_eq!(ErrorCode::ChecksumMismatch.as_str(), "CHECKSUM_MISMATCH");
+    }
+
+    #[test]
+    fn camera_codes_are_stable_and_have_message_keys() {
+        for (code, text, key, retriable) in [
+            (
+                ErrorCode::CameraDisconnected,
+                "CAMERA_DISCONNECTED",
+                "errors.camera_disconnected",
+                true,
+            ),
+            (
+                ErrorCode::CameraBusy,
+                "CAMERA_BUSY",
+                "errors.camera_busy",
+                true,
+            ),
+            (
+                ErrorCode::CameraUnresponsive,
+                "CAMERA_UNRESPONSIVE",
+                "errors.camera_unresponsive",
+                true,
+            ),
+            (
+                ErrorCode::RawCameraRejected,
+                "RAW_CAMERA_REJECTED",
+                "errors.raw_camera_rejected",
+                false,
+            ),
+        ] {
+            assert_eq!(code.as_str(), text);
+            assert_eq!(code.message_key(), key);
+            assert_eq!(serde_json::to_string(&code).unwrap(), format!("\"{text}\""));
+            assert_eq!(code.default_retriable(), retriable);
+        }
     }
 }

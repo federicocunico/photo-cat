@@ -84,6 +84,8 @@ export const it = {
       sequence_export_of: "Esportazione della sequenza in {{object}}",
       raw_review_export: "Esportazione in un catalogo",
       raw_review_export_of: "Esportazione in un catalogo in {{object}}",
+      raw_review_develop: "Sviluppo dalla fotocamera",
+      raw_review_develop_of: "Sviluppo dalla fotocamera in {{object}}",
       bulk: "Modifica di foto",
       bulk_of: "Modifica di {{object}} foto",
       analysis: "Analisi AI",
@@ -121,6 +123,15 @@ export const it = {
     pressure: "Stato memoria",
     aiPaused: "Analisi AI in pausa per memoria insufficiente",
     memoryPaused: "In pausa per memoria",
+    // Perché un'attività si è fermata da sola (accanto allo stato "In pausa").
+    pauseReasons: {
+      camera_disconnected: "Fotocamera scollegata",
+      camera_busy: "Fotocamera occupata da un altro programma",
+      camera_not_ready: "Fotocamera non pronta per la conversione",
+      disk_space: "Spazio su disco insufficiente",
+      output_write: "Scrittura nella cartella di output non riuscita",
+      other: "Attività in pausa",
+    },
     phases: {
       qualita_foto: "Qualità delle foto",
       scansione: "Scansione",
@@ -144,6 +155,8 @@ export const it = {
       copia: "Copia dei file",
       catalogo: "Catalogo",
       esportazione_raw: "Esportazione in un catalogo",
+      sviluppo: "Sviluppo delle varianti",
+      sviluppo_raw: "Sviluppo dalla fotocamera",
     },
     states: {
       queued: "In coda",
@@ -497,6 +510,10 @@ export const it = {
     cancelled: "Operazione annullata.",
     invalid_input: "Dati non validi.",
     link_unsupported: "Collegamento non supportato in questa destinazione.",
+    camera_disconnected: "Fotocamera non collegata.",
+    camera_busy: "Fotocamera occupata da un altro programma.",
+    camera_unresponsive: "La fotocamera non risponde.",
+    raw_camera_rejected: "RAF non scattato da questa fotocamera.",
   },
   hints: {
     access_denied:
@@ -510,6 +527,11 @@ export const it = {
     checksum_mismatch: "Il file verrà scaricato di nuovo automaticamente.",
     insufficient_memory: 'Chiudi altre applicazioni o scegli il profilo risorse "Leggero".',
     link_unsupported: "Usa hard link o copia, oppure attiva la Modalità sviluppatore di Windows.",
+    camera_disconnected: "Controlla il cavo USB, accendi la fotocamera e riprova.",
+    camera_busy: "Chiudi X RAW Studio e gli altri programmi Fujifilm, poi riprova.",
+    camera_unresponsive: "Spegni e riaccendi la fotocamera, poi riavvia lo sviluppo.",
+    raw_camera_rejected:
+      "Il file è stato saltato: sviluppa questo RAF con la fotocamera con cui è stato scattato.",
   },
 };
 

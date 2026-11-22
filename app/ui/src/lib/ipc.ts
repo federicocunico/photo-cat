@@ -4,11 +4,15 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   BootStatus,
+  CameraDiagnostics,
+  CameraLogLine,
+  CameraStatus,
   Config,
   ErrorBatch,
   JobSnapshot,
   LogLine,
   ModelStatus,
+  RawReviewDeveloped,
   ResourceSnapshot,
 } from "../bindings";
 
@@ -53,6 +57,10 @@ export const EVENTS = {
   trimCaches: "app://trim-caches",
   facesChanged: "faces://changed",
   sourceWatchChanged: "sources://watch-changed",
+  rawReviewCameraStatus: "raw-review://camera-status",
+  rawReviewCameraLog: "raw-review://camera-log",
+  rawReviewCameraDiagnostics: "raw-review://camera-diagnostics",
+  rawReviewDeveloped: "raw-review://developed",
 } as const;
 
 export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -74,4 +82,15 @@ export const events = {
   onTrimCaches: (cb: () => void) => on(EVENTS.trimCaches, cb),
   onFacesChanged: (cb: () => void) => on(EVENTS.facesChanged, cb),
   onSourceWatchChanged: (cb: () => void) => on(EVENTS.sourceWatchChanged, cb),
+  /** Stato della fotocamera cambiato (collegata, scollegata, occupata, pronta). */
+  onRawReviewCameraStatus: (cb: (s: CameraStatus) => void) =>
+    on(EVENTS.rawReviewCameraStatus, cb),
+  /** Nuova riga del registro della fotocamera. */
+  onRawReviewCameraLog: (cb: (l: CameraLogLine) => void) => on(EVENTS.rawReviewCameraLog, cb),
+  /** Avanzamento o esito della verifica della fotocamera. */
+  onRawReviewCameraDiagnostics: (cb: (d: CameraDiagnostics) => void) =>
+    on(EVENTS.rawReviewCameraDiagnostics, cb),
+  /** Uno sviluppo è terminato: porta il riepilogo e la sessione aggiornata con i nuovi preset. */
+  onRawReviewDeveloped: (cb: (d: RawReviewDeveloped) => void) =>
+    on(EVENTS.rawReviewDeveloped, cb),
 };

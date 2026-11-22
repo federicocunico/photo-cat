@@ -53,7 +53,14 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
   const done = phase.state === "done";
   return (
     <tr className="jobs-phase-row" data-testid={`phase-${phase.name}`}>
-      <td>{t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}</td>
+      <td>
+        {t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}
+        {phase.current && (
+          <div className="muted jobs-current" data-testid={`phase-current-${phase.name}`}>
+            {phase.current}
+          </div>
+        )}
+      </td>
       <td>
         <div className="jobs-phase-progress">
           <div
@@ -227,6 +234,16 @@ export function JobCard({
           </tbody>
         </table>
       </div>
+      {job.pauseReason && (
+        <InlineAlert
+          tone="warn"
+          title={t(`jobs.pauseReasons.${job.pauseReason.code}`, {
+            defaultValue: t("jobs.pauseReasons.other"),
+          })}
+        >
+          <span data-testid={`pause-reason-${job.id}`}>{job.pauseReason.detail}</span>
+        </InlineAlert>
+      )}
       {job.failed > 0 && (
         <BusyButton
           type="button"

@@ -10,6 +10,7 @@ authors.workspace = true
 pc-core.workspace = true
 pc-governor.workspace = true
 pc-ingest.workspace = true
+pc-jobs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -21,6 +22,10 @@ fast_image_resize = { version = "6.1", features = ["rayon"] }
 kamadak-exif = "0.6"
 image = { version = "0.25", default-features = false, features = ["jpeg", "tiff"] }
 turbojpeg = { version = "1.5", default-features = false, features = ["cmake", "require-simd"], optional = true }
+
+[target.'cfg(not(windows))'.dependencies]
+# Spazio libero sul disco di output (su Windows si usa GetDiskFreeSpaceExW).
+sysinfo = { version = "0.32", default-features = false, features = ["disk"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
@@ -43,3 +48,4 @@ fake-camera = []
 
 [dev-dependencies]
 tempfile.workspace = true
+pc-store.workspace = true
