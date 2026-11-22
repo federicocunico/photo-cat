@@ -33,13 +33,13 @@ L'applicazione SHALL organizzare la navigazione in gruppi con un'etichetta:
 - **Sfoglia**: Libreria, Sequenza;
 - **Organizza**: Cataloghi, Persone, Tag;
 - **AI**: AI;
-- **Importa ed esporta**: Importa, Esporta.
+- **Importa ed esporta**: Importa, Esporta, Varianti RAW (Fujifilm X-T5).
 
 In fondo alla navigazione SHALL stare **Attività** e **Impostazioni**.
 
 Modelli AI e Diagnostica SHALL essere sezioni di Impostazioni e non voci di primo livello. SHALL restare raggiungibili direttamente da Attività, dalla barra di stato, dagli avvisi e dalla palette dei comandi. Persone e identità SHALL essere gestite in un unico modulo Persone. Il modulo AI riguarda lo stato e il controllo delle analisi; le soglie e i modelli restano in Impostazioni.
 
-Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+8 nell'ordine dei gruppi). Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni, una sezione del modulo AI o un'attività, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
+Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+9 nell'ordine dei gruppi). Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni, una sezione del modulo AI, un'attività o una sessione di revisione RAW, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
 
 Un modulo salvato come attivo nelle preferenze che non è più una voce di primo livello SHALL aprire la sezione corrispondente.
 
@@ -58,6 +58,10 @@ Un modulo salvato come attivo nelle preferenze che non è più una voce di primo
 #### Scenario: Scorciatoia del modulo AI
 - **WHEN** l'utente preme Ctrl+6
 - **THEN** si apre il modulo AI
+
+#### Scenario: Scorciatoia della revisione RAW
+- **WHEN** l'utente preme Ctrl+9
+- **THEN** si apre il modulo Varianti RAW (Fujifilm X-T5) sull'ultima sessione aperta, oppure sulla scelta della cartella se non ce ne sono
 
 #### Scenario: Identità nel modulo Persone
 - **WHEN** l'utente cerca nella navigazione il modulo Identità

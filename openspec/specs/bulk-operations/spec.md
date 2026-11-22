@@ -6,7 +6,7 @@ Permette di agire in un colpo solo su molti file della libreria o di un catalogo
 ## Requirements
 
 ### Requirement: Selezione multipla
-L'utente SHALL poter selezionare più file con clic, Ctrl/Shift+clic, selezione rettangolare, "seleziona tutto" sui risultati del filtro corrente e inversione della selezione; la UI SHALL mostrare sempre il numero di elementi selezionati. "Seleziona tutto" e l'inversione SHALL funzionare con 100.000 risultati senza caricare nell'interfaccia l'elenco di tutti gli elementi, e le azioni bulk SHALL applicarsi esattamente agli elementi selezionati. Shift+clic SHALL selezionare l'intervallo dall'ancora, cioè l'elemento dell'ultimo clic semplice o Ctrl+clic; Shift+clic successivi MUST NOT spostare l'ancora.
+L'utente SHALL poter selezionare più file con clic, Ctrl/Shift+clic, selezione rettangolare, "seleziona tutto" sui risultati del filtro corrente e inversione della selezione; la UI SHALL mostrare sempre il numero di elementi selezionati. "Seleziona tutto" e l'inversione SHALL funzionare con 100.000 risultati senza caricare nell'interfaccia l'elenco di tutti gli elementi, e le azioni bulk SHALL applicarsi esattamente agli elementi selezionati. Shift+clic SHALL selezionare l'intervallo dall'ancora, cioè l'elemento dell'ultimo clic semplice o Ctrl+clic; Shift+clic successivi MUST NOT spostare l'ancora. "Seleziona tutto" e "Inverti selezione" SHALL essere disponibili in ogni vista che mostra più foto o volti selezionabili (Libreria, cataloghi manuali e smart, cataloghi di sistema, foto escluse, griglia dei volti di Persone, Sequenza, risultati e foto simili del modulo AI), dalla barra della vista, dal menu contestuale e da tastiera con Ctrl+A (Cmd+A su macOS) e Ctrl+Maiusc+I; Esc SHALL svuotare la selezione. Le scorciatoie MUST NOT agire quando il focus è in un campo di testo.
 
 #### Scenario: Seleziona tutto i risultati
 - **WHEN** un filtro restituisce 2.340 file e l'utente sceglie "Seleziona tutto"
@@ -36,8 +36,24 @@ L'utente SHALL poter selezionare più file con clic, Ctrl/Shift+clic, selezione 
 - **WHEN** nella griglia dei volti l'utente fa clic sul primo volto, poi Shift+clic sul terzo e Shift+clic sul sesto
 - **THEN** risultano selezionati i volti dal primo al sesto
 
+#### Scenario: Seleziona tutto i volti di una persona
+- **WHEN** la persona "Giulia" ha 400 volti, la griglia ne ha caricati 120 e l'utente preme Ctrl+A
+- **THEN** risultano selezionati 400 volti e "Assegna a…" agisce su tutti e 400
+
+#### Scenario: Inverti selezione in un catalogo
+- **WHEN** il catalogo "Mare" ha 50 foto, ne sono selezionate 10 e l'utente sceglie "Inverti selezione" dal menu contestuale
+- **THEN** risultano selezionate le altre 40 foto del catalogo
+
+#### Scenario: Seleziona tutto in Sequenza
+- **WHEN** la Sequenza mostra 310 foto e l'utente preme Ctrl+A
+- **THEN** risultano selezionate le 310 foto della sequenza e il conteggio lo indica
+
+#### Scenario: Scorciatoia in un campo di testo
+- **WHEN** il focus è nella casella di ricerca e l'utente preme Ctrl+A
+- **THEN** viene selezionato il testo della casella e la selezione delle foto non cambia
+
 ### Requirement: Azioni bulk disponibili
-Su una selezione l'utente SHALL poter: aggiungere/rimuovere tag, aggiungere a cataloghi manuali, escludere da un catalogo (manuale o smart) e reinserire nel catalogo, impostare o correggere un campo di catalogazione, impostare il luogo o ripristinare il luogo automatico, assegnare una persona, rianalizzare con AI, esportare, organizzare in cartelle e rimuovere dalla libreria.
+Su una selezione l'utente SHALL poter: aggiungere/rimuovere tag, aggiungere a cataloghi manuali, escludere da un catalogo (manuale o smart) e reinserire nel catalogo, impostare o correggere un campo di catalogazione, impostare il luogo o ripristinare il luogo automatico, impostare la valutazione, impostare o rimuovere la caratteristica di colore, impostare la data di scatto o ripristinare quella del file, assegnare una persona, rianalizzare con AI, esportare, organizzare in cartelle e rimuovere dalla libreria.
 
 #### Scenario: Tag in bulk
 - **WHEN** l'utente aggiunge il tag "Matrimonio" a 150 file selezionati
@@ -62,6 +78,18 @@ Su una selezione l'utente SHALL poter: aggiungere/rimuovere tag, aggiungere a ca
 #### Scenario: Esclusione in bulk da un catalogo smart
 - **WHEN** l'utente seleziona 120 foto del catalogo smart "Paesaggi" e sceglie "Escludi dal catalogo"
 - **THEN** le 120 foto non compaiono più in "Paesaggi", compaiono tra le sue escluse, e "Annulla" le riporta nel catalogo
+
+#### Scenario: Valutazione in bulk
+- **WHEN** l'utente seleziona 25 foto e sceglie "Valutazione ▸ ★★★★"
+- **THEN** le 25 foto hanno valutazione 4 e "Annulla" ripristina la valutazione che ciascuna aveva prima
+
+#### Scenario: Caratteristica di colore in bulk
+- **WHEN** l'utente seleziona 80 scansioni e sceglie "Colore ▸ Seppia" dal menu contestuale
+- **THEN** le 80 foto hanno caratteristica di colore "Seppia"
+
+#### Scenario: Data di scatto in bulk
+- **WHEN** l'utente seleziona 60 scansioni di negativi e imposta come data di scatto l'anno 1987
+- **THEN** le 60 foto hanno data di scatto 1987 con precisione "anno" e fonte "manuale", e "Annulla" ripristina le date precedenti
 
 ### Requirement: Esecuzione come job per selezioni grandi
 Le azioni bulk su più di una soglia di elementi o che richiedono elaborazione SHALL essere eseguite come job con progresso, senza bloccare l'interfaccia.
