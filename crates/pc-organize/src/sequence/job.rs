@@ -263,6 +263,7 @@ fn names(
                 people: &shorts,
                 place: it.place.as_deref(),
                 orig: &it.stem,
+                preset: None,
             })
         })
         .collect();

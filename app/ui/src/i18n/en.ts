@@ -14,6 +14,7 @@ export const en: Messages = {
     import: "Import",
     jobs: "Activity",
     organize: "Export",
+    "raw-review": "RAW variants (Fujifilm X-T5)",
     ai: "AI",
     models: "AI models",
     diagnostics: "Diagnostics",
@@ -81,6 +82,10 @@ export const en: Messages = {
       organize_of: "Organizing into folders in {{object}}",
       sequence_export: "Sequence export",
       sequence_export_of: "Exporting the sequence to {{object}}",
+      raw_review_export: "Export to a catalog",
+      raw_review_export_of: "Exporting to a catalog in {{object}}",
+      raw_review_develop: "Developing from the camera",
+      raw_review_develop_of: "Developing from the camera into {{object}}",
       bulk: "Editing photos",
       bulk_of: "Editing {{object}} photos",
       analysis: "AI analysis",
@@ -118,6 +123,25 @@ export const en: Messages = {
     pressure: "Memory state",
     aiPaused: "AI analysis paused: not enough memory",
     memoryPaused: "Paused for memory",
+    // Why a task stopped by itself (next to the "Paused" state).
+    pauseReasons: {
+      camera_disconnected: "Camera disconnected",
+      camera_busy: "Camera in use by another program",
+      camera_not_ready: "Camera not ready for conversion",
+      disk_space: "Not enough disk space",
+      output_write: "Writing to the output folder failed",
+      other: "Task paused",
+    },
+    // What to do to resume a task that stopped by itself.
+    pauseHints: {
+      camera_disconnected:
+        "Reconnect the USB cable and turn the camera on; when it shows as ready, press “Resume”.",
+      camera_busy: "Close X RAW Studio and the other Fujifilm programs, then press “Resume”.",
+      camera_not_ready: "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then press “Resume”.",
+      disk_space: "Free some space on the output folder's drive, then press “Resume”.",
+      output_write:
+        "Check that the output folder is reachable and writable (drive connected, permissions), then press “Resume”.",
+    },
     phases: {
       qualita_foto: "Photo quality",
       scansione: "Scan",
@@ -138,6 +162,11 @@ export const en: Messages = {
       per_tag: "Per-tag folders",
       manifest: "Manifest",
       archivi: "Zip archives",
+      copia: "Copying files",
+      catalogo: "Catalog",
+      esportazione_raw: "Export to a catalog",
+      sviluppo: "Developing variants",
+      sviluppo_raw: "Developing from the camera",
     },
     states: {
       queued: "Queued",
@@ -490,6 +519,12 @@ export const en: Messages = {
     cancelled: "Operation cancelled.",
     invalid_input: "Invalid data.",
     link_unsupported: "Link not supported at this destination.",
+    camera_disconnected: "Camera not connected.",
+    camera_busy: "Camera in use by another program.",
+    camera_unresponsive: "The camera is not responding.",
+    raw_camera_rejected: "RAF not shot with this camera.",
+    camera_not_ready: "The camera is not in RAW conversion mode.",
+    output_folder_rejected: "Output folder not allowed.",
   },
   hints: {
     access_denied: "Check the folder permissions or run the app as a user with access.",
@@ -501,5 +536,14 @@ export const en: Messages = {
     checksum_mismatch: "The file will be downloaded again automatically.",
     insufficient_memory: 'Close other applications or choose the "Light" resource profile.',
     link_unsupported: "Use hard links or copy, or enable Windows Developer Mode.",
+    camera_disconnected: "Check the USB cable, turn the camera on and try again.",
+    camera_busy: "Close X RAW Studio and the other Fujifilm programs, then try again.",
+    camera_unresponsive: "Turn the camera off and on again, then restart the development.",
+    raw_camera_rejected:
+      "The file was skipped: develop this RAF with the camera it was shot with.",
+    camera_not_ready:
+      "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then try again.",
+    output_folder_rejected:
+      "Choose a folder other than the RAF folder or one that contains it, not the root of a drive and not a system folder. The default “FujiView varianti” is always fine.",
   },
 };

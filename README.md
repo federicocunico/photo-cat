@@ -9,18 +9,19 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 
 **Primo avvio.** Tre passi, ognuno saltabile con "Lo faccio dopo": lingua e tema, la prima cartella di foto (scelta o trascinata; i file non vengono spostati né modificati), le funzioni AI con un riepilogo del computer in parole e il download dei modelli in background. Alla fine si apre la Libreria, dove le foto compaiono man mano che l'importazione procede, insieme alla lista **Primi passi** (importare una cartella, scaricare i modelli, dare un nome a una persona, creare un catalogo, usare un set di tag), che si spunta da sola anche se l'azione si fa da un'altra parte. Aiuto › "Rivedi l'introduzione" la ripropone senza cambiare nulla finché non si conferma un passo.
 
-**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag), **AI** e **Importa ed esporta** (Importa, Esporta), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
+**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag), **AI** e **Importa ed esporta** (Importa, Esporta, Varianti RAW), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
 
 **Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera):
 
 | Tasto | Azione |
 |---|---|
 | Ctrl+K | palette dei comandi: moduli, azioni, persone, tag, cataloghi, luoghi |
-| Ctrl+1…8 | apre i moduli nell'ordine della navigazione; Ctrl+, apre Impostazioni |
+| Ctrl+1…9 | apre i moduli nell'ordine della navigazione (Ctrl+9: Varianti RAW); Ctrl+, apre Impostazioni |
 | Ctrl+B | riduce o espande la navigazione |
 | Ctrl+Z | annulla l'ultima operazione annullabile |
 | ? | foglio delle scorciatoie |
 | 1–9, 0 | in Libreria e Sequenza, aggiunge il tag del set attivo alle foto selezionate (0 toglie i tag del set) |
+| Maiusc+1…9, Invio, 1–5, 0, Spazio | in Varianti RAW, sceglie la variante migliore e dà le stelle (vedi la sezione dedicata) |
 
 **Impostazioni.** Sezioni Generale, Libreria e importazione, Riconoscimento AI, Modelli AI e sistema, Applicazioni esterne, Diagnostica e Avanzate, con una ricerca che porta al campo. Le preferenze si salvano appena modificate ("Salvato" accanto al campo). Soglie, tassonomia e percorso dei dati cambiano i risultati della libreria: restano in sospeso nella barra **Ripristina / Applica**, con l'anteprima dell'effetto. La sensibilità si regola su una scala "Più risultati ↔ Più precisi"; i valori numerici sono in Avanzate.
 
@@ -29,6 +30,7 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 - Rust stable ≥ 1.90 (`rustup`), con `rustfmt` e `clippy`
 - Node.js ≥ 20 e npm
 - Windows: Microsoft Edge WebView2 Runtime (preinstallato su Windows 11) e Build Tools di Visual Studio (C++)
+  - lo sviluppo dei RAF dalla fotocamera (modulo Varianti RAW) esiste solo su Windows; il resto del modulo funziona su ogni sistema
 - Linux (Debian/Ubuntu): `sudo apt install build-essential libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
   - per le foto HEIC: `libheif1` ≥ 1.20 e `libheif-plugin-libde265` (senza, gli HEIC vengono importati con i soli metadati)
 - macOS (Apple Silicon): Xcode Command Line Tools
@@ -73,7 +75,7 @@ Le release includono, per Linux x86_64:
 - `photo-cat_<versione>_amd64.deb` per Debian/Ubuntu: `sudo apt install ./photo-cat_<versione>_amd64.deb` installa anche le dipendenze e aggiunge photo-cat al menu delle applicazioni (categoria Fotografia). Si rimuove con `sudo apt remove photo-cat`; i dati in `~/.local/share/photo-cat` restano.
 - `photo-cat-<versione>-linux-x64.tar.gz` per le altre distro: si estrae dove si vuole e si avvia `bin/photo-cat`. Servono WebKitGTK 4.1 e GTK 3 del sistema (su Debian/Ubuntu `libwebkit2gtk-4.1-0`) e glibc ≥ 2.35.
 
-In entrambi i casi la decodifica HEIC usa la libheif di sistema (vedi Prerequisiti). L'AI gira su CPU: il runtime ONNX per Linux è incluso.
+In entrambi i casi la decodifica HEIC usa la libheif di sistema (vedi Prerequisiti). L'AI gira su CPU: il runtime ONNX per Linux è incluso. Lo sviluppo dei RAF dalla fotocamera (Varianti RAW) è solo per Windows.
 
 Verifica del download: `sha256sum -c <file>.sha256` nella cartella del file.
 
@@ -85,6 +87,8 @@ La build locale (`make build` su un Mac arm64) produce in `target/release/dist/`
 - `photo-cat_<versione>_aarch64.dmg.sha256` — verifica con `shasum -a 256 -c photo-cat_<versione>_aarch64.dmg.sha256`.
 
 Per pubblicarli sulla release GitHub della stessa versione (dopo `make release` / CI Windows+Linux): `make publish-mac`. Non passa da CI.
+
+Lo sviluppo dei RAF dalla fotocamera non è disponibile su macOS (né su Linux): il resto del modulo Varianti RAW funziona.
 
 Il DMG usa una firma ad-hoc (non Developer ID / notarizzazione). Al primo avvio macOS chiede di autorizzare un’app di uno sviluppatore non identificato: tasto destro › Apri, oppure Impostazioni di sistema › Privacy e sicurezza › Apri comunque. Se compare «è danneggiata», è una build senza firma del bundle: rifare `make build` / `make publish-mac` con la versione corrente.
 
@@ -314,6 +318,83 @@ name = "darktable"
 path = "/usr/bin/darktable"
 args = ["--library", ":memory:", "{file}"]
 ```
+
+## Varianti RAW (Fujifilm X-T5)
+
+Il modulo **Varianti RAW (Fujifilm X-T5)** sta nel gruppo "Importa ed esporta" (Ctrl+9; anche dalla ricerca dei comandi, Ctrl+K). Dopo uno shooting con la X-T5:
+
+1. apre la cartella dei RAF **senza importarla** in libreria;
+2. mette a confronto le varianti di simulazione pellicola (le ricette C1–C7 della fotocamera e "Come scattato") di ogni scatto;
+3. permette di scegliere la variante migliore e dare da 0 a 5 stelle;
+4. esporta le scelte in un **nuovo catalogo**.
+
+La guida in app (Aiuto › Guida, o il pulsante **Guida** nella pagina del modulo) ha la stessa panoramica.
+
+### Cartelle riconosciute
+
+| Forma | Contenuto |
+|---|---|
+| Solo RAF | file `.RAF` al primo livello; le varianti si possono generare dalla fotocamera (solo Windows) |
+| RAF con varianti | file `.RAF` e, accanto, `FujiView varianti/<preset>/` con i JPEG già sviluppati |
+| Una sottocartella per preset | ogni sottocartella è un preset e contiene JPEG o TIFF con gli stessi nomi dei file (l'esportazione di FujiView) |
+
+La cartella con più scatti diversi fa da guida all'elenco degli scatti, in ordine naturale (`DSCF2` prima di `DSCF10`). Una variante mancante in uno scatto compare come "Variante non disponibile", senza togliere lo scatto. Una cartella senza foto da rivedere viene rifiutata con un messaggio che spiega le forme supportate.
+
+Uno scatto senza varianti mostra l'**Anteprima RAW**, l'anteprima contenuta nel RAF: serve per confrontare e valutare, ma **non si può scegliere come variante migliore né esportare**. Va prima sviluppato.
+
+### Sviluppo dalla fotocamera (solo Windows)
+
+"Sviluppa dalla fotocamera…" invia i RAF alla X-T5 collegata con il cavo USB e le fa produrre un JPEG per ogni ricetta scelta: i banchi personalizzati **C1–C7** (con il nome che hanno nella fotocamera) e **Come scattato**, cioè le impostazioni registrate nel RAF. Si sviluppano tutti gli scatti della cartella o solo quelli selezionati nell'elenco.
+
+Preparare la fotocamera:
+
+1. nel menu `MENU > SET UP > CONNECTION SETTING > USB MODE` scegliere **USB RAW CONV./BACKUP RESTORE** (il nome in italiano può cambiare con il firmware);
+2. disattivare lo spegnimento automatico (`AUTO POWER OFF`), così la fotocamera non va in standby durante un lavoro lungo, e tenere la batteria carica;
+3. chiudere FUJIFILM X RAW Studio e ogni altro programma che usa la fotocamera: ne può parlare uno solo alla volta;
+4. usare RAF scattati con lo **stesso corpo macchina** collegato: gli altri vengono saltati.
+
+La finestra controlla la fotocamera ("Ripeti verifica" dopo ogni correzione) e, prima di partire, mostra quante conversioni servono, lo spazio su disco necessario contro quello libero (con poco spazio lo sviluppo non parte) e un tempo stimato. Valori indicativi su una X-T5 (firmware 4.31) con RAF non compressi da 87 MB: circa 2,3 s per caricare ogni RAF, poi 1,5–2,5 s per ogni variante (in media 2,4 s su 5 RAF × 8 ricette); ogni JPEG a piena risoluzione pesa circa 26 MB.
+
+- **Cartella di output**: predefinita `FujiView varianti/` accanto ai RAF, con una sottocartella per ricetta (`<ricetta>/DSCF0001.jpg`, `Come scattato/DSCF0001.jpg`); si può cambiare. Le ricette scelte vengono ricordate per la volta dopo.
+- **Come attività**: lo sviluppo gira in Attività (si può chiudere la finestra e continuare a usare l'app), con **Pausa**, **Riprendi** e **Annulla**. Si mette in pausa da solo se finisce lo spazio o la fotocamera si scollega o si spegne, e riprende da dove era arrivato.
+- **Varianti già presenti**: sono saltate, quindi un lavoro interrotto non si rifà da capo; "Sovrascrivi le varianti esistenti" le rigenera.
+- **Sicurezza**: i RAF non vengono mai modificati e ogni JPEG compare solo quando è completo. A fine lavoro i nuovi pannelli sono già nel confronto.
+
+Su Linux e macOS la voce è disattivata con "Disponibile solo su Windows"; tutto il resto del modulo funziona.
+
+### Confronto e scorciatoie
+
+Ogni preset ha un pannello (fino a 9, la griglia si adatta). Rotellina per ingrandire, trascinamento per spostare, doppio clic per adattare: **zoom e spostamento sono sincronizzati** in tutti i pannelli. La barra a destra mostra metadati e ricetta Fujifilm della variante (simulazione pellicola, gamma dinamica, bilanciamento del bianco e altro) e permette di **nascondere** e **riordinare** i preset; "Mostra tutti" li riporta tutti.
+
+| Tasto | Azione |
+|---|---|
+| Maiusc+1…9 | sceglie la variante del pannello corrispondente |
+| ← → ↑ ↓ | sposta il pannello a fuoco |
+| Invio | sceglie la variante del pannello a fuoco |
+| 1–5, 0 (anche Alt+1–5, Alt+0) | dà da 1 a 5 stelle allo scatto; 0 le toglie |
+| Spazio, Maiusc+Spazio | scatto successivo, precedente |
+| ↑ ↓ Pag↑ Pag↓ Home Fine | nell'elenco degli scatti, passano da uno scatto all'altro |
+| Ctrl+A, Ctrl+Maiusc+I | nell'elenco degli scatti, selezionano tutto o invertono la selezione |
+
+Scegliere una variante non fa avanzare da solo. Le scorciatoie sono ignorate mentre si scrive in un campo di testo, e Ctrl+1…9 continuano ad aprire i moduli. L'elenco completo è nel foglio delle scorciatoie (`?`).
+
+### Sessioni
+
+Scelte, stelle, preset nascosti e ordine dei pannelli e ultimo scatto visto si salvano **da soli**, senza un pulsante Salva, in una sessione per cartella nei dati dell'app (cartella `raw-review/`): **mai nella cartella delle foto**. Ogni scrittura è atomica e tiene una copia `.bak` usata se il file si rovina. Riaprendo la cartella si riparte da dove si era; nuovi preset (per esempio dopo uno sviluppo) non toccano le scelte già fatte. Le cartelle usate di recente compaiono in **Sessioni recenti**, dove si possono anche togliere dall'elenco (la sessione salvata non viene cancellata). **Apri progetto FujiView (.fujiview)…** apre i progetti dell'app FujiView; le sessioni di FujiView non vengono migrate da sole.
+
+Le anteprime si tengono in una cache su disco, con indice SQLite, per aprirsi subito, e le prossime foto vengono caricate in anticipo. Il limite (20 GB se vuoto) si imposta in Impostazioni › Generale › **Cache delle anteprime di Varianti RAW (GB)**, minimo 1 GB; superato il limite si eliminano le anteprime usate meno di recente, e "Svuota la cache" le elimina tutte. Le foto non vengono mai toccate.
+
+### Esportare in un nuovo catalogo
+
+"Esporta in un nuovo catalogo…" copia in una cartella a scelta le varianti scelte e le mette in un catalogo della libreria. Il riepilogo del dialogo dice quante foto verranno esportate e quante no.
+
+- **Quali foto**: solo scatti con una variante scelta, con **valutazione minima** (conteggi per stelle nel dialogo) e, volendo, solo alcuni **preset**.
+- **Solo JPEG**: si copiano byte per byte (nessuna ricodifica), senza modificare i metadati. **RAF e TIFF non vengono mai copiati**: gli scatti scelti su un TIFF sono indicati come "non JPEG" tra gli esclusi, e quelli senza variante sviluppata come "senza scelta".
+- **Nomi**: si possono mantenere gli originali o rinominare con un modello, con anteprima dei nuovi nomi. I token sono quelli dell'export della Sequenza (`{seq:04d}`, `{date}`, `{time}`, `{device}`, `{orig}`) più `{preset}`, il nome del preset della variante scelta. I numeri seguono l'ordine di scatto e, a parità di nome, si aggiunge un suffisso (-2, -3).
+- **Destinazione**: una cartella fuori da quella della revisione, dove non si scrive mai. Se non fa ancora parte della libreria viene **aggiunta come sorgente**; se ne fa parte, la sorgente viene **aggiornata**; il dialogo lo dice prima. Un file già presente nella cartella è lasciato com'è, salvo "Sovrascrivi i file già presenti".
+- **Catalogo**: nuovo con il nome indicato, oppure, se esiste già un catalogo manuale con quel nome, "Aggiungi le foto al catalogo esistente" o "Cambia nome" (i cataloghi Smart non accettano foto a mano).
+- **Valutazioni e tag**: le stelle date in revisione passano alle foto in libreria. Uno scatto con **0 stelle non azzera** una valutazione che la foto ha già in libreria. Con "Aggiungi il preset come tag" ogni foto riceve come tag il nome del preset scelto, nel set "Preset Fujifilm".
+- **Come attività**: l'esportazione (copia, importazione e catalogo) è un'unica attività in Attività, che si può annullare. Se si annulla, i file già copiati restano nella destinazione ma il catalogo non viene creato. A fine lavoro il riepilogo ha "Apri il catalogo".
 
 ## Foto simili
 

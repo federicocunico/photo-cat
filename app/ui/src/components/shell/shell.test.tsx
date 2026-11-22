@@ -267,7 +267,7 @@ describe("navigazione dei moduli", () => {
     useLayout.setState({ navCompact: false });
   });
 
-  it("Gruppi della navigazione: Sfoglia, Organizza, AI, Importa ed esporta, poi Attività e Impostazioni", () => {
+  it("Gruppi della navigazione: Sfoglia, Organizza, AI, Importa ed esporta (con Varianti RAW), poi Attività e Impostazioni", () => {
     renderNav();
     const group = (name: string) =>
       within(screen.getByRole("group", { name }))
@@ -276,7 +276,11 @@ describe("navigazione dei moduli", () => {
     expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
     expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
     expect(group("AI")).toEqual(["AI"]);
-    expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta"]);
+    expect(group("Importa ed esporta")).toEqual([
+      "Importa",
+      "Esporta",
+      "Varianti RAW (Fujifilm X-T5)",
+    ]);
     const nav = screen.getByRole("navigation", { name: "Moduli" });
     const all = within(nav).getAllByRole("button");
     expect(all[all.length - 3]).toHaveTextContent("Attività");
@@ -305,6 +309,24 @@ describe("navigazione dei moduli", () => {
     expect(useLayout.getState().module).toBe("organize");
     fireEvent.keyDown(window, { key: "3", ctrlKey: true });
     expect(useLayout.getState().module).toBe("catalogs");
+  });
+
+  it("Scorciatoia della revisione RAW: Ctrl+9 apre Varianti RAW, anche da Esporta", () => {
+    renderNav();
+    fireEvent.keyDown(window, { key: "8", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("organize");
+    fireEvent.keyDown(window, { key: "9", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("raw-review");
+    expect(screen.getByRole("button", { name: "Varianti RAW (Fujifilm X-T5)" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Control+9",
+    );
+    // Non in un campo di testo.
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "1", ctrlKey: true });
+    expect(useLayout.getState().module).toBe("raw-review");
+    input.remove();
   });
 
   it("Navigazione a icone: Ctrl+B mostra solo le icone, con il nome per il lettore di schermo", () => {

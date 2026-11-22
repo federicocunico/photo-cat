@@ -9,7 +9,7 @@ import { commands } from "../../lib/ipc";
 import { useCommands, type Command } from "../../commands/registry";
 import { fmtInt } from "../../lib/format";
 import { Icon } from "../icons";
-import { Tooltip } from "../ui";
+import { Tooltip, chooseFolder } from "../ui";
 import "./shell.css";
 
 /** Sotto questa larghezza della finestra la navigazione passa a sole icone (design D2). */
@@ -34,7 +34,7 @@ function useNarrowWindow() {
   return narrow;
 }
 
-/** Comandi della navigazione: Ctrl+1…8 per le voci dei gruppi, Ctrl+, Impostazioni, Ctrl+B. */
+/** Comandi della navigazione: Ctrl+1…9 per le voci dei gruppi, Ctrl+, Impostazioni, Ctrl+B. */
 function useNavCommands() {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
@@ -51,6 +51,17 @@ function useNavCommands() {
           : undefined,
       run: () => openModule({ module: m.id }),
     })),
+    {
+      id: "nav.raw-review.open",
+      label: t("commands.rawReviewOpen"),
+      group: "navigation",
+      keywords: `${t("modules.raw-review")} RAW Fujifilm X-T5 FujiView`,
+      // Apre il dialogo di scelta cartella e porta la cartella scelta nel modulo.
+      run: async () => {
+        const root = await chooseFolder().catch(() => null);
+        openModule(root ? { module: "raw-review", root } : { module: "raw-review" });
+      },
+    },
     ...(["overview", "reprocess", "cleanup", "map"] as const).map((section): Command => ({
       id: `nav.ai.${section}`,
       label: section === "map" ? t("aiMap.command") : t(`ai.commands.${section}`),

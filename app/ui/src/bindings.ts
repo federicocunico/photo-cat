@@ -221,6 +221,106 @@ export const commands = {
 	ignoreTzSuggestion: (group: number, offsetMin: number) => __TAURI_INVOKE<null>("ignore_tz_suggestion", { group, offsetMin }),
 	/**  Nomi dei fusi IANA per il selettore dell'ora locale. */
 	listTimezones: () => __TAURI_INVOKE<string[]>("list_timezones"),
+	/**
+	 *  Apre una cartella di foto per la revisione, senza importarla: scansiona, riprende la sessione
+	 *  salvata (o ne crea una) e rende servibili le anteprime. Una cartella senza foto è un errore che
+	 *  elenca le forme supportate.
+	 */
+	rawReviewOpen: (root: string) => __TAURI_INVOKE<OpenedReview>("raw_review_open", { root }),
+	/**
+	 *  Apre un progetto FujiView (`.fujiview`): riprende la sua cartella con scelte e valutazioni. Il
+	 *  file non viene modificato.
+	 */
+	rawReviewOpenFujiview: (path: string) => __TAURI_INVOKE<OpenedReview>("raw_review_open_fujiview", { path }),
+	/**  Sessioni recenti, dalla più recente. */
+	rawReviewRecent: () => __TAURI_INVOKE<RecentSession[]>("raw_review_recent"),
+	/**  Toglie una cartella dall'elenco delle recenti; la sessione salvata resta. */
+	rawReviewForget: (root: string) => __TAURI_INVOKE<null>("raw_review_forget", { root }),
+	/**  Imposta o toglie la variante migliore di uno scatto (l'anteprima RAW è rifiutata). */
+	rawReviewSetWinner: (sessionId: string, shotKey: string, preset: string | null) => __TAURI_INVOKE<ShotDecision>("raw_review_set_winner", { sessionId, shotKey, preset }),
+	/**  Imposta la valutazione (0-5) di uno scatto. */
+	rawReviewSetRating: (sessionId: string, shotKey: string, rating: number) => __TAURI_INVOKE<ShotDecision>("raw_review_set_rating", { sessionId, shotKey, rating }),
+	/**  Segna uno scatto come rivisto o da rivedere. */
+	rawReviewSetReviewed: (sessionId: string, shotKey: string, reviewed: boolean) => __TAURI_INVOKE<ShotDecision>("raw_review_set_reviewed", { sessionId, shotKey, reviewed }),
+	/**  Mostra o nasconde il pannello di un preset. */
+	rawReviewTogglePreset: (sessionId: string, preset: string) => __TAURI_INVOKE<PanelState>("raw_review_toggle_preset", { sessionId, preset }),
+	/**  Sposta il pannello di un preset visibile alla posizione indicata (0 = primo). */
+	rawReviewMovePreset: (sessionId: string, preset: string, to: number) => __TAURI_INVOKE<PanelState>("raw_review_move_preset", { sessionId, preset, to }),
+	/**  Mostra di nuovo tutti i pannelli nascosti (fino a nove). */
+	rawReviewShowAllPresets: (sessionId: string) => __TAURI_INVOKE<PanelState>("raw_review_show_all_presets", { sessionId }),
+	/**  Metadati e ricetta Fujifilm di una variante della sessione aperta. */
+	rawReviewMetadata: (sessionId: string, shotKey: string, preset: string) => __TAURI_INVOKE<ImageMetadata>("raw_review_metadata", { sessionId, shotKey, preset }),
+	/**  Ricorda l'ultimo scatto visto. */
+	rawReviewSetLastShot: (sessionId: string, shotKey: string | null) => __TAURI_INVOKE<null>("raw_review_set_last_shot", { sessionId, shotKey }),
+	/**  Salva la sessione di revisione nei dati dell'app (mai nella cartella delle foto). */
+	rawReviewSave: (sessionId: string) => __TAURI_INVOKE<null>("raw_review_save", { sessionId }),
+	/**  Chiavi `review://` di tutte le varianti di uno scatto (il lato è limitato a 384–8192 px). */
+	rawReviewImageKeys: (sessionId: string, shotKey: string, maxEdge: number) => __TAURI_INVOKE<ReviewImageKey[]>("raw_review_image_keys", { sessionId, shotKey, maxEdge }),
+	/**
+	 *  Precarica gli scatti vicini allo scatto corrente per i preset dei pannelli, annullando il
+	 *  precaricamento precedente non ancora eseguito.
+	 */
+	rawReviewPrefetch: (sessionId: string, centerShotKey: string, presets: string[]) => __TAURI_INVOKE<PrefetchReport>("raw_review_prefetch", { sessionId, centerShotKey, presets }),
+	/**  Chiavi delle miniature degli scatti visibili e relativa generazione in background. */
+	rawReviewThumbnails: (sessionId: string, shotKeys: string[]) => __TAURI_INVOKE<ThumbnailKey[]>("raw_review_thumbnails", { sessionId, shotKeys }),
+	/**  Chiude una sessione di revisione: le sue chiavi `review://` non valgono più. */
+	rawReviewClose: (sessionId: string) => __TAURI_INVOKE<boolean>("raw_review_close", { sessionId }),
+	/**  Spazio occupato e limite della cache delle anteprime delle Varianti RAW. */
+	rawReviewCacheInfo: () => __TAURI_INVOKE<ReviewCacheInfo>("raw_review_cache_info"),
+	/**
+	 *  Svuota la cache delle anteprime (solo i file della cache nei dati dell'app) e restituisce i
+	 *  byte liberati. Sessioni, scelte e foto non cambiano.
+	 */
+	rawReviewClearCache: () => __TAURI_INVOKE<number>("raw_review_clear_cache"),
+	/**
+	 *  Stato della fotocamera, senza bloccarsi su una fotocamera appesa. Con `available: false` (Linux
+	 *  e macOS) `message` dice "Disponibile solo su Windows".
+	 */
+	rawReviewCameraStatus: () => __TAURI_INVOKE<CameraStatus>("raw_review_camera_status"),
+	/**
+	 *  Banchi C1-C7 e "Come scattato" con riepilogo e impostazioni non applicabili, più i preset da
+	 *  preselezionare (l'ultima scelta, o tutti i banchi la prima volta).
+	 */
+	rawReviewCameraPresets: () => __TAURI_INVOKE<CameraPresets>("raw_review_camera_presets"),
+	/**
+	 *  Verifica della fotocamera: l'esito di ogni controllo con il suggerimento. `ready` è vero solo
+	 *  se nessun controllo è fallito: solo allora "Avvia" è possibile.
+	 */
+	rawReviewCameraDiagnostics: () => __TAURI_INVOKE<CameraDiagnostics>("raw_review_camera_diagnostics"),
+	/**  Registro recente della fotocamera (per l'assistenza). */
+	rawReviewCameraLog: () => __TAURI_INVOKE<CameraLogLine[]>("raw_review_camera_log"),
+	/**
+	 *  Piano dello sviluppo: RAF, conversioni totali, già presenti (saltate), da fare, spazio e tempo
+	 *  stimati, avvisi. Non scrive nulla e non occupa la fotocamera se i preset sono già noti.
+	 */
+	rawReviewDevelopPlan: (request: RawReviewDevelopRequest) => __TAURI_INVOKE<VariantPlan>("raw_review_develop_plan", { request }),
+	/**
+	 *  Avvia lo sviluppo come attività. Rifiuta l'avvio se la fotocamera non è pronta, se non c'è
+	 *  spazio sufficiente sul disco di output (con il margine), se non c'è niente da fare o se un
+	 *  altro sviluppo è in corso. Ricorda i preset scelti. Restituisce l'id dell'attività.
+	 */
+	startRawReviewDevelop: (request: RawReviewDevelopRequest) => __TAURI_INVOKE<number>("start_raw_review_develop", { request }),
+	/**
+	 *  Riepilogo di uno sviluppo concluso (convertite, saltate, errori per RAF con il motivo, o il
+	 *  motivo per cui si è fermato). `null` finché l'attività non ha finito o dopo un riavvio.
+	 */
+	rawReviewDevelopReport: (jobId: number) => __TAURI_INVOKE<DevelopReport | null>("raw_review_develop_report", { jobId }),
+	/**  Conteggi, esclusioni, anteprima dei nomi e conflitti, mentre si cambiano i filtri. */
+	rawReviewExportPreflight: (request: RawReviewExportRequest) => __TAURI_INVOKE<RawReviewExportPreflight>("raw_review_export_preflight", { request }),
+	/**  Nomi dei primi scatti da esportare mentre si scrive il modello (`null` = nomi originali). */
+	rawReviewPreviewNames: (request: RawReviewExportRequest, limit: number) => __TAURI_INVOKE<NamePreviewResult>("raw_review_preview_names", { request, limit }),
+	/**
+	 *  Avvia l'esportazione come attività (copia, import, catalogo). Il conflitto sul nome del
+	 *  catalogo e il modello dei nomi si controllano prima di copiare: in caso contrario l'avvio
+	 *  fallisce senza toccare il disco. Restituisce l'id dell'attività.
+	 */
+	startRawReviewExport: (request: RawReviewExportRequest) => __TAURI_INVOKE<number>("start_raw_review_export", { request }),
+	/**
+	 *  Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo, o il
+	 *  motivo per cui si è fermata). `null` finché l'attività non ha finito o se l'app è stata
+	 *  riavviata: il riepilogo vive solo in memoria e il dialogo lo dice.
+	 */
+	rawReviewExportReport: (jobId: number) => __TAURI_INVOKE<RawExportReport | null>("raw_review_export_report", { jobId }),
 	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
 	/**  Nomi delle prime foto mentre si scrive il modello. */
 	sequenceExportPreview: (options: SequenceExportOptions, limit: number) => __TAURI_INVOKE<NamePreviewResult>("sequence_export_preview", { options, limit }),
@@ -492,6 +592,63 @@ export type BulkOutcome = {
 	requested: number,
 };
 
+export type CameraDiagnostics = {
+	checks: DiagnosticCheck[],
+	model: string | null,
+	firmware: string | null,
+	simulated: boolean,
+	checkedAt: number,
+	/**  Nessun controllo è fallito o saltato: lo sviluppo può partire. */
+	ready: boolean,
+	/**  A step hung or failed in a way that points to a frozen camera. */
+	unresponsive: boolean,
+	/**  Still running (some checks pending). */
+	running: boolean,
+};
+
+export type CameraLogLine = {
+	/**  Milliseconds since the Unix epoch. */
+	at: number,
+	/**  "info" | "warn" | "error" */
+	level: string,
+	message: string,
+};
+
+export type CameraPreset = {
+	/**  `asshot` oppure `C1`..`C7`. */
+	id: string,
+	bank: number | null,
+	name: string,
+	folderName: string,
+	filmSimulation: string | null,
+	summary: string,
+	/**  Impostazioni del banco che la conversione in fotocamera non può applicare. */
+	unappliedProperties: string[],
+};
+
+/**  Preset della fotocamera e quelli da preselezionare (l'ultima scelta, o tutti i banchi). */
+export type CameraPresets = {
+	presets: CameraPreset[],
+	selectedIds: string[],
+};
+
+export type CameraState = "disconnected" | "notReady" | "busy" | "ready" | "error" | 
+/**  Una chiamata alla fotocamera è bloccata (fotocamera congelata): si attende che torni. */
+"unresponsive";
+
+export type CameraStatus = {
+	/**
+	 *  `false` dove lo sviluppo dalla fotocamera non esiste (Linux e macOS, senza simulatore):
+	 *  `message` dice "Disponibile solo su Windows".
+	 */
+	available: boolean,
+	state: CameraState,
+	model: string | null,
+	firmware: string | null,
+	message: string | null,
+	simulated: boolean,
+};
+
 export type Catalog = {
 	id: number,
 	name: string,
@@ -503,6 +660,14 @@ export type Catalog = {
 	 *  eliminabili né rinominabili; le loro foto sono nascoste dalle altre viste.
 	 */
 	system?: string | null,
+};
+
+/**  Conflitto di nome con un catalogo esistente (per il dialogo). */
+export type CatalogConflict = {
+	id: number,
+	name: string,
+	/**  Se si può aggiungere (catalogo manuale e non di sistema). */
+	canAdd: boolean,
 };
 
 export type CatalogCount = {
@@ -575,6 +740,8 @@ export type ChangeGroup = {
 	ids: number[],
 };
 
+export type CheckStatus = "ok" | "warning" | "error" | "pending" | "skipped" | "info";
+
 /**  Riga di anteprima: ora mostrata prima e dopo una correzione. */
 export type ClockPreview = {
 	mediaId: number,
@@ -634,6 +801,50 @@ export type DatePrecision = "day" | "month" | "year";
 
 export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
 
+/**  Un RAF che la fotocamera ha rifiutato o che non si è potuto leggere. */
+export type DevelopFailure = {
+	/**  Nome del file RAF. */
+	raf: string,
+	/**  Cartelle dei preset non sviluppate per questo RAF. */
+	presets: string[],
+	/**  Codice stabile (`errors.<codice>` per il testo localizzato). */
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+/**  Riepilogo finale di uno sviluppo (in memoria, per il dialogo). */
+export type DevelopReport = {
+	jobId: number,
+	sessionId: string,
+	outputDir: string,
+	/**  Conversioni scritte in questa esecuzione. */
+	converted: number,
+	/**  Varianti già presenti e complete, o già concluse in un'esecuzione precedente. */
+	skipped: number,
+	/**  Conversioni non riuscite (un RAF rifiutato conta una per preset). */
+	failed: number,
+	failures: DevelopFailure[],
+	cancelled: boolean,
+	/**  Errore che ha fermato l'attività (fotocamera bloccata, scrittura rifiutata…). */
+	stopped: DevelopStop | null,
+};
+
+/**  Perché lo sviluppo si è fermato prima della fine. */
+export type DevelopStop = {
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+export type DiagnosticCheck = {
+	id: string,
+	label: string,
+	status: CheckStatus,
+	detail: string | null,
+	hint: string | null,
+};
+
 /**  Motivo per cui un volto è scartato per qualità dal raggruppamento e dai suggerimenti. */
 export type DiscardReason = "blurred" | "too_small" | "non_frontal" | "low_confidence";
 
@@ -668,7 +879,19 @@ export type ErrorBatch = {
  *  Codici errore stabili: compaiono nei log, nel registro errori e nell'export
  *  diagnostico, quindi non vanno rinominati.
  */
-export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED";
+export type ErrorCode = "INTERNAL" | "IO" | "NOT_FOUND" | "ACCESS_DENIED" | "INVALID_CONFIG" | "DATABASE" | "UNSUPPORTED_FORMAT" | "DECODE_FAILED" | "CORRUPT_EXIF" | "NETWORK" | "CHECKSUM_MISMATCH" | "MODEL_UNAVAILABLE" | "SELF_TEST_FAILED" | "INSUFFICIENT_MEMORY" | "CANCELLED" | "INVALID_INPUT" | "LINK_UNSUPPORTED" | 
+/**  La fotocamera non è collegata o è stata scollegata. */
+"CAMERA_DISCONNECTED" | 
+/**  La fotocamera è usata da un altro programma. */
+"CAMERA_BUSY" | 
+/**  La fotocamera non risponde (da spegnere e riaccendere). */
+"CAMERA_UNRESPONSIVE" | 
+/**  La fotocamera ha rifiutato il RAF (altro corpo macchina o file non convertibile). */
+"RAW_CAMERA_REJECTED" | 
+/**  La fotocamera è collegata ma non in modalità USB RAW CONV./BACKUP RESTORE. */
+"CAMERA_NOT_READY" | 
+/**  Cartella di output dello sviluppo non ammessa (cartella dei RAF, radice, cartella di sistema). */
+"OUTPUT_FOLDER_REJECTED";
 
 export type ErrorCount = {
 	jobId: number | null,
@@ -748,6 +971,30 @@ export type ExifInfo = {
 	/**  Tutti i tag letti, come oggetto JSON. */
 	raw: Value | null,
 };
+
+/**  Cosa fare se esiste già un catalogo con il nome indicato. */
+export type ExistingCatalog = 
+/**  Aggiunge le foto al catalogo manuale esistente. */
+"add" | 
+/**  Crea un catalogo nuovo con un nome reso unico (`Nome (2)`). */
+"rename";
+
+/**  Perché l'esportazione non può partire. */
+export type ExportBlock = 
+/**  Nessuno scatto da esportare con questi filtri. */
+"no_photos" | 
+/**  Modello dei nomi non valido (vedi `templateErrors`). */
+"template_invalid" | 
+/**  Nome del catalogo mancante. */
+"catalog_name_empty" | 
+/**  Il nome esiste già e non si è scelto cosa fare (vedi `catalogConflict`). */
+"catalog_name_taken" | 
+/**  Il catalogo esistente non accetta foto aggiunte a mano. */
+"catalog_not_addable" | 
+/**  Destinazione mancante o non utilizzabile. */
+"destination_invalid" | 
+/**  La destinazione è (o sta dentro) una cartella della revisione. */
+"destination_in_review";
 
 export type ExportDefaults = {
 	template: string,
@@ -948,6 +1195,12 @@ export type GovernorSnapshot = {
 	aiPaused: boolean,
 };
 
+export type GpsPoint = {
+	latitude: number | null,
+	longitude: number | null,
+	altitude: number | null,
+};
+
 export type GridItem = {
 	id: number,
 	name: string,
@@ -1051,6 +1304,12 @@ export type IdentitySuggestion = {
 	person: number | null,
 };
 
+export type ImageMetadata = {
+	sections: MetaSection[],
+	gps: GpsPoint | null,
+	recipe: Recipe | null,
+};
+
 export type ImportConflict = {
 	name: string,
 	/**  Identità locale con lo stesso nome. */
@@ -1075,6 +1334,16 @@ export type ImportPreview = {
 	faces: number,
 };
 
+/**  Cosa farà la fase di import con la destinazione. */
+export type ImportTarget = 
+/**
+ *  La destinazione non è in libreria: diventa una nuova sorgente (senza sottocartelle né
+ *  monitoraggio).
+ */
+{ kind: "newSource"; path: string } | 
+/**  La destinazione è dentro una sorgente: si aggiorna solo quella cartella. */
+{ kind: "updateFolder"; sourceId: number; sourcePath: string; folder: string };
+
 export type JobRow = {
 	id: number,
 	kind: string,
@@ -1096,6 +1365,8 @@ export type JobSnapshot = {
 	error: string | null,
 	/**  Il job è fermo in attesa di memoria ("in pausa per memoria"). */
 	memoryPaused?: boolean,
+	/**  Perché il job si è fermato da solo (es. fotocamera scollegata, disco pieno). */
+	pauseReason?: PauseReason | null,
 };
 
 export type JobState = "queued" | "running" | "paused" | "completed" | "completed_with_errors" | "cancelled" | "interrupted" | "failed";
@@ -1132,6 +1403,15 @@ export type LabelView = {
 };
 
 export type Language = "it" | "en";
+
+/**  Forma della cartella aperta. */
+export type Layout = 
+/**  Solo RAF al primo livello, nessuna variante generata. */
+{ kind: "rafOnly" } | 
+/**  RAF più sottocartelle di preset in `output_dir`. */
+{ kind: "rafWithVariants"; outputDir: string } | 
+/**  Una sottocartella per preset con JPEG o TIFF, senza RAF. */
+{ kind: "presets" };
 
 export type LibraryFilter = {
 	sourceIds?: number[],
@@ -1307,6 +1587,30 @@ export type MergeHint = {
 	score: number | null,
 };
 
+export type MetaRow = {
+	/**  Chiave stabile da tradurre (per esempio `exposureTime`). */
+	label: string,
+	/**  Valore già formattato (testo italiano per i valori enumerati). */
+	value: string,
+	/**  Chiave di traduzione del valore, solo per i valori enumerati da tradurre. */
+	valueKey: MetaValueKey | null,
+};
+
+export type MetaSection = {
+	/**  Chiave stabile della sezione: `shot`, `camera`, `place` o `file`. */
+	title: string,
+	rows: MetaRow[],
+};
+
+/**
+ *  Valori enumerati traducibili dalla UI (`rawReviewMeta.values.<chiave>`).
+ * 
+ *  Il nome serializzato è la chiave i18n. L'elenco è chiuso: nei binding
+ *  TypeScript diventa `MetaValueKey`, e il typecheck controlla che ogni chiave
+ *  abbia la traduzione in italiano e in inglese.
+ */
+export type MetaValueKey = "programManual" | "programNormal" | "programAperture" | "programShutter" | "meteringAverage" | "meteringCenterWeighted" | "meteringSpot" | "meteringMultiSpot" | "meteringMultiSegment" | "meteringPartial" | "flashFired" | "flashNotFired" | "shutterMechanical" | "shutterElectronic" | "shutterElectronicLong" | "shutterElectronicFront" | "focusAuto" | "focusManual" | "filmMonochrome" | "filmMonochromeR" | "filmMonochromeYe" | "filmMonochromeG" | "filmSepia" | "wbAuto" | "wbAutoWhite" | "wbAutoAmbience" | "wbDaylight" | "wbShade" | "wbFluorescent1" | "wbFluorescent2" | "wbFluorescent3" | "wbIncandescent" | "wbFlash" | "wbUnderwater" | "wbCustom" | "wbKelvin" | "effectOff" | "effectWeak" | "effectStrong" | "grainWeakSmall" | "grainWeakLarge" | "grainStrongSmall" | "grainStrongLarge";
+
 export type Method = "symlink" | "hardlink" | "copy";
 
 export type ModelState = { state: "missing" } | { state: "downloading"; done_bytes: number; total_bytes: number; bytes_per_second?: number } | { state: "verified" } | { state: "error"; code: string; message: string } | { state: "self_test_failed"; message: string } | { state: "update_available" };
@@ -1370,6 +1674,22 @@ export type OpenTarget =
 /**  Azione del doppio clic scelta nelle impostazioni. */
 { kind: "double_click" };
 
+/**
+ *  Esito dell'apertura di una cartella o di un progetto: sessione registrata per `review://`,
+ *  scelte salvate e indice degli scatti.
+ */
+export type OpenedReview = {
+	/**  Identificatore opaco per `review://` e per i comandi di modifica. */
+	sessionId: string,
+	session: Session,
+	layout: ReviewLayoutKind,
+	presets: string[],
+	guidePreset: string | null,
+	shots: ReviewShotView[],
+	/**  Avvisi della scansione (file ignorati, duplicati, varianti mancanti). */
+	warnings: string[],
+};
+
 export type Organization = {
 	id: number,
 	dest: string,
@@ -1409,6 +1729,20 @@ export type PageAt =
 /**  Dalla posizione `offset` (salto con la barra di scorrimento). */
 { kind: "offset"; offset: number };
 
+/**  Pannelli di confronto dopo aver mostrato o nascosto un preset. */
+export type PanelState = {
+	panelPresets: string[],
+	hiddenPresets: string[],
+};
+
+/**  Perché un job si è fermato da solo (la UI lo mostra accanto allo stato "In pausa"). */
+export type PauseReason = {
+	/**  Codice stabile, tradotto dalla UI (`jobs.pauseReasons.<codice>`). */
+	code: string,
+	/**  Dettaglio per l'utente (causa e azione suggerita), già in italiano. */
+	detail: string,
+};
+
 /**  Sezione del modulo Persone. */
 export type PeopleSection = "review" | "people" | "ignored";
 
@@ -1444,6 +1778,8 @@ export type PhaseSnapshot = {
 	etaSecs: number | null,
 	/**  In pausa per memoria insufficiente (pressione critica). */
 	memoryPaused?: boolean,
+	/**  Elemento in lavorazione, se la fase lo dichiara. */
+	current?: string | null,
 };
 
 export type PhaseState = "pending" | "running" | "done";
@@ -1479,7 +1815,20 @@ export type PlaceSuggestion = {
 	inLibrary: boolean,
 };
 
+export type PlannedPreset = {
+	id: string,
+	folderName: string,
+};
+
 export type Postprocessing = "normalized_embedding512" | "token_ids" | "person_nms" | "face_landmarks_nms" | "normalized_embedding128" | "city_index";
+
+/**  Esito di `raw_review_prefetch`. */
+export type PrefetchReport = {
+	/**  Anteprime messe in coda per gli scatti vicini. */
+	queued: number,
+	/**  Lavori della generazione precedente ancora in coda, annullati da questa richiesta. */
+	cancelled: number,
+};
 
 export type Preflight = {
 	available: boolean,
@@ -1516,6 +1865,156 @@ export type RatingFilter = {
 };
 
 export type RatingOp = "at_least" | "equal" | "at_most";
+
+/**  Il catalogo risultante. */
+export type RawExportCatalog = {
+	id: number,
+	name: string,
+	/**  `true` se il catalogo è stato creato, `false` se si è aggiunto a uno esistente. */
+	created: boolean,
+	/**  Foto messe nel catalogo. */
+	photos: number,
+};
+
+/**  Un file con errore e il suo motivo. */
+export type RawExportError = {
+	/**  Nome previsto nella destinazione. */
+	name: string,
+	sourcePath: string,
+	/**  Codice stabile (`errors.<codice>` per il testo localizzato). */
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+/**  Motivo per cui l'attività si è fermata prima della fine. */
+export type RawExportFailure = {
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
+/**  Riepilogo finale dell'esportazione. */
+export type RawExportReport = {
+	jobId: number,
+	exported: number,
+	skipped: number,
+	failed: number,
+	errors: RawExportError[],
+	/**  L'attività è stata annullata (i file già copiati restano, senza catalogo). */
+	cancelled: boolean,
+	import: ImportTarget | null,
+	catalog: RawExportCatalog | null,
+	/**  File della destinazione che non si sono trovati in libreria dopo l'import. */
+	unresolved: number,
+	/**
+	 *  Errore che ha fermato l'attività (destinazione non scrivibile, import non riuscito…):
+	 *  i conteggi dicono fin dove si è arrivati, il catalogo non è stato creato.
+	 */
+	failure: RawExportFailure | null,
+};
+
+/**  Cosa sviluppare, scelto nel dialogo. */
+export type RawReviewDevelopRequest = {
+	sessionId: string,
+	/**  Solo questi scatti; assente = tutti gli scatti con un RAF. */
+	shotKeys?: string[] | null,
+	/**  Preset scelti: `asshot` e `C1`..`C7`. */
+	presetIds: string[],
+	/**  Cartella di output; assente = quella predefinita della sessione. */
+	outputDir?: string | null,
+	/**  Rigenera anche le varianti già presenti e complete. */
+	overwrite?: boolean,
+};
+
+/**  Evento di fine sviluppo: riepilogo e sessione aggiornata con i nuovi preset. */
+export type RawReviewDeveloped = {
+	jobId: number,
+	sessionId: string,
+	converted: number,
+	skipped: number,
+	failed: number,
+	cancelled: boolean,
+	/**  Perché lo sviluppo si è fermato prima della fine (fotocamera bloccata, cartella rifiutata…). */
+	stopped: DevelopStop | null,
+	/**
+	 *  La sessione riletta dal disco (scatti e preset aggiornati, scelte intatte). `None` se la
+	 *  sessione è stata chiusa nel frattempo o la rilettura non è riuscita (vedi `refreshError`).
+	 */
+	opened: OpenedReview | null,
+	refreshError: string | null,
+};
+
+/**  Dati del dialogo: conteggi, esclusioni, nomi, conflitti e cosa farà l'import. */
+export type RawReviewExportPreflight = {
+	/**  Scatti che verranno esportati con i filtri attuali. */
+	total: number,
+	/**  Scatti esportabili per valutazione (indice 0-5), prima della valutazione minima. */
+	byRating: number[],
+	/**  Esclusi perché senza una variante scelta. */
+	noChoice: number,
+	/**  Esclusi perché la variante scelta non è un JPEG. */
+	notJpeg: number,
+	/**  Esclusi perché la variante scelta non esiste più. */
+	missing: number,
+	templateErrors: TemplateError[],
+	/**  Primi nomi in ordine di scatto. */
+	preview: NamePreview[],
+	/**  File che hanno già il nome finale nella destinazione (saltati, o sovrascritti). */
+	existingFiles: number,
+	catalogConflict: CatalogConflict | null,
+	/**  Cosa farà l'import: nuova sorgente o aggiornamento di una cartella. */
+	import: ImportTarget | null,
+	canStart: boolean,
+	block: ExportBlock | null,
+};
+
+/**  Opzioni scelte nel dialogo di esportazione. */
+export type RawReviewExportRequest = {
+	sessionId: string,
+	destination: string,
+	/**  Valutazione minima (0-5). */
+	minRating?: number,
+	/**  Solo i preset indicati; assente = tutti. */
+	presets?: string[] | null,
+	/**  Modello dei nomi; `null` mantiene i nomi originali. */
+	template?: string | null,
+	catalogName: string,
+	/**  Se il catalogo esiste già: `add` aggiunge le foto, `rename` ne crea uno con nome unico. */
+	existingCatalog?: ExistingCatalog | null,
+	overwrite?: boolean,
+	presetAsTag?: boolean,
+};
+
+/**  Voce dell'indice delle sessioni recenti. */
+export type RecentSession = {
+	sourceRoot: string,
+	name: string,
+	/**  Ultimo uso, ISO 8601 UTC. */
+	lastUsedAt: string,
+	shotCount: number,
+	/**  Scatti con una variante scelta. */
+	choiceCount: number,
+};
+
+export type Recipe = {
+	/**  Riga breve, per esempio "Classic Chrome · DR200 · Auto". */
+	summary: string,
+	/**  Simulazione pellicola, per l'intestazione del pannello. */
+	film: string | null,
+	/**
+	 *  Chiave di traduzione di `film` (solo monocromatico e seppia: gli altri
+	 *  sono nomi propri).
+	 */
+	filmKey: MetaValueKey | null,
+	/**  Gamma dinamica (`DR200`). */
+	dynamicRange: string | null,
+	/**  Bilanciamento del bianco. */
+	whiteBalance: string | null,
+	/**  Chiave di traduzione di `white_balance`. */
+	whiteBalanceKey: MetaValueKey | null,
+	rows: MetaRow[],
+};
 
 export type RefFaceView = {
 	id: number,
@@ -1594,6 +2093,54 @@ export type ResourcesConfig = {
 	profile?: ResourceProfile,
 	/**  Limite massimo manuale di RAM per l'app, in MB. */
 	ram_limit_mb?: number | null,
+	/**  Limite della cache delle anteprime delle Varianti RAW, in MB (`None` = 20 GB). */
+	raw_review_cache_mb?: number | null,
+};
+
+/**  Spazio della cache delle anteprime, per le Impostazioni. */
+export type ReviewCacheInfo = {
+	/**  `false` se la cache non si è aperta all'avvio (il modulo resta senza anteprime). */
+	available: boolean,
+	/**  Byte occupati dalle anteprime. */
+	usedBytes: number,
+	/**  Limite in vigore, in byte. */
+	limitBytes: number,
+};
+
+/**  Chiave `review://` di una variante di uno scatto. */
+export type ReviewImageKey = {
+	preset: string,
+	/**  Da passare a `convertFileSrc(key, "review")`. */
+	key: string,
+};
+
+/**  Forma della cartella aperta, senza i percorsi del [`Layout`]. */
+export type ReviewLayoutKind = 
+/**  Solo RAF al primo livello. */
+"rafOnly" | 
+/**  RAF più sottocartella delle varianti già generate. */
+"rafWithVariants" | 
+/**  Una sottocartella per preset. */
+"presets";
+
+/**  Scatto della lista di revisione. */
+export type ReviewShotView = {
+	key: string,
+	displayName: string,
+	variants: ReviewVariantView[],
+};
+
+/**  Variante di uno scatto come la vede la UI: nessun percorso, il file si chiede a `review://`. */
+export type ReviewVariantView = {
+	preset: string,
+	fileName: string,
+	extension: string,
+	bytes: number,
+	kind: VariantKind,
+	/**  Si può scegliere come variante migliore (l'anteprima RAW no). */
+	selectable: boolean,
+	/**  Il file è un JPEG, quindi entra nell'export. */
+	exportable: boolean,
 };
 
 export type Role = "classification_image" | "classification_text" | "tokenizer" | "person_detection" | "face_detection" | "face_embedding" | "gazetteer";
@@ -1676,6 +2223,25 @@ export type SequencePage = {
 
 export type SequenceScope = { scope: "library" } | { scope: "catalog"; id: number } | { scope: "selection"; ids: number[] };
 
+/**  Sessione di revisione di una cartella (schema v2). */
+export type Session = {
+	schemaVersion: number,
+	name: string,
+	sourceRoot: string,
+	/**  Forma della cartella (assente nei file v1 finché non si fa il merge). */
+	layout?: Layout | null,
+	/**  Cartella di output scelta per le varianti (nuovo in v2). */
+	variantsOutputDir?: string | null,
+	presets: string[],
+	guidePreset?: string | null,
+	panelPresets: string[],
+	hiddenPresets?: string[],
+	decisions?: { [key in string]: ShotDecision },
+	lastShotKey?: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
 export type SessionView = {
 	index: number,
 	startLocal: string,
@@ -1691,6 +2257,16 @@ export type SetTag = {
 	/**  Tasto rapido (1–9). */
 	key: number,
 	name: string,
+};
+
+/**  Decisione su uno scatto. */
+export type ShotDecision = {
+	key: string,
+	/**  Valutazione da 0 a 5. */
+	rating: number,
+	/**  Preset della variante migliore; mai `raw-preview`. */
+	winnerPreset: string | null,
+	reviewed: boolean,
 };
 
 /**  Foto simili mostrate nell'Inspector. */
@@ -1889,7 +2465,7 @@ export type TemplateError = {
 	text: string,
 };
 
-export type TemplateErrorKind = "unknown_token" | "invalid_char" | "unclosed" | "empty";
+export type TemplateErrorKind = "unknown_token" | "unavailable_token" | "invalid_char" | "unclosed" | "empty";
 
 export type Theme = 
 /**  Segue il tema del sistema operativo: predefinito per le nuove installazioni. */
@@ -1914,6 +2490,13 @@ export type ThresholdImpact = {
 	/**  Gruppi di foto simili con la soglia attuale e con quella nuova. */
 	similarGroupsCurrent?: number,
 	similarGroups?: number,
+};
+
+/**  Miniatura di uno scatto della lista. */
+export type ThumbnailKey = {
+	shotKey: string,
+	/**  `None` se lo scatto non ha varianti da mostrare. */
+	key: string | null,
 };
 
 /**
@@ -1987,6 +2570,35 @@ export type UpdateSummary = {
 };
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  Natura di una variante. */
+export type VariantKind = 
+/**  File immagine (JPEG o TIFF) di un preset. */
+"image" | 
+/**  Anteprima incorporata nel RAF ("Anteprima RAW"). */
+"raw_preview";
+
+/**  Quello che farà lo sviluppo: conteggi, spazio e tempo stimati. */
+export type VariantPlan = {
+	sourceRoot: string,
+	outputDir: string,
+	rafCount: number,
+	presets: PlannedPreset[],
+	/**  RAF × preset. */
+	totalConversions: number,
+	/**  Conversioni ancora da fare. */
+	pendingConversions: number,
+	/**  Varianti già presenti e complete (saltate). */
+	alreadyDone: number,
+	estimatedBytes: number,
+	/**  `None` se non si riesce a leggere lo spazio libero (non blocca l'avvio). */
+	freeBytes: number | null,
+	/**  Margine che deve restare libero dopo lo sviluppo. */
+	safetyMarginBytes: number,
+	enoughSpace: boolean,
+	estimatedSeconds: number,
+	warnings: string[],
+};
 
 /**  Stato del monitoraggio di una sorgente. */
 export type WatchState = 

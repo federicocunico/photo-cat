@@ -50,6 +50,20 @@ pub struct ResourcesConfig {
     pub profile: ResourceProfile,
     /// Limite massimo manuale di RAM per l'app, in MB.
     pub ram_limit_mb: Option<u64>,
+    /// Limite della cache delle anteprime delle Varianti RAW, in MB (`None` = 20 GB).
+    pub raw_review_cache_mb: Option<u64>,
+}
+
+/// Limite predefinito della cache delle anteprime delle Varianti RAW (20 GB, in MB).
+pub const DEFAULT_RAW_REVIEW_CACHE_MB: u64 = 20 * 1024;
+
+impl ResourcesConfig {
+    /// Limite effettivo della cache delle anteprime delle Varianti RAW, in byte.
+    pub fn raw_review_cache_bytes(&self) -> u64 {
+        self.raw_review_cache_mb
+            .unwrap_or(DEFAULT_RAW_REVIEW_CACHE_MB)
+            .saturating_mul(1024 * 1024)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -270,6 +284,13 @@ impl Config {
                 ));
             }
         }
+        if let Some(limit) = self.resources.raw_review_cache_mb {
+            if limit < 256 {
+                return bad(format!(
+                    "resources.raw_review_cache_mb deve essere >= 256 (trovato {limit})"
+                ));
+            }
+        }
         if !(0.0..=1.0).contains(&self.ai.confidence_threshold) {
             return bad(format!(
                 "ai.confidence_threshold deve essere tra 0 e 1 (trovato {})",
@@ -348,12 +369,30 @@ mod tests {
     }
 
     #[test]
+    fn raw_review_cache_limit_defaults_to_20_gb_and_old_files_still_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        // File scritto prima del campo: resta valido e usa il limite predefinito.
+        std::fs::write(&p, "[resources]\nram_limit_mb = 4096\n").unwrap();
+        let cfg = Config::load(&p).unwrap();
+        assert_eq!(cfg.resources.raw_review_cache_mb, None);
+        assert_eq!(
+            cfg.resources.raw_review_cache_bytes(),
+            20 * 1024 * 1024 * 1024
+        );
+        std::fs::write(&p, "[resources]\nraw_review_cache_mb = 1024\n").unwrap();
+        let cfg = Config::load(&p).unwrap();
+        assert_eq!(cfg.resources.raw_review_cache_bytes(), 1024 * 1024 * 1024);
+    }
+
+    #[test]
     fn invalid_values_are_rejected() {
         let tmp = tempfile::tempdir().unwrap();
         let p = tmp.path().join("config.toml");
         for bad in [
             "[ai]\nconfidence_threshold = 1.5\n",
             "[resources]\nram_limit_mb = 10\n",
+            "[resources]\nraw_review_cache_mb = 10\n",
             "[resources]\nprofile = \"turbo\"\n",
             "not toml at all = = =",
             "[unknown]\nx = 1\n",

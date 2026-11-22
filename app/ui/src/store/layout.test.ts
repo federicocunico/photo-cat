@@ -8,6 +8,7 @@ beforeEach(() => {
     settingsSection: "general",
     diagFilter: {},
     peopleTarget: null,
+    rawReviewTarget: null,
   });
 });
 
@@ -57,6 +58,34 @@ describe("openModule", () => {
     expect(useLayout.getState()).toMatchObject({ module: "people", peopleTarget: { person: 7 } });
     useLayout.getState().openModule({ module: "jobs" });
     expect(useLayout.getState()).toMatchObject({ module: "jobs", settingsSection: "general" });
+  });
+
+  it("apre Varianti RAW su una sessione o una cartella, e senza target azzera il precedente", () => {
+    useLayout.getState().openModule({ module: "raw-review", sessionId: "s1" });
+    expect(useLayout.getState()).toMatchObject({
+      module: "raw-review",
+      rawReviewTarget: { sessionId: "s1" },
+    });
+    useLayout.getState().openModule({ module: "raw-review", root: "D:/Foto/X-T5" });
+    expect(useLayout.getState().rawReviewTarget).toEqual({
+      sessionId: undefined,
+      root: "D:/Foto/X-T5",
+    });
+    useLayout.getState().openModule({ module: "raw-review" });
+    expect(useLayout.getState().rawReviewTarget).toBeNull();
+    useLayout.getState().openModule({ module: "raw-review", sessionId: "s2" });
+    useLayout.getState().clearRawReviewTarget();
+    expect(useLayout.getState().rawReviewTarget).toBeNull();
+  });
+
+  it("una preferenza con il modulo Varianti RAW lo riapre; un nome sconosciuto no", async () => {
+    expect(destinationFor("raw-review")).toEqual({ module: "raw-review" });
+    localStorage.setItem(
+      "photo-cat.layout",
+      JSON.stringify({ state: { module: "raw-review" }, version: 2 }),
+    );
+    await useLayout.persist.rehydrate();
+    expect(useLayout.getState().module).toBe("raw-review");
   });
 
   it("i vecchi nomi dei moduli diventano destinazioni", () => {

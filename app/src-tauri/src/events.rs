@@ -226,6 +226,7 @@ mod tests {
             failed: 0,
             error: None,
             memory_paused: false,
+            pause_reason: None,
         }
     }
 
@@ -272,6 +273,7 @@ mod faces_tests {
             rate: None,
             eta_secs: None,
             memory_paused: false,
+            current: None,
         };
         JobSnapshot {
             id: 3,
@@ -283,6 +285,7 @@ mod faces_tests {
             failed: 0,
             error: None,
             memory_paused: false,
+            pause_reason: None,
         }
     }
 

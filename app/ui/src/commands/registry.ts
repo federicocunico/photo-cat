@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { isTyping, modalOpen } from "../lib/keys";
 
 export type CommandGroup =
-  "general" | "navigation" | "library" | "selection" | "viewer" | "sequence" | "people";
+  "general" | "navigation" | "library" | "selection" | "viewer" | "sequence" | "people" | "rawReview";
 
 /** Combinazione di tasti; `mod` è Ctrl (⌘ su macOS). */
 export type Shortcut = {
@@ -59,11 +59,14 @@ function matches(s: Shortcut, e: KeyboardEvent): boolean {
   const mod = e.ctrlKey || e.metaKey;
   if (Boolean(s.mod) !== mod || Boolean(s.alt) !== e.altKey) return false;
   // "?" si ottiene con Maiusc: per i simboli conta il carattere, non il tasto Maiusc.
-  const symbol = s.key.length === 1 && !/[a-z0-9]/i.test(s.key);
+  // Lo Spazio non è un simbolo: Spazio e Maiusc+Spazio sono due scorciatoie diverse.
+  const symbol = s.key.length === 1 && !/[a-z0-9 ]/i.test(s.key);
   if (!symbol && Boolean(s.shift) !== e.shiftKey) return false;
   // Con Alt (Option su macOS) `e.key` diventa un altro carattere (Option+1 = "¡"):
   // per lettere e cifre conta il tasto fisico.
-  if (s.alt && !symbol && s.key.length === 1) {
+  // Maiusc+cifra: `e.key` è il simbolo ("!"), conta il tasto fisico.
+  const physical = s.alt || (s.shift && /[0-9]/.test(s.key));
+  if (physical && !symbol && s.key.length === 1) {
     const k = s.key.toUpperCase();
     const codes = /[0-9]/.test(k) ? [`Digit${k}`, `Numpad${k}`] : [`Key${k}`];
     if (codes.includes(e.code)) return true;

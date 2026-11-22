@@ -2,7 +2,8 @@
 //!
 //! Token: `{seq}`, `{seq:0Nd}` (N da 1 a 9), `{date}` (`AAAA-MM-GG`), `{time}`
 //! (`HHMM`), `{time_full}` (`HHMMSS`), `{datetime}` (`AAAA-MM-GG_HHMMSS`),
-//! `{tag}`, `{device}`, `{people}`, `{place}`, `{orig}`. Un token vuoto elimina
+//! `{tag}`, `{device}`, `{people}`, `{place}`, `{orig}`, più `{preset}` (solo nelle
+//! Varianti RAW, vedi [`NameContext`]). Un token vuoto elimina
 //! anche il separatore (`_`, `-`, spazio, `.`) che lo precede. I nomi sono
 //! validi su Windows e Linux; i nomi uguali ricevono `-2`, `-3` in ordine.
 
@@ -28,7 +29,31 @@ pub const TOKENS: &[&str] = &[
     "people",
     "place",
     "orig",
+    "preset",
 ];
+
+/// Da dove arrivano le foto da rinominare, quindi quali token si possono usare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NameContext {
+    /// Foto della libreria (Sequenza): tutti i token tranne `{preset}`.
+    #[default]
+    Library,
+    /// File fuori libreria (Varianti RAW): solo i token ricavabili dai file
+    /// (`{seq}`, `{date}`, `{time}`, `{time_full}`, `{datetime}`, `{device}`,
+    /// `{orig}`) più `{preset}`. `{tag}`, `{people}` e `{place}` richiedono la
+    /// libreria e sono segnalati prima dell'avvio.
+    Review,
+}
+
+impl NameContext {
+    fn allows(self, t: Token) -> bool {
+        match t {
+            Token::Preset => self == NameContext::Review,
+            Token::Tag | Token::People | Token::Place => self == NameContext::Library,
+            _ => true,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Token {
@@ -42,6 +67,7 @@ pub enum Token {
     People,
     Place,
     Orig,
+    Preset,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +86,9 @@ pub struct Template {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum TemplateErrorKind {
     UnknownToken,
+    // Token valido ma non disponibile in questo contesto (es. `{tag}` nelle
+    // Varianti RAW, `{preset}` nella Sequenza).
+    UnavailableToken,
     InvalidChar,
     Unclosed,
     Empty,
@@ -88,6 +117,7 @@ fn token(name: &str) -> Option<Token> {
         "people" => Token::People,
         "place" => Token::Place,
         "orig" => Token::Orig,
+        "preset" => Token::Preset,
         other => {
             // {seq:0Nd}
             let n = other.strip_prefix("seq:0")?.strip_suffix('d')?;
@@ -100,8 +130,14 @@ fn token(name: &str) -> Option<Token> {
     })
 }
 
-/// Analizza il modello; restituisce tutti i problemi trovati.
+/// Analizza il modello per la Sequenza (libreria); restituisce tutti i problemi trovati.
 pub fn parse(template: &str) -> Result<Template, Vec<TemplateError>> {
+    parse_for(template, NameContext::Library)
+}
+
+/// Analizza il modello nel contesto dato: i token non disponibili in quel
+/// contesto sono errori `UnavailableToken`.
+pub fn parse_for(template: &str, ctx: NameContext) -> Result<Template, Vec<TemplateError>> {
     let chars: Vec<char> = template.chars().collect();
     let mut parts = Vec::new();
     let mut errors = Vec::new();
@@ -121,6 +157,12 @@ pub fn parse(template: &str) -> Result<Template, Vec<TemplateError>> {
             };
             let name: String = chars[i + 1..close].iter().collect();
             match token(name.trim()) {
+                Some(t) if !ctx.allows(t) => errors.push(TemplateError {
+                    kind: TemplateErrorKind::UnavailableToken,
+                    start: i as u32,
+                    end: close as u32 + 1,
+                    text: format!("{{{name}}}"),
+                }),
                 Some(t) => {
                     if !lit.is_empty() {
                         parts.push(Part::Lit(std::mem::take(&mut lit)));
@@ -181,6 +223,8 @@ pub struct NameInput<'a> {
     pub place: Option<&'a str>,
     /// Nome originale senza estensione.
     pub orig: &'a str,
+    /// Nome del preset della variante (solo Varianti RAW).
+    pub preset: Option<&'a str>,
 }
 
 /// Valore di un token reso sicuro come parte di un nome di file.
@@ -222,6 +266,7 @@ impl Template {
                 .join("-"),
             Token::Place => n.place.map(clean_value).unwrap_or_default(),
             Token::Orig => clean_value(n.orig),
+            Token::Preset => n.preset.map(clean_value).unwrap_or_default(),
         }
     }
 
@@ -316,6 +361,7 @@ mod tests {
             people: &[],
             place: Some("Moab"),
             orig: "DSCF0042",
+            preset: None,
         }
     }
 
@@ -353,6 +399,7 @@ mod tests {
             people: &people,
             place: Some("Moab"),
             orig: "IMG_0042",
+            preset: Some("C1 Kodachrome/64"),
         };
         let r = |s: &str| parse(s).unwrap().render(&n);
         assert_eq!(r("{seq}"), "12");
@@ -366,6 +413,40 @@ mod tests {
         assert_eq!(r("{people}"), "Giulia-Luca");
         assert_eq!(r("{place}"), "Moab");
         assert_eq!(r("{orig}"), "IMG_0042");
+        let preset = parse_for("{preset}", NameContext::Review).unwrap();
+        assert_eq!(preset.render(&n), "C1 Kodachrome-64");
+    }
+
+    #[test]
+    fn contexts_gate_the_tokens() {
+        // Sequenza: {preset} rifiutato.
+        let e = parse("{seq}_{preset}").unwrap_err();
+        assert_eq!(e.len(), 1);
+        assert_eq!(e[0].kind, TemplateErrorKind::UnavailableToken);
+        assert_eq!(e[0].text, "{preset}");
+        assert_eq!((e[0].start, e[0].end), (6, 14));
+        // Varianti RAW: i token della libreria sono rifiutati, tutti insieme.
+        let e = parse_for("{tag}_{people}_{place}_{seq}", NameContext::Review).unwrap_err();
+        assert_eq!(
+            e.iter()
+                .map(|x| (x.kind, x.text.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (TemplateErrorKind::UnavailableToken, "{tag}"),
+                (TemplateErrorKind::UnavailableToken, "{people}"),
+                (TemplateErrorKind::UnavailableToken, "{place}"),
+            ]
+        );
+        // Un token sconosciuto resta sconosciuto in entrambi i contesti.
+        assert_eq!(
+            parse_for("{camera}", NameContext::Review).unwrap_err()[0].kind,
+            TemplateErrorKind::UnknownToken
+        );
+        assert!(parse_for(
+            "{seq:04d}{seq}{date}{time}{time_full}{datetime}{device}{orig}{preset}",
+            NameContext::Review
+        )
+        .is_ok());
     }
 
     #[test]

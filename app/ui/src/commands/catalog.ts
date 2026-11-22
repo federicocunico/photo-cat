@@ -19,7 +19,7 @@ export function entries(t: TFunction): Entry[] {
     e("general", "palette", "Ctrl+K"),
     e("general", "undo", "Ctrl+Z"),
     e("general", "sheet", "?"),
-    e("navigation", "modules", "Ctrl+1…8"),
+    e("navigation", "modules", "Ctrl+1…9"),
     e("navigation", "settings", "Ctrl+,"),
     e("navigation", "nav", "Ctrl+B"),
     e("library", "inspector", "Ctrl+I"),
@@ -51,6 +51,13 @@ export function entries(t: TFunction): Entry[] {
     e("people", "merge", "U"),
     e("people", "ignore", "I"),
     e("people", "undo", "Ctrl+Z"),
+    e("rawReview", "rawChoose", "Maiusc+1…9"),
+    e("rawReview", "rawChooseFocused", "Invio"),
+    e("rawReview", "rawRate", "1–5, 0, Alt+1–5, Alt+0"),
+    e("rawReview", "rawShots", "Spazio, Maiusc+Spazio"),
+    e("rawReview", "rawPanels", "← → ↑ ↓"),
+    e("rawReview", "rawList", "↑ ↓ Pag↑ Pag↓ Home Fine"),
+    e("rawReview", "rawListSelect", "Ctrl+A, Ctrl+Maiusc+I"),
   ];
 }
 
@@ -76,4 +83,5 @@ export const SHEET_GROUPS: CommandGroup[] = [
   "viewer",
   "sequence",
   "people",
+  "rawReview",
 ];

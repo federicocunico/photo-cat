@@ -12,6 +12,7 @@ import { PeopleModule } from "./modules/people/PeopleModule";
 import { AiPage } from "./modules/ai/AiPage";
 import { CatalogsPage } from "./modules/catalogs/CatalogsPage";
 import { OrganizePage } from "./modules/organize/OrganizePage";
+import { RawReviewPage } from "./modules/raw-review/RawReviewPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
 import { TagsPage } from "./modules/tags/TagsPage";
 import { SequencePage, SequenceStatus } from "./modules/sequence/SequencePage";
@@ -21,6 +22,7 @@ import { Placeholder } from "./modules/Placeholder";
 import { destinationFor, useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents, useTrimCaches } from "./store/live";
 import { useImportRefresh } from "./modules/import/sourceActions";
+import { useDevelopedEvents } from "./modules/raw-review/useDevelopedEvents";
 import { ToastHost } from "./components/feedback/ToastHost";
 import { ConfirmHost } from "./components/feedback/ConfirmHost";
 import { applyTheme } from "./theme/tokens";
@@ -44,6 +46,8 @@ function ModuleView({ module }: { module: ModuleId }) {
       return <SequencePage />;
     case "organize":
       return <OrganizePage />;
+    case "raw-review":
+      return <RawReviewPage />;
     case "ai":
       return <AiPage />;
     case "settings":
@@ -70,6 +74,7 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   useLiveEvents();
   useTrimCaches();
   useImportRefresh();
+  useDevelopedEvents();
   useEffect(() => startLongTaskReporter(), []);
   useEffect(() => {
     const check = () =>

@@ -613,6 +613,17 @@ pub mod catalog {
         )?)
     }
 
+    /// Catalogo con quel nome (senza maiuscole né spazi ai bordi), se esiste.
+    pub fn by_name(c: &Connection, name: &str) -> StoreResult<Option<Catalog>> {
+        Ok(c.query_row(
+            "SELECT id, name, kind, rules, created_at, system FROM catalog
+             WHERE name = ?1 COLLATE NOCASE ORDER BY id LIMIT 1",
+            [name.trim()],
+            from_row,
+        )
+        .optional()?)
+    }
+
     pub fn list(c: &Connection) -> StoreResult<Vec<Catalog>> {
         let mut st = c.prepare(
             "SELECT id, name, kind, rules, created_at, system FROM catalog ORDER BY system IS NOT NULL, name COLLATE NOCASE",

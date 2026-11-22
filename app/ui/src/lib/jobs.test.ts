@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "../i18n";
-import { jobTitle } from "./jobs";
+import { FILE_WRITING_KINDS, jobTitle } from "./jobs";
 
 const t = i18n.getFixedT("it");
 const paths = (id: number) => (id === 4 ? "/media/foto" : undefined);
@@ -15,11 +15,29 @@ describe("titoli delle attività", () => {
       { options: { destination: "/media/seq" } },
       "Esportazione della sequenza in /media/seq",
     ],
+    [
+      "raw_review_export",
+      { options: { destination: "/media/dolomiti" } },
+      "Esportazione in un catalogo in /media/dolomiti",
+    ],
+    [
+      "raw_review_develop",
+      { outputDir: "/media/foto/FujiView varianti" },
+      "Sviluppo dalla fotocamera in /media/foto/FujiView varianti",
+    ],
+    ["raw_review_develop", {}, "Sviluppo dalla fotocamera"],
     ["bulk", { ids: [1, 2, 3] }, "Modifica di 3 foto"],
     ["analysis", {}, "Analisi AI"],
     ["models", {}, "Verifica dei modelli AI"],
     ["boh", {}, "Attività"],
   ])("%s %j", (kind, params, title) => {
     expect(jobTitle(t, kind, params, paths)).toBe(title);
+  });
+});
+
+describe("attività che scrivono file", () => {
+  it("lo sviluppo dalla fotocamera chiede conferma prima di essere interrotto", () => {
+    expect(FILE_WRITING_KINDS.has("raw_review_develop")).toBe(true);
+    expect(FILE_WRITING_KINDS.has("analysis")).toBe(false);
   });
 });

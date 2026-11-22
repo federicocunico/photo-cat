@@ -39,6 +39,10 @@ pub enum UndoAction {
         catalog_id: i64,
         ids: Vec<MediaId>,
     },
+    /// Catalogo manuale creato con i suoi elementi: l'annullamento lo elimina.
+    CatalogCreated {
+        catalog_id: i64,
+    },
     CatalogRemoved {
         catalog_id: i64,
         ids: Vec<MediaId>,
@@ -921,6 +925,30 @@ pub fn add_to_catalog(
     })
 }
 
+/// Crea un catalogo manuale con gli elementi indicati. Annullabile: l'annullamento
+/// elimina il catalogo, senza toccare file né foto.
+pub fn create_catalog_with_items(
+    c: &Connection,
+    name: &str,
+    ids: &[MediaId],
+) -> StoreResult<(i64, BulkOutcome)> {
+    let catalog_id = catalog::create(c, name, crate::model::CatalogKind::Manual, None)?;
+    let changed = catalog::add_items(c, catalog_id, ids)?.len();
+    let name = catalog::get(c, catalog_id)?.name;
+    record_undo(
+        c,
+        &format!("Crea il catalogo {name}"),
+        &UndoAction::CatalogCreated { catalog_id },
+    )?;
+    Ok((
+        catalog_id,
+        BulkOutcome {
+            changed,
+            requested: ids.len(),
+        },
+    ))
+}
+
 /**
  * "Sposta nel cestino": le foto entrano nel Cestino e escono dai cataloghi manuali
  * dell'utente. Un solo annullamento rimette le foto fuori dal Cestino e nei cataloghi.
@@ -1581,6 +1609,11 @@ fn undo_action(
         }
         UndoAction::CatalogAdded { catalog_id, ids } => {
             catalog::remove_items(c, catalog_id, &ids)?;
+        }
+        UndoAction::CatalogCreated { catalog_id } => {
+            // Gli elementi seguono per `ON DELETE CASCADE`; il catalogo potrebbe essere
+            // già stato eliminato a mano nel frattempo.
+            c.execute("DELETE FROM catalog WHERE id = ?1", [catalog_id])?;
         }
         UndoAction::CatalogRemoved { catalog_id, ids } => {
             catalog::add_items(c, catalog_id, &ids)?;

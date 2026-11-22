@@ -185,6 +185,45 @@ describe("schermata Job", () => {
     expect(screen.queryByTestId("memory-paused-9")).not.toBeInTheDocument();
   });
 
+  it("sviluppo dalla fotocamera: RAF e preset correnti e motivo della pausa", () => {
+    render(<Harness />);
+    act(() =>
+      emit(
+        "job",
+        job({
+          id: 14,
+          kind: "raw_review_develop",
+          state: "paused",
+          pauseReason: {
+            code: "camera_disconnected",
+            detail: "Fotocamera scollegata: ricollega il cavo USB e premi Riprendi.",
+          },
+          phases: [
+            phase("sviluppo", {
+              done: 14,
+              total: 40,
+              current: "DSCF0005.RAF · C1 Kodachrome",
+            }),
+          ],
+        }),
+      ),
+    );
+    const card = screen.getByTestId("job-14");
+    expect(within(card).getByRole("heading", { level: 2 })).toHaveTextContent(
+      "Sviluppo dalla fotocamera",
+    );
+    expect(screen.getByTestId("phase-current-sviluppo")).toHaveTextContent(
+      "DSCF0005.RAF · C1 Kodachrome",
+    );
+    expect(card).toHaveTextContent("Fotocamera scollegata");
+    expect(screen.getByTestId("pause-reason-14")).toHaveTextContent("ricollega il cavo USB");
+    // Riprendi è disponibile dopo il ricollegamento; il motivo sparisce con la ripresa.
+    fireEvent.click(screen.getByRole("button", { name: "Riprendi" }));
+    expect(commandsMock.resumeJob).toHaveBeenCalledWith(14);
+    act(() => emit("job", job({ id: 14, kind: "raw_review_develop", pauseReason: null })));
+    expect(screen.queryByTestId("pause-reason-14")).not.toBeInTheDocument();
+  });
+
   it("titolo in parole, senza identificatori interni", () => {
     render(<Harness />);
     act(() => emit("job", job({ id: 12, kind: "similar" })));

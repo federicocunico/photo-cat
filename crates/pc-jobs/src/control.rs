@@ -2,13 +2,26 @@
 //! verificati dai worker tra un elemento e l'altro.
 
 use parking_lot::{Condvar, Mutex};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
+
+/// Perché un job si è fermato da solo (la UI lo mostra accanto allo stato "In pausa").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct PauseReason {
+    /// Codice stabile, tradotto dalla UI (`jobs.pauseReasons.<codice>`).
+    pub code: String,
+    /// Dettaglio per l'utente (causa e azione suggerita), già in italiano.
+    pub detail: String,
+}
 
 #[derive(Debug, Default)]
 struct Flags {
     cancelled: bool,
     paused: bool,
+    reason: Option<PauseReason>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -31,9 +44,26 @@ impl JobControl {
         self.inner.0.lock().paused = true;
     }
 
+    /// Pausa decisa dal job stesso (disco pieno, periferica scollegata…): resta in pausa finché
+    /// l'utente non preme "Riprendi" o annulla, e la UI mostra il motivo.
+    pub fn pause_for(&self, reason: PauseReason) {
+        let mut f = self.inner.0.lock();
+        f.paused = true;
+        f.reason = Some(reason);
+    }
+
+    /// Il motivo della pausa, se è stato il job a fermarsi.
+    pub fn pause_reason(&self) -> Option<PauseReason> {
+        self.inner.0.lock().reason.clone()
+    }
+
     pub fn resume(&self) {
         let (lock, cv) = &*self.inner;
-        lock.lock().paused = false;
+        {
+            let mut f = lock.lock();
+            f.paused = false;
+            f.reason = None;
+        }
         cv.notify_all();
     }
 
@@ -53,6 +83,23 @@ impl JobControl {
             cv.wait_for(&mut f, Duration::from_millis(500));
         }
         !f.cancelled
+    }
+
+    /// Come [`JobControl::checkpoint`], ma attende al massimo `timeout`: `Some(true)` se il job
+    /// può proseguire, `Some(false)` se è stato annullato, `None` se è ancora in pausa (chi
+    /// aspetta può fare altro, per esempio ricontrollare una periferica, e riprovare).
+    pub fn checkpoint_timeout(&self, timeout: Duration) -> Option<bool> {
+        let (lock, cv) = &*self.inner;
+        let deadline = std::time::Instant::now() + timeout;
+        let mut f = lock.lock();
+        while f.paused && !f.cancelled {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            cv.wait_for(&mut f, (deadline - now).min(Duration::from_millis(500)));
+        }
+        Some(!f.cancelled)
     }
 }
 
@@ -83,5 +130,41 @@ mod tests {
         std::thread::sleep(Duration::from_millis(30));
         c.cancel();
         assert!(!t.join().unwrap());
+    }
+
+    #[test]
+    fn checkpoint_timeout_returns_while_still_paused() {
+        let c = JobControl::new();
+        assert_eq!(c.checkpoint_timeout(Duration::from_millis(10)), Some(true));
+        c.pause();
+        let start = Instant::now();
+        assert_eq!(c.checkpoint_timeout(Duration::from_millis(40)), None);
+        assert!(start.elapsed() >= Duration::from_millis(30));
+        let c2 = c.clone();
+        let t = std::thread::spawn(move || c2.checkpoint_timeout(Duration::from_secs(10)));
+        std::thread::sleep(Duration::from_millis(30));
+        c.resume();
+        assert_eq!(t.join().unwrap(), Some(true));
+        c.pause();
+        c.cancel();
+        assert_eq!(c.checkpoint_timeout(Duration::from_secs(10)), Some(false));
+    }
+
+    #[test]
+    fn pause_for_keeps_the_reason_until_resume() {
+        let c = JobControl::new();
+        assert!(c.pause_reason().is_none());
+        c.pause_for(PauseReason {
+            code: "disk_space".into(),
+            detail: "Libera spazio".into(),
+        });
+        assert!(c.is_paused());
+        assert_eq!(c.pause_reason().unwrap().code, "disk_space");
+        c.resume();
+        assert!(!c.is_paused());
+        assert!(c.pause_reason().is_none());
+        // Una pausa dell'utente non ha motivo.
+        c.pause();
+        assert!(c.pause_reason().is_none());
     }
 }

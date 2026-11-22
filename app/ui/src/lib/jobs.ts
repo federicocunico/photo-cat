@@ -17,6 +17,8 @@ export const JOB_KINDS = [
   "export",
   "organize",
   "sequence_export",
+  "raw_review_export",
+  "raw_review_develop",
   "bulk",
   "analysis",
   "models",
@@ -33,6 +35,9 @@ export const FILE_WRITING_KINDS: ReadonlySet<string> = new Set([
   "export",
   "organize",
   "sequence_export",
+  "raw_review_export",
+  // Scrive le varianti JPEG nelle cartelle dei preset (mai sui RAF).
+  "raw_review_develop",
 ]);
 
 type Params = Record<string, unknown> | null | undefined;
@@ -53,10 +58,14 @@ export function jobObject(
     case "export":
     case "organize":
       return typeof p.destination === "string" ? p.destination : undefined;
+    case "raw_review_export":
     case "sequence_export": {
       const options = p.options as Record<string, unknown> | undefined;
       return typeof options?.destination === "string" ? options.destination : undefined;
     }
+    case "raw_review_develop":
+      // Cartella di output delle varianti.
+      return typeof p.outputDir === "string" ? p.outputDir : undefined;
     case "bulk":
     case "analysis":
       return Array.isArray(p.ids) ? String(p.ids.length) : undefined;

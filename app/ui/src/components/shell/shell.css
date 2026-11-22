@@ -69,6 +69,10 @@
 }
 .nav-label {
   flex: 1;
+  /* Nomi lunghi (es. "Varianti RAW (Fujifilm X-T5)") vanno a capo invece di essere tagliati. */
+  padding: 4px 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .nav-toggle {
   color: var(--pc-text-secondary);

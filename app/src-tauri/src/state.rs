@@ -13,6 +13,14 @@ use pc_store::{AppStore, Store};
 use std::sync::Arc;
 
 pub struct AppState {
+    /// Varianti RAW: cache delle anteprime, sessioni aperte e precaricamento.
+    pub raw_review: Arc<crate::raw_review::ReviewState>,
+    /// Riepiloghi delle esportazioni delle Varianti RAW in nuovi cataloghi.
+    pub raw_export_reports: pc_organize::raw_export::RawExportReports,
+    /// Servizio della fotocamera (uno solo): thread con la sessione esclusiva, stato e preset.
+    pub camera: Arc<pc_raw_review::variants::service::CameraService>,
+    /// Riepiloghi degli sviluppi dalla fotocamera.
+    pub develop_reports: pc_raw_review::variants::job::DevelopReports,
     pub paths: AppPaths,
     pub config: Arc<RwLock<Config>>,
     pub face_policy: Arc<pc_ai::face_policy::FacePolicy>,

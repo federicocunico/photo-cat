@@ -551,3 +551,60 @@ it("Elimina tutti i dati dei volti: pericolo e conferma esplicita", async () => 
   fireEvent.click(within(ask).getByRole("button", { name: "Elimina tutti i dati dei volti" }));
   await waitFor(() => expect(commandsMock.purgeFaces).toHaveBeenCalled());
 });
+
+it("cache delle anteprime di Varianti RAW: limite in GB, spazio in uso e Svuota", async () => {
+  commandsMock.rawReviewCacheInfo.mockResolvedValue({
+    available: true,
+    usedBytes: 3 * 1024 ** 3,
+    limitBytes: 20 * 1024 ** 3,
+  } as never);
+  commandsMock.rawReviewClearCache.mockResolvedValue((3 * 1024 ** 3) as never);
+  renderSettings();
+  const field = await screen.findByLabelText("Cache delle anteprime di Varianti RAW (GB)");
+  expect(await screen.findByText("In uso: 3,0 GB su 20,0 GB")).toBeInTheDocument();
+  // Un valore sotto 1 GB non si salva.
+  fireEvent.change(field, { target: { value: "0.1" } });
+  expect(await screen.findByText("Almeno 1 GB.")).toBeInTheDocument();
+  fireEvent.change(field, { target: { value: "8" } });
+  await waitFor(() =>
+    expect(commandsMock.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        resources: expect.objectContaining({ raw_review_cache_mb: 8192 }),
+      }),
+    ),
+  );
+  expect(commandsMock.saveSettings).toHaveBeenCalledTimes(1);
+  // Vuoto: torna al predefinito (20 GB).
+  fireEvent.change(field, { target: { value: "" } });
+  await waitFor(() =>
+    expect(commandsMock.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        resources: expect.objectContaining({ raw_review_cache_mb: null }),
+      }),
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Svuota la cache" }));
+  await waitFor(() => expect(commandsMock.rawReviewClearCache).toHaveBeenCalled());
+  await waitFor(() =>
+    expect(useToast.getState().notices.map((n) => n.message)).toContain(
+      "Cache delle anteprime svuotata: liberati 3,0 GB.",
+    ),
+  );
+});
+
+it("cache di Varianti RAW: si trova con la ricerca e si traduce in inglese", async () => {
+  commandsMock.rawReviewCacheInfo.mockResolvedValue({
+    available: true,
+    usedBytes: 0,
+    limitBytes: 20 * 1024 ** 3,
+  } as never);
+  renderSettings();
+  fireEvent.change(await screen.findByLabelText("Cerca nelle impostazioni"), {
+    target: { value: "varianti" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Cache delle anteprime di Varianti RAW/ }));
+  expect(useLayout.getState().settingsSection).toBe("general");
+  await act(() => i18n.changeLanguage("en"));
+  expect(await screen.findByLabelText("RAW Variants preview cache (GB)")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Clear the cache" })).toBeDisabled();
+});

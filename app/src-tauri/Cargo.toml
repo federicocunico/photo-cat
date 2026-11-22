@@ -14,6 +14,8 @@ heif = ["pc-ingest/heif"]
 e2e = []
 # Test dei comandi con i modelli reali (`assets/models`, runtime ONNX di sviluppo).
 model-tests = []
+# Fotocamera simulata al posto di quella reale (prove e sviluppo; su Windows con PHOTOCAT_FAKE_CAMERA=1).
+fake-camera = ["pc-raw-review/fake-camera"]
 
 [lib]
 name = "photo_cat_lib"
@@ -32,6 +34,7 @@ pc-ingest = { workspace = true, features = ["specta"] }
 pc-models = { workspace = true, features = ["specta"] }
 pc-ai = { workspace = true, features = ["specta"] }
 pc-organize = { workspace = true, features = ["specta"] }
+pc-raw-review = { workspace = true, features = ["specta"] }
 tauri-plugin-dialog = "2"
 tauri = { version = "2", features = [] }
 serde.workspace = true
@@ -47,9 +50,11 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 tempfile.workspace = true
 tauri-plugin-opener = "2"
+natord = "1"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [target.'cfg(windows)'.dependencies]
 # Stesse versioni usate da Tauri/wry: servono solo per verificare il runtime WebView2 all'avvio.

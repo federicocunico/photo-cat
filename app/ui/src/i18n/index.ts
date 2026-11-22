@@ -24,6 +24,7 @@ import { selection } from "./selection";
 import { commandStrings } from "./commands";
 import { guide } from "./guide";
 import { faceMenu } from "./faceMenu";
+import { rawReview } from "./rawReview";
 
 export type Language = "it" | "en";
 
@@ -54,6 +55,7 @@ void i18n.use(initReactI18next).init({
         ...commandStrings.it,
         ...guide.it,
         ...faceMenu.it,
+        ...rawReview.it,
       },
     },
     en: {
@@ -81,6 +83,7 @@ void i18n.use(initReactI18next).init({
         ...commandStrings.en,
         ...guide.en,
         ...faceMenu.en,
+        ...rawReview.en,
       },
     },
   },

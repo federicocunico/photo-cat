@@ -48,6 +48,25 @@ import type {
   FaceCursor,
   LocateFaceRequest,
   LocatedFace,
+  OpenedReview,
+  RecentSession,
+  ShotDecision,
+  PanelState,
+  ReviewImageKey,
+  ThumbnailKey,
+  PrefetchReport,
+  ImageMetadata,
+  RawReviewExportRequest,
+  RawReviewExportPreflight,
+  RawExportReport,
+  CameraStatus,
+  CameraPresets,
+  CameraDiagnostics,
+  CameraLogLine,
+  RawReviewDevelopRequest,
+  RawReviewDeveloped,
+  VariantPlan,
+  DevelopReport,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -63,6 +82,10 @@ export const emitters = {
   trimCaches: [] as Cb<void>[],
   facesChanged: [] as Cb<void>[],
   sourceWatchChanged: [] as Cb<void>[],
+  rawReviewCameraStatus: [] as Cb<CameraStatus>[],
+  rawReviewCameraLog: [] as Cb<CameraLogLine>[],
+  rawReviewCameraDiagnostics: [] as Cb<CameraDiagnostics>[],
+  rawReviewDeveloped: [] as Cb<RawReviewDeveloped>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -190,9 +213,9 @@ export const commandsMock = {
     count: 0,
     maxId: 0,
   })),
-  faceSelectionIds: vi.fn<
-    (scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>
-  >(async () => []),
+  faceSelectionIds: vi.fn<(scope: FaceScope, maxId: number, except: number[]) => Promise<number[]>>(
+    async () => [],
+  ),
   faceSelectionMedia: vi.fn<
     (scope: FaceScope, maxId: number, except: number[]) => Promise<FaceSelectionMedia>
   >(async () => ({ present: [], missing: [] })),
@@ -306,6 +329,70 @@ export const commandsMock = {
   listOrganizations: vi.fn(async () => []),
   undoOrganization: vi.fn(async () => [0, 0]),
   faceCount: vi.fn(async () => 0),
+  rawReviewCacheInfo: vi.fn(async () => ({
+    available: true,
+    usedBytes: 0,
+    limitBytes: 20 * 1024 ** 3,
+  })),
+  rawReviewClearCache: vi.fn(async () => 0),
+  rawReviewExportPreflight: vi.fn<(request: RawReviewExportRequest) => Promise<RawReviewExportPreflight>>(),
+  rawReviewPreviewNames: vi.fn<(request: RawReviewExportRequest, limit: number) => Promise<NamePreviewResult>>(
+    async () => ({ names: [], errors: [] }),
+  ),
+  startRawReviewExport: vi.fn<(request: RawReviewExportRequest) => Promise<number>>(async () => 88),
+  rawReviewExportReport: vi.fn<(jobId: number) => Promise<RawExportReport | null>>(async () => null),
+  // Sviluppo dalla fotocamera: di norma "non disponibile" (Linux/macOS); i test lo cambiano.
+  rawReviewCameraStatus: vi.fn<() => Promise<CameraStatus>>(async () => ({
+    available: false,
+    state: "disconnected",
+    model: null,
+    firmware: null,
+    message: "Disponibile solo su Windows",
+    simulated: false,
+  })),
+  rawReviewCameraPresets: vi.fn<() => Promise<CameraPresets>>(async () => ({
+    presets: [],
+    selectedIds: [],
+  })),
+  rawReviewCameraDiagnostics: vi.fn<() => Promise<CameraDiagnostics>>(),
+  rawReviewCameraLog: vi.fn(async () => [] as CameraLogLine[]),
+  rawReviewDevelopPlan: vi.fn<(request: RawReviewDevelopRequest) => Promise<VariantPlan>>(),
+  startRawReviewDevelop: vi.fn<(request: RawReviewDevelopRequest) => Promise<number>>(
+    async () => 90,
+  ),
+  rawReviewDevelopReport: vi.fn<(jobId: number) => Promise<DevelopReport | null>>(
+    async () => null,
+  ),
+  rawReviewOpen: vi.fn<(root: string) => Promise<OpenedReview>>(),
+  rawReviewOpenFujiview: vi.fn<(path: string) => Promise<OpenedReview>>(),
+  rawReviewRecent: vi.fn(async () => [] as RecentSession[]),
+  rawReviewForget: vi.fn(async () => null),
+  rawReviewSave: vi.fn(async () => null),
+  rawReviewClose: vi.fn(async () => true),
+  rawReviewSetWinner:
+    vi.fn<(id: string, shot: string, preset: string | null) => Promise<ShotDecision>>(),
+  rawReviewSetReviewed:
+    vi.fn<(id: string, shot: string, reviewed: boolean) => Promise<ShotDecision>>(),
+  rawReviewSetLastShot: vi.fn(async () => null),
+  rawReviewSetRating:
+    vi.fn<(id: string, shot: string, rating: number) => Promise<ShotDecision>>(),
+  rawReviewThumbnails: vi.fn<(id: string, shots: string[]) => Promise<ThumbnailKey[]>>(
+    async () => [],
+  ),
+  rawReviewTogglePreset: vi.fn<(id: string, preset: string) => Promise<PanelState>>(),
+  rawReviewMovePreset: vi.fn<(id: string, preset: string, to: number) => Promise<PanelState>>(),
+  rawReviewShowAllPresets: vi.fn<(id: string) => Promise<PanelState>>(),
+  rawReviewImageKeys: vi.fn<(id: string, shot: string, edge: number) => Promise<ReviewImageKey[]>>(
+    async () => [],
+  ),
+  rawReviewPrefetch: vi.fn<
+    (id: string, center: string, presets: string[]) => Promise<PrefetchReport>
+  >(async () => ({ queued: 0, cancelled: 0 })),
+  rawReviewMetadata: vi.fn(async (): Promise<ImageMetadata> => ({
+    sections: [],
+    gps: null,
+    recipe: null,
+  })),
   saveSettings: vi.fn(async () => null),
   getTaxonomy: vi.fn(),
   addCategory: vi.fn(),
@@ -344,7 +431,14 @@ export function ipcMockModule(tauri = false) {
   return {
     commands: commandsMock,
     isTauri: () => tauri,
-    EVENTS: { facesChanged: "faces://changed", sourceWatchChanged: "sources://watch-changed" },
+    EVENTS: {
+      facesChanged: "faces://changed",
+      sourceWatchChanged: "sources://watch-changed",
+      rawReviewCameraStatus: "raw-review://camera-status",
+      rawReviewCameraLog: "raw-review://camera-log",
+      rawReviewCameraDiagnostics: "raw-review://camera-diagnostics",
+      rawReviewDeveloped: "raw-review://developed",
+    },
     events: {
       onBootPhase: reg(emitters.boot),
       onBootReady: reg(emitters.boot),
@@ -357,6 +451,10 @@ export function ipcMockModule(tauri = false) {
       onTrimCaches: reg(emitters.trimCaches),
       onFacesChanged: reg(emitters.facesChanged),
       onSourceWatchChanged: reg(emitters.sourceWatchChanged),
+      onRawReviewCameraStatus: reg(emitters.rawReviewCameraStatus),
+      onRawReviewCameraLog: reg(emitters.rawReviewCameraLog),
+      onRawReviewCameraDiagnostics: reg(emitters.rawReviewCameraDiagnostics),
+      onRawReviewDeveloped: reg(emitters.rawReviewDeveloped),
     },
   };
 }
@@ -370,6 +468,7 @@ export function job(partial: Partial<JobSnapshot> & { id: number }): JobSnapshot
     failed: 0,
     error: null,
     memoryPaused: false,
+    pauseReason: null,
     phases: [],
     ...partial,
   };

@@ -67,9 +67,17 @@ const dynamic: Record<string, string[]> = {
   "shell.models": ["ready", "missing", "update", "error"],
   "jobs.kinds": [
     "other",
-    ...["import", "relink", "export", "organize", "sequence_export", "bulk", "analysis"].flatMap(
-      (k) => [k, `${k}_of`],
-    ),
+    ...[
+      "import",
+      "relink",
+      "export",
+      "organize",
+      "sequence_export",
+      "raw_review_export",
+      "raw_review_develop",
+      "bulk",
+      "analysis",
+    ].flatMap((k) => [k, `${k}_of`]),
     ...[
       "models",
       "similar",
@@ -115,7 +123,27 @@ const dynamic: Record<string, string[]> = {
     "place",
     "orig",
   ],
-  "jobs.phases": ["orari", "preparazione", "codifica", "per_tag", "manifest", "archivi"],
+  "jobs.phases": [
+    "orari",
+    "preparazione",
+    "codifica",
+    "per_tag",
+    "manifest",
+    "archivi",
+    "copia",
+    "catalogo",
+    "sviluppo",
+    "sviluppo_raw",
+  ],
+  // Motivi per cui un'attività si ferma da sola (PauseReason.code del backend).
+  "jobs.pauseReasons": [
+    "camera_disconnected",
+    "camera_busy",
+    "camera_not_ready",
+    "disk_space",
+    "output_write",
+    "other",
+  ],
   // Diagnostica: livelli degli errori e del log (errors.ts).
   "diag.levels": ["error", "warn"],
   "diag.levelFilter": ["error", "warn"],
@@ -206,6 +234,12 @@ const dynamic: Record<string, string[]> = {
     "navLabel",
   ],
 };
+const bindings = import.meta.glob("../bindings.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
 for (const [prefix, values] of Object.entries(dynamic))
   for (const v of values) used.add(`${prefix}.${v}`);
 
@@ -228,6 +262,22 @@ describe("risorse di traduzione", () => {
         (k) =>
           i18n.getResource(lng, "translation", k) === undefined &&
           i18n.getResource(lng, "translation", `${k}_other`) === undefined,
+      );
+      expect(missing).toEqual([]);
+    });
+  }
+
+  // errors.<codice> è la chiave del messaggio di ogni AppError (ErrorCode::message_key).
+  for (const lng of ["it", "en"]) {
+    it(`ogni codice errore del backend ha il testo in ${lng}`, () => {
+      const source = Object.values(bindings)[0] ?? "";
+      const union = /export type ErrorCode = ([^;]+);/.exec(source)?.[1] ?? "";
+      const codes = [...union.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]);
+      expect(codes).toContain("RAW_CAMERA_REJECTED");
+      expect(codes).toContain("CAMERA_DISCONNECTED");
+      expect(codes).toContain("CAMERA_BUSY");
+      const missing = codes.filter(
+        (code) => i18n.getResource(lng, "translation", `errors.${code.toLowerCase()}`) === undefined,
       );
       expect(missing).toEqual([]);
     });

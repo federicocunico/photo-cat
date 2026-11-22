@@ -18,6 +18,9 @@ mod open_with;
 mod organize;
 mod people;
 mod places;
+mod raw_review;
+mod raw_review_develop;
+mod raw_review_export;
 mod recovery;
 mod sequence;
 mod settings;
@@ -206,6 +209,36 @@ pub fn bindings() -> Builder<tauri::Wry> {
             timeline::place_undated,
             timeline::ignore_tz_suggestion,
             timeline::list_timezones,
+            raw_review::raw_review_open,
+            raw_review::raw_review_open_fujiview,
+            raw_review::raw_review_recent,
+            raw_review::raw_review_forget,
+            raw_review::raw_review_set_winner,
+            raw_review::raw_review_set_rating,
+            raw_review::raw_review_set_reviewed,
+            raw_review::raw_review_toggle_preset,
+            raw_review::raw_review_move_preset,
+            raw_review::raw_review_show_all_presets,
+            raw_review::raw_review_metadata,
+            raw_review::raw_review_set_last_shot,
+            raw_review::raw_review_save,
+            raw_review::raw_review_image_keys,
+            raw_review::raw_review_prefetch,
+            raw_review::raw_review_thumbnails,
+            raw_review::raw_review_close,
+            raw_review::raw_review_cache_info,
+            raw_review::raw_review_clear_cache,
+            raw_review_develop::raw_review_camera_status,
+            raw_review_develop::raw_review_camera_presets,
+            raw_review_develop::raw_review_camera_diagnostics,
+            raw_review_develop::raw_review_camera_log,
+            raw_review_develop::raw_review_develop_plan,
+            raw_review_develop::start_raw_review_develop,
+            raw_review_develop::raw_review_develop_report,
+            raw_review_export::raw_review_export_preflight,
+            raw_review_export::raw_review_preview_names,
+            raw_review_export::start_raw_review_export,
+            raw_review_export::raw_review_export_report,
             sequence::sequence_export_defaults,
             sequence::sequence_export_preview,
             sequence::sequence_export_preflight,
@@ -269,6 +302,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
         .typ::<pc_diag::ErrorRecord>()
         .typ::<pc_diag::ErrorBatch>()
         .typ::<pc_models::store::ModelStatus>()
+        // Varianti RAW: tipi dei metadati (task 3.3).
+        .typ::<pc_raw_review::metadata::ImageMetadata>()
+        .typ::<raw_review_develop::RawReviewDeveloped>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
         .disable_serde_phases()
@@ -342,6 +378,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
+        .register_asynchronous_uri_scheme_protocol("review", raw_review::review_protocol)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -611,16 +648,59 @@ fn initialize(
         decode_workers: recommended_workers(budget.budget_mb, 160, cores),
     };
     // Dopo l'import (senza analisi AI accodata) i gruppi partono dalle impronte percettive.
+    let raw_export_phases = import::phases(&import_deps);
+    let import_factory: pc_jobs::JobFactory = Arc::new(move |p| {
+        let plan = import::plan(import_deps.clone(), p)?;
+        let plan = pc_ai::place_geo::with_place_geo_after(import_similar_deps.clone(), plan);
+        Ok(pc_ai::similar::with_similar_followup(
+            import_similar_deps.clone(),
+            plan,
+        ))
+    });
+    jobs.register(import::JOB_KIND, import_factory.clone());
+    // Varianti RAW: copia, import (le stesse fasi dell'import) e catalogo in un'unica attività.
+    let raw_export_reports = pc_organize::raw_export::RawExportReports::default();
+    let raw_export_hook = pc_organize::raw_export::ImportHook {
+        phases: raw_export_phases,
+        factory: import_factory,
+    };
+    let (raw_export_store, raw_export_app, raw_export_sink) =
+        (store.clone(), app_store.clone(), raw_export_reports.clone());
     jobs.register(
-        import::JOB_KIND,
+        pc_organize::raw_export::JOB_KIND,
         Arc::new(move |p| {
-            let plan = import::plan(import_deps.clone(), p)?;
-            let plan = pc_ai::place_geo::with_place_geo_after(import_similar_deps.clone(), plan);
-            Ok(pc_ai::similar::with_similar_followup(
-                import_similar_deps.clone(),
-                plan,
-            ))
+            pc_organize::raw_export::plan(
+                raw_export_store.clone(),
+                raw_export_app.clone(),
+                raw_export_hook.clone(),
+                raw_export_sink.clone(),
+                p,
+            )
         }),
+    );
+    // Varianti RAW: sviluppo dalla fotocamera. Il servizio (thread con la sessione esclusiva) è
+    // uno solo e il job lo tiene per tutta la durata; alla fine la sessione si aggiorna.
+    let camera = Arc::new(pc_raw_review::variants::service::CameraService::start(
+        pc_raw_review::variants::diagnostics::CameraBackend::for_platform(),
+        raw_review_develop::camera_event_sink(handle.clone()),
+    ));
+    let develop_reports = pc_raw_review::variants::job::DevelopReports::default();
+    let develop_deps = pc_raw_review::variants::job::DevelopDeps {
+        service: camera.clone(),
+        reports: develop_reports.clone(),
+        on_finished: {
+            let handle = handle.clone();
+            Arc::new(move |report| {
+                if let Some(state) = handle.try_state::<AppState>() {
+                    raw_review_develop::on_develop_finished(&handle, &state, report);
+                }
+            })
+        },
+        options: Default::default(),
+    };
+    jobs.register(
+        pc_raw_review::variants::job::JOB_KIND,
+        Arc::new(move |p| pc_raw_review::variants::job::plan(develop_deps.clone(), p)),
     );
     let relink_store = store.clone();
     jobs.register(
@@ -686,7 +766,18 @@ fn initialize(
     #[cfg(any(debug_assertions, feature = "e2e"))]
     dev::on_startup(&store, &jobs);
 
+    // Varianti RAW: cache sotto la cartella dati, worker limitati da core e memoria del governor.
+    let raw_review = Arc::new(raw_review::ReviewState::new(
+        paths.root(),
+        config.resources.raw_review_cache_bytes(),
+        governor.clone(),
+        raw_review::Workers::for_system(budget.budget_mb, cores),
+    ));
     handle.manage(AppState {
+        raw_review,
+        raw_export_reports,
+        camera,
+        develop_reports,
         paths: paths.clone(),
         config: shared_config,
         face_policy,
