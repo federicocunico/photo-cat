@@ -93,7 +93,7 @@
   margin: 0;
   font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
 }
-.rr-bar-export {
+.rr-bar-develop {
   margin-left: auto;
 }
 .rr-warnings summary {
@@ -644,4 +644,227 @@
   margin: 0;
   color: var(--pc-warn);
   font-weight: var(--pc-weight-medium);
+}
+
+/* Dialogo "Sviluppa dalla fotocamera" e verifica della fotocamera. */
+.dv-form,
+.dv-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.dv-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  margin: 0;
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  min-width: 0;
+}
+.dv-section > h3,
+.dv-section > legend {
+  margin: 0;
+  padding: 0 var(--pc-space-1);
+  font: var(--pc-weight-medium) var(--pc-font-md, inherit) var(--pc-font-ui);
+}
+.dv-section > p {
+  margin: 0;
+}
+.dv-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-2);
+}
+.dv-check input {
+  margin-top: 3px;
+}
+.dv-small {
+  font-size: var(--pc-font-sm);
+}
+.dv-warn {
+  color: var(--pc-warn);
+  margin: 0;
+}
+.dv-block {
+  display: block;
+}
+.dv-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dv-preset {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--pc-space-5);
+}
+.dv-preset .dv-check {
+  margin-left: calc(-1 * var(--pc-space-5));
+}
+.dv-preset-info {
+  display: flex;
+  flex-direction: column;
+}
+.dv-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--pc-space-1) var(--pc-space-4);
+  margin: 0;
+}
+.dv-facts dd {
+  margin: 0;
+  font-weight: var(--pc-weight-medium);
+}
+.dv-stale {
+  opacity: 0.55;
+}
+.dv-bar {
+  width: 100%;
+}
+.dv-final {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+  justify-content: flex-end;
+}
+.dv-report-title {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+.dv-report-list,
+.dv-failures {
+  margin: var(--pc-space-1) 0 0;
+  padding-left: var(--pc-space-5);
+}
+.dv-failures {
+  max-height: 200px;
+  overflow: auto;
+}
+
+.cc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.cc-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--pc-space-2);
+}
+.cc-status .btn {
+  margin-left: auto;
+}
+.cc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pc-text-muted, gray);
+}
+.cc-dot.cc-ready {
+  background: var(--pc-ok);
+}
+.cc-dot.cc-busy,
+.cc-dot.cc-notReady,
+.cc-dot.cc-unresponsive {
+  background: var(--pc-warn);
+}
+.cc-dot.cc-error,
+.cc-dot.cc-disconnected {
+  background: var(--pc-danger);
+}
+.cc-headline {
+  margin: 0;
+  font-weight: var(--pc-weight-medium);
+}
+.cc-tone-ready {
+  color: var(--pc-ok);
+}
+.cc-tone-problems,
+.cc-tone-waiting {
+  color: var(--pc-warn);
+}
+.cc-tone-frozen,
+.cc-tone-none {
+  color: var(--pc-danger);
+}
+.cc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cc-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cc-check {
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.cc-check-icon {
+  display: inline-flex;
+  margin-top: 2px;
+}
+.cc-check-ok .cc-check-icon {
+  color: var(--pc-ok);
+}
+.cc-check-warning .cc-check-icon {
+  color: var(--pc-warn);
+}
+.cc-check-error .cc-check-icon {
+  color: var(--pc-danger);
+}
+.cc-check-body {
+  display: flex;
+  flex-direction: column;
+}
+.cc-check-body small {
+  color: var(--pc-text-muted, inherit);
+}
+.cc-check-body em {
+  font-style: normal;
+  color: var(--pc-warn);
+}
+.cc-guide summary,
+.cc-log summary {
+  cursor: pointer;
+}
+.cc-guide ol {
+  margin: var(--pc-space-1) 0 0;
+  padding-left: var(--pc-space-5);
+}
+.cc-log-actions {
+  margin: var(--pc-space-1) 0;
+}
+.cc-log-text {
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--pc-space-2);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+  font: var(--pc-font-sm) var(--pc-font-mono, monospace);
+  white-space: pre-wrap;
+}
+.cc-log-warn {
+  color: var(--pc-warn);
+}
+.cc-log-error {
+  color: var(--pc-danger);
 }

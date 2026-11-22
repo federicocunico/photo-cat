@@ -22,6 +22,7 @@ import { Placeholder } from "./modules/Placeholder";
 import { destinationFor, useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents, useTrimCaches } from "./store/live";
 import { useImportRefresh } from "./modules/import/sourceActions";
+import { useDevelopedEvents } from "./modules/raw-review/useDevelopedEvents";
 import { ToastHost } from "./components/feedback/ToastHost";
 import { ConfirmHost } from "./components/feedback/ConfirmHost";
 import { applyTheme } from "./theme/tokens";
@@ -73,6 +74,7 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   useLiveEvents();
   useTrimCaches();
   useImportRefresh();
+  useDevelopedEvents();
   useEffect(() => startLongTaskReporter(), []);
   useEffect(() => {
     const check = () =>

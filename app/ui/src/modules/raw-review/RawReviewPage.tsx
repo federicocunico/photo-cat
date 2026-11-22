@@ -30,6 +30,7 @@ import {
 } from "../../store/rawReview";
 import { notifyError } from "../../store/toasts";
 import { ComparePanels } from "./ComparePanels";
+import { DevelopDialog } from "./DevelopDialog";
 import { ExportToCatalogDialog } from "./ExportToCatalogDialog";
 import { InfoSidebar } from "./InfoSidebar";
 import { RatingRow } from "../library/InspectorQuality";
@@ -37,6 +38,7 @@ import { focusedPanel } from "./panelFocus";
 import { presetLabel } from "./presetLabel";
 import { chooseProject } from "./pickers";
 import { ShotList } from "./ShotList";
+import { useCameraStatus } from "./useCamera";
 import { useRawReviewShortcuts } from "./useRawReviewShortcuts";
 import { forgetMetadata, useShotMetadata } from "./useShotMetadata";
 import "./raw-review.css";
@@ -241,6 +243,11 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
   ).length;
   const total = opened.shots.length;
   const [exportOpen, setExportOpen] = useState(false);
+  const [developOpen, setDevelopOpen] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const camera = useCameraStatus();
+  // Sviluppare dalla fotocamera esiste solo su Windows: altrove la voce resta, spenta, con il motivo.
+  const developReason = camera && !camera.available ? t("rawDevelop.windowsOnly") : undefined;
 
   // Pannello a fuoco per Invio e frecce: quello scelto, altrimenti la variante migliore o il primo.
   // Un altro scatto riparte da capo.
@@ -274,6 +281,14 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
           </details>
         )}
         <Button
+          className="rr-bar-develop"
+          icon={<Icon.RawReview size={16} />}
+          disabledReason={developReason}
+          onClick={() => setDevelopOpen(true)}
+        >
+          {t("rawDevelop.open")}
+        </Button>
+        <Button
           className="rr-bar-export"
           icon={<Icon.Export size={16} />}
           onClick={() => setExportOpen(true)}
@@ -291,6 +306,12 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
         sessionName={opened.session.name}
         presets={opened.presets}
       />
+      <DevelopDialog
+        open={developOpen}
+        onOpenChange={setDevelopOpen}
+        sessionId={opened.sessionId}
+        selectedKeys={selectedKeys}
+      />
       <div className="rr-workspace">
         <ShotList
           sessionId={opened.sessionId}
@@ -298,6 +319,7 @@ function Review({ opened, onClose }: { opened: OpenedReview; onClose: () => void
           decisions={opened.session.decisions}
           current={shotIndex}
           onOpen={selectShot}
+          onSelectionChange={setSelectedKeys}
         />
         <div className="rr-main">
           {shot ? (
