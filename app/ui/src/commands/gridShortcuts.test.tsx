@@ -96,6 +96,54 @@ describe("scorciatoie di selezione della shell", () => {
     panel.remove();
   });
 
+  it("una vista secondaria (con hasFocus) è attiva solo con il focus, in qualunque ordine", () => {
+    let focused = false;
+    const main = mk();
+    const side: ActiveGrid = { ...mk(), hasFocus: () => focused };
+    function Pair({ sideFirst }: { sideFirst: boolean }) {
+      useGridShortcuts();
+      return sideFirst ? (
+        <>
+          <Reg grid={side} />
+          <Reg grid={main} />
+        </>
+      ) : (
+        <>
+          <Reg grid={main} />
+          <Reg grid={side} />
+        </>
+      );
+    }
+    function Reg({ grid }: { grid: ActiveGrid }) {
+      useActiveGrid(grid);
+      return null;
+    }
+    for (const sideFirst of [true, false]) {
+      const { unmount } = render(<Pair sideFirst={sideFirst} />);
+      focused = false;
+      fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+      expect(main.selectAll).toHaveBeenCalledTimes(1);
+      expect(side.selectAll).not.toHaveBeenCalled();
+      focused = true;
+      fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+      expect(side.selectAll).toHaveBeenCalledTimes(1);
+      expect(main.selectAll).toHaveBeenCalledTimes(1);
+      unmount();
+      useCommandStore.setState({ commands: [] });
+      vi.mocked(main.selectAll).mockClear();
+      vi.mocked(side.selectAll).mockClear();
+    }
+  });
+
+  it("una vista secondaria da sola senza focus non riceve le scorciatoie", () => {
+    const side: ActiveGrid = { ...mk(), hasFocus: () => false };
+    render(<Host grid={side} />);
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(side.selectAll).not.toHaveBeenCalled();
+    expect(side.clear).not.toHaveBeenCalled();
+  });
+
   it("Esc non fa nulla senza selezione e senza griglia attiva", () => {
     const grid = mk(0);
     const { unmount } = render(<Host grid={grid} />);

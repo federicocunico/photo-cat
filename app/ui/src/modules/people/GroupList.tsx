@@ -15,14 +15,19 @@ import {
   isTauri,
   type GroupRow,
   type GroupSort,
+  type GroupTarget,
   type IdentityRow,
   type PeopleSection,
   type PeopleSections,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Button } from "../../components/ui";
-import { notifyError } from "../../store/toasts";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { useActiveGrid } from "../../commands/gridShortcuts";
+import { notify, notifyError } from "../../store/toasts";
+import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
+import { PersonPicker, type PickerChoice } from "./PersonPicker";
+import { withNewIdentity } from "./newIdentity";
+import { PhotoCountFilter } from "./PhotoCountFilter";
 import "./people.css";
 import { fmtDate, fmtDec, fmtInt } from "../../lib/format";
 import { useDebounced } from "../library/facets";
@@ -60,6 +65,29 @@ type VirtItem =
   | { kind: "discarded"; count: number };
 
 const SORTS: GroupSort[] = ["photos_desc", "name_asc", "faces_desc"];
+
+/** Gruppi al massimo in un'assegnazione in blocco (come `people::MAX_BULK_GROUPS`). */
+const MAX_BULK_GROUPS = 10_000;
+
+/** Riga di un'identità (come quella di un gruppo) più lo spazio tra le righe. */
+const ID_ROW_H = ROW_H + 2;
+
+/** In jsdom / flex annidato l'altezza misurata può essere 0: resta l'initialRect. */
+function observeRect(el: HTMLElement | null, cb: (r: { width: number; height: number }) => void) {
+  const emit = () => {
+    const w = el?.clientWidth ?? 0;
+    const h = el?.clientHeight ?? 0;
+    cb({ width: w || 300, height: h || 600 });
+  };
+  emit();
+  if (!el || typeof ResizeObserver === "undefined") return () => {};
+  const ro = new ResizeObserver(emit);
+  ro.observe(el);
+  return () => ro.disconnect();
+}
+
+/** Dialogo aperto, con la selezione fissata all'apertura (la conferma riguarda proprio quella). */
+type BulkDialog = { kind: "merge"; uids: string[] } | { kind: "assign"; ids: number[] } | null;
 
 function Cover({ group }: { group: GroupRow }) {
   const [failed, setFailed] = useState(false);
@@ -117,11 +145,22 @@ export const GroupList = forwardRef<
     selectedIds: number[];
     onSelect: (next: GroupListSelection) => void;
     onCreateIdentity?: () => void;
+    /** Cambia solo l'insieme dei gruppi selezionati (Seleziona tutto, Esc), senza aprirne uno. */
+    onSelectedIdsChange?: (ids: number[]) => void;
     /** Elenco corrente dei gruppi (per tastiera e refresh senza perdere la selezione). */
     onCatalogChange?: (rows: GroupRow[]) => void;
   }
 >(function GroupList(
-  { section, onSectionChange, target, selectedIds, onSelect, onCreateIdentity, onCatalogChange },
+  {
+    section,
+    onSectionChange,
+    target,
+    selectedIds,
+    onSelect,
+    onCreateIdentity,
+    onSelectedIdsChange,
+    onCatalogChange,
+  },
   ref,
 ) {
   const { t } = useTranslation();
@@ -131,8 +170,32 @@ export const GroupList = forwardRef<
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [restoreBusy, setRestoreBusy] = useState<number | null>(null);
+  // Filtro "con al massimo N foto" e selezione multipla delle identità (sezione Persone).
+  const [maxPhotos, setMaxPhotos] = useState<number | null>(null);
+  const [idSel, setIdSel] = useState<string[]>([]);
+  const [idAnchor, setIdAnchor] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [dialog, setDialog] = useState<BulkDialog>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  // L'utente sta lavorando sull'elenco (ultimo clic o focus dentro): Ctrl+A va qui, non ai volti.
+  const listActive = useRef(false);
   const debouncedQuery = useDebounced(query, 200);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const track = (e: Event) => {
+      const node = e.target instanceof Node ? e.target : null;
+      // I dialoghi (in un portale) non cambiano la vista su cui si sta lavorando.
+      if (node instanceof Element && node.closest('[role="dialog"]')) return;
+      listActive.current = node != null && (asideRef.current?.contains(node) ?? false);
+    };
+    document.addEventListener("pointerdown", track, true);
+    document.addEventListener("focusin", track, true);
+    return () => {
+      document.removeEventListener("pointerdown", track, true);
+      document.removeEventListener("focusin", track, true);
+    };
+  }, []);
 
   const restoreGroup = async (id: number, e: MouseEvent) => {
     e.stopPropagation();
@@ -156,15 +219,15 @@ export const GroupList = forwardRef<
   });
 
   const identities = useQuery({
-    queryKey: ["identities", debouncedQuery.trim()],
-    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null),
+    queryKey: ["identities", debouncedQuery.trim(), maxPhotos],
+    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null, maxPhotos),
     enabled: isTauri() && section === "people",
   });
 
   const groups = useInfiniteQuery({
-    queryKey: ["people-groups", section, debouncedQuery, sort],
+    queryKey: ["people-groups", section, debouncedQuery, sort, maxPhotos],
     queryFn: ({ pageParam }) =>
-      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE),
+      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE, maxPhotos),
     initialPageParam: null as number | null,
     getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && section !== "people",
@@ -235,24 +298,27 @@ export const GroupList = forwardRef<
     estimateSize: (i) => (virtItems[i]?.kind === "label" ? LABEL_H : ROW_H),
     overscan: 8,
     initialRect: { width: 300, height: 600 },
-    // In jsdom / flex annidato l'altezza misurata può essere 0: resta l'initialRect.
-    observeElementRect: (_instance, cb) => {
-      const el = scrollRef.current;
-      const emit = () => {
-        const w = el?.clientWidth ?? 0;
-        const h = el?.clientHeight ?? 0;
-        cb({ width: w || 300, height: h || 600 });
-      };
-      emit();
-      if (!el || typeof ResizeObserver === "undefined") return () => {};
-      const ro = new ResizeObserver(emit);
-      ro.observe(el);
-      return () => ro.disconnect();
-    },
+    observeElementRect: (_instance, cb) => observeRect(scrollRef.current, cb),
+  });
+
+  // Anche le identità sono virtualizzate: con migliaia di righe e la selezione multipla, ogni
+  // clic ridisegnerebbe tutto l'elenco.
+  const idVirt = useVirtualizer({
+    count: section === "people" ? identityRows.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ID_ROW_H,
+    overscan: 8,
+    initialRect: { width: 300, height: 600 },
+    observeElementRect: (_instance, cb) => observeRect(scrollRef.current, cb),
   });
 
   useImperativeHandle(ref, () => ({
     scrollToGroup(id: number) {
+      if (section === "people") {
+        const index = identityRows.findIndex((r) => r.person === id);
+        if (index >= 0) idVirt.scrollToIndex(index, { align: "auto" });
+        return;
+      }
       const index = virtItems.findIndex((i) => i.kind === "group" && i.group.id === id);
       if (index >= 0) virt.scrollToIndex(index, { align: "auto" });
     },
@@ -329,6 +395,202 @@ export const GroupList = forwardRef<
     });
   };
 
+  // --- Selezione multipla e azioni in blocco (Persone e Da rivedere) ---------------------------
+  useEffect(() => {
+    setMaxPhotos(null);
+    setIdSel([]);
+    setIdAnchor(null);
+    setDialog(null);
+  }, [section]);
+
+  /** Solo le identità che si vedono: un'unione non annullabile non tocca righe nascoste. */
+  const selectedUids = useMemo(() => {
+    const set = new Set(idSel);
+    return identityRows.filter((r) => set.has(r.uid)).map((r) => r.uid);
+  }, [idSel, identityRows]);
+  const selectedUidSet = useMemo(() => new Set(selectedUids), [selectedUids]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const bulkSection = section === "people" || section === "review";
+  const selectedCount = section === "people" ? selectedUids.length : selectedIds.length;
+
+  const clickIdentity = (row: IdentityRow, e: MouseEvent) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!ctrl && !e.shiftKey) {
+      setIdSel([row.uid]);
+      setIdAnchor(row.uid);
+      selectIdentity(row);
+      return;
+    }
+    const order = identityRows.map((r) => r.uid);
+    const a = idAnchor != null ? order.indexOf(idAnchor) : -1;
+    const b = order.indexOf(row.uid);
+    if (e.shiftKey && a >= 0 && b >= 0) {
+      const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+      setIdSel(ctrl ? Array.from(new Set([...selectedUids, ...range])) : range);
+      return;
+    }
+    setIdSel(
+      selectedUidSet.has(row.uid)
+        ? selectedUids.filter((u) => u !== row.uid)
+        : [...selectedUids, row.uid],
+    );
+    setIdAnchor(row.uid);
+  };
+
+  const resolveAllIds = async (): Promise<number[] | string[]> =>
+    section === "people"
+      ? groupFilter === null
+        ? commands.identitySelectionUids(debouncedQuery.trim() || null, maxPhotos)
+        : identityRows.map((r) => r.uid)
+      : commands.groupSelectionIds(section, debouncedQuery || null, maxPhotos);
+
+  const applySelection = (all: Array<number | string>) => {
+    if (section === "people") setIdSel(all as string[]);
+    else onSelectedIdsChange?.(all as number[]);
+  };
+
+  const selectAll = async () => {
+    setSelecting(true);
+    try {
+      applySelection(await resolveAllIds());
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setSelecting(false);
+    }
+  };
+  const invertSelection = async () => {
+    setSelecting(true);
+    try {
+      const all = await resolveAllIds();
+      const have = new Set<number | string>(section === "people" ? selectedUids : selectedIds);
+      applySelection(all.filter((x: number | string) => !have.has(x)));
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setSelecting(false);
+    }
+  };
+  const clearSelection = () => {
+    if (section === "people") {
+      setIdSel([]);
+      setIdAnchor(null);
+    } else onSelectedIdsChange?.([]);
+  };
+
+  /**
+   * Cambiando il filtro per numero di foto la selezione si azzera: non resta selezionato nulla
+   * che il nuovo elenco non mostra (e "Seleziona tutto" riparte dal nuovo elenco).
+   */
+  const changeMaxPhotos = (max: number | null) => {
+    if (max === maxPhotos) return;
+    setMaxPhotos(max);
+    clearSelection();
+  };
+
+  // Ctrl+A, Ctrl+Maiusc+I ed Esc agiscono sull'elenco mentre l'utente ci lavora (ultimo clic o
+  // focus nell'elenco); altrimenti restano ai volti.
+  useActiveGrid(
+    {
+      selectAll,
+      invert: invertSelection,
+      clear: clearSelection,
+      count: () => selectedCount,
+      hasFocus: () => listActive.current && (asideRef.current?.isConnected ?? false),
+    },
+    bulkSection,
+  );
+
+  const nameOf = (c: PickerChoice) => c.name;
+
+  /** "Unisci in…": anteprima con i conteggi, poi unione in un'unica operazione. */
+  const mergeProps = (uids: string[]) => ({
+    mode: "identities" as const,
+    title: t("people.bulk.mergePickTitle"),
+    intro: t("people.bulk.mergePickIntro", { count: uids.length }),
+    danger: true,
+    describe: async (c: PickerChoice) => {
+      if (c.kind !== "identity") throw new Error(t("people.failed"));
+      const p = await commands.mergeIdentitiesPreview(uids, c.uid);
+      if (p.identities === 0) throw new Error(t("people.bulk.mergeNothing", { name: c.name }));
+      const more = p.identities - p.names.length;
+      return {
+        title: t("people.bulk.mergeTitle", { count: p.identities, name: c.name }),
+        body: t("people.bulk.mergeBody", {
+          name: c.name,
+          photos: t("people.bulk.photosCount", { count: p.photos }),
+          refs: t("people.bulk.refFacesCount", { count: p.referenceFaces }),
+        }),
+        details: p.names.length
+          ? [
+              more > 0
+                ? t("people.bulk.mergeNamesMore", {
+                    names: p.names.join(", "),
+                    count: more,
+                  })
+                : t("people.bulk.mergeNames", { names: p.names.join(", ") }),
+            ]
+          : undefined,
+        warning:
+          p.withoutPhotos > 0
+            ? t("people.bulk.mergeWithoutPhotos", { count: p.withoutPhotos })
+            : undefined,
+      };
+    },
+    confirmLabel: (c: PickerChoice) => t("people.bulk.mergeConfirm", { name: nameOf(c) }),
+    run: async (c: PickerChoice) => {
+      if (c.kind !== "identity") return;
+      const n = await commands.mergeIdentitiesMany(uids, c.uid);
+      notify({
+        key: "people-bulk",
+        tone: "ok",
+        message: t("people.bulk.mergedDone", { count: n, name: c.name }),
+      });
+      setIdSel([]);
+      setIdAnchor(null);
+      onSelect({ target: null, selectedIds: [], anchor: null, group: null, identity: null });
+      await refreshPeople(qc);
+    },
+  });
+
+  /** "Assegna a…": tutti i volti dei gruppi selezionati in una persona, in un solo passaggio. */
+  const assignProps = (ids: number[]) => ({
+    mode: "assign" as const,
+    title: t("people.bulk.assignPickTitle"),
+    intro: t("people.bulk.assignPickIntro", { count: ids.length }),
+    allowCreate: true,
+    describe: (c: PickerChoice) => {
+      // Lo stesso limite del backend: meglio dirlo qui che dopo la conferma.
+      if (ids.length > MAX_BULK_GROUPS)
+        throw new Error(t("people.bulk.tooMany", { max: fmtInt(MAX_BULK_GROUPS) }));
+      return {
+        title: t("people.bulk.assignTitle", { count: ids.length, name: c.name }),
+        body: t("people.bulk.assignBody", { name: c.name }),
+      };
+    },
+    confirmLabel: (c: PickerChoice) => t("people.bulk.assignConfirm", { name: nameOf(c) }),
+    run: async (c: PickerChoice) => {
+      const assign = (to: GroupTarget) => commands.assignGroups(ids, to);
+      const out =
+        c.kind === "person"
+          ? await assign({ kind: "person", person: c.person })
+          : c.kind === "identity"
+            ? await assign({ kind: "identity", uid: c.uid })
+            : await withNewIdentity(c.name, (uid) => assign({ kind: "identity", uid }));
+      let message = t("people.bulk.assignedDone", {
+        count: out.groups,
+        faces: t("people.bulk.facesCount", { count: out.faces }),
+        name: c.name,
+      });
+      if (out.skippedFaces > 0)
+        message += " " + t("people.bulk.skipped", { count: out.skippedFaces });
+      notifyPeopleUndo(qc, message);
+      onSelect({ target: null, selectedIds: [], anchor: null, group: null, identity: null });
+      await refreshPeopleFast(qc);
+    },
+  });
+
   const emptyMsg =
     section === "review"
       ? t("people.emptyReview")
@@ -340,7 +602,7 @@ export const GroupList = forwardRef<
   const everyone = identities.data?.identities ?? [];
 
   return (
-    <aside aria-label={t("people.listLabel")} className="people-list">
+    <aside ref={asideRef} aria-label={t("people.listLabel")} className="people-list">
       <div className="people-list-head">
         <div role="tablist" className="people-tabs">
           {tab("review", t("people.sectionReview"), counts.review)}
@@ -413,6 +675,48 @@ export const GroupList = forwardRef<
             </div>
           </>
         )}
+        {bulkSection && (
+          <div role="toolbar" aria-label={t("people.bulk.toolbar")} className="people-bulk-bar">
+            <PhotoCountFilter
+              key={section}
+              value={maxPhotos}
+              onChange={changeMaxPhotos}
+              atMost={section === "people"}
+            />
+            <div className="people-wrap people-wrap--gap-sm">
+              <Button size="sm" disabled={selecting} onClick={() => void selectAll()}>
+                {t("people.selectAll")}
+              </Button>
+              <Button size="sm" disabled={selectedCount === 0} onClick={clearSelection}>
+                {t("people.bulk.clear")}
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabledReason={
+                  selectedCount === 0
+                    ? t(section === "people" ? "people.bulk.noIdentities" : "people.bulk.noGroups")
+                    : undefined
+                }
+                onClick={() =>
+                  setDialog(
+                    section === "people"
+                      ? { kind: "merge", uids: selectedUids }
+                      : { kind: "assign", ids: selectedIds },
+                  )
+                }
+              >
+                {section === "people"
+                  ? t("people.bulk.mergeAction")
+                  : t("people.bulk.assignAction")}
+              </Button>
+            </div>
+            {/* Sempre presente: il cambio di conteggio (Ctrl+A, Esc) viene annunciato. */}
+            <span aria-live="polite" aria-atomic="true" className="muted people-muted-sm">
+              {selectedCount > 0 ? t("people.bulk.selectedCount", { count: selectedCount }) : null}
+            </span>
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} data-testid="group-list-scroll" className="people-list-scroll">
@@ -425,17 +729,32 @@ export const GroupList = forwardRef<
           >
             {() => (
               <>
-                <div role="list" aria-label={t("identities.title")} className="people-id-list">
-                  {identityRows.map((r) => {
-                    const selected =
+                <div
+                  role="list"
+                  aria-label={t("identities.title")}
+                  className="people-virt"
+                  style={{ height: idVirt.getTotalSize() }}
+                >
+                  {idVirt.getVirtualItems().map((vi) => {
+                    const r = identityRows[vi.index];
+                    if (!r) return null;
+                    const checked = selectedUidSet.has(r.uid);
+                    const current =
                       (target?.kind === "identity" && target.uid === r.uid) ||
                       (target?.kind === "group" && r.person != null && target.id === r.person);
+                    const selected = checked || current;
                     return (
-                      <div key={r.uid} role="listitem">
+                      <div
+                        key={r.uid}
+                        role="listitem"
+                        className="people-virt-row"
+                        style={{ height: ROW_H, transform: `translateY(${vi.start}px)` }}
+                      >
                         <button
                           type="button"
-                          aria-current={selected || undefined}
-                          onClick={() => selectIdentity(r)}
+                          aria-current={current || undefined}
+                          aria-pressed={checked}
+                          onClick={(e) => clickIdentity(r, e)}
                           className="people-list-item people-list-item--id"
                           style={{
                             border: selected
@@ -496,7 +815,7 @@ export const GroupList = forwardRef<
                     const groupSelected =
                       item.kind === "group" &&
                       ((target?.kind === "group" && target.id === item.group.id) ||
-                        selectedIds.includes(item.group.id));
+                        selectedIdSet.has(item.group.id));
                     return (
                       <div
                         key={vi.key}
@@ -520,7 +839,7 @@ export const GroupList = forwardRef<
                               aria-selected={
                                 target?.kind === "group" && target.id === item.group.id
                                   ? true
-                                  : selectedIds.includes(item.group.id)
+                                  : selectedIdSet.has(item.group.id)
                               }
                               onClick={(e) => selectGroup(item.group.id, e, item.group)}
                               onKeyDown={(e) => {
@@ -657,6 +976,13 @@ export const GroupList = forwardRef<
           </QueryView>
         )}
       </div>
+
+      {dialog?.kind === "merge" && (
+        <PersonPicker {...mergeProps(dialog.uids)} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === "assign" && (
+        <PersonPicker {...assignProps(dialog.ids)} onClose={() => setDialog(null)} />
+      )}
     </aside>
   );
 });

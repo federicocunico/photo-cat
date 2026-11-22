@@ -13,7 +13,7 @@ export async function listAllGroups(section: PeopleSection, sort: GroupSort): Pr
   const seen = new Set<number>();
   let after: number | null = null;
   for (let i = 0; i < MAX_PAGES; i++) {
-    const page = await commands.listGroups(section, null, sort, after, PAGE);
+    const page = await commands.listGroups(section, null, sort, after, PAGE, null);
     for (const g of page.items) {
       if (seen.has(g.id)) continue;
       seen.add(g.id);

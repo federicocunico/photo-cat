@@ -100,7 +100,7 @@ export const PersonCard = forwardRef<
 
   const identities = useQuery({
     queryKey: ["identities", ""],
-    queryFn: () => commands.listIdentities(null),
+    queryFn: () => commands.listIdentities(null, null),
     enabled: isTauri() && (section === "people" || creating),
   });
 

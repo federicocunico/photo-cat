@@ -64,14 +64,16 @@ pub async fn list_groups(
     sort: GroupSort,
     after: Option<i64>,
     limit: Option<i64>,
+    max_photos: Option<u32>,
 ) -> AppResult<GroupPage> {
     let (db, m) = (state.store.clone(), face_match(&state));
     tauri::async_runtime::spawn_blocking(move || {
         db.read(move |c| {
-            people::list_groups(
+            people::list_groups_filtered(
                 c,
                 section,
                 query.as_deref(),
+                max_photos,
                 sort,
                 after,
                 limit.unwrap_or(50),
@@ -79,6 +81,26 @@ pub async fn list_groups(
             )
         })
         .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Id di tutti i gruppi dell'elenco filtrato di una sezione (stessi criteri di `list_groups`,
+/// senza pagine): la base di "Seleziona tutto" su centinaia di righe. Ordinati per foto
+/// decrescenti; con qualche migliaio di gruppi resta un elenco di interi.
+#[tauri::command]
+#[specta::specta]
+pub async fn group_selection_ids(
+    state: State<'_, AppState>,
+    section: PeopleSection,
+    query: Option<String>,
+    max_photos: Option<u32>,
+) -> AppResult<Vec<i64>> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| people::group_selection_ids(c, section, query.as_deref(), max_photos, &m))
+            .map_err(Into::into)
     })
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
@@ -371,6 +393,53 @@ pub async fn correct_person(
     events::faces_changed(&app);
     Ok(())
 }
+/// Destinazione di `assign_groups`, come arriva dalla UI.
+#[derive(Debug, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum GroupTarget {
+    /// Una persona o un gruppo della libreria.
+    Person { person: i64 },
+    /// Un'identità dell'app (nome letto da `app.db`): persona collegata, creata se manca.
+    Identity { uid: String },
+    /// Una nuova persona con nome, senza identità.
+    NewPerson { name: String },
+}
+
+/// Assegna tutti i volti dei `groups` a una persona, a un'identità o a una nuova persona con
+/// una sola operazione e una sola voce di annullamento (`undo_people`). I volti rifiutati per la
+/// destinazione ("non è questa persona") non vengono assegnati.
+#[tauri::command]
+#[specta::specta]
+pub async fn assign_groups(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    groups: Vec<i64>,
+    target: GroupTarget,
+) -> AppResult<people::AssignOutcome> {
+    let (db, app_store) = (state.store.clone(), state.app_store.clone());
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let target = match target {
+            GroupTarget::Person { person } => people::AssignTarget::Person { id: person },
+            GroupTarget::Identity { uid } => {
+                let i = app_store.with(|c| pc_store::app_store::identities::get(c, &uid))?;
+                people::AssignTarget::Identity {
+                    uid: i.uid,
+                    name: i.name,
+                }
+            }
+            GroupTarget::NewPerson { name } => people::AssignTarget::NewPerson { name },
+        };
+        db.write(move |c| people::assign_groups(c, &groups, &target))
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    if out.groups + out.faces > 0 {
+        events::faces_changed(&app);
+    }
+    Ok(out)
+}
+
 /// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento: gruppi
 /// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse".
 fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {

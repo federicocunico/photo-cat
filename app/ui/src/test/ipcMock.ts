@@ -10,6 +10,9 @@ import type {
   ModelStatus,
   RenameOutcome,
   IdentitiesView,
+  AssignOutcome,
+  GroupTarget,
+  MergePreview,
   RefFaceView,
   AddReferenceOutcome,
   IdentitySuggestion,
@@ -183,12 +186,29 @@ export const commandsMock = {
       sort: GroupSort,
       after: number | null,
       limit: number | null,
+      maxPhotos: number | null,
     ) => Promise<GroupPage>
   >(async () => ({ items: [], next: null, total: 0 })),
+  groupSelectionIds: vi.fn<
+    (
+      section: PeopleSection,
+      query: string | null,
+      maxPhotos: number | null,
+    ) => Promise<number[]>
+  >(async () => []),
+  assignGroups: vi.fn<(groups: number[], target: GroupTarget) => Promise<AssignOutcome>>(
+    async (groups) => ({
+      person: 1,
+      created: false,
+      groups: groups.length,
+      faces: groups.length,
+      skippedFaces: 0,
+    }),
+  ),
   // Di default cerca il gruppo nelle pagine simulate da `listGroups`.
   getGroup: vi.fn(async (id: number) => {
     for (const section of ["review", "people", "ignored"] as const) {
-      const page = await commandsMock.listGroups(section, null, "photos_desc", null, 200);
+      const page = await commandsMock.listGroups(section, null, "photos_desc", null, 200, null);
       const found = page?.items?.find((g) => g.id === id);
       if (found) return found;
     }
@@ -251,15 +271,32 @@ export const commandsMock = {
   setTagSetExportKeywords: vi.fn(async () => null),
   setTagSetExclusive: vi.fn(async (): Promise<number[]> => []),
   tagSetConflicts: vi.fn(async (): Promise<number[]> => []),
-  listIdentities: vi.fn<(q: string | null) => Promise<IdentitiesView>>(async () => ({
-    identities: [],
-    groups: [],
-    storePath: "",
-    defaultThreshold: 0.363,
-  })),
+  listIdentities: vi.fn<(q: string | null, maxPhotos: number | null) => Promise<IdentitiesView>>(
+    async () => ({
+      identities: [],
+      groups: [],
+      storePath: "",
+      defaultThreshold: 0.363,
+    }),
+  ),
+  identitySelectionUids: vi.fn<(q: string | null, maxPhotos: number | null) => Promise<string[]>>(
+    async () => [],
+  ),
   saveIdentity: vi.fn(async () => "uid-1"),
   deleteIdentity: vi.fn(async () => null),
   mergeIdentities: vi.fn(async () => null),
+  mergeIdentitiesMany: vi.fn<(from: string[], into: string) => Promise<number>>(
+    async (from) => from.length,
+  ),
+  mergeIdentitiesPreview: vi.fn<(from: string[], into: string) => Promise<MergePreview>>(
+    async (from) => ({
+      identities: from.length,
+      photos: 0,
+      referenceFaces: 0,
+      withoutPhotos: 0,
+      names: [],
+    }),
+  ),
   identityFaces: vi.fn(async (): Promise<RefFaceView[]> => []),
   identityFaceImage: vi.fn(async () => "data:image/png;base64,"),
   removeIdentityFace: vi.fn(async () => null),

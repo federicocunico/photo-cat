@@ -111,7 +111,19 @@ export const commands = {
 	setResourceProfile: (profile: ResourceProfile) => __TAURI_INVOKE<null>("set_resource_profile", { profile }),
 	listPeople: () => __TAURI_INVOKE<PersonView[]>("list_people"),
 	peopleSections: () => __TAURI_INVOKE<PeopleSections>("people_sections"),
-	listGroups: (section: PeopleSection, query: string | null, sort: GroupSort, after: number | null, limit: number | null) => __TAURI_INVOKE<GroupPage>("list_groups", { section, query, sort, after, limit }),
+	listGroups: (section: PeopleSection, query: string | null, sort: GroupSort, after: number | null, limit: number | null, maxPhotos: number | null) => __TAURI_INVOKE<GroupPage>("list_groups", { section, query, sort, after, limit, maxPhotos }),
+	/**
+	 *  Id di tutti i gruppi dell'elenco filtrato di una sezione (stessi criteri di `list_groups`,
+	 *  senza pagine): la base di "Seleziona tutto" su centinaia di righe. Ordinati per foto
+	 *  decrescenti; con qualche migliaio di gruppi resta un elenco di interi.
+	 */
+	groupSelectionIds: (section: PeopleSection, query: string | null, maxPhotos: number | null) => __TAURI_INVOKE<number[]>("group_selection_ids", { section, query, maxPhotos }),
+	/**
+	 *  Assegna tutti i volti dei `groups` a una persona, a un'identità o a una nuova persona con
+	 *  una sola operazione e una sola voce di annullamento (`undo_people`). I volti rifiutati per la
+	 *  destinazione ("non è questa persona") non vengono assegnati.
+	 */
+	assignGroups: (groups: number[], target: GroupTarget) => __TAURI_INVOKE<AssignOutcome>("assign_groups", { groups, target }),
 	/**  Un singolo gruppo, in qualunque sezione: `None` se non esiste più. */
 	getGroup: (id: number) => __TAURI_INVOKE<GroupRow | null>("get_group", { id }),
 	groupFaces: (scope: FaceScope, sort: FaceSort, after: FaceCursor | null, limit: number | null) => __TAURI_INVOKE<FacePage>("group_faces", { scope, sort, after, limit }),
@@ -174,12 +186,26 @@ export const commands = {
 	setTagSetExclusive: (id: number, exclusive: boolean) => __TAURI_INVOKE<number[]>("set_tag_set_exclusive", { id, exclusive }),
 	/**  File con due o più tag del set (da sistemare a mano se il set è esclusivo). */
 	tagSetConflicts: (id: number) => __TAURI_INVOKE<number[]>("tag_set_conflicts", { id }),
-	listIdentities: (query: string | null) => __TAURI_INVOKE<IdentitiesView>("list_identities", { query }),
+	/**
+	 *  Elenco delle identità, con ricerca e filtro "al massimo `max_photos` foto" (foto della
+	 *  persona collegata nella libreria aperta; senza collegamento sono 0).
+	 */
+	listIdentities: (query: string | null, maxPhotos: number | null) => __TAURI_INVOKE<IdentitiesView>("list_identities", { query, maxPhotos }),
 	/**  Crea (senza `uid`) o modifica un'identità. Un nome già usato è un errore. */
 	saveIdentity: (uid: string | null, input: IdentityInput) => __TAURI_INVOKE<string>("save_identity", { uid, input }),
 	deleteIdentity: (uid: string) => __TAURI_INVOKE<null>("delete_identity", { uid }),
 	/**  Unisce `from` in `into`: alias, volti di riferimento e collegamenti. */
 	mergeIdentities: (from: string, into: string) => __TAURI_INVOKE<null>("merge_identities", { from, into }),
+	/**
+	 *  Unisce più identità in `into` in un'unica operazione tutto-o-niente (alias, volti di
+	 *  riferimento) e riallinea le persone collegate nella libreria aperta. Non si annulla.
+	 *  Restituisce quante identità sono state unite.
+	 */
+	mergeIdentitiesMany: (from: string[], into: string) => __TAURI_INVOKE<number>("merge_identities_many", { from, into }),
+	/**  Conteggi per la conferma dell'unione (identità, foto, volti di riferimento): non modifica nulla. */
+	mergeIdentitiesPreview: (from: string[], into: string) => __TAURI_INVOKE<MergePreview>("merge_identities_preview", { from, into }),
+	/**  Uid di tutte le identità dell'elenco filtrato (per "Seleziona tutto" su centinaia di righe). */
+	identitySelectionUids: (query: string | null, maxPhotos: number | null) => __TAURI_INVOKE<string[]>("identity_selection_uids", { query, maxPhotos }),
 	identityFaces: (uid: string) => __TAURI_INVOKE<RefFaceView[]>("identity_faces", { uid }),
 	/**  Ritaglio di un volto di riferimento (data URL PNG). */
 	identityFaceImage: (id: number) => __TAURI_INVOKE<string>("identity_face_image", { id }),
@@ -537,6 +563,23 @@ export type ArchiveTarget =
 jobId: number | null; code: string | null; phase: string | null; query: ErrorQuery } | 
 /**  Tutte le voci che corrispondono al filtro corrente. */
 { kind: "query"; query: ErrorQuery };
+
+/**  Esito di [`assign_groups`]. */
+export type AssignOutcome = {
+	/**  Persona di destinazione (`None` se non è stato assegnato nulla e non ne è stata creata). */
+	person: number | null,
+	/**  `true` se la persona di destinazione è stata creata da questa operazione. */
+	created: boolean,
+	/**  Gruppi interamente uniti nella destinazione (non esistono più). */
+	groups: number,
+	/**  Volti spostati nella destinazione. */
+	faces: number,
+	/**
+	 *  Volti rifiutati per la destinazione ("non è questa persona"): non assegnati, restano in
+	 *  un gruppo da rivedere.
+	 */
+	skippedFaces: number,
+};
 
 /**  Classe dell'istogramma: `[from, to)` (l'ultima include 1,0). */
 export type Bin = {
@@ -1257,6 +1300,15 @@ export type GroupRow = {
 /**  Ordinamento dei gruppi nel modulo Persone. */
 export type GroupSort = "photos_desc" | "name_asc" | "faces_desc";
 
+/**  Destinazione di `assign_groups`, come arriva dalla UI. */
+export type GroupTarget = 
+/**  Una persona o un gruppo della libreria. */
+{ kind: "person"; person: number } | 
+/**  Un'identità dell'app (nome letto da `app.db`): persona collegata, creata se manca. */
+{ kind: "identity"; uid: string } | 
+/**  Una nuova persona con nome, senza identità. */
+{ kind: "new_person"; name: string };
+
 export type IdentitiesView = {
 	identities: IdentityRow[],
 	groups: string[],
@@ -1585,6 +1637,26 @@ export type MergeHint = {
 	otherPhotos: number,
 	otherCover: FaceView | null,
 	score: number | null,
+};
+
+/**  Quanto verrebbe unito da `merge_identities_many`, per la conferma (l'unione non si annulla). */
+export type MergePreview = {
+	/**  Identità che verrebbero unite (la destinazione e i doppioni non contano). */
+	identities: number,
+	/**  Foto distinte delle loro persone collegate nella libreria aperta. */
+	photos: number,
+	/**  Volti di riferimento che passerebbero alla destinazione. */
+	referenceFaces: number,
+	/**
+	 *  Identità senza foto nella libreria aperta: potrebbero averne in altre librerie, e la
+	 *  conferma lo segnala (un filtro "al massimo N foto" le include sempre).
+	 */
+	withoutPhotos: number,
+	/**
+	 *  I primi nomi delle identità che verrebbero unite (al massimo [`PREVIEW_NAMES`]), perché
+	 *  la conferma mostri chi sparisce e non solo quante.
+	 */
+	names: string[],
 };
 
 export type MetaRow = {

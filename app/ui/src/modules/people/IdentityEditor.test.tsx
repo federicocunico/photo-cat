@@ -125,7 +125,7 @@ it("finds an identity by alias", async () => {
   fireEvent.change(screen.getByLabelText("Cerca nome o alias"), {
     target: { value: "Nonna Rita" },
   });
-  await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita"));
+  await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita", null));
   const table = await waitFor(() => screen.getByRole("list", { name: "Identità" }));
   await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
   expect(within(table).getByText("Rita Rossi")).toBeInTheDocument();
