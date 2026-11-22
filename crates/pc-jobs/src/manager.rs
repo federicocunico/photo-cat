@@ -497,11 +497,16 @@ impl JobManager {
                 .values()
                 .any(|e| !e.state.is_terminal());
             if !busy {
+                // Un worker segna il job concluso e solo dopo accoda l'eventuale job successivo:
+                // si attende la fine dei worker e si ricontrolla, finché nessuno ne avvia altri.
                 let handles: Vec<_> = self.shared.workers.lock().drain(..).collect();
+                if handles.is_empty() {
+                    return true;
+                }
                 for h in handles {
                     let _ = h.join();
                 }
-                return true;
+                continue;
             }
             if Instant::now() >= deadline {
                 return false;
