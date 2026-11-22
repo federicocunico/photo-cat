@@ -1272,6 +1272,12 @@ mod tests {
             CopyOutcome::Exported
         ));
         assert_eq!(std::fs::read(&target).unwrap(), b"nuovo");
+        // Su Windows un file eliminato mentre un altro processo (es. l'antivirus) lo tiene aperto
+        // resta elencato in "eliminazione in sospeso" finché quel processo non lo rilascia.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while names(&out).len() > 1 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         assert_eq!(names(&out), vec!["new.jpg"], "nessun backup rimasto");
     }
 
