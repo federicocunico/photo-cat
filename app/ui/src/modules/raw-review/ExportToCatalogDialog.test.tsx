@@ -38,6 +38,7 @@ const report = (over: Partial<RawExportReport> = {}): RawExportReport => ({
   import: null,
   catalog: { id: 7, name: "Dolomiti", created: true, photos: 12 },
   unresolved: 0,
+  failure: null,
   ...over,
 });
 
@@ -222,6 +223,19 @@ describe("Esporta in un nuovo catalogo", () => {
     await waitFor(() => expect(startButton()).not.toHaveAttribute("aria-disabled"));
   });
 
+  it("rifiuta una destinazione dentro le cartelle della revisione", async () => {
+    commandsMock.rawReviewExportPreflight.mockImplementation(async () =>
+      pre({ import: null, canStart: false, block: "destination_in_review" }),
+    );
+    mount();
+    setDestination("D:/RAF/Dolomiti/Scelte");
+    await waitFor(() => expect(startButton()).toHaveAttribute("aria-disabled", "true"));
+    expect(await screen.findByTestId("raw-export-block")).toHaveTextContent(
+      "La cartella scelta fa parte della revisione",
+    );
+    expect(screen.queryByTestId("raw-export-import")).not.toBeInTheDocument();
+  });
+
   it("nome già usato: chiede se aggiungere al catalogo esistente o cambiare nome, prima di partire", async () => {
     commandsMock.rawReviewExportPreflight.mockImplementation(async (r) =>
       pre({
@@ -291,9 +305,14 @@ describe("Avanzamento e riepilogo", () => {
     await screen.findByText("Esportazione avviata");
     return view;
   }
-  const finish = (state: "completed" | "cancelled" | "completed_with_errors" = "completed") =>
+  const finish = (
+    state: "completed" | "cancelled" | "completed_with_errors" | "failed" = "completed",
+    error: string | null = null,
+  ) =>
     act(() =>
-      useLive.setState({ jobs: { 88: job({ id: 88, kind: "raw_review_export", state }) } }),
+      useLive.setState({
+        jobs: { 88: job({ id: 88, kind: "raw_review_export", state, error }) },
+      }),
     );
 
   it("durante l'esportazione rimanda alle attività", async () => {
@@ -358,5 +377,49 @@ describe("Avanzamento e riepilogo", () => {
     expect(await screen.findByText("Esportazione annullata")).toBeInTheDocument();
     expect(screen.getByText(/il catalogo non è stato creato/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apri il catalogo" })).not.toBeInTheDocument();
+  });
+
+  it("file non trovati in libreria: riepilogo con errori anche senza errori di copia", async () => {
+    commandsMock.rawReviewExportReport.mockResolvedValue(
+      report({ unresolved: 2, catalog: { id: 7, name: "Dolomiti", created: true, photos: 10 } }),
+    );
+    await started();
+    finish("completed_with_errors");
+    expect(await screen.findByText("Esportazione completata con errori")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 file non sono stati trovati in libreria dopo l'aggiornamento."),
+    ).toBeInTheDocument();
+  });
+
+  it("un errore che ferma l'attività arriva nel riepilogo con il motivo", async () => {
+    commandsMock.rawReviewExportReport.mockResolvedValue(
+      report({
+        exported: 4,
+        skipped: 0,
+        catalog: null,
+        failure: { code: "STRANA", messageKey: "x", reason: "cartella non scrivibile" },
+      }),
+    );
+    await started();
+    finish("failed", "cartella non scrivibile");
+    expect(await screen.findByText("Esportazione non completata")).toBeInTheDocument();
+    expect(screen.getByText("cartella non scrivibile")).toBeInTheDocument();
+    expect(screen.getByText(/il catalogo non è stato creato/)).toBeInTheDocument();
+  });
+
+  it("senza riepilogo (perso dall'app) non resta in attesa e lo spiega", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await started();
+      finish("completed");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(await screen.findByText("Riepilogo non disponibile")).toBeInTheDocument();
+      expect(screen.getByText(/il riepilogo non è più disponibile/)).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Chiudi" }).length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -61,6 +61,8 @@ pub enum ExportBlock {
     CatalogNotAddable,
     /// Destinazione mancante o non utilizzabile.
     DestinationInvalid,
+    /// La destinazione è (o sta dentro) una cartella della revisione.
+    DestinationInReview,
 }
 
 /// Dati del dialogo: conteggi, esclusioni, nomi, conflitti e cosa farà l'import.
@@ -153,16 +155,15 @@ fn preflight(
             block = Some(ExportBlock::TemplateInvalid);
         }
         Ok(()) if !items.is_empty() => {
-            if let Ok(preview) =
-                raw_export::names_preview(&items, request.template.as_deref(), PREVIEW_LIMIT)
+            // Nomi e anteprima da una sola lettura dei file (con la cache dei dati EXIF).
+            if let Ok((names, preview)) =
+                raw_export::names_with_preview(&items, request.template.as_deref(), PREVIEW_LIMIT)
             {
                 out.preview = preview;
-            }
-            if let (Some(dest), Ok(names)) = (
-                &dest,
-                raw_export::final_names(&items, request.template.as_deref()),
-            ) {
-                out.existing_files = names.iter().filter(|n| dest.join(n).exists()).count() as u32;
+                if let Some(dest) = &dest {
+                    out.existing_files =
+                        names.iter().filter(|n| dest.join(n).exists()).count() as u32;
+                }
             }
         }
         Ok(()) => {}
@@ -186,6 +187,13 @@ fn preflight(
 
     // Destinazione: cosa farà l'import.
     match &dest {
+        Some(dest)
+            if state
+                .raw_review
+                .is_review_folder(&request.session_id, dest)? =>
+        {
+            block = block.or(Some(ExportBlock::DestinationInReview));
+        }
         Some(dest) => out.import = Some(raw_export::import_target(&state.store, dest)?),
         None => block = block.or(Some(ExportBlock::DestinationInvalid)),
     }
@@ -248,6 +256,15 @@ pub async fn start_raw_review_export(
         if selection.items.is_empty() {
             return Err(AppError::invalid_input("nessuno scatto da esportare"));
         }
+        let dest = raw_export::resolve_destination(&request.destination)?;
+        if state
+            .raw_review
+            .is_review_folder(&request.session_id, &dest)?
+        {
+            return Err(AppError::invalid_input(
+                "la destinazione è una cartella della revisione: scegline una fuori",
+            ));
+        }
         // Le scelte vive finiscono anche nei dati dell'app prima che l'attività parta.
         if let Err(e) = state
             .raw_review
@@ -267,8 +284,9 @@ pub async fn start_raw_review_export(
     .await
 }
 
-/// Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo).
-/// `null` finché l'attività non ha finito o se l'app è stata riavviata.
+/// Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo, o il
+/// motivo per cui si è fermata). `null` finché l'attività non ha finito o se l'app è stata
+/// riavviata: il riepilogo vive solo in memoria e il dialogo lo dice.
 #[tauri::command]
 #[specta::specta]
 pub async fn raw_review_export_report(

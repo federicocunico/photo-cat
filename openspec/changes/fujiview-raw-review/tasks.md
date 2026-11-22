@@ -76,7 +76,7 @@
   - riepilogo con "Apri il catalogo".
 
   Test vitest dei conteggi, del conflitto di nome e del riepilogo.
-- [ ] 4.4 Revisione Opus della parte 4: atomicità della copia, coerenza tra file copiati e catalogo, annullamento.
+- [x] 4.4 Revisione Opus della parte 4: atomicità della copia, coerenza tra file copiati e catalogo, annullamento.
 
 ## 5. Sviluppo dalla fotocamera (Windows)
 

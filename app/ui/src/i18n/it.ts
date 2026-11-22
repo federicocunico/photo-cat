@@ -143,6 +143,7 @@ export const it = {
       archivi: "Archivi zip",
       copia: "Copia dei file",
       catalogo: "Catalogo",
+      esportazione_raw: "Esportazione in un catalogo",
     },
     states: {
       queued: "In coda",

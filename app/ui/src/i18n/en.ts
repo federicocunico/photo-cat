@@ -143,6 +143,7 @@ export const en: Messages = {
       archivi: "Zip archives",
       copia: "Copying files",
       catalogo: "Catalog",
+      esportazione_raw: "Export to a catalog",
     },
     states: {
       queued: "Queued",

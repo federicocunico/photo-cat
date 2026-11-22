@@ -46,6 +46,7 @@ const BLOCK_KEYS: Record<ExportBlock, string> = {
   catalog_name_taken: "rawExport.block.catalogNameTaken",
   catalog_not_addable: "rawExport.block.catalogNotAddable",
   destination_invalid: "rawExport.block.destinationInvalid",
+  destination_in_review: "rawExport.block.destinationInReview",
 };
 
 const TERMINAL = ["completed", "completed_with_errors", "cancelled", "interrupted", "failed"];
@@ -607,7 +608,11 @@ function Progress({
             title={t("rawExport.noReport")}
             action={openJobs}
           >
-            {job?.error ?? t("rawExport.noReportBody")}
+            {job?.state === "failed" && job.error
+              ? job.error
+              : job?.state === "completed" || job?.state === "completed_with_errors"
+                ? t("rawExport.noReportDone")
+                : t("rawExport.noReportBody")}
           </InlineAlert>
           <div className="rx-final">
             <Button onClick={onClose}>{t("common.close")}</Button>
@@ -641,17 +646,26 @@ function Progress({
   return (
     <div className="rx-progress" data-testid="raw-export-report">
       <h3 className="rx-report-title" role="status">
-        {report.cancelled
-          ? t("rawExport.reportCancelled")
-          : report.failed > 0
-            ? t("rawExport.reportWithErrors")
-            : t("rawExport.reportDone")}
+        {report.failure
+          ? t("rawExport.reportStopped")
+          : report.cancelled
+            ? t("rawExport.reportCancelled")
+            : report.failed > 0 || report.unresolved > 0
+              ? t("rawExport.reportWithErrors")
+              : t("rawExport.reportDone")}
       </h3>
+      {report.failure && (
+        <InlineAlert tone="danger" title={t("rawExport.stoppedTitle")}>
+          {failureReason(report.failure)}
+        </InlineAlert>
+      )}
       <ul className="rx-report-list">
         <li>{t("rawExport.reportExported", { count: report.exported })}</li>
         {report.skipped > 0 && <li>{t("rawExport.reportSkipped", { count: report.skipped })}</li>}
         {report.failed > 0 && <li>{t("rawExport.reportFailed", { count: report.failed })}</li>}
-        {done === 0 && !report.cancelled && <li>{t("rawExport.reportNothing")}</li>}
+        {done === 0 && !report.cancelled && !report.failure && (
+          <li>{t("rawExport.reportNothing")}</li>
+        )}
         {report.catalog && (
           <li>
             {t(report.catalog.created ? "rawExport.catalogCreated" : "rawExport.catalogAdded", {
@@ -664,7 +678,9 @@ function Progress({
           <li>{t("rawExport.reportUnresolved", { count: report.unresolved })}</li>
         )}
       </ul>
-      {report.cancelled && <p className="rx-note">{t("rawExport.cancelledNote")}</p>}
+      {(report.cancelled || report.failure) && !report.catalog && done > 0 && (
+        <p className="rx-note">{t("rawExport.cancelledNote")}</p>
+      )}
       {report.errors.length > 0 && (
         <div>
           <strong>{t("rawExport.errorsTitle")}</strong>
@@ -701,5 +717,11 @@ function Progress({
   function errorReason(e: RawExportReport["errors"][number]): string {
     const key = `errors.${e.code.toLowerCase()}`;
     return i18n.exists(key) ? t(key) : e.reason;
+  }
+
+  function failureReason(f: NonNullable<RawExportReport["failure"]>): string {
+    const key = `errors.${f.code.toLowerCase()}`;
+    // Il motivo tecnico resta visibile: dice quale cartella o quale passo non è riuscito.
+    return i18n.exists(key) ? `${t(key)} (${f.reason})` : f.reason;
   }
 }

@@ -582,6 +582,23 @@ fn review_ratings_and_preset_tags_reach_the_library() {
     assert_eq!(tags, vec!["C1 Kodachrome 64", "C2 Velvia"]);
 }
 
+/// Decisione D7: senza stelle in revisione (0) l'export non cancella la valutazione della libreria.
+#[test]
+fn review_without_stars_keeps_the_library_rating() {
+    let e = env();
+    let mut items = e.shots(1);
+    items[0].rating = 3;
+    let (_, _) = e.run(&items, &e.options("export", "Zero"));
+    let target = e.path("export").join(&items[0].orig_name);
+    assert_eq!(e.rating_of(&target), 3);
+    items[0].rating = 0;
+    let mut again = e.options("export", "Zero");
+    again.existing_catalog = Some(ExistingCatalog::Add);
+    let (_, report) = e.run(&items, &again);
+    assert_eq!(report.skipped, 1);
+    assert_eq!(e.rating_of(&target), 3);
+}
+
 #[test]
 fn preset_tag_option_off_adds_ratings_only() {
     let e = env();
@@ -694,14 +711,134 @@ fn single_undo_removes_catalog_ratings_and_tags() {
     assert_eq!(e.sources().len(), 1);
 }
 
+/// Costo della verifica preliminare del dialogo con 400 scatti (nomi da EXIF a ogni modifica).
+/// `cargo test -p pc-organize --release --test raw_review_export -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn bench_names_for_400_shots() {
+    let e = env();
+    let items = e.shots(400);
+    let template = Some("Dolomiti_{seq:04d}");
+    let time = |label: &str| {
+        let t = std::time::Instant::now();
+        let names = raw_export::final_names(&items, template).unwrap();
+        let preview = raw_export::names_preview(&items, template, 8).unwrap();
+        assert_eq!((names.len(), preview.len()), (400, 8));
+        eprintln!("{label}: {:?}", t.elapsed());
+    };
+    time("prima chiamata");
+    for i in 0..3 {
+        time(&format!("chiamata {}", i + 2));
+    }
+    use pc_organize::sequence::review_names::{plan_review_names, ReviewNameInput};
+    let t = std::time::Instant::now();
+    let inputs: Vec<ReviewNameInput> = items
+        .iter()
+        .map(|i| ReviewNameInput::from_file(Path::new(&i.source_path), &i.orig_name, None))
+        .collect();
+    eprintln!("solo ingressi: {:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    plan_review_names(&inputs, "Dolomiti_{seq:04d}").unwrap();
+    eprintln!("solo nomi: {:?}", t.elapsed());
+}
+
 #[test]
 fn destination_equal_to_source_folder_never_overwrites_the_source() {
     let e = env();
     let items = e.shots(2);
-    let mut options = e.options("revisione/C1", "Stessa");
-    options.overwrite = true;
-    let before = hash(Path::new(&items[0].source_path));
-    let (_, report) = e.run(&items, &options);
-    assert_eq!(report.failed, 2);
-    assert_eq!(hash(Path::new(&items[0].source_path)), before);
+    let before = files_in(&e.path("revisione/C1"));
+    let hash_before = hash(Path::new(&items[0].source_path));
+    // Con "Sovrascrivi" e anche con un modello che darebbe nomi nuovi: rifiutato prima di copiare.
+    for template in [None, Some("Copia_{seq}".to_string())] {
+        let mut options = e.options("revisione/C1", "Stessa");
+        options.overwrite = true;
+        options.template = template;
+        let err = e
+            .mgr
+            .submit(JOB_KIND, raw_export::job_params(&items, &options))
+            .unwrap_err();
+        assert_eq!(err.code.as_str(), "INVALID_INPUT");
+    }
+    assert_eq!(files_in(&e.path("revisione/C1")), before);
+    assert_eq!(hash(Path::new(&items[0].source_path)), hash_before);
+    assert!(
+        e.sources().is_empty(),
+        "la cartella delle varianti non entra in libreria"
+    );
+    assert!(e.catalog("Stessa").is_none());
+}
+
+#[test]
+fn skipped_file_with_other_case_on_disk_still_enters_the_catalog() {
+    let e = env();
+    let items = e.shots(3);
+    std::fs::create_dir_all(e.path("export")).unwrap();
+    // Già presente con il nome in minuscolo (su Windows è lo stesso file di `DSCF0001.JPG`).
+    std::fs::write(
+        e.path("export").join(items[0].orig_name.to_lowercase()),
+        jpeg(240, "2026:08:19 07:00:00"),
+    )
+    .unwrap();
+    let (_, report) = e.run(&items, &e.options("export", "Maiuscole"));
+    assert_eq!(report.unresolved, 0, "{:?}", report.errors);
+    assert_eq!(report.exported + report.skipped, 3);
+    if cfg!(windows) {
+        assert_eq!(report.skipped, 1);
+    }
+    assert_eq!(report.catalog.unwrap().photos, 3);
+}
+
+#[test]
+fn files_the_import_does_not_take_are_reported_as_unresolved() {
+    let e = env();
+    let items = e.shots(3);
+    let root = e.path("Foto");
+    std::fs::create_dir_all(&root).unwrap();
+    // La sorgente che contiene la destinazione importa solo i PNG.
+    e.store
+        .write({
+            let path = root.display().to_string();
+            move |c| {
+                repo::source::insert(
+                    c,
+                    &NewSource {
+                        path,
+                        recursive: true,
+                        include_formats: vec!["png".into()],
+                        ..Default::default()
+                    },
+                )
+            }
+        })
+        .unwrap();
+    let (snap, report) = e.run(&items, &e.options("Foto/Dolomiti", "Nessuna"));
+    assert_eq!(report.exported, 3);
+    assert_eq!(report.unresolved, 3);
+    assert_eq!(report.errors.len(), 3);
+    assert!(report.errors.iter().all(|x| x.code == "NOT_FOUND"));
+    assert!(report.catalog.is_none());
+    assert!(e.catalog("Nessuna").is_none());
+    assert_eq!(snap.state, pc_jobs::JobState::CompletedWithErrors);
+}
+
+#[test]
+fn stopping_error_still_leaves_a_report_with_the_reason() {
+    let e = env();
+    let items = e.shots(2);
+    // La destinazione è un file: la cartella non si può creare.
+    std::fs::write(e.path("occupato"), b"x").unwrap();
+    let id = e
+        .mgr
+        .submit(
+            JOB_KIND,
+            raw_export::job_params(&items, &e.options("occupato", "Fermo")),
+        )
+        .unwrap();
+    assert!(e.mgr.wait_idle(Duration::from_secs(60)));
+    assert_eq!(e.sink.0.lock()[&id].state, pc_jobs::JobState::Failed);
+    let report = e.reports.get(id).expect("riepilogo anche dopo l'errore");
+    let failure = report.failure.expect("motivo");
+    assert!(!failure.code.is_empty() && !failure.reason.is_empty());
+    assert!(report.catalog.is_none());
+    assert!(!report.cancelled);
 }

@@ -105,7 +105,7 @@ export const rawReview = {
       catalogName: "Nome del catalogo",
       destination: "Cartella di destinazione",
       destinationHint:
-        "I file scelti vengono copiati qui. Scegli una cartella tua: non viene mai usata quella dei RAW.",
+        "I file scelti vengono copiati qui. Scegli una cartella fuori da quella della revisione: lì non si scrive mai.",
       importNew: "La cartella «{{path}}» verrà aggiunta alla libreria.",
       importUpdate: "Verrà aggiornata la cartella «{{folder}}» della libreria.",
       which: "Quali foto esportare",
@@ -167,7 +167,7 @@ export const rawReview = {
       existingOverwrite_other: "{{count}} file sono già nella cartella e verranno sostituiti.",
       presetAsTag: "Aggiungi il preset come tag",
       presetAsTagHelp:
-        "Ogni foto riceve il nome del preset scelto come tag, nel set «Preset Fujifilm». Le stelle date qui passano sempre in libreria.",
+        "Ogni foto riceve il nome del preset scelto come tag, nel set «Preset Fujifilm». Le stelle date qui passano sempre in libreria; una foto senza stelle tiene la valutazione che ha già.",
       safety:
         "I file vengono copiati senza modificarli e senza ricodificarli. Gli originali restano dove sono e i file RAF non vengono mai copiati.",
       conflictTitle: "Esiste già un catalogo chiamato «{{name}}»",
@@ -193,18 +193,24 @@ export const rawReview = {
         catalogNotAddable:
           "Il catalogo «{{name}}» non accetta foto aggiunte a mano: scegli un altro nome.",
         destinationInvalid: "Scegli la cartella in cui salvare le foto.",
+        destinationInReview:
+          "La cartella scelta fa parte della revisione: scegline una fuori, così varianti e RAW restano intatti.",
       },
       startFailed: "Impossibile avviare l'esportazione",
       started: "Esportazione avviata",
       startedHelp: "Puoi chiudere questa finestra: l'esportazione continua e la trovi in Attività.",
       progress: "Avanzamento dell'esportazione",
       openJobs: "Apri attività",
-      noReport: "Non c'è un riepilogo",
+      noReport: "Riepilogo non disponibile",
       noReportBody:
         "L'esportazione si è fermata prima di finire. Controlla i dettagli in Attività.",
+      noReportDone:
+        "L'esportazione è finita, ma il riepilogo non è più disponibile. I file sono nella cartella di destinazione; il catalogo e gli eventuali errori si vedono in Cataloghi e in Attività.",
       reportDone: "Esportazione completata",
       reportWithErrors: "Esportazione completata con errori",
       reportCancelled: "Esportazione annullata",
+      reportStopped: "Esportazione non completata",
+      stoppedTitle: "L'esportazione si è fermata per un errore",
       reportExported_zero: "Nessuna foto esportata",
       reportExported_one: "{{count}} foto esportata",
       reportExported_other: "{{count}} foto esportate",
@@ -360,7 +366,7 @@ export const rawReview = {
       catalogName: "Catalog name",
       destination: "Destination folder",
       destinationHint:
-        "The picked files are copied here. Choose a folder of your own: the RAW folder is never used.",
+        "The picked files are copied here. Choose a folder outside the review folder: nothing is ever written there.",
       importNew: "The folder “{{path}}” will be added to the library.",
       importUpdate: "The folder “{{folder}}” of the library will be updated.",
       which: "Which photos to export",
@@ -422,7 +428,7 @@ export const rawReview = {
       existingOverwrite_other: "{{count}} files are already in the folder and will be replaced.",
       presetAsTag: "Add the preset as a tag",
       presetAsTagHelp:
-        "Each photo gets the name of its picked preset as a tag, in the “Preset Fujifilm” set. The stars given here always reach the library.",
+        "Each photo gets the name of its picked preset as a tag, in the “Preset Fujifilm” set. The stars given here always reach the library; a photo without stars keeps the rating it already has.",
       safety:
         "Files are copied without changing or re-encoding them. Originals stay where they are and RAF files are never copied.",
       conflictTitle: "A catalog called “{{name}}” already exists",
@@ -448,6 +454,8 @@ export const rawReview = {
         catalogNotAddable:
           "The catalog “{{name}}” does not accept photos added by hand: choose another name.",
         destinationInvalid: "Choose the folder where the photos will be saved.",
+        destinationInReview:
+          "The chosen folder is part of the review: choose one outside it, so variants and RAW files stay untouched.",
       },
       startFailed: "Could not start the export",
       started: "Export started",
@@ -455,11 +463,15 @@ export const rawReview = {
         "You can close this window: the export keeps going and you can follow it in Activity.",
       progress: "Export progress",
       openJobs: "Open Activity",
-      noReport: "No summary available",
+      noReport: "Summary not available",
       noReportBody: "The export stopped before finishing. Check the details in Activity.",
+      noReportDone:
+        "The export finished, but its summary is no longer available. The files are in the destination folder; the catalog and any errors are shown in Catalogs and in Activity.",
       reportDone: "Export complete",
       reportWithErrors: "Export complete with errors",
       reportCancelled: "Export cancelled",
+      reportStopped: "Export not completed",
+      stoppedTitle: "The export stopped because of an error",
       reportExported_zero: "No photos exported",
       reportExported_one: "{{count}} photo exported",
       reportExported_other: "{{count}} photos exported",

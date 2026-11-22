@@ -16,6 +16,8 @@
 //!    annullamento toglie catalogo, valutazioni e tag, non i file né la sorgente.
 //!
 //! Se l'attività è annullata dopo la copia, i file copiati restano e il catalogo non viene creato.
+//! Il riepilogo (in memoria, per il dialogo) si scrive sempre, anche quando un errore ferma
+//! l'attività: in quel caso ne riporta il motivo in `failure`.
 //! Gli errori vanno nel registro errori con la fase `esportazione_raw`.
 
 use crate::paths;
@@ -176,6 +178,46 @@ pub struct RawExportReport {
     pub catalog: Option<RawExportCatalog>,
     /// File della destinazione che non si sono trovati in libreria dopo l'import.
     pub unresolved: u32,
+    /// Errore che ha fermato l'attività (destinazione non scrivibile, import non riuscito…):
+    /// i conteggi dicono fin dove si è arrivati, il catalogo non è stato creato.
+    pub failure: Option<RawExportFailure>,
+}
+
+/// Motivo per cui l'attività si è fermata prima della fine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct RawExportFailure {
+    pub code: String,
+    pub message_key: String,
+    pub reason: String,
+}
+
+impl RawExportReport {
+    fn new(job_id: i64) -> Self {
+        Self {
+            job_id,
+            exported: 0,
+            skipped: 0,
+            failed: 0,
+            errors: Vec::new(),
+            cancelled: false,
+            import: None,
+            catalog: None,
+            unresolved: 0,
+            failure: None,
+        }
+    }
+
+    fn push_error(&mut self, name: &str, source_path: &str, e: &AppError) {
+        self.errors.push(RawExportError {
+            name: name.to_string(),
+            source_path: source_path.to_string(),
+            code: e.code.as_str().to_string(),
+            message_key: e.message_key.clone(),
+            reason: e.detail.clone(),
+        });
+    }
 }
 
 /// Riepiloghi degli ultimi export, per job (in memoria: servono al dialogo che li mostra).
@@ -219,13 +261,46 @@ pub struct CatalogConflict {
 
 // ------------------------------------------------------------------ percorsi
 
-/// Toglie il prefisso `\\?\` che `canonicalize` aggiunge su Windows.
+/// Toglie il prefisso `\\?\` che `canonicalize` aggiunge su Windows (`\\?\UNC\server\x` diventa
+/// `\\server\x`).
 fn plain(path: PathBuf) -> PathBuf {
     let text = path.display().to_string();
-    match text.strip_prefix(r"\\?\") {
-        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
-        _ => path,
+    PathBuf::from(strip_verbatim(&text))
+}
+
+fn strip_verbatim(text: &str) -> String {
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}");
     }
+    text.strip_prefix(r"\\?\").unwrap_or(text).to_string()
+}
+
+/// Chiave di confronto di due percorsi della libreria: senza prefisso esteso, con separatori
+/// uniformi, senza separatore finale e, su Windows, senza distinguere le maiuscole.
+fn path_key(path: &str) -> String {
+    let p = strip_verbatim(path);
+    let p = if cfg!(windows) {
+        p.replace('/', "\\").to_lowercase()
+    } else {
+        p
+    };
+    p.trim_end_matches(['\\', '/']).to_string()
+}
+
+/// La destinazione (anche se non esiste ancora) coincide con la cartella di una delle varianti
+/// scelte: copiare lì vorrebbe dire scrivere tra i file della revisione.
+fn destination_holds_sources(dest: &Path, items: &[RawExportItem]) -> bool {
+    let Ok(dest) = std::fs::canonicalize(dest) else {
+        return false;
+    };
+    let parents: std::collections::HashSet<&Path> = items
+        .iter()
+        .filter_map(|i| Path::new(&i.source_path).parent())
+        .collect();
+    parents
+        .into_iter()
+        .filter_map(|p| std::fs::canonicalize(p).ok())
+        .any(|p| paths::same(&p, &dest))
 }
 
 /// Destinazione assoluta, normalizzata e senza prefisso esteso (anche se non esiste ancora).
@@ -305,6 +380,20 @@ pub fn names_preview(
         template.unwrap_or(ORIGINAL_TEMPLATE),
         limit,
     )
+}
+
+/// Nomi finali (nell'ordine di `items`) e anteprima dei primi `limit`, leggendo i file una volta.
+pub fn names_with_preview(
+    items: &[RawExportItem],
+    template: Option<&str>,
+    limit: usize,
+) -> Result<(Vec<String>, Vec<NamePreview>), Vec<TemplateError>> {
+    let inputs = name_inputs(items);
+    let template = template.unwrap_or(ORIGINAL_TEMPLATE);
+    Ok((
+        plan_review_names(&inputs, template)?,
+        preview_review_names(&inputs, template, limit)?,
+    ))
 }
 
 /// Controlla il modello senza leggere file.
@@ -574,6 +663,12 @@ fn copy_one(
         }
         Err(e) => return CopyOutcome::Failed(e.into()),
     };
+    let backup = hidden_sibling(target, "old");
+    // Un'interruzione brusca durante una sostituzione può aver lasciato il file precedente solo
+    // nel backup: torna al suo nome prima di qualsiasi altra cosa.
+    if !target.exists() && backup.is_file() {
+        let _ = std::fs::rename(&backup, target);
+    }
     let had_target = target.exists();
     if had_target {
         if let (Ok(a), Ok(b)) = (std::fs::canonicalize(source), std::fs::canonicalize(target)) {
@@ -605,9 +700,9 @@ fn copy_one(
             return CopyOutcome::Failed(e);
         }
     }
-    let backup = hidden_sibling(target, "old");
     if had_target {
-        let _ = std::fs::remove_file(&backup);
+        remove_leftover(&backup);
+        // Su Windows fallisce se il file è aperto da un altro programma: resta com'è.
         if let Err(e) = std::fs::rename(target, &backup) {
             let _ = std::fs::remove_file(&tmp);
             return CopyOutcome::Failed(e.into());
@@ -621,9 +716,33 @@ fn copy_one(
         return CopyOutcome::Failed(e.into());
     }
     if had_target {
-        let _ = std::fs::remove_file(&backup);
+        remove_leftover(&backup);
     }
     CopyOutcome::Exported
+}
+
+/// Elimina un temporaneo o un backup, anche se è in sola lettura (il file sostituito lo era).
+fn remove_leftover(path: &Path) {
+    if std::fs::remove_file(path).is_ok() || !path.is_file() {
+        return;
+    }
+    if let Ok(meta) = std::fs::metadata(path) {
+        let mut perms = meta.permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perms);
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+/// Porta su disco le rinomine della cartella (best effort, dove il sistema lo consente).
+fn sync_dir(dir: &Path) {
+    #[cfg(unix)]
+    if let Ok(d) = std::fs::File::open(dir) {
+        let _ = d.sync_all();
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
 }
 
 /// Scrive `tmp` come copia di `source`; `Ok(false)` se annullata a metà.
@@ -704,7 +823,12 @@ fn validate(store: &Store, params: &Params) -> AppResult<CatalogTarget> {
     if let Err(errors) = validate_template(params.options.template.as_deref()) {
         return Err(AppError::invalid_input(template_errors_message(&errors)));
     }
-    resolve_destination(&params.options.destination)?;
+    let dest = resolve_destination(&params.options.destination)?;
+    if destination_holds_sources(&dest, &params.items) {
+        return Err(AppError::invalid_input(
+            "la destinazione è la cartella delle varianti scelte: scegline un'altra",
+        ));
+    }
     resolve_catalog(
         store,
         &params.options.catalog_name,
@@ -725,52 +849,92 @@ pub fn plan(
     Ok(JobPlan {
         phases: phases(&hook),
         min_memory_mb: 64,
-        run: Box::new(move |ctx| run(store, app, hook, reports, params, ctx)),
+        run: Box::new(move |ctx| {
+            // Il riepilogo si scrive sempre, anche se l'attività si ferma per un errore: il
+            // dialogo che lo aspetta mostra fin dove si è arrivati e perché.
+            let mut report = RawExportReport::new(ctx.job_id);
+            let result = run(&store, &app, &hook, &params, &ctx, &mut report);
+            match &result {
+                Ok(summary) => report.cancelled = summary.cancelled,
+                Err(e) => {
+                    log_error(ctx.job_id, Path::new(&params.options.destination), e);
+                    report.failure = Some(RawExportFailure {
+                        code: e.code.as_str().to_string(),
+                        message_key: e.message_key.clone(),
+                        reason: e.detail.clone(),
+                    });
+                }
+            }
+            reports.put(report);
+            result
+        }),
     })
 }
 
+/// Media in libreria per percorso: prima il confronto esatto, poi (una volta sola) quello che
+/// ignora prefisso esteso, separatori e, su Windows, maiuscole. Su Windows un file saltato perché
+/// già presente come `dscf0001.jpg` ha in libreria il nome scritto sul disco, non `DSCF0001.JPG`.
+struct MediaByPath<'a> {
+    store: &'a Store,
+    source_id: i64,
+    folder: String,
+    loose: Option<std::collections::HashMap<String, MediaId>>,
+}
+
+impl MediaByPath<'_> {
+    fn find(&mut self, path: &str) -> AppResult<Option<MediaId>> {
+        let exact = {
+            let path = path.to_string();
+            self.store
+                .read(move |c| repo::media::get_by_path(c, &path))?
+        };
+        if let Some(media) = exact {
+            return Ok(Some(media.id));
+        }
+        if self.loose.is_none() {
+            let (source_id, folder) = (self.source_id, path_key(&self.folder));
+            let all = self
+                .store
+                .read(move |c| repo::media::by_source(c, source_id))?;
+            self.loose = Some(
+                all.into_iter()
+                    .filter_map(|m| {
+                        let key = path_key(&m.path);
+                        sources::path_in_folder(&key, &folder).then_some((key, m.id))
+                    })
+                    .collect(),
+            );
+        }
+        Ok(self
+            .loose
+            .as_ref()
+            .and_then(|m| m.get(&path_key(path)).copied()))
+    }
+}
+
 fn run(
-    store: Store,
-    app: AppStore,
-    hook: ImportHook,
-    reports: RawExportReports,
-    params: Params,
-    ctx: JobContext,
+    store: &Store,
+    app: &AppStore,
+    hook: &ImportHook,
+    params: &Params,
+    ctx: &JobContext,
+    report: &mut RawExportReport,
 ) -> AppResult<RunSummary> {
     let Params { items, options } = params;
     let job_id = ctx.job_id;
-    let target = validate(
-        &store,
-        &Params {
-            items: items.clone(),
-            options: options.clone(),
-        },
-    )?;
-    let dest = resolve_destination(&options.destination)?;
-    std::fs::create_dir_all(&dest)?;
-    let dest = plain(std::fs::canonicalize(&dest)?);
-    let names = final_names(&items, options.template.as_deref())
-        .map_err(|e| AppError::invalid_input(template_errors_message(&e)))?;
-
-    let mut report = RawExportReport {
-        job_id,
-        exported: 0,
-        skipped: 0,
-        failed: 0,
-        errors: Vec::new(),
-        cancelled: false,
-        import: None,
-        catalog: None,
-        unresolved: 0,
-    };
-    let cancelled_summary = |report: &mut RawExportReport, failed: i64| {
-        report.cancelled = true;
-        reports.put(report.clone());
+    let cancelled = |failed: i64| {
         Ok(RunSummary {
             cancelled: true,
             failed,
         })
     };
+    // Di nuovo al via: il nome del catalogo può essere stato preso mentre l'attività era in coda.
+    let target = validate(store, params)?;
+    let dest = resolve_destination(&options.destination)?;
+    std::fs::create_dir_all(&dest)?;
+    let dest = plain(std::fs::canonicalize(&dest)?);
+    let names = final_names(items, options.template.as_deref())
+        .map_err(|e| AppError::invalid_input(template_errors_message(&e)))?;
 
     // --- 1. copia
     let copy = ctx.progress.phase(PHASE_COPY);
@@ -780,10 +944,7 @@ fn run(
     let mut present: Vec<usize> = Vec::new();
     for (i, item) in items.iter().enumerate() {
         if !ctx.control.checkpoint() {
-            {
-                let f = i64::from(report.failed);
-                return cancelled_summary(&mut report, f);
-            }
+            return cancelled(i64::from(report.failed));
         }
         let source = Path::new(&item.source_path);
         let target_path = dest.join(&names[i]);
@@ -799,46 +960,32 @@ fn run(
                 present.push(i);
                 copy.inc_done(1);
             }
-            CopyOutcome::Cancelled => {
-                let f = i64::from(report.failed);
-                return cancelled_summary(&mut report, f);
-            }
+            CopyOutcome::Cancelled => return cancelled(i64::from(report.failed)),
             CopyOutcome::Failed(e) => {
                 report.failed += 1;
                 copy.inc_failed(1);
                 log_error(job_id, source, &e);
-                report.errors.push(RawExportError {
-                    name: names[i].clone(),
-                    source_path: item.source_path.clone(),
-                    code: e.code.as_str().to_string(),
-                    message_key: e.message_key.clone(),
-                    reason: e.detail.clone(),
-                });
+                report.push_error(&names[i], &item.source_path, &e);
             }
         }
     }
+    sync_dir(&dest);
     copy.finish();
     let mut failed = i64::from(report.failed);
 
-    let finish_rest = |from_import: bool| {
-        if from_import {
-            for p in &hook.phases {
-                let c = ctx.progress.phase(&p.name);
-                c.set_total(0);
-                c.finish();
-            }
+    if ctx.control.is_cancelled() {
+        return cancelled(failed);
+    }
+    if present.is_empty() {
+        // Niente nella destinazione: né import né catalogo.
+        for p in &hook.phases {
+            let c = ctx.progress.phase(&p.name);
+            c.set_total(0);
+            c.finish();
         }
         let c = ctx.progress.phase(PHASE_CATALOG);
         c.set_total(0);
         c.finish();
-    };
-    if ctx.control.is_cancelled() {
-        return cancelled_summary(&mut report, failed);
-    }
-    if present.is_empty() {
-        // Niente nella destinazione: né import né catalogo.
-        finish_rest(true);
-        reports.put(report);
         return Ok(RunSummary {
             cancelled: false,
             failed,
@@ -846,7 +993,7 @@ fn run(
     }
 
     // --- 2. import (dentro questa attività: stesso avanzamento e stesso annullamento)
-    let import = import_target(&store, &dest)?;
+    let import = import_target(store, &dest)?;
     report.import = Some(import.clone());
     let source_id = match &import {
         ImportTarget::UpdateFolder { source_id, .. } => *source_id,
@@ -892,28 +1039,34 @@ fn run(
     let imported = (sub.run)(sub_ctx)?;
     failed += imported.failed;
     if imported.cancelled || ctx.control.is_cancelled() {
-        return cancelled_summary(&mut report, failed);
+        return cancelled(failed);
     }
     // Il seguito dell'import (analisi AI, foto simili) parte alla fine di questa attività.
     *ctx.followup.lock() = sub_followup.lock().take();
 
-    // --- 3. catalogo
+    // --- 3. catalogo: tutti i file attesi nella destinazione, anche quelli saltati
     let cat = ctx.progress.phase(PHASE_CATALOG);
     cat.set_total(1);
     cat.start();
+    let mut lookup = MediaByPath {
+        store,
+        source_id,
+        folder: folder.display().to_string(),
+        loose: None,
+    };
     let mut rows: Vec<CatalogRow> = Vec::new();
     for &i in &present {
         let path = folder.join(&names[i]).display().to_string();
-        let found = {
-            let path = path.clone();
-            store.read(move |c| repo::media::get_by_path(c, &path))?
-        };
-        match found {
-            Some(media) => rows.push(CatalogRow {
-                id: media.id,
-                rating: items[i].rating,
-                preset: items[i].preset.clone(),
-            }),
+        match lookup.find(&path)? {
+            Some(id) => {
+                if !rows.iter().any(|r| r.id == id) {
+                    rows.push(CatalogRow {
+                        id,
+                        rating: items[i].rating,
+                        preset: items[i].preset.clone(),
+                    });
+                }
+            }
             None => {
                 report.unresolved += 1;
                 failed += 1;
@@ -922,30 +1075,24 @@ fn run(
                     "il file non è in libreria dopo l'importazione",
                 );
                 log_error(job_id, Path::new(&path), &e);
-                report.errors.push(RawExportError {
-                    name: names[i].clone(),
-                    source_path: items[i].source_path.clone(),
-                    code: e.code.as_str().to_string(),
-                    message_key: e.message_key.clone(),
-                    reason: e.detail.clone(),
-                });
+                report.push_error(&names[i], &items[i].source_path, &e);
             }
         }
     }
-    if ctx.control.is_cancelled() {
-        return cancelled_summary(&mut report, failed);
+    // Ultimo punto in cui annullare: la scrittura del catalogo è una transazione sola.
+    if !ctx.control.checkpoint() {
+        return cancelled(failed);
     }
     if rows.is_empty() {
         cat.inc_failed(1);
         cat.finish();
-        reports.put(report);
         return Ok(RunSummary {
             cancelled: false,
             failed,
         });
     }
     let photos = rows.len() as u32;
-    let outcome = apply_catalog(&store, &app, target, rows, options.preset_as_tag)?;
+    let outcome = apply_catalog(store, app, target, rows, options.preset_as_tag)?;
     report.catalog = Some(RawExportCatalog {
         id: outcome.id,
         name: outcome.name,
@@ -954,7 +1101,6 @@ fn run(
     });
     cat.inc_done(1);
     cat.finish();
-    reports.put(report);
     Ok(RunSummary {
         cancelled: false,
         failed,
@@ -1087,6 +1233,81 @@ mod tests {
         ));
         assert_eq!(std::fs::read(&target).unwrap(), b"vecchio");
         assert!(!hidden_sibling(&target, "export").exists());
+    }
+
+    #[test]
+    fn backup_left_by_a_crash_during_replacement_is_restored() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("new.jpg");
+        std::fs::write(&src, b"nuovo").unwrap();
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let target = out.join("new.jpg");
+        // Processo ucciso tra "file vecchio nel backup" e "temporaneo al nome finale".
+        std::fs::write(hidden_sibling(&target, "old"), b"vecchio").unwrap();
+        std::fs::write(hidden_sibling(&target, "export"), b"nu").unwrap();
+        // Senza "Sovrascrivi" il file precedente torna al suo posto e viene saltato.
+        assert!(matches!(
+            copy_one(&src, &target, false, &never),
+            CopyOutcome::Skipped
+        ));
+        assert_eq!(std::fs::read(&target).unwrap(), b"vecchio");
+        assert!(!hidden_sibling(&target, "old").exists());
+    }
+
+    #[test]
+    fn read_only_file_is_replaced_without_leftovers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("new.jpg");
+        std::fs::write(&src, b"nuovo").unwrap();
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let target = out.join("new.jpg");
+        std::fs::write(&target, b"vecchio").unwrap();
+        let mut perms = std::fs::metadata(&target).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&target, perms).unwrap();
+        assert!(matches!(
+            copy_one(&src, &target, true, &never),
+            CopyOutcome::Exported
+        ));
+        assert_eq!(std::fs::read(&target).unwrap(), b"nuovo");
+        assert_eq!(names(&out), vec!["new.jpg"], "nessun backup rimasto");
+    }
+
+    #[test]
+    fn path_keys_ignore_verbatim_prefix_separators_and_case_on_windows() {
+        assert_eq!(strip_verbatim(r"\\?\D:\Foto"), r"D:\Foto");
+        assert_eq!(strip_verbatim(r"\\?\UNC\nas\foto"), r"\\nas\foto");
+        assert_eq!(strip_verbatim("/home/foto"), "/home/foto");
+        if cfg!(windows) {
+            assert_eq!(
+                path_key(r"\\?\D:\Foto\Dolomiti\DSCF0001.JPG"),
+                path_key("d:/foto/dolomiti/dscf0001.jpg")
+            );
+        } else {
+            assert_ne!(path_key("/foto/A.jpg"), path_key("/foto/a.jpg"));
+            assert_eq!(path_key("/foto/a/"), path_key("/foto/a"));
+        }
+    }
+
+    #[test]
+    fn destination_equal_to_a_variant_folder_is_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("C1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let item = RawExportItem {
+            source_path: dir.join("a.jpg").display().to_string(),
+            orig_name: "a.jpg".into(),
+            preset: "C1".into(),
+            rating: 0,
+        };
+        assert!(destination_holds_sources(&dir, std::slice::from_ref(&item)));
+        assert!(!destination_holds_sources(
+            &tmp.path().join("altrove"),
+            std::slice::from_ref(&item)
+        ));
+        assert!(!destination_holds_sources(tmp.path(), &[item]));
     }
 
     #[test]

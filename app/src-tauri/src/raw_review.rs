@@ -865,6 +865,37 @@ impl ReviewState {
         Ok(selection)
     }
 
+    /// La cartella (anche se non esiste ancora) è una delle cartelle della revisione o sta dentro
+    /// una di esse: l'export non deve mai scrivere lì (una sottocartella diventerebbe un preset).
+    pub fn is_review_folder(&self, session_id: &str, folder: &Path) -> AppResult<bool> {
+        let open = self.session(session_id)?;
+        // Si risale fino alla prima cartella esistente, che `canonicalize` sa risolvere.
+        let mut rest: Vec<std::ffi::OsString> = Vec::new();
+        let mut cursor = folder.to_path_buf();
+        let real = loop {
+            if let Ok(real) = std::fs::canonicalize(&cursor) {
+                break Some(real);
+            }
+            match (cursor.file_name(), cursor.parent()) {
+                (Some(name), Some(parent)) => {
+                    rest.push(name.to_os_string());
+                    cursor = parent.to_path_buf();
+                }
+                _ => break None,
+            }
+        };
+        let Some(mut real) = real else {
+            return Ok(false);
+        };
+        for name in rest.into_iter().rev() {
+            real.push(name);
+        }
+        Ok(open
+            .allowed_roots
+            .iter()
+            .any(|root| pc_organize::paths::within(&real, root)))
+    }
+
     /// Metadati e ricetta di una variante. Il file viene dall'indice della sessione, mai dal
     /// chiamante, e deve stare in una cartella ammessa (stesso controllo del protocollo).
     pub fn metadata(
@@ -1969,6 +2000,25 @@ mod tests {
         // Una sessione chiusa non esporta più nulla.
         assert!(f.state.close(id));
         assert!(f.state.export_selection(id, &filter).is_err());
+    }
+
+    #[test]
+    fn review_folders_are_never_an_export_destination() {
+        let f = fixture(1, NO_WORKERS);
+        let data = f._tmp.path().join("app");
+        let opened = f.state.open_folder(&data, &f.photos).unwrap();
+        let id = opened.session_id.as_str();
+        assert!(f.state.is_review_folder(id, &f.photos).unwrap());
+        // Anche una sottocartella che non esiste ancora.
+        assert!(f
+            .state
+            .is_review_folder(id, &f.photos.join("Scelte").join("2026"))
+            .unwrap());
+        assert!(!f
+            .state
+            .is_review_folder(id, &f._tmp.path().join("Esportate"))
+            .unwrap());
+        assert!(f.state.is_review_folder("sconosciuta", &f.photos).is_err());
     }
 
     #[test]

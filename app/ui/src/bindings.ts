@@ -283,8 +283,9 @@ export const commands = {
 	 */
 	startRawReviewExport: (request: RawReviewExportRequest) => __TAURI_INVOKE<number>("start_raw_review_export", { request }),
 	/**
-	 *  Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo).
-	 *  `null` finché l'attività non ha finito o se l'app è stata riavviata.
+	 *  Riepilogo di un'esportazione conclusa (esportati, saltati, errori con il motivo, catalogo, o il
+	 *  motivo per cui si è fermata). `null` finché l'attività non ha finito o se l'app è stata
+	 *  riavviata: il riepilogo vive solo in memoria e il dialogo lo dice.
 	 */
 	rawReviewExportReport: (jobId: number) => __TAURI_INVOKE<RawExportReport | null>("raw_review_export_report", { jobId }),
 	sequenceExportDefaults: () => __TAURI_INVOKE<ExportDefaults>("sequence_export_defaults"),
@@ -843,7 +844,9 @@ export type ExportBlock =
 /**  Il catalogo esistente non accetta foto aggiunte a mano. */
 "catalog_not_addable" | 
 /**  Destinazione mancante o non utilizzabile. */
-"destination_invalid";
+"destination_invalid" | 
+/**  La destinazione è (o sta dentro) una cartella della revisione. */
+"destination_in_review";
 
 export type ExportDefaults = {
 	template: string,
@@ -1719,6 +1722,13 @@ export type RawExportError = {
 	reason: string,
 };
 
+/**  Motivo per cui l'attività si è fermata prima della fine. */
+export type RawExportFailure = {
+	code: string,
+	messageKey: string,
+	reason: string,
+};
+
 /**  Riepilogo finale dell'esportazione. */
 export type RawExportReport = {
 	jobId: number,
@@ -1732,6 +1742,11 @@ export type RawExportReport = {
 	catalog: RawExportCatalog | null,
 	/**  File della destinazione che non si sono trovati in libreria dopo l'import. */
 	unresolved: number,
+	/**
+	 *  Errore che ha fermato l'attività (destinazione non scrivibile, import non riuscito…):
+	 *  i conteggi dicono fin dove si è arrivati, il catalogo non è stato creato.
+	 */
+	failure: RawExportFailure | null,
 };
 
 /**  Dati del dialogo: conteggi, esclusioni, nomi, conflitti e cosa farà l'import. */

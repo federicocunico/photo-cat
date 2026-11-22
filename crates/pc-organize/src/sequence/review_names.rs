@@ -37,8 +37,10 @@ pub struct ReviewNameInput {
 impl ReviewNameInput {
     /// Legge data di scatto e dispositivo dall'EXIF del file (mai scritto).
     /// Un file illeggibile o senza EXIF produce un ingresso senza data.
+    /// La lettura passa da una cache per (percorso, dimensione, data di modifica):
+    /// il dialogo dell'export ricalcola i nomi a ogni modifica delle opzioni.
     pub fn from_file(path: &Path, orig_name: &str, preset: Option<&str>) -> Self {
-        let (capture, device) = read_file_facts(path);
+        let (capture, device) = cached_file_facts(path);
         Self {
             orig_name: orig_name.to_string(),
             preset: preset.map(str::to_string),
@@ -46,6 +48,38 @@ impl ReviewNameInput {
             device,
         }
     }
+}
+
+/// Voci massime della cache dei dati EXIF (oltre si svuota e riparte).
+const FACTS_CACHE_LIMIT: usize = 20_000;
+
+type Facts = (Option<String>, Option<String>);
+type FactsKey = (std::path::PathBuf, u64, Option<std::time::SystemTime>);
+
+fn facts_cache() -> &'static std::sync::Mutex<HashMap<FactsKey, Facts>> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<HashMap<FactsKey, Facts>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+/// Come [`read_file_facts`], ma rilegge il file solo se dimensione o data di
+/// modifica sono cambiate. Un file che non si apre non entra nella cache.
+pub fn cached_file_facts(path: &Path) -> Facts {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return (None, None);
+    };
+    let key: FactsKey = (path.to_path_buf(), meta.len(), meta.modified().ok());
+    if let Some(hit) = facts_cache().lock().ok().and_then(|c| c.get(&key).cloned()) {
+        return hit;
+    }
+    let facts = read_file_facts(path);
+    if let Ok(mut cache) = facts_cache().lock() {
+        if cache.len() >= FACTS_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(key, facts.clone());
+    }
+    facts
 }
 
 /// Chiave di scatto ordinabile e dispositivo letti dall'EXIF di `path`.
@@ -406,5 +440,39 @@ mod tests {
         // File illeggibile: nessuna data, nessun errore.
         let missing = ReviewNameInput::from_file(&dir.path().join("nope.jpg"), "nope.jpg", None);
         assert_eq!((missing.capture, missing.device), (None, None));
+    }
+
+    #[test]
+    fn cached_facts_follow_size_and_modification_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("DSCF0002.jpg");
+        let write = |local: &str| {
+            let meta = crate::sequence::metadata::CopyMeta {
+                local: Some(local.into()),
+                ..Default::default()
+            };
+            let segments = crate::sequence::metadata::app_segments(&meta).unwrap();
+            let rgb = image::RgbImage::new(8, 8);
+            let bytes =
+                crate::sequence::encode::encode_jpeg(&rgb, 80, false, None, &segments).unwrap();
+            std::fs::write(&path, bytes).unwrap();
+        };
+        write("2026-08-19 09:15:07");
+        let first = cached_file_facts(&path).0;
+        assert_eq!(first.as_deref(), Some("2026:08:19 09:15:07."));
+        assert_eq!(cached_file_facts(&path).0, first, "dalla cache");
+        // Stessa dimensione, altro contenuto e altra data di modifica: si rilegge.
+        write("2026-08-19 11:40:00");
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(10);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        assert_eq!(
+            cached_file_facts(&path).0.as_deref(),
+            Some("2026:08:19 11:40:00.")
+        );
     }
 }
