@@ -13,12 +13,18 @@ export interface ActiveGrid {
   clear: () => unknown;
   /** Elementi selezionati ora: Esc passa alla griglia solo se c'è qualcosa da togliere. */
   count: () => number;
+  /**
+   * Vero quando il focus è dentro la vista: tra più viste montate insieme (elenco e griglia dei
+   * volti) vince quella con il focus, altrimenti l'ultima registrata.
+   */
+  hasFocus?: () => boolean;
 }
 
 const active: ActiveGrid[] = [];
 
-/** La griglia attiva è l'ultima registrata (la vista montata più di recente). */
+/** La griglia attiva: quella con il focus, altrimenti l'ultima registrata (montata più di recente). */
 export function activeGrid(): ActiveGrid | undefined {
+  for (let i = active.length - 1; i >= 0; i--) if (active[i]!.hasFocus?.()) return active[i];
   return active[active.length - 1];
 }
 
@@ -33,6 +39,7 @@ export function useActiveGrid(grid: ActiveGrid, enabled = true) {
       invert: () => latest.current.invert(),
       clear: () => latest.current.clear(),
       count: () => latest.current.count(),
+      hasFocus: () => latest.current.hasFocus?.() ?? false,
     };
     active.push(entry);
     return () => {

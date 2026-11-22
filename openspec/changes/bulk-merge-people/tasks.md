@@ -18,7 +18,7 @@
 
 ## 2. Interfaccia
 
-- [ ] 2.1 Sezione "Persone": selezione multipla delle identità con le scorciatoie di selezione, filtro "con al massimo N foto" e dialogo "Unisci in…" con ricerca e conferma con i conteggi. In "Da rivedere" e "Singoli": filtro per numero di foto, "Seleziona tutto" e dialogo "Assegna a…" con ricerca, includendo "Nuova persona…", e avviso con "Annulla". i18n it/en. Test vitest sugli scenari delle spec.
+- [x] 2.1 Sezione "Persone": selezione multipla delle identità con le scorciatoie di selezione, filtro "con al massimo N foto" e dialogo "Unisci in…" con ricerca e conferma con i conteggi. In "Da rivedere" e "Singoli": filtro per numero di foto, "Seleziona tutto" e dialogo "Assegna a…" con ricerca, includendo "Nuova persona…", e avviso con "Annulla". i18n it/en. Test vitest sugli scenari delle spec.
 - [ ] 2.2 Revisione Opus: aderenza alle spec, prestazioni con centinaia di elementi, sicurezza dell'unione non annullabile (conferma chiara), testi per un utente non tecnico.
 
 ## 3. Verifica

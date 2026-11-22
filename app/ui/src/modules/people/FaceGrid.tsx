@@ -43,6 +43,7 @@ import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo
 import "./people.css";
 import { FaceCrop } from "./FaceCrop";
 import { MergeDialog } from "./MergeDialog";
+import { PersonPicker, type PickerChoice } from "./PersonPicker";
 import { discardReasonLabel } from "./discardReason";
 import { Spinner } from "../../components/feedback/Spinner";
 import type { GroupListTarget } from "./GroupList";
@@ -100,6 +101,7 @@ export const FaceGrid = forwardRef<
   const [error, setError] = useState("");
   const [mergeHintOpen, setMergeHintOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [width, setWidth] = useState(640);
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -611,6 +613,16 @@ export const FaceGrid = forwardRef<
         >
           {t("people.moveApply")}
         </Button>
+        {target?.kind === "singles" && (
+          <Button
+            variant="primary"
+            disabled={busy}
+            disabledReason={selectedCount === 0 ? t("people.noSelection") : undefined}
+            onClick={() => setAssignOpen(true)}
+          >
+            {t("people.bulk.assignAction")}
+          </Button>
+        )}
         {groupId != null && (
           <>
             <Button disabled={busy || selectedCount === 0} onClick={() => reject(groupId)}>
@@ -796,10 +808,48 @@ export const FaceGrid = forwardRef<
         title={t("people.removeTitle", { count: selectedCount })}
         message={t("people.removeBody")}
         confirmLabel={t("people.removeButton", { count: selectedCount })}
-        onConfirm={() =>
-          correct((ids) => [{ action: "remove", faces: ids }])
-        }
+        onConfirm={() => correct((ids) => [{ action: "remove", faces: ids }])}
       />
+
+      {assignOpen && (
+        <PersonPicker
+          mode="assign"
+          title={t("people.bulk.assignFacesPickTitle")}
+          intro={t("people.bulk.assignFacesPickIntro", { count: selectedCount })}
+          allowCreate
+          describe={(c: PickerChoice) => ({
+            title: t("people.bulk.assignFacesTitle", { count: selectedCount, name: c.name }),
+            body: t("people.bulk.assignFacesBody", { name: c.name }),
+          })}
+          confirmLabel={(c: PickerChoice) => t("people.bulk.assignConfirm", { name: c.name })}
+          run={async (c: PickerChoice) => {
+            const faces = await resolveFaceIds();
+            let correction: Correction;
+            if (c.kind === "person") correction = { action: "assign", person: c.person, faces };
+            else if (c.kind === "identity")
+              correction = { action: "assign_identity", identity: c.uid, faces };
+            else {
+              // Come "Chi è?": prima l'identità, così la persona compare anche in "Persone".
+              const uid = await commands.saveIdentity(null, {
+                name: c.name,
+                shortName: null,
+                group: null,
+                threshold: null,
+                aliases: [],
+              });
+              correction = { action: "assign_identity", identity: uid, faces };
+            }
+            await commands.correctPerson(correction);
+            sel.clear();
+            notifyPeopleUndo(
+              qc,
+              t("people.bulk.facesAssignedDone", { count: faces.length, name: c.name }),
+            );
+            await refreshPeopleFast(qc);
+          }}
+          onClose={() => setAssignOpen(false)}
+        />
+      )}
 
       {mergeHintOpen && group && hint && (
         <MergeDialog

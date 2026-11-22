@@ -15,14 +15,18 @@ import {
   isTauri,
   type GroupRow,
   type GroupSort,
+  type GroupTarget,
   type IdentityRow,
   type PeopleSection,
   type PeopleSections,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Button } from "../../components/ui";
-import { notifyError } from "../../store/toasts";
-import { notifyPeopleUndo, refreshPeople } from "./peopleUndo";
+import { useActiveGrid } from "../../commands/gridShortcuts";
+import { notify, notifyError } from "../../store/toasts";
+import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
+import { PersonPicker, type PickerChoice } from "./PersonPicker";
+import { PhotoCountFilter } from "./PhotoCountFilter";
 import "./people.css";
 import { fmtDate, fmtDec, fmtInt } from "../../lib/format";
 import { useDebounced } from "../library/facets";
@@ -117,11 +121,22 @@ export const GroupList = forwardRef<
     selectedIds: number[];
     onSelect: (next: GroupListSelection) => void;
     onCreateIdentity?: () => void;
+    /** Cambia solo l'insieme dei gruppi selezionati (Seleziona tutto, Esc), senza aprirne uno. */
+    onSelectedIdsChange?: (ids: number[]) => void;
     /** Elenco corrente dei gruppi (per tastiera e refresh senza perdere la selezione). */
     onCatalogChange?: (rows: GroupRow[]) => void;
   }
 >(function GroupList(
-  { section, onSectionChange, target, selectedIds, onSelect, onCreateIdentity, onCatalogChange },
+  {
+    section,
+    onSectionChange,
+    target,
+    selectedIds,
+    onSelect,
+    onCreateIdentity,
+    onSelectedIdsChange,
+    onCatalogChange,
+  },
   ref,
 ) {
   const { t } = useTranslation();
@@ -131,6 +146,13 @@ export const GroupList = forwardRef<
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [restoreBusy, setRestoreBusy] = useState<number | null>(null);
+  // Filtro "con al massimo N foto" e selezione multipla delle identità (sezione Persone).
+  const [maxPhotos, setMaxPhotos] = useState<number | null>(null);
+  const [idSel, setIdSel] = useState<string[]>([]);
+  const [idAnchor, setIdAnchor] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [dialog, setDialog] = useState<"merge" | "assign" | null>(null);
+  const focusedRef = useRef(false);
   const debouncedQuery = useDebounced(query, 200);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -156,15 +178,15 @@ export const GroupList = forwardRef<
   });
 
   const identities = useQuery({
-    queryKey: ["identities", debouncedQuery.trim()],
-    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null, null),
+    queryKey: ["identities", debouncedQuery.trim(), maxPhotos],
+    queryFn: () => commands.listIdentities(debouncedQuery.trim() || null, maxPhotos),
     enabled: isTauri() && section === "people",
   });
 
   const groups = useInfiniteQuery({
-    queryKey: ["people-groups", section, debouncedQuery, sort],
+    queryKey: ["people-groups", section, debouncedQuery, sort, maxPhotos],
     queryFn: ({ pageParam }) =>
-      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE, null),
+      commands.listGroups(section, debouncedQuery || null, sort, pageParam, PAGE, maxPhotos),
     initialPageParam: null as number | null,
     getNextPageParam: (last) => last.next ?? undefined,
     enabled: isTauri() && section !== "people",
@@ -329,6 +351,177 @@ export const GroupList = forwardRef<
     });
   };
 
+  // --- Selezione multipla e azioni in blocco (Persone e Da rivedere) ---------------------------
+  useEffect(() => {
+    setMaxPhotos(null);
+    setIdSel([]);
+    setIdAnchor(null);
+    setDialog(null);
+  }, [section]);
+
+  /** Solo le identità che si vedono: un'unione non annullabile non tocca righe nascoste. */
+  const selectedUids = useMemo(() => {
+    const set = new Set(idSel);
+    return identityRows.filter((r) => set.has(r.uid)).map((r) => r.uid);
+  }, [idSel, identityRows]);
+
+  const bulkSection = section === "people" || section === "review";
+  const selectedCount = section === "people" ? selectedUids.length : selectedIds.length;
+
+  const clickIdentity = (row: IdentityRow, e: MouseEvent) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!ctrl && !e.shiftKey) {
+      setIdSel([row.uid]);
+      setIdAnchor(row.uid);
+      selectIdentity(row);
+      return;
+    }
+    const order = identityRows.map((r) => r.uid);
+    const a = idAnchor != null ? order.indexOf(idAnchor) : -1;
+    const b = order.indexOf(row.uid);
+    if (e.shiftKey && a >= 0 && b >= 0) {
+      const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+      setIdSel(ctrl ? Array.from(new Set([...selectedUids, ...range])) : range);
+      return;
+    }
+    setIdSel(
+      selectedUids.includes(row.uid)
+        ? selectedUids.filter((u) => u !== row.uid)
+        : [...selectedUids, row.uid],
+    );
+    setIdAnchor(row.uid);
+  };
+
+  const resolveAllIds = async (): Promise<number[] | string[]> =>
+    section === "people"
+      ? groupFilter === null
+        ? commands.identitySelectionUids(debouncedQuery.trim() || null, maxPhotos)
+        : identityRows.map((r) => r.uid)
+      : commands.groupSelectionIds(section, debouncedQuery || null, maxPhotos);
+
+  const applySelection = (all: Array<number | string>) => {
+    if (section === "people") setIdSel(all as string[]);
+    else onSelectedIdsChange?.(all as number[]);
+  };
+
+  const selectAll = async () => {
+    setSelecting(true);
+    try {
+      applySelection(await resolveAllIds());
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setSelecting(false);
+    }
+  };
+  const invertSelection = async () => {
+    setSelecting(true);
+    try {
+      const all = await resolveAllIds();
+      const have = new Set<number | string>(section === "people" ? selectedUids : selectedIds);
+      applySelection(all.filter((x: number | string) => !have.has(x)));
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setSelecting(false);
+    }
+  };
+  const clearSelection = () => {
+    if (section === "people") {
+      setIdSel([]);
+      setIdAnchor(null);
+    } else onSelectedIdsChange?.([]);
+  };
+
+  // Ctrl+A, Ctrl+Maiusc+I ed Esc agiscono sull'elenco quando ha il focus (sui volti altrimenti).
+  useActiveGrid(
+    {
+      selectAll,
+      invert: invertSelection,
+      clear: clearSelection,
+      count: () => selectedCount,
+      hasFocus: () => focusedRef.current,
+    },
+    bulkSection,
+  );
+
+  const nameOf = (c: PickerChoice) => c.name;
+
+  /** "Unisci in…": anteprima con i conteggi, poi unione in un'unica operazione. */
+  const mergeProps = {
+    mode: "identities" as const,
+    title: t("people.bulk.mergePickTitle"),
+    intro: t("people.bulk.mergePickIntro", { count: selectedUids.length }),
+    danger: true,
+    describe: async (c: PickerChoice) => {
+      if (c.kind !== "identity") throw new Error(t("people.failed"));
+      const p = await commands.mergeIdentitiesPreview(selectedUids, c.uid);
+      if (p.identities === 0) throw new Error(t("people.bulk.mergeNothing", { name: c.name }));
+      return {
+        title: t("people.bulk.mergeTitle", { count: p.identities, name: c.name }),
+        body: t("people.bulk.mergeBody", {
+          name: c.name,
+          photos: t("people.bulk.photosCount", { count: p.photos }),
+          refs: t("people.bulk.refFacesCount", { count: p.referenceFaces }),
+        }),
+      };
+    },
+    confirmLabel: (c: PickerChoice) => t("people.bulk.mergeConfirm", { name: nameOf(c) }),
+    run: async (c: PickerChoice) => {
+      if (c.kind !== "identity") return;
+      const n = await commands.mergeIdentitiesMany(selectedUids, c.uid);
+      notify({
+        key: "people-bulk",
+        tone: "ok",
+        message: t("people.bulk.mergedDone", { count: n, name: c.name }),
+      });
+      setIdSel([]);
+      setIdAnchor(null);
+      onSelect({ target: null, selectedIds: [], anchor: null, group: null, identity: null });
+      await refreshPeople(qc);
+    },
+  };
+
+  /** "Assegna a…": tutti i volti dei gruppi selezionati in una persona, in un solo passaggio. */
+  const assignProps = {
+    mode: "assign" as const,
+    title: t("people.bulk.assignPickTitle"),
+    intro: t("people.bulk.assignPickIntro", { count: selectedIds.length }),
+    allowCreate: true,
+    describe: (c: PickerChoice) => ({
+      title: t("people.bulk.assignTitle", { count: selectedIds.length, name: c.name }),
+      body: t("people.bulk.assignBody", { name: c.name }),
+    }),
+    confirmLabel: (c: PickerChoice) => t("people.bulk.assignConfirm", { name: nameOf(c) }),
+    run: async (c: PickerChoice) => {
+      let to: GroupTarget;
+      if (c.kind === "person") to = { kind: "person", person: c.person };
+      else if (c.kind === "identity") to = { kind: "identity", uid: c.uid };
+      else {
+        // Come "Chi è?": prima l'identità, così la persona compare anche in "Persone".
+        const uid = await commands.saveIdentity(null, {
+          name: c.name,
+          shortName: null,
+          group: null,
+          threshold: null,
+          aliases: [],
+        });
+        to = { kind: "identity", uid };
+      }
+      const out = await commands.assignGroups(selectedIds, to);
+      let message = t("people.bulk.assignedDone", {
+        count: out.groups,
+        faces: t("people.bulk.facesCount", { count: out.faces }),
+        name: c.name,
+      });
+      if (out.skippedFaces > 0)
+        message += " " + t("people.bulk.skipped", { count: out.skippedFaces });
+      notifyPeopleUndo(qc, message);
+      onSelect({ target: null, selectedIds: [], anchor: null, group: null, identity: null });
+      await refreshPeopleFast(qc);
+    },
+  };
+
   const emptyMsg =
     section === "review"
       ? t("people.emptyReview")
@@ -340,7 +533,16 @@ export const GroupList = forwardRef<
   const everyone = identities.data?.identities ?? [];
 
   return (
-    <aside aria-label={t("people.listLabel")} className="people-list">
+    <aside
+      aria-label={t("people.listLabel")}
+      className="people-list"
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusedRef.current = false;
+      }}
+    >
       <div className="people-list-head">
         <div role="tablist" className="people-tabs">
           {tab("review", t("people.sectionReview"), counts.review)}
@@ -413,6 +615,41 @@ export const GroupList = forwardRef<
             </div>
           </>
         )}
+        {bulkSection && (
+          <div role="toolbar" aria-label={t("people.bulk.toolbar")} className="people-bulk-bar">
+            <PhotoCountFilter
+              value={maxPhotos}
+              onChange={setMaxPhotos}
+              atMost={section === "people"}
+            />
+            <div className="people-wrap people-wrap--gap-sm">
+              <Button size="sm" disabled={selecting} onClick={() => void selectAll()}>
+                {t("people.selectAll")}
+              </Button>
+              <Button size="sm" disabled={selectedCount === 0} onClick={clearSelection}>
+                {t("people.bulk.clear")}
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabledReason={
+                  selectedCount === 0
+                    ? t(section === "people" ? "people.bulk.noIdentities" : "people.bulk.noGroups")
+                    : undefined
+                }
+                onClick={() => setDialog(section === "people" ? "merge" : "assign")}
+              >
+                {section === "people"
+                  ? t("people.bulk.mergeAction")
+                  : t("people.bulk.assignAction")}
+              </Button>
+            </div>
+            {/* Sempre presente: il cambio di conteggio (Ctrl+A, Esc) viene annunciato. */}
+            <span aria-live="polite" aria-atomic="true" className="muted people-muted-sm">
+              {selectedCount > 0 ? t("people.bulk.selectedCount", { count: selectedCount }) : null}
+            </span>
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} data-testid="group-list-scroll" className="people-list-scroll">
@@ -427,15 +664,23 @@ export const GroupList = forwardRef<
               <>
                 <div role="list" aria-label={t("identities.title")} className="people-id-list">
                   {identityRows.map((r) => {
+                    const checked = selectedUids.includes(r.uid);
                     const selected =
+                      checked ||
                       (target?.kind === "identity" && target.uid === r.uid) ||
                       (target?.kind === "group" && r.person != null && target.id === r.person);
                     return (
                       <div key={r.uid} role="listitem">
                         <button
                           type="button"
-                          aria-current={selected || undefined}
-                          onClick={() => selectIdentity(r)}
+                          aria-current={
+                            (target?.kind === "identity" && target.uid === r.uid) ||
+                            (target?.kind === "group" && r.person != null && target.id === r.person)
+                              ? true
+                              : undefined
+                          }
+                          aria-pressed={checked}
+                          onClick={(e) => clickIdentity(r, e)}
                           className="people-list-item people-list-item--id"
                           style={{
                             border: selected
@@ -657,6 +902,9 @@ export const GroupList = forwardRef<
           </QueryView>
         )}
       </div>
+
+      {dialog === "merge" && <PersonPicker {...mergeProps} onClose={() => setDialog(null)} />}
+      {dialog === "assign" && <PersonPicker {...assignProps} onClose={() => setDialog(null)} />}
     </aside>
   );
 });

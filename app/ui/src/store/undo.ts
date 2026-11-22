@@ -36,6 +36,7 @@ export const UNDO_LOG_COMMANDS: ReadonlySet<string> = new Set([
   "mergeTag",
   "deleteTag",
   "correctPerson",
+  "assignGroups",
   "renamePlace",
   "deleteCategory",
   "setGroupShift",

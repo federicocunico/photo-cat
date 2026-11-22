@@ -399,6 +399,7 @@ export function PeopleModule() {
           target={target}
           selectedIds={selectedIds}
           onCatalogChange={onCatalogChange}
+          onSelectedIdsChange={setSelectedIds}
           onCreateIdentity={() => {
             setCreating(true);
             setIdentity(null);
