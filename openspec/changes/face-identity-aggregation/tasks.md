@@ -4,7 +4,7 @@ Ogni gruppo si integra da solo con test verdi (`cargo test` con `CARGO_BUILD_JOB
 
 ## 1. Preparazione e misura di partenza
 
-- [ ] 1.1 Creare il branch `change/face-identity-aggregation` da `main` aggiornato, dopo il merge di `ui-usability-audit`, e verificare che `make test` passi prima di ogni modifica
+- [x] 1.1 Creare il branch `change/face-identity-aggregation` da `main` aggiornato, dopo il merge di `ui-usability-audit`, e verificare che `make test` passi prima di ogni modifica (branch creato prima, poi allineato a `main` 0.5.2 con il merge 1810532)
 - [x] 1.2 Generatore di dati sintetici (identità sull'ipersfera a 128-d con frammenti lontani, gemelli nella stessa foto, volti ponte, volti di qualità bassa) e metriche (F a coppie, BCubed F, gruppi per identità, quota di gruppi da un volto, precisione delle unioni automatiche); verificare con test unitari su casi calcolati a mano (D9)
 - [x] 1.3 Esempio `cluster_bench` che misura il raggruppamento attuale sui dati sintetici e su un file JSONL locale; verificare che riporti i valori di partenza e salvarli in `design.md` come riferimento (D9)
 - [x] 1.4 Comando di sviluppo che esporta in un file locale gli embedding delle persone con nome della libreria dell'utente, mai nel repository (escluso da git); verificare con un test che il file contenga solo embedding e id anonimi
@@ -33,14 +33,14 @@ Ogni gruppo si integra da solo con test verdi (`cargo test` con `CARGO_BUILD_JOB
 
 - [x] 5.1 Migrazione: tabelle `merge_log` e `review_question`, flag "confermato" e indice dei volti per foto; verificare con il test delle migrazioni su un database della versione 0.5
 - [x] 5.2 Registrazione di ogni unione (manuale, automatica, coda) con istantanea dei volti, copertina e nome d'origine; "Annulla" che ripristina e, per le automatiche, aggiunge il vincolo; `undoPeople` come vista sullo storico; verificare con test d'integrazione gli scenari di "Storico delle unioni" (D7)
-- [ ] 5.3 Persone › "Unioni recenti": elenco degli ultimi 90 giorni con copertine, origine, filtro per persona e "Annulla"; verificare con test vitest
-- [ ] 5.4 Riepilogo della prima riaggregazione dopo l'aggiornamento ("N gruppi uniti automaticamente", collegamento allo storico); verificare con un test che compaia una sola volta
+- [x] 5.3 Persone › "Unioni recenti": elenco degli ultimi 90 giorni con copertine, origine, filtro per persona e "Annulla"; verificare con test vitest
+- [x] 5.4 Riepilogo della prima riaggregazione dopo l'aggiornamento ("N gruppi uniti automaticamente", collegamento allo storico); verificare con un test che compaia una sola volta
 
 ## 6. Coda "Da confermare"
 
 - [x] 6.1 Calcolo delle domande dopo ogni analisi, con l'ordine misto (gruppi grandi per volti risolti attesi, poi piccoli per probabilità) e il raggruppamento per persona di destinazione; verificare con test che l'ordine riduca le domande per arrivare a BCubed F 0,95 nel banco di prova rispetto all'ordine per probabilità (D6)
 - [x] 6.2 Propagazione: union-find per i Sì, vincoli per i No, domande superflue tolte, conflitti rilevati; verificare gli scenari di "Propagazione delle risposte"
-- [ ] 6.3 Interfaccia della coda in "Da rivedere": domanda singola "È {nome}?" o "È Anna o Marta?", schede in blocco con caselle e "Conferma tutti", coda vuota con il conteggio dei gruppi rimasti, tutto da tastiera; verificare con test vitest gli scenari di "Coda Da confermare"
+- [x] 6.3 Interfaccia della coda in "Da rivedere": domanda singola "È {nome}?" o "È Anna o Marta?", schede in blocco con caselle e "Conferma tutti", coda vuota con il conteggio dei gruppi rimasti, tutto da tastiera; verificare con test vitest gli scenari di "Coda Da confermare"
 
 ## 7. Misure
 
@@ -50,7 +50,7 @@ Ogni gruppo si integra da solo con test verdi (`cargo test` con `CARGO_BUILD_JOB
 ## 8. Verifica d'insieme
 
 - [ ] 8.1 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
-- [ ] 8.2 Aggiornare README (Persone: coda, storico, sensibilità) e `research.md` con i risultati del banco di prova
+- [x] 8.2 Aggiornare README (Persone: coda, storico, sensibilità) e `research.md` con i risultati del banco di prova
 - [ ] 8.3 Prova sull'app reale (per l'utente): libreria di prova da `D:\Foto` con un catalogo isolato; confronto prima/dopo delle misure in Diagnostica, delle unioni automatiche e del numero di domande per sistemare i gruppi piccoli
 
 ## Workflow follow-up

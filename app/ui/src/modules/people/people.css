@@ -770,3 +770,101 @@
   flex-direction: column;
   padding-top: 0;
 }
+
+/* Coda "Da confermare" (face-identity-aggregation): domanda, volti dei gruppi, blocchi. */
+.people-queue {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  outline: none;
+}
+.people-queue-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.people-queue-sides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-4);
+}
+.people-queue-side {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+}
+.people-queue-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pc-space-1);
+}
+.people-queue-face {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--pc-radius-sm);
+  object-fit: cover;
+  background: var(--pc-thumb-bg);
+}
+.people-queue-batch {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--pc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.people-queue-batch-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-2);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--pc-radius-md);
+}
+.people-queue-batch-item:not([data-checked]) {
+  opacity: 0.6;
+}
+.people-queue-ph {
+  display: inline-grid;
+  place-items: center;
+  color: var(--pc-accent-text);
+}
+
+/* "Unioni recenti": copertine, testo e "Annulla" su una riga. */
+.people-merges {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.people-merge-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-3);
+  padding: var(--pc-space-2) 0;
+  border-bottom: 1px solid var(--pc-border);
+}
+.people-merge-row[data-undone] {
+  opacity: 0.6;
+}
+.people-merge-covers {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  flex: none;
+}
+.people-merge-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.people-merge-title {
+  overflow-wrap: anywhere;
+}

@@ -358,11 +358,59 @@ describe("Somiglianze in parole (P9)", () => {
       total: 1,
     } as never);
     renderModule();
-    expect(await screen.findByText("35 foto · forse Giulia · somiglianza alta")).toBeInTheDocument();
+    expect(
+      await screen.findByText("35 foto · forse Giulia · somiglianza alta"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("option", { name: /Persona senza nome\s*35 foto/i }));
     const question = await screen.findByRole("region", { name: "È Giulia?" });
     expect(question).toHaveTextContent("Somiglianza media con i 17 volti di Giulia");
     await screen.findByTestId("face-1");
     expect(document.body.textContent).not.toMatch(/\b0[,.]\d{2}\b/);
+  });
+});
+
+describe("Coda Da confermare in Da rivedere", () => {
+  it("è la prima voce dell'elenco e apre la domanda nella colonna dei volti", async () => {
+    commandsMock.listGroups.mockResolvedValue({
+      items: [row({ id: 12, faces: 61, photos: 58 })],
+      next: null,
+      total: 1,
+    } as never);
+    commandsMock.reviewQueue.mockResolvedValue({
+      items: [
+        {
+          kind: "single",
+          question: {
+            id: 1,
+            kind: "group_person",
+            group: { id: 12, name: null, faces: 61, photos: 58, cover: null },
+            other: { id: 7, name: "Gioia", faces: 40, photos: 40, cover: null },
+            second: null,
+            probability: 0.7,
+          },
+        },
+      ],
+      open: 3,
+      unnamedGroups: 1,
+    });
+    renderModule();
+    const list = await screen.findByRole("listbox", { name: "Elenco persone e gruppi" });
+    const options = await within(list).findAllByRole("option");
+    expect(options[0]).toHaveTextContent("3 domande");
+    fireEvent.click(options[0]!);
+    expect(await screen.findByRole("region", { name: "È Gioia?" })).toBeInTheDocument();
+    expect(screen.queryByTestId("face-grid-scroll")).toBeNull();
+    expect(
+      within(screen.getByRole("complementary", { name: "Scheda" })).getByText(/Ctrl\+Z/),
+    ).toBeInTheDocument();
+  });
+
+  it("«Unioni recenti» è un comando della pagina", async () => {
+    commandsMock.listGroups.mockResolvedValue({ items: [], next: null, total: 0 } as never);
+    commandsMock.listMerges.mockResolvedValue([]);
+    renderModule();
+    fireEvent.click(await screen.findByRole("button", { name: "Unioni recenti" }));
+    expect(await screen.findByRole("dialog", { name: "Unioni recenti" })).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna unione negli ultimi 90 giorni.")).toBeInTheDocument();
   });
 });

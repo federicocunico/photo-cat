@@ -37,6 +37,7 @@ import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo
 import { PersonPicker, type PickerChoice } from "./PersonPicker";
 import { withNewIdentity } from "./newIdentity";
 import { Cover } from "./Cover";
+import { QUEUE_KEY } from "./ReviewQueue";
 import { similarityLevel } from "./similarity";
 import "./people.css";
 import { fmtDate, fmtInt } from "../../lib/format";
@@ -58,6 +59,8 @@ export type GroupListTarget =
   | { kind: "identity"; uid: string }
   | { kind: "singles" }
   | { kind: "discarded" }
+  /** Coda "Da confermare" (face-identity-aggregation). */
+  | { kind: "queue" }
   | null;
 
 export type GroupListSelection = {
@@ -77,7 +80,8 @@ type VirtItem =
   | { kind: "label"; key: string; label: string }
   | { kind: "group"; group: GroupRow }
   | { kind: "singles"; count: number }
-  | { kind: "discarded"; count: number };
+  | { kind: "discarded"; count: number }
+  | { kind: "queue"; count: number };
 
 const SORTS: GroupSort[] = ["photos_desc", "name_asc", "faces_desc"];
 
@@ -240,11 +244,25 @@ export const GroupList = forwardRef<
     discarded: 0,
   };
 
+  // Domande aperte della coda (stessa query del pannello: una sola richiesta).
+  const queue = useQuery({
+    queryKey: QUEUE_KEY,
+    queryFn: () => commands.reviewQueue(50),
+    enabled: isTauri() && section === "review",
+  });
+  const queueOpen = queue.data?.open ?? null;
+
   const virtItems = useMemo((): VirtItem[] => {
     if (section === "people") return [];
     const suggested = rows.filter((g) => g.nameHint || g.mergeHint);
     const others = rows.filter((g) => !g.nameHint && !g.mergeHint);
     const out: VirtItem[] = [];
+    // Coda "Da confermare" in testa, quando ci sono domande: quelle che sistemano più gruppi per
+    // risposta (D6). Se si svuota mentre è aperta, il pannello dice quanti gruppi restano.
+    if (section === "review" && queueOpen != null && queueOpen > 0) {
+      out.push({ kind: "label", key: "queue", label: t("people.queue.title") });
+      out.push({ kind: "queue", count: queueOpen });
+    }
     if (suggested.length) {
       out.push({ kind: "label", key: "suggested", label: t("people.suggestedForName") });
       for (const g of suggested) out.push({ kind: "group", group: g });
@@ -264,7 +282,7 @@ export const GroupList = forwardRef<
       out.push({ kind: "discarded", count: counts.discarded });
     }
     return out;
-  }, [rows, section, counts.singles, counts.discarded, t]);
+  }, [rows, section, counts.singles, counts.discarded, queueOpen, t]);
 
   // Gruppi nell'ordine mostrato (suggeriti, poi altri gruppi): lo seguono frecce e avanzamento.
   const shownRows = useMemo(
@@ -975,6 +993,35 @@ export const GroupList = forwardRef<
                                 </Button>
                               )}
                             </div>
+                          )}
+                          {item.kind === "queue" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onSelect({
+                                  target: { kind: "queue" },
+                                  selectedIds: [],
+                                  anchor: null,
+                                  group: null,
+                                  identity: null,
+                                })
+                              }
+                              role="option"
+                              aria-selected={target?.kind === "queue"}
+                              className="people-list-item people-list-item--pair"
+                            >
+                              <span aria-hidden className="people-cover-ph people-queue-ph">
+                                <Icon.Help size={16} />
+                              </span>
+                              <span className="people-list-text">
+                                <span className="people-list-name-plain">
+                                  {t("people.queue.listItem", { count: item.count })}
+                                </span>
+                                <span className="muted people-muted-sm">
+                                  {t("people.queue.listSub")}
+                                </span>
+                              </span>
+                            </button>
                           )}
                           {item.kind === "singles" && (
                             <button

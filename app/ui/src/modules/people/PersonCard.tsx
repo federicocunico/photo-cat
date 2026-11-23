@@ -94,6 +94,8 @@ export const PersonCard = forwardRef<
     onIdentitySaved: (uid: string) => void;
     onIdentityDeleted: () => void;
     onCreatingChange: (v: boolean) => void;
+    /** "Unioni recenti" filtrate per questa persona. */
+    onShowMerges?: (person: number) => void;
   }
 >(function PersonCard(
   {
@@ -106,6 +108,7 @@ export const PersonCard = forwardRef<
     onIdentitySaved,
     onIdentityDeleted,
     onCreatingChange,
+    onShowMerges,
   },
   ref,
 ) {
@@ -208,6 +211,7 @@ export const PersonCard = forwardRef<
               onCreatingChange(false);
               onIdentityDeleted();
             }}
+            onShowMerges={onShowMerges}
           />
         )}
         <div className="people-stack people-stack--gap-xs">
@@ -226,6 +230,8 @@ export const PersonCard = forwardRef<
   // Volti singoli e scartati: la scheda dice che cosa sono e come si sistemano.
   if (target?.kind === "singles")
     return <p className="muted people-muted-reset">{t("people.singlesCard")}</p>;
+  if (target?.kind === "queue")
+    return <p className="muted people-muted-reset">{t("people.queue.cardHint")}</p>;
   if (target?.kind === "discarded")
     return <p className="muted people-muted-reset">{t("people.discardedCard")}</p>;
 

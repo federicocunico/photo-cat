@@ -141,7 +141,7 @@ export const FaceGrid = forwardRef<
   }, [highlight?.faceId, highlight?.discarded]);
 
   const scope: FaceScope | null = useMemo(() => {
-    if (!target || target.kind === "identity") return null;
+    if (!target || target.kind === "identity" || target.kind === "queue") return null;
     if (target.kind === "singles") return { kind: "singles" };
     if (target.kind === "discarded") return { kind: "discarded", group: null };
     if (discardedOnly) return { kind: "discarded", group: target.id };
