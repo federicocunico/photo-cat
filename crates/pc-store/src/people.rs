@@ -1651,11 +1651,43 @@ pub struct MergeSuggestion {
     pub score: f32,
 }
 
-/// Ricalcola i suggerimenti di unione dai centroidi dei gruppi non ignorati:
+/// Volti campione per gruppo nel collegamento robusto (design D2): al massimo 12, i migliori
+/// per qualità, quindi al massimo 144 confronti per coppia di gruppi.
+pub const LINK_SAMPLES: usize = 12;
+
+/// Mediana di valori finiti (media dei due centrali se sono pari); `None` se vuoti.
+pub fn median(values: &mut [f32]) -> Option<f32> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(|a, b| a.total_cmp(b));
+    let n = values.len();
+    Some(if n % 2 == 1 {
+        values[n / 2]
+    } else {
+        (values[n / 2 - 1] + values[n / 2]) / 2.0
+    })
+}
+
+/// Collegamento robusto tra due gruppi (design D2): mediana dei coseni tra i loro campioni.
+/// Resiste a un volto "ponte" meglio del massimo e, a differenza del centroide, non gonfia il
+/// punteggio. `None` se uno dei due insiemi è vuoto.
+pub fn robust_linkage(a: &[&[f32]], b: &[&[f32]]) -> Option<f32> {
+    let mut scores: Vec<f32> = a
+        .iter()
+        .flat_map(|x| b.iter().map(move |y| cosine(x, y)))
+        .collect();
+    median(&mut scores)
+}
+
+/// Ricalcola i suggerimenti di unione tra i gruppi non ignorati:
 /// - ogni gruppo deve avere almeno 3 volti non scartati;
-/// - coseno tra centroidi ≥ `similarity * 0.8`;
+/// - coseno tra centroidi ≥ `similarity * 0.8` (filtro rapido dei candidati);
 /// - almeno 3 coppie di volti non scartati tra i due gruppi con coseno ≥ `similarity`;
-/// - esclusione delle coppie in `person_not_same`;
+/// - collegamento robusto (mediana tra i campioni, [`robust_linkage`]) ≥ `similarity`: è il
+///   punteggio del suggerimento;
+/// - esclusione delle coppie in `person_not_same` e dei gruppi con volti nella stessa foto
+///   (sono sicuramente persone diverse);
 /// - limite di al massimo 1 suggerimento per gruppo (scelto per punteggio decrescente).
 pub fn refresh_merge_suggestions(
     c: &Connection,
@@ -1670,8 +1702,13 @@ pub fn refresh_merge_suggestions(
         v
     };
     let all = records(c, None)?;
-    // Raggruppa i volti validi per `(person_id, model)`.
+    // Raggruppa i volti validi per `(person_id, model)`, dal migliore per qualità.
     let mut by_group: BTreeMap<(i64, String), Vec<Vec<f32>>> = BTreeMap::new();
+    // (qualità, id del volto, posizione in `by_group`) per scegliere i campioni.
+    type Ranked = Vec<(f32, i64, usize)>;
+    let mut ranked: BTreeMap<(i64, String), Ranked> = BTreeMap::new();
+    let mut media_of: std::collections::HashMap<i64, HashSet<i64>> =
+        std::collections::HashMap::new();
     for f in &all {
         if f.is_discarded(m) {
             continue;
@@ -1682,11 +1719,29 @@ pub fn refresh_merge_suggestions(
         let Some(emb) = &f.embedding else {
             continue;
         };
-        by_group
-            .entry((pid, f.model.clone()))
+        let key = (pid, f.model.clone());
+        let list = by_group.entry(key.clone()).or_default();
+        ranked
+            .entry(key)
             .or_default()
-            .push(emb.clone());
+            .push((f.quality_score, f.id, list.len()));
+        list.push(emb.clone());
+        media_of.entry(pid).or_default().insert(f.media_id);
     }
+    let samples: BTreeMap<(i64, String), Vec<usize>> = ranked
+        .into_iter()
+        .map(|(k, mut v)| {
+            v.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+            (k, v.into_iter().take(LINK_SAMPLES).map(|x| x.2).collect())
+        })
+        .collect();
+    let share_photo = |a: i64, b: i64| match (media_of.get(&a), media_of.get(&b)) {
+        (Some(x), Some(y)) => {
+            let (small, big) = if x.len() <= y.len() { (x, y) } else { (y, x) };
+            small.iter().any(|m| big.contains(m))
+        }
+        _ => false,
+    };
     let mut centroids: BTreeMap<String, Vec<(i64, Vec<f32>)>> = BTreeMap::new();
     {
         let mut q = c.prepare(
@@ -1720,17 +1775,16 @@ pub fn refresh_merge_suggestions(
         for (i, (pa, ca)) in group_centroids.iter().enumerate() {
             for (pb, cb) in group_centroids.iter().skip(i + 1) {
                 let (lo, hi) = ((*pa).min(*pb), (*pa).max(*pb));
-                if not_same.contains(&(lo, hi)) {
+                if not_same.contains(&(lo, hi)) || share_photo(lo, hi) {
                     continue;
                 }
                 let c_score = cosine(ca, cb);
                 if c_score < centroid_min {
                     continue;
                 }
-                let Some(fa) = by_group.get(&(*pa, model.clone())) else {
-                    continue;
-                };
-                let Some(fb) = by_group.get(&(*pb, model.clone())) else {
+                let ka = (*pa, model.clone());
+                let kb = (*pb, model.clone());
+                let (Some(fa), Some(fb)) = (by_group.get(&ka), by_group.get(&kb)) else {
                     continue;
                 };
                 let mut pairs = 0usize;
@@ -1744,11 +1798,21 @@ pub fn refresh_merge_suggestions(
                         }
                     }
                 }
-                if pairs >= 3 {
-                    let entry = candidates.entry((lo, hi)).or_insert(c_score);
-                    if c_score > *entry {
-                        *entry = c_score;
-                    }
+                if pairs < 3 {
+                    continue;
+                }
+                let pick = |k: &(i64, String), list: &Vec<Vec<f32>>| -> Vec<Vec<f32>> {
+                    samples[k].iter().map(|i| list[*i].clone()).collect()
+                };
+                let (sa, sb) = (pick(&ka, fa), pick(&kb, fb));
+                let ra: Vec<&[f32]> = sa.iter().map(|v| v.as_slice()).collect();
+                let rb: Vec<&[f32]> = sb.iter().map(|v| v.as_slice()).collect();
+                let Some(score) = robust_linkage(&ra, &rb).filter(|s| *s >= similarity) else {
+                    continue;
+                };
+                let entry = candidates.entry((lo, hi)).or_insert(score);
+                if score > *entry {
+                    *entry = score;
                 }
             }
         }
@@ -1795,6 +1859,67 @@ pub fn list_merge_suggestions(c: &Connection) -> StoreResult<Vec<MergeSuggestion
     Ok(rows)
 }
 
+/// Margine richiesto tra la persona con nome più simile e la seconda perché un volto le sia
+/// associato da solo (design D3, "Due candidate vicine"): sotto il margine il volto resta al
+/// raggruppamento, che ne fa una domanda "È A o B?".
+pub const NAMED_MARGIN: f32 = pc_core::AiThresholds::DEFAULT_FACE_MERGE_MARGIN;
+
+/// I [`LINK_SAMPLES`] volti migliori per qualità di una persona, per il modello indicato.
+pub fn person_samples(c: &Connection, person: i64, model: &str) -> StoreResult<Vec<Vec<f32>>> {
+    let mut q = c.prepare_cached(
+        "SELECT embedding FROM face WHERE person_id=?1 AND model_ver=?2 AND embedding IS NOT NULL \
+         ORDER BY COALESCE(quality_score, quality) DESC, id LIMIT ?3",
+    )?;
+    let rows = q
+        .query_map(params![person, model, LINK_SAMPLES as i64], |r| {
+            r.get::<_, Vec<u8>>(0)
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    rows.iter().map(|b| vector(b)).collect()
+}
+
+/// Persona con nome (o identità, o ignorata) più simile a `v`. Il centroide serve solo da
+/// filtro rapido (sopra `0,8 × threshold`): il punteggio è il collegamento robusto del volto
+/// con i volti migliori della persona (mediana, [`robust_linkage`]), che deve raggiungere
+/// `threshold` e staccare la seconda persona di almeno [`NAMED_MARGIN`]. Il centroide da solo
+/// gonfia i punteggi e attirava volti di altre persone (design D2–D3). Restituisce anche il
+/// punteggio migliore.
+fn best_named_centroid(
+    c: &Connection,
+    v: &[f32],
+    model: &str,
+    rejected: &[i64],
+    threshold: f32,
+) -> StoreResult<(Option<i64>, f32)> {
+    let mut q = c.prepare_cached(
+        "SELECT p.id,pc.vector FROM person p JOIN person_centroid pc ON pc.person_id=p.id
+         WHERE (p.name IS NOT NULL OR p.identity_uid IS NOT NULL OR p.ignored_at IS NOT NULL) AND pc.model_ver=?1
+         ORDER BY p.id",
+    )?;
+    let rows = q
+        .query_map([model], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut scored: Vec<(i64, f32)> = Vec::new();
+    for (id, b) in rows {
+        if rejected.contains(&id) || cosine(v, &vector(&b)?) < threshold * 0.8 {
+            continue;
+        }
+        let samples = person_samples(c, id, model)?;
+        let refs: Vec<&[f32]> = samples.iter().map(|s| s.as_slice()).collect();
+        if let Some(score) = robust_linkage(&[v], &refs).filter(|s| *s >= threshold) {
+            scored.push((id, score));
+        }
+    }
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+    match (scored.first(), scored.get(1)) {
+        (None, _) => Ok((None, threshold)),
+        (Some(best), Some(second)) if best.1 - second.1 < NAMED_MARGIN => Ok((None, best.1)),
+        (Some(best), _) => Ok((Some(best.0), best.1)),
+    }
+}
+
 pub fn named_match(
     c: &Connection,
     v: &[f32],
@@ -1802,25 +1927,7 @@ pub fn named_match(
     rejected: &[i64],
     threshold: f32,
 ) -> StoreResult<Option<i64>> {
-    let mut q = c.prepare(
-        "SELECT p.id,pc.vector FROM person p JOIN person_centroid pc ON pc.person_id=p.id
-         WHERE (p.name IS NOT NULL OR p.identity_uid IS NOT NULL OR p.ignored_at IS NOT NULL) AND pc.model_ver=?1",
-    )?;
-    let rows = q.query_map([model], |r| {
-        Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
-    })?;
-    let mut best = (None, threshold);
-    for row in rows {
-        let (id, b) = row?;
-        if rejected.contains(&id) {
-            continue;
-        }
-        let score = cosine(v, &vector(&b)?);
-        if score >= best.1 {
-            best = (Some(id), score);
-        }
-    }
-    Ok(best.0)
+    Ok(best_named_centroid(c, v, model, rejected, threshold)?.0)
 }
 /// Riferimenti delle identità dell'app per una versione di modello, con i
 /// nomi per creare la persona collegata in una libreria che non la conosce.
@@ -1863,24 +1970,7 @@ pub fn named_match_refs(
     ids: &IdentityRefs,
     create: bool,
 ) -> StoreResult<Option<i64>> {
-    let mut q = c.prepare(
-        "SELECT p.id,pc.vector FROM person p JOIN person_centroid pc ON pc.person_id=p.id
-         WHERE (p.name IS NOT NULL OR p.identity_uid IS NOT NULL OR p.ignored_at IS NOT NULL) AND pc.model_ver=?1",
-    )?;
-    let rows = q.query_map([model], |r| {
-        Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
-    })?;
-    let mut best: (Option<i64>, f32) = (None, threshold);
-    for row in rows {
-        let (id, b) = row?;
-        if rejected.contains(&id) {
-            continue;
-        }
-        let score = cosine(v, &vector(&b)?);
-        if score >= best.1 {
-            best = (Some(id), score);
-        }
-    }
+    let best = best_named_centroid(c, v, model, rejected, threshold)?;
     if ids.is_empty() {
         return Ok(best.0);
     }
@@ -2283,6 +2373,8 @@ pub fn mark_not_same(c: &Connection, a: i64, b: i64) -> StoreResult<()> {
         "DELETE FROM person_suggestion WHERE a=?1 AND b=?2",
         params![lo, hi],
     )?;
+    // Le domande della coda contraddette dal vincolo spariscono.
+    crate::review::cleanup(c)?;
     Ok(())
 }
 
@@ -2663,6 +2755,114 @@ fn refresh_media(c: &Connection, ids: &HashSet<i64>) -> StoreResult<()> {
     }
     Ok(())
 }
+/// Aggiorna le persone nell'indice di ricerca delle foto indicate.
+pub fn refresh_media_ids(c: &Connection, ids: &HashSet<i64>) -> StoreResult<()> {
+    refresh_media(c, ids)
+}
+/// Riserva un id di persona senza creare la riga: serve allo storico per un gruppo del primo
+/// passaggio unito subito dal secondo, che "Annulla" ricrea con questo id.
+pub fn reserve_person_id(c: &Connection) -> StoreResult<i64> {
+    next_id(c, "person")
+}
+
+/// `true` se un vincolo dell'utente separa i gruppi `a` e `b`: "Persone diverse" tra i due o
+/// un volto di uno che rifiuta l'altro ("Non è questa persona").
+pub fn blocked(c: &Connection, a: i64, b: i64) -> StoreResult<bool> {
+    Ok(c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM person_not_same WHERE a=?1 AND b=?2) \
+         OR EXISTS(SELECT 1 FROM face f, json_each(f.rejected) j \
+                   WHERE (f.person_id=?3 AND j.value=?4) OR (f.person_id=?4 AND j.value=?3))",
+        params![a.min(b), a.max(b), a, b],
+        |r| r.get(0),
+    )?)
+}
+
+/// Toglie i vincoli tra `a` e `b` (conflitto risolto dall'utente a favore dell'unione).
+fn clear_constraints(c: &Connection, a: i64, b: i64) -> StoreResult<()> {
+    remove_not_same(c, a, b)?;
+    let touched: Vec<(i64, Option<i64>, String)> = {
+        let mut q = c.prepare(
+            "SELECT id, person_id, rejected FROM face WHERE person_id IN (?1, ?2) AND rejected <> '[]'",
+        )?;
+        let v = q
+            .query_map(params![a, b], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        v
+    };
+    for (id, person, rejected) in touched {
+        let other = if person == Some(a) { b } else { a };
+        let before: Vec<i64> = serde_json::from_str(&rejected)?;
+        let after: Vec<i64> = before.iter().copied().filter(|p| *p != other).collect();
+        if after != before {
+            c.execute(
+                "UPDATE face SET rejected=?2 WHERE id=?1",
+                params![id, serde_json::to_string(&after)?],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Unisce i gruppi `from` in `to` come una sola operazione annullabile (`description` nel
+/// registro di Ctrl+Z) e la registra nello storico delle unioni con l'origine indicata.
+/// Con `clear` toglie prima i vincoli tra i gruppi e la destinazione (l'annullamento li
+/// rimette). Restituisce l'id della voce dello storico.
+pub fn merge_logged(
+    c: &Connection,
+    from: &[i64],
+    to: i64,
+    origin: crate::merge_log::MergeOrigin,
+    description: &str,
+    clear: bool,
+) -> StoreResult<i64> {
+    use crate::bulk::{record_undo, UndoAction};
+    let from: Vec<i64> = {
+        let mut seen = HashSet::new();
+        from.iter()
+            .copied()
+            .filter(|g| *g != to && seen.insert(*g))
+            .collect()
+    };
+    if from.is_empty() {
+        return Err(StoreError::Invalid("nessun gruppo da unire".into()));
+    }
+    let mut snaps = Vec::with_capacity(from.len());
+    for id in &from {
+        snaps.push(person_snapshot(c, *id)?);
+    }
+    let target = person_snapshot(c, to)?;
+    let faces = faces_of_persons(c, &from)?;
+    let mut groups = from.clone();
+    groups.push(to);
+    let states = face_states(c, &faces_touching(c, &groups)?)?;
+    let not_same = not_same_rows(c, &groups)?;
+    let snapshot = crate::merge_log::snapshot_groups(c, &from, to)?;
+    if clear {
+        for g in &from {
+            clear_constraints(c, *g, to)?;
+        }
+    }
+    merge_many(c, &from, to)?;
+    let id = crate::merge_log::record(c, origin, to, &snapshot)?;
+    record_undo(
+        c,
+        description,
+        &UndoAction::Group {
+            actions: vec![
+                UndoAction::PersonsMerged {
+                    from: snaps,
+                    faces,
+                    to,
+                    states,
+                    target: Some(target),
+                    not_same,
+                },
+                UndoAction::MergeLogged { id },
+            ],
+        },
+    )?;
+    Ok(id)
+}
 fn person_media(c: &Connection, person: i64) -> StoreResult<HashSet<i64>> {
     let mut q = c.prepare("SELECT DISTINCT media_id FROM face WHERE person_id=?1")?;
     let out = q
@@ -2844,6 +3044,8 @@ fn merge_rows(c: &Connection, from: i64, to: i64) -> StoreResult<HashSet<i64>> {
         }
     }
     c.execute("DELETE FROM person_suggestion WHERE a=?1 OR b=?1", [from])?;
+    // Le domande della coda seguono il gruppo unito (propagazione per transitività).
+    crate::review::after_merge(c, &[from], to)?;
     c.execute("DELETE FROM person WHERE id=?1", [from])?;
     Ok(media)
 }
@@ -2983,6 +3185,7 @@ fn merge_rows_many(c: &Connection, from: &[i64], to: i64) -> StoreResult<HashSet
          OR b IN (SELECT value FROM json_each(?1))",
         [&list],
     )?;
+    crate::review::after_merge(c, from, to)?;
     c.execute(
         "DELETE FROM person WHERE id IN (SELECT value FROM json_each(?1))",
         [&list],
@@ -3172,6 +3375,21 @@ pub fn assign_groups(
             }
         }
     }
+    // Storico delle unioni: gruppi interi e, dei gruppi parziali, i soli volti spostati.
+    let mut log_sources = full
+        .iter()
+        .map(|g| crate::merge_log::source_group(c, *g))
+        .collect::<StoreResult<Vec<_>>>()?;
+    for g in &partial {
+        let mut s = crate::merge_log::source_group(c, *g)?;
+        s.faces.retain(|f| moved_ids.contains(&f.id));
+        if !s.cover.is_some_and(|f| moved_ids.contains(&f)) {
+            s.cover = s.faces.first().map(|f| f.id);
+        }
+        if !s.faces.is_empty() {
+            log_sources.push(s);
+        }
+    }
 
     let (to, created) = match existing {
         Some(t) => (t, false),
@@ -3208,7 +3426,23 @@ pub fn assign_groups(
     refresh_centroids(c)?;
     refresh_media(c, &media)?;
 
-    let mut actions = Vec::new();
+    let log_id = crate::merge_log::record(
+        c,
+        crate::merge_log::MergeOrigin::Manual,
+        to,
+        &crate::merge_log::MergeSnapshot {
+            sources: log_sources,
+            target_name: match &target_snapshot {
+                Some(t) => t.name.clone(),
+                None => new_name.map(str::to_string),
+            },
+            target_identity: match &target_snapshot {
+                Some(t) => t.identity_uid.clone(),
+                None => new_uid.map(str::to_string),
+            },
+        },
+    )?;
+    let mut actions = vec![UndoAction::MergeLogged { id: log_id }];
     if created {
         actions.push(UndoAction::FacesRestored {
             states: Vec::new(),
@@ -3283,6 +3517,8 @@ pub fn clear(c: &Connection) -> StoreResult<()> {
     c.execute("DELETE FROM person_centroid", [])?;
     c.execute("DELETE FROM person_not_same", [])?;
     c.execute("DELETE FROM person_suggestion", [])?;
+    c.execute("DELETE FROM review_question", [])?;
+    c.execute("DELETE FROM merge_log", [])?;
     c.execute("DELETE FROM person", [])?;
     c.execute("DELETE FROM face_exclusion", [])?;
     c.execute("DELETE FROM analysis_version WHERE stage='faces'", [])?;

@@ -188,6 +188,11 @@ pub enum UndoAction {
         #[serde(default)]
         created: Option<i64>,
     },
+    /// Unione registrata nello storico (`merge_log`): l'annullamento segna la voce come
+    /// annullata. Così Ctrl+Z in Persone e "Annulla" in "Unioni recenti" restano coerenti.
+    MergeLogged {
+        id: i64,
+    },
 }
 
 impl UndoAction {
@@ -207,7 +212,17 @@ impl UndoAction {
                 | UndoAction::FacesMoved { .. }
                 | UndoAction::PersonsMerged { .. }
                 | UndoAction::FacesRestored { .. }
+                | UndoAction::MergeLogged { .. }
         )
+    }
+
+    /// `true` se l'azione (o una sua parte) registra la voce `id` dello storico delle unioni.
+    pub fn logs_merge(&self, id: i64) -> bool {
+        match self {
+            UndoAction::Group { actions } => actions.iter().any(|a| a.logs_merge(id)),
+            UndoAction::MergeLogged { id: m } => *m == id,
+            _ => false,
+        }
     }
 }
 
@@ -1405,6 +1420,40 @@ pub fn last_undoable(c: &Connection) -> StoreResult<Option<String>> {
     .optional()?)
 }
 
+/// `true` se l'ultima operazione annullabile registra la voce `merge` dello storico delle unioni.
+pub fn last_undo_is_merge(c: &Connection, merge: i64) -> StoreResult<bool> {
+    let payload: Option<String> = c
+        .query_row(
+            "SELECT payload FROM undo_log ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(match payload {
+        Some(p) => serde_json::from_str::<UndoAction>(&p)?.logs_merge(merge),
+        None => false,
+    })
+}
+
+/// Toglie dal registro di annullamento le operazioni che registrano la voce `merge`: annullata
+/// dallo storico, un Ctrl+Z successivo non deve riapplicare uno stato ormai superato.
+pub fn forget_merge(c: &Connection, merge: i64) -> StoreResult<()> {
+    let rows: Vec<(i64, String)> = {
+        let mut q =
+            c.prepare("SELECT id, payload FROM undo_log WHERE payload LIKE '%merge_logged%'")?;
+        let v = q
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<_, _>>()?;
+        v
+    };
+    for (id, payload) in rows {
+        if serde_json::from_str::<UndoAction>(&payload)?.logs_merge(merge) {
+            c.execute("DELETE FROM undo_log WHERE id=?1", [id])?;
+        }
+    }
+    Ok(())
+}
+
 /// Annulla l'ultima operazione solo se è una correzione delle persone: dal modulo Persone
 /// Ctrl+Z non deve annullare un tag o un catalogo assegnati prima in Libreria.
 pub fn undo_last_people(c: &Connection) -> StoreResult<Option<String>> {
@@ -1720,6 +1769,9 @@ fn undo_action(
                 crate::people::restore_not_same(c, &persons, &not_same)?;
                 crate::people::restore_face_states(c, &states)?;
             }
+        }
+        UndoAction::MergeLogged { id } => {
+            crate::merge_log::mark_undone(c, id)?;
         }
         UndoAction::FacesRestored { states, created } => {
             crate::people::restore_face_states(c, &states)?;
