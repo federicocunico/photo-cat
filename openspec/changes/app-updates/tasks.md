@@ -17,6 +17,6 @@ D = `design.md`. Build con `CARGO_BUILD_JOBS` ≤ 4 e `CARGO_PROFILE_DEV_DEBUG=0
 
 ## 3. Verifica
 
-- [ ] 3.1 `make test` in locale, `make test-linux` in Docker e build NSIS locale
+- [x] 3.1 `make test` in locale, `make test-linux` in Docker e build NSIS locale
 - [x] 3.2 README: sezione sugli aggiornamenti
 - [ ] 3.3 Prova sull'app reale (per l'utente): con la release successiva pubblicata, notifica, download con avanzamento, badge e installazione
