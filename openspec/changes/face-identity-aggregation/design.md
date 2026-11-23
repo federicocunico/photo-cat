@@ -137,3 +137,51 @@ Le fonti dei dati:
 - Valori predefiniti delle due soglie e del margine per SFace: si fissano con il banco di prova (task 2.x), senza cambiare l'approccio.
 - Con quanti anni di distanza scatta il margine aggiuntivo: 3 è il valore di partenza, da verificare sulla libreria di prova. `research.md` suggerisce circa 2 anni per i bambini.
 - Quanti campioni per coppia di gruppi: 12×12 per stare nel budget, contro i 32×32 indicati da `research.md`. Si sceglie con il banco di prova, misurando qualità e tempo.
+
+## Esito dell'implementazione
+
+### Banco di prova: valori di partenza e risultati (task 1.3, 3.4, 4.2)
+
+`cargo run -p pc-ai --example cluster_bench` (soglie 0,363 / 0,55 / margine 0,05). Dati sintetici con le distribuzioni misurate sulla libreria di prova (coseni della stessa persona: mediana 0,46 contro 0,49 reale; della stessa foto: mediana 0,11 contro 0,14 reale): 1.081 volti, 120 identità; l'utente ha già dato un nome alle 12 identità più grandi, confermandone il 30% dei volti del periodo con più foto.
+
+| Misura | Prima (CW, una soglia) | Dopo (due passaggi) |
+| --- | --- | --- |
+| BCubed F (P / R) | 0,844 (0,743 / 0,976) | 0,950 (0,965 / 0,934) |
+| F a coppie | 0,824 | 0,933 |
+| Gruppi per identità | 1,13 | 1,28 |
+| Quota di gruppi da un volto | 5,0% | 17,7% |
+| Unioni automatiche (precisione) | — | 0 (1,00) |
+| Domande nella coda | — | 8 |
+
+- Il guadagno viene dalla precisione: prima il centroide delle persone con nome (a 0,363) e la propagazione delle etichette con nome in Chinese Whispers attiravano volti di altre persone. Il prezzo è un richiamo più basso: più volti restano da soli in "Da rivedere".
+- Con le distribuzioni realistiche il collegamento mediano tra due gruppi della stessa persona sta intorno a 0,46–0,49: a 0,55 le unioni automatiche sono rare (0 nel banco). Abbassando "unisci da solo" restano corrette (0,40: 1 unione, 0,38: 2 unioni, precisione 1,00), ma senza prove sulla libreria reale i valori predefiniti restano **0,55 / 0,363 / 0,05**. Vanno confermati sulla libreria dell'utente (task 8.3).
+- Libreria di prova copiata (197 volti, una sola persona con nome, 26 volti): prima BCubed F 1,000, dopo 0,922 (2 volti restano da soli, nessuna domanda). Non è una misura utile: le etichette di quella persona vengono dal raggruppamento di prima, che quindi è avvantaggiato per costruzione. Servono persone curate a mano (task 8.3).
+- Coda, utente perfetto: sul banco l'ordine misto non chiede mai più domande dell'ordine per probabilità. Con frammenti lontani nel tempo (coseno 0,68–0,8 dal centro) arriva a metà del guadagno possibile con 3–4 domande invece di 7–9; con seme 1 arriva a BCubed F 0,95 con 8 domande invece di 9. Nella maggior parte delle configurazioni realistiche, però, la coda da sola non porta la BCubed F a 0,95: il test del task 6.1 verifica 0,95 su un caso dove è raggiungibile e "metà del guadagno" su tre configurazioni.
+
+### Scostamenti dal design
+
+1. **Le persone protette non attirano volti nel primo passaggio.** Le etichette fisse (con nome, ignorate, con volti confermati, con vincoli) non votano in Chinese Whispers. Con la propagazione, un volto simile ad "Anna" e a "Marta" finiva nella più votata, contro lo scenario "Due candidate vicine". I volti nuovi raggiungono le persone protette dall'abbinamento per volto, dal secondo passaggio o dai gruppi piccoli (D3), oppure diventano domande.
+2. **Abbinamento per volto alle persone con nome** (al salvataggio e, in lettura, per i volti senza persona): il centroide serve solo da filtro (≥ 0,8 × soglia). Il volto deve avere un collegamento robusto (mediana con i 12 volti migliori della persona) ≥ alla soglia di somiglianza, e staccare la seconda persona di 0,05. Resta la soglia di somiglianza del requisito "Identificazione delle persone", che non cambia; i volti di riferimento delle identità dell'app usano ancora la loro soglia.
+3. **Il riabbinamento in lettura riguarda solo i volti senza persona.** Prima ogni analisi riabbinava al centroide tutti i volti non manuali, anche quelli già in un gruppo. Ora i gruppi esistenti passano dal secondo passaggio e da D3.
+4. **"Almeno metà dei suoi volti" (D5)** si conta sui volti che avevano già una persona: i volti nuovi non tolgono l'id al gruppo in cui entrano.
+5. **Incrementale e completo.** Il ricalcolo è completo se cambiano la versione dell'algoritmo (quindi alla prima analisi dopo l'aggiornamento), la somiglianza, la sensibilità o le soglie di qualità dei volti (chiave `faces.cluster_run` in `settings_kv`). Negli altri casi Chinese Whispers visita solo i volti nuovi e i loro vicini, e il secondo passaggio e D3 considerano solo i gruppi toccati. Una Rianalisi senza cambi di soglie resta incrementale; `cluster::run_with(.., Some(Mode::Full))` è pronto per un comando esplicito.
+6. **Sensibilità.** Il tasso obiettivo è 10^(−4 + 2s). Il valore predefinito di "unisci da solo" è 0,55 + 0,2 × max(0; 0,5 − s), cioè 0,65 verso "Più domande", e non scende mai sotto 0,55. La metà destra della scala cambia qualcosa solo se la taratura sulla libreria supera 0,55. "Chiedi" non scende sotto la soglia di somiglianza impostata; se serve, "unisci da solo" sale a "chiedi" + 0,05. L'origine è "tarate" solo se la libreria ha spostato almeno una soglia.
+7. **Domande**: per ogni gruppo senza nome al massimo una verso una persona con nome ("È A?" o "È A o B?") e una verso un altro gruppo, solo tra gruppi vicini nel grafo e sopra "chiedi". Probabilità = (collegamento − chiedi) / (unisci da solo − chiedi). Le coppie oltre "unisci da solo" ma non reciproche, o frenate dalle date lontane, diventano domande.
+8. **Secondo passaggio**: coda di priorità dalla coppia migliore, con reciprocità e vincoli ricontrollati all'estrazione; dopo ogni unione si rimettono in coda le coppie del gruppo nuovo e dei vicini. I gruppi di al massimo 3 volti verso persone con nome sono lasciati a D3. Il margine verso la seconda persona vale anche per i gruppi più grandi diretti a una persona con nome.
+9. **Qualità bassa** (D3): qualità combinata < 0,4.
+10. **Flag "confermato" e indice per foto** (task 5.1): il flag è `assigned_by = 'manual'`, che ricevono anche i volti passati da una risposta della coda; l'indice per foto è `face_media` (v1). Nessuna colonna nuova.
+11. **Storico**: si conservano 90 giorni, quindi i conteggi delle unioni in Diagnostica valgono per 90 giorni. "Annulla" di una voce che è anche l'ultima operazione annullabile usa Ctrl+Z (stato completo); altrimenti riporta solo i volti ancora nella destinazione e toglie la voce dal registro di Ctrl+Z. Una risposta "Sì" annullata non rimette la domanda: tornerà alla prossima analisi.
+12. **Prestazioni (task 3.5)**: test ignorato `centomila_volti_entro_il_budget` (103.152 volti sintetici, 10.000 identità, ricalcolo completo), eseguito una volta con il profilo di sviluppo (dipendenze ottimizzate, crate del progetto senza ottimizzazioni): 407,6 s; memoria in più al picco 436 MB contro i 520 MB stimati per il governatore (5 KiB per volto + 16 MB, stima alzata da 4 KiB); annullamento dopo 2 s con risposta in 3,3 ms. Il tempo in build di rilascio non è stato misurato: va confermato che resti nell'ordine del primo passaggio.
+
+### Risposte alle Open Questions
+
+- Soglie e margine: restano 0,55 / 0,363 / 0,05 (vedi sopra).
+- Anni per il margine aggiuntivo: 3 (`aggregate::FAR_MS`). Non verificato sulla libreria di prova: l'esportazione non include le date (solo id anonimi ed embedding).
+- Campioni per coppia: 12×12, mantenuto. Sul banco (1.081 volti, build di debug) il raggruppamento nuovo richiede 1,4 s contro 0,8 s di prima; 32×32 non è stato provato.
+
+### Comandi per le interfacce rinviate (task 5.3, 5.4, 6.3)
+
+- "Unioni recenti": `listMerges(person, limit)` (ultimi 90 giorni, con copertine come id di volto per `face://`, origine e `undoable`) e `undoMerge(id)`.
+- Riepilogo della prima riaggregazione: `aggregationSummary()` (una sola volta finché non si chiama) e `dismissAggregationSummary()`.
+- Coda "Da confermare": `reviewQueue(limit)` (elementi singoli o in blocco verso la stessa persona, domande aperte, gruppi senza nome per la coda vuota); `answerQuestion(question, answer, overrideConflict)` con `answer` = `yes`, `no`, `choose {person}`, `neither`; `answerQuestions(person, confirm, reject, overrideConflict)` per "Conferma tutti". Un conflitto torna in `AnswerOutcome.conflict` senza modifiche: per togliere il vincolo si ripete la risposta con `overrideConflict = true`.
+- Le risposte e le unioni emettono `faces_changed`; le probabilità servono solo all'ordine e alle etichette, non vanno mostrate come numeri.
