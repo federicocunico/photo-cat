@@ -70,6 +70,12 @@ import type {
   RawReviewDeveloped,
   VariantPlan,
   DevelopReport,
+  MergeEntry,
+  ReviewQueue,
+  Answer,
+  AnswerOutcome,
+  AggregationSummary,
+  ClusterMetrics,
 } from "../bindings";
 
 type Cb<T> = (p: T) => void;
@@ -249,6 +255,29 @@ export const commandsMock = {
   startBulk: vi.fn(async () => 1),
   undoBulk: vi.fn(async () => null),
   undoPeople: vi.fn(async () => null),
+  listMerges: vi.fn<(person: number | null, limit: number | null) => Promise<MergeEntry[]>>(
+    async () => [],
+  ),
+  undoMerge: vi.fn<(id: number) => Promise<number>>(async () => 0),
+  reviewQueue: vi.fn<(limit: number | null) => Promise<ReviewQueue>>(async () => ({
+    items: [],
+    open: 0,
+    unnamedGroups: 0,
+  })),
+  answerQuestion: vi.fn<
+    (question: number, answer: Answer, overrideConflict: boolean) => Promise<AnswerOutcome>
+  >(async () => ({ mergedGroups: 0, faces: 0, constrainedGroups: 0, conflict: null })),
+  answerQuestions: vi.fn<
+    (
+      person: number,
+      confirm: number[],
+      reject: number[],
+      overrideConflict: boolean,
+    ) => Promise<AnswerOutcome>
+  >(async () => ({ mergedGroups: 0, faces: 0, constrainedGroups: 0, conflict: null })),
+  aggregationSummary: vi.fn<() => Promise<AggregationSummary | null>>(async () => null),
+  dismissAggregationSummary: vi.fn(async () => null),
+  faceClusterMetrics: vi.fn<() => Promise<ClusterMetrics | null>>(async () => null),
   lastBulkUndo: vi.fn(async () => null),
   collectDuplicates: vi.fn(async () => 0),
   startPhotoQuality: vi.fn(async () => 1),

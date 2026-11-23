@@ -412,12 +412,21 @@ fn frammenti_uniti_al_secondo_passaggio() {
     assert!(log
         .iter()
         .all(|e| e.origin == MergeOrigin::Auto && e.target == p));
-    // Una nuova analisi non registra di nuovo le stesse unioni.
+    // Prima riaggregazione dopo l'aggiornamento (c'erano già volti assegnati): riepilogo.
+    let summary = lib
+        .db
+        .read(review::first_summary)
+        .unwrap()
+        .expect("riepilogo");
+    assert_eq!(summary.auto_merges, 4);
+    lib.db.write(review::dismiss_first_summary).unwrap();
+    // Una nuova analisi non registra di nuovo le stesse unioni né un nuovo riepilogo.
     cluster_with(&lib.db, &AiThresholds::default());
     assert_eq!(
         lib.db.read(|c| merge_log::list(c, None, 50)).unwrap().len(),
         4
     );
+    assert!(lib.db.read(review::first_summary).unwrap().is_none());
 }
 
 #[test]
@@ -719,10 +728,13 @@ fn raggruppamento_interrompibile() {
 #[test]
 #[ignore]
 fn centomila_volti_entro_il_budget() {
+    use pc_governor::{SysinfoProbe, SystemProbe};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    // Σ k^-0,5 per 10.000 identità ≈ 200: circa 104.000 volti.
     let cfg = bench::SynthConfig {
-        identities: 9000,
-        largest: 600,
-        zipf: 0.75,
+        identities: 10_000,
+        largest: 520,
+        zipf: 0.5,
         ..Default::default()
     };
     let samples = bench::synthetic(&cfg);
@@ -730,23 +742,61 @@ fn centomila_volti_entro_il_budget() {
     println!("volti sintetici: {n}");
     assert!(n >= 100_000, "{n}");
     let (faces, people) = bench::to_faces(&samples, &vec![false; n]);
+    drop(samples);
+    // Stima del governatore usata da `cluster::run` (5 KiB per volto + 16 MB).
     let budget_mb = (n as u64 * 5120).div_ceil(1024 * 1024) + 16;
     let gov = MemoryGovernor::new(budget_mb + 64);
     let permit = gov.try_acquire(budget_mb).expect("budget del governatore");
+    // Memoria del processo: picco campionato durante il raggruppamento, oltre alla base.
+    let probe = Arc::new(SysinfoProbe::default());
+    let base = probe.snapshot().process_mb;
+    let peak = Arc::new(AtomicU64::new(base));
+    let done = Arc::new(AtomicBool::new(false));
+    let sampler = {
+        let (probe, peak, done) = (probe.clone(), peak.clone(), done.clone());
+        std::thread::spawn(move || {
+            while !done.load(Ordering::Relaxed) {
+                peak.fetch_max(probe.snapshot().process_mb, Ordering::Relaxed);
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        })
+    };
     let t = std::time::Instant::now();
     let out =
         aggregate::aggregate(&faces, &people, params(), Mode::Full, &JobControl::new()).unwrap();
     let elapsed = t.elapsed();
+    done.store(true, Ordering::Relaxed);
+    sampler.join().unwrap();
     drop(permit);
+    let used = peak.load(Ordering::Relaxed).saturating_sub(base);
     let groups: HashSet<_> = out.labels.iter().collect();
     println!(
-        "100k: {:.1?}, {} gruppi, {} unioni automatiche, {} domande, budget {} MB",
+        "100k: {:.1?}, {} gruppi, {} unioni automatiche, {} domande; memoria in più al picco \
+         {used} MB (base {base} MB), stima del governatore {budget_mb} MB",
         elapsed,
         groups.len(),
         out.merges.len(),
         out.questions.len(),
-        budget_mb
     );
+    assert!(
+        used <= budget_mb,
+        "picco {used} MB oltre la stima {budget_mb} MB"
+    );
+    // Interrompibile: dopo l'annullamento torna entro pochi secondi.
+    let control = JobControl::new();
+    let stopper = {
+        let control = control.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            control.cancel();
+            std::time::Instant::now()
+        })
+    };
+    let err = aggregate::aggregate(&faces, &people, params(), Mode::Full, &control).unwrap_err();
+    let stopped = stopper.join().unwrap().elapsed();
+    println!("annullamento: risposta in {stopped:.2?}");
+    assert_eq!(err.code, pc_core::ErrorCode::Cancelled);
+    assert!(stopped < std::time::Duration::from_secs(5));
 }
 
 // ------------------------------------------------------------------ 4.x soglie

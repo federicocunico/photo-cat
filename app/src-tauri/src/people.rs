@@ -3,10 +3,12 @@ use crate::events;
 use crate::state::AppState;
 use pc_core::{AppError, AppResult};
 use pc_store::bulk::{self, UndoAction};
+use pc_store::merge_log::{self, MergeOrigin};
 use pc_store::people::{
     self, FaceCursor, FacePage, FaceScope, FaceSort, FaceView, GroupPage, GroupRow, GroupSort,
     LocateFaceRequest, LocatedFace, PeopleSection, PeopleSections, PersonView,
 };
+use pc_store::review;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -440,32 +442,153 @@ pub async fn assign_groups(
     Ok(out)
 }
 
-/// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento: gruppi
-/// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse".
+/// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento (gruppi
+/// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse") e
+/// una voce nello storico delle unioni ("Unioni recenti").
 fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {
-    let mut snaps = Vec::with_capacity(from.len());
-    for id in &from {
-        snaps.push(people::person_snapshot(c, *id)?);
+    if from.iter().all(|f| *f == to) {
+        return Err(pc_store::StoreError::Invalid("persone coincidenti".into()));
     }
-    let target = people::person_snapshot(c, to)?;
-    let faces = people::faces_of_persons(c, &from)?;
-    let mut groups = from.clone();
-    groups.push(to);
-    let states = people::face_states(c, &people::faces_touching(c, &groups)?)?;
-    let not_same = people::not_same_rows(c, &groups)?;
-    people::merge_many(c, &from, to)?;
-    bulk::record_undo(
-        c,
-        "Unisci persone",
-        &UndoAction::PersonsMerged {
-            from: snaps,
-            faces,
-            to,
-            states,
-            target: Some(target),
-            not_same,
-        },
-    )
+    people::merge_logged(c, &from, to, MergeOrigin::Manual, "Unisci persone", false).map(|_| ())
+}
+
+/// Unioni recenti (ultimi 90 giorni), dalla più recente; con `person` solo quelle che la
+/// riguardano come destinazione o come gruppo d'origine.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_merges(
+    state: State<'_, AppState>,
+    person: Option<i64>,
+    limit: Option<i64>,
+) -> AppResult<Vec<merge_log::MergeEntry>> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| merge_log::list(c, person, limit.unwrap_or(200)))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// "Annulla" di una voce di "Unioni recenti": i volti tornano nei gruppi di prima (ricreati
+/// con lo stesso id); un'unione automatica annullata non si ripete. Restituisce i volti
+/// riportati.
+#[tauri::command]
+#[specta::specta]
+pub async fn undo_merge(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<i64> {
+    let db = state.store.clone();
+    let moved = tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| merge_log::undo(c, id))
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    events::faces_changed(&app);
+    Ok(moved)
+}
+
+/// Coda "Da confermare": al massimo `limit` elementi (predefiniti 50), con le domande verso la
+/// stessa persona riunite in un blocco.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_queue(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> AppResult<review::ReviewQueue> {
+    let (db, m) = (state.store.clone(), face_match(&state));
+    let limit = limit.unwrap_or(50).clamp(1, 500) as usize;
+    tauri::async_runtime::spawn_blocking(move || {
+        db.read(move |c| review::queue(c, &m, limit))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Risponde a una domanda della coda e propaga la risposta (una sola operazione annullabile).
+/// Un "Sì" in conflitto con un vincolo precedente restituisce il conflitto senza unire nulla;
+/// con `override_conflict` toglie il vincolo e unisce.
+#[tauri::command]
+#[specta::specta]
+pub async fn answer_question(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    question: i64,
+    answer: review::Answer,
+    override_conflict: bool,
+) -> AppResult<review::AnswerOutcome> {
+    let db = state.store.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| review::answer(c, question, &answer, override_conflict))
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    if out.conflict.is_none() {
+        events::faces_changed(&app);
+    }
+    Ok(out)
+}
+
+/// "Conferma tutti" su un blocco verso `person`: le domande `confirm` passano alla persona con
+/// un'unica unione annullabile, i gruppi delle domande `reject` ricevono "Non è questa persona".
+#[tauri::command]
+#[specta::specta]
+pub async fn answer_questions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    person: i64,
+    confirm: Vec<i64>,
+    reject: Vec<i64>,
+    override_conflict: bool,
+) -> AppResult<review::AnswerOutcome> {
+    let db = state.store.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| review::answer_batch(c, person, &confirm, &reject, override_conflict))
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))??;
+    if out.conflict.is_none() {
+        events::faces_changed(&app);
+    }
+    Ok(out)
+}
+
+/// Riepilogo della prima riaggregazione dopo l'aggiornamento, se non ancora mostrato.
+#[tauri::command]
+#[specta::specta]
+pub async fn aggregation_summary(
+    state: State<'_, AppState>,
+) -> AppResult<Option<review::AggregationSummary>> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || db.read(review::first_summary).map_err(Into::into))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Segna il riepilogo della prima riaggregazione come mostrato.
+#[tauri::command]
+#[specta::specta]
+pub async fn dismiss_aggregation_summary(state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(review::dismiss_first_summary)
+            .map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
+/// Misure del raggruppamento dei volti (Diagnostica): gruppi per persona con nome, gruppi da
+/// un volto, unioni automatiche e annullate, soglie in uso e loro origine.
+#[tauri::command]
+#[specta::specta]
+pub async fn face_cluster_metrics(state: State<'_, AppState>) -> AppResult<review::ClusterMetrics> {
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || db.read(review::metrics).map_err(Into::into))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?
 }
 
 /// Sposta volti su un gruppo registrando lo stato completo dei volti per l'annullamento.
