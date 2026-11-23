@@ -1,174 +1,161 @@
-//! Chinese Whispers su vicini kNN/HNSW, con identità manuali e rifiuti persistenti.
-use hnsw_rs::prelude::*;
+//! Raggruppamento dei volti sul catalogo (design D1–D8): legge volti, vincoli e soglie,
+//! esegue il raggruppamento in due passaggi ([`crate::aggregate`]) e scrive persone, unioni
+//! automatiche nello storico, domande della coda "Da confermare" e misure.
+
+use crate::aggregate::{self, Face, Mode, Outcome, People, QuestionKind};
+use crate::calibrate::{self, Calibration};
 use pc_core::{AppError, AppResult, ErrorCode};
 use pc_governor::MemoryGovernor;
 use pc_jobs::JobControl;
-use pc_store::{
-    people::{self, FaceRecord},
-    Store,
-};
+use pc_store::merge_log::{self, MergeOrigin};
+use pc_store::review::{self, NewQuestion, ThresholdsInUse};
+use pc_store::{people, Store};
+use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Label {
-    Person(i64),
-    Seed(i64),
+pub use crate::aggregate::Label;
+
+/// Versione dell'algoritmo: cambiandola, la prima analisi rifà il raggruppamento completo.
+pub const ALGORITHM: u32 = 2;
+const RUN_KEY: &str = "faces.cluster_run";
+
+/// Impostazioni che, se cambiano, richiedono un ricalcolo completo.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct RunKey {
+    algorithm: u32,
+    face_detection: f32,
+    face_min_sharpness: f32,
+    face_similarity: f32,
+    face_merge_sensitivity: f32,
 }
 
-pub fn chinese_whispers(
-    nodes: &[FaceRecord],
-    named: &HashSet<i64>,
-    threshold: f32,
-    control: &JobControl,
-) -> AppResult<Vec<Label>> {
-    chinese_whispers_with(nodes, named, &HashSet::new(), threshold, control)
-}
-
-pub fn chinese_whispers_with(
-    nodes: &[FaceRecord],
-    named: &HashSet<i64>,
-    not_same: &HashSet<(i64, i64)>,
-    threshold: f32,
-    control: &JobControl,
-) -> AppResult<Vec<Label>> {
-    let mut protected = named.clone();
-    for &(a, b) in not_same {
-        protected.insert(a);
-        protected.insert(b);
+impl RunKey {
+    fn of(t: &pc_core::AiThresholds) -> Self {
+        Self {
+            algorithm: ALGORITHM,
+            face_detection: t.face_detection,
+            face_min_sharpness: t.face_min_sharpness,
+            face_similarity: t.face_similarity,
+            face_merge_sensitivity: t.face_merge_sensitivity,
+        }
     }
-    for f in nodes {
+}
+
+/// Volti e stato delle persone letti dal catalogo.
+struct Loaded {
+    faces: Vec<Face>,
+    /// Volti confermati dall'utente (`assigned_by = 'manual'`).
+    confirmed: Vec<bool>,
+    /// Persona salvata di ogni volto (prima dell'abbinamento ai nomi in lettura).
+    stored: Vec<Option<i64>>,
+    people: People,
+}
+
+fn capture_times(c: &Connection) -> pc_store::StoreResult<HashMap<i64, i64>> {
+    let mut q = c.prepare(
+        "SELECT f.id, COALESCE(d.instant_utc, CAST(strftime('%s', d.captured_at) AS INTEGER) * 1000) \
+         FROM face f JOIN media_dates d ON d.media_id = f.media_id WHERE f.embedding IS NOT NULL",
+    )?;
+    let rows = q
+        .query_map([], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, Option<i64>>(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .filter_map(|(id, t)| t.map(|t| (id, t)))
+        .collect();
+    Ok(rows)
+}
+
+/// Legge i volti utilizzabili e lo stato delle persone. I volti senza persona vengono prima
+/// abbinati alle persone con nome come al salvataggio (centroide sopra `ask`, con margine
+/// verso la seconda; identità dell'app con la loro soglia).
+fn load(
+    c: &Connection,
+    matching: &people::FaceMatch,
+    ask: f32,
+    refs: &people::IdentityRefs,
+) -> pc_store::StoreResult<Loaded> {
+    let not_same = people::not_same_pairs(c)?;
+    let times = capture_times(c)?;
+    let records: Vec<people::FaceRecord> = people::records(c, None)?
+        .into_iter()
+        .filter(|f| f.embedding.is_some() && !f.is_discarded(matching))
+        .collect();
+    let mut protected = people::named_ids(c)?;
+    for f in &records {
         if f.manual {
             protected.extend(f.person_id);
         }
         protected.extend(f.rejected.iter().copied());
     }
-    let fixed: Vec<_> = nodes
-        .iter()
-        .map(|f| f.person_id.filter(|p| protected.contains(p)))
-        .collect();
-    let mut labels: Vec<_> = nodes
-        .iter()
-        .zip(&fixed)
-        .map(|(f, p)| p.map(Label::Person).unwrap_or(Label::Seed(f.id)))
-        .collect();
-    let mut groups: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for (i, n) in nodes.iter().enumerate() {
-        if n.embedding.is_some() {
-            groups.entry(&n.model).or_default().push(i);
+    let mut named = HashSet::new();
+    let mut ignored = HashSet::new();
+    {
+        let mut q = c.prepare(
+            "SELECT id, (name IS NOT NULL OR identity_uid IS NOT NULL), ignored_at IS NOT NULL \
+             FROM person",
+        )?;
+        for row in q.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, bool>(1)?,
+                r.get::<_, bool>(2)?,
+            ))
+        })? {
+            let (id, n, i) = row?;
+            if n {
+                named.insert(id);
+            }
+            if i {
+                ignored.insert(id);
+            }
         }
     }
-    let mut graph = vec![Vec::<(usize, f32)>::new(); nodes.len()];
-    for ids in groups.values() {
-        if !control.checkpoint() {
-            return Err(AppError::cancelled());
-        }
-        let index = if ids.len() > 64 {
-            let h = Hnsw::<f32, DistCosine>::new(16, ids.len(), 16, 100, DistCosine {});
-            for i in ids {
-                h.insert((
-                    nodes[*i].embedding.as_ref().expect("embedding").as_slice(),
-                    *i,
-                ));
+    let mut faces = Vec::with_capacity(records.len());
+    let mut confirmed = Vec::with_capacity(records.len());
+    let mut stored = Vec::with_capacity(records.len());
+    for f in records {
+        let embedding = f.embedding.expect("embedding");
+        let mut person = f.person_id;
+        if person.is_none() && !f.manual {
+            // Lettura: un'identità non collegata non crea persone qui (lo fa il salvataggio).
+            if let Some(p) =
+                people::named_match_refs(c, &embedding, &f.model, &f.rejected, ask, refs, false)?
+            {
+                person = Some(p);
             }
-            Some(h)
-        } else {
-            None
-        };
-        for i in ids {
-            if !control.checkpoint() {
-                return Err(AppError::cancelled());
-            }
-            let v = nodes[*i].embedding.as_ref().expect("embedding");
-            let neighbours: Vec<_> = match &index {
-                Some(h) => h
-                    .search(v, 17.min(ids.len()), 50)
-                    .into_iter()
-                    .map(|n| n.d_id)
-                    .collect(),
-                None => ids.clone(),
-            };
-            let mut edges: Vec<_> = neighbours
-                .into_iter()
-                .filter(|j| j != i)
-                .filter(|j| {
-                    !matches!(
-                        (nodes[*i].person_id, nodes[*j].person_id),
-                        (Some(pa), Some(pb)) if not_same.contains(&(pa, pb))
-                    )
-                })
-                .filter_map(|j| {
-                    let score = people::cosine(v, nodes[j].embedding.as_ref()?);
-                    (score >= threshold).then_some((j, score))
-                })
-                .collect();
-            edges.sort_by(|a, b| b.1.total_cmp(&a.1));
-            edges.truncate(16);
-            graph[*i] = edges;
         }
+        confirmed.push(f.manual);
+        stored.push(f.person_id);
+        faces.push(Face {
+            id: f.id,
+            media: f.media_id,
+            model: f.model,
+            embedding,
+            quality: f.quality_score,
+            time: times.get(&f.id).copied(),
+            person,
+            rejected: f.rejected,
+        });
     }
-    for iteration in 0..30 {
-        let mut changed = false;
-        for step in 0..nodes.len() {
-            if !control.checkpoint() {
-                return Err(AppError::cancelled());
-            }
-            let i = if iteration % 2 == 0 {
-                step
-            } else {
-                nodes.len() - 1 - step
-            };
-            if fixed[i].is_some() {
-                continue;
-            }
-            let mut votes: BTreeMap<Label, f32> = BTreeMap::new();
-            for (j, score) in &graph[i] {
-                let label = labels[*j];
-                if let Label::Person(p) = label {
-                    if nodes[i].rejected.contains(&p)
-                        || nodes[i]
-                            .person_id
-                            .is_some_and(|pa| not_same.contains(&(pa, p)))
-                    {
-                        continue;
-                    }
-                }
-                *votes.entry(label).or_default() += score;
-            }
-            let prior = labels[i];
-            let selected = votes
-                .into_iter()
-                .max_by(|a, b| {
-                    a.1.total_cmp(&b.1)
-                        .then_with(|| (a.0 == prior).cmp(&(b.0 == prior)))
-                })
-                .map(|(l, _)| l)
-                .unwrap_or(prior);
-            changed |= selected != prior;
-            labels[i] = selected;
-        }
-        if !changed {
-            break;
-        }
-    }
-    Ok(labels)
+    Ok(Loaded {
+        faces,
+        confirmed,
+        stored,
+        people: People {
+            protected,
+            named,
+            ignored,
+            not_same,
+        },
+    })
 }
 
-pub fn run(
+fn memory_permit(
     store: &Store,
     governor: &MemoryGovernor,
-    control: &JobControl,
-    policy: std::sync::Arc<crate::face_policy::FacePolicy>,
-    refs: &people::IdentityRefs,
-    thresholds: &pc_core::AiThresholds,
-) -> AppResult<()> {
-    let Some(generation) = policy.token() else {
-        return Ok(());
-    };
-    let similarity = thresholds.face_similarity;
-    let matching = crate::analyze::face_match(thresholds);
-    // I volti scartati per qualità restano salvati ma non sono usati per il
-    // raggruppamento (né tengono una persona automatica).
-    store.write(move |c| people::unassign_discarded(c, &matching, true).map(|_| ()))?;
+) -> AppResult<Option<pc_governor::Permit>> {
     let count: i64 = store.read(|c| {
         Ok(c.query_row(
             "SELECT count(*) FROM face WHERE embedding IS NOT NULL",
@@ -177,10 +164,12 @@ pub fn run(
         )?)
     })?;
     if count == 0 {
-        return Ok(());
+        return Ok(None);
     }
+    // Embedding, grafo kNN e indice (≈ 4 KiB per volto) più gruppi e coppie del secondo
+    // passaggio (≈ 1 KiB per volto).
     let cost = (count as u64)
-        .saturating_mul(4096)
+        .saturating_mul(5120)
         .div_ceil(1024 * 1024)
         .saturating_add(16);
     if cost > governor.capacity_mb() {
@@ -189,164 +178,384 @@ pub fn run(
             "memoria insufficiente per il raggruppamento volti",
         ));
     }
-    let _permit = governor.try_acquire(cost).ok_or_else(|| {
+    governor.try_acquire(cost).map(Some).ok_or_else(|| {
         AppError::new(
             ErrorCode::InsufficientMemory,
             "attendere memoria libera per raggruppare i volti",
         )
+    })
+}
+
+/// Raggruppa i volti salvati: ricalcolo completo se sono cambiate soglie o algoritmo,
+/// altrimenti incrementale (cambiano solo i gruppi toccati dai volti nuovi).
+pub fn run(
+    store: &Store,
+    governor: &MemoryGovernor,
+    control: &JobControl,
+    policy: std::sync::Arc<crate::face_policy::FacePolicy>,
+    refs: &people::IdentityRefs,
+    thresholds: &pc_core::AiThresholds,
+) -> AppResult<()> {
+    run_with(store, governor, control, policy, refs, thresholds, None)
+}
+
+/// Come [`run`], con la modalità imposta (`None` = scelta automatica).
+pub fn run_with(
+    store: &Store,
+    governor: &MemoryGovernor,
+    control: &JobControl,
+    policy: std::sync::Arc<crate::face_policy::FacePolicy>,
+    refs: &people::IdentityRefs,
+    thresholds: &pc_core::AiThresholds,
+    mode: Option<Mode>,
+) -> AppResult<()> {
+    let Some(generation) = policy.token() else {
+        return Ok(());
+    };
+    let matching = crate::analyze::face_match(thresholds);
+    // I volti scartati per qualità restano salvati ma non sono usati per il
+    // raggruppamento (né tengono una persona automatica).
+    store.write(move |c| people::unassign_discarded(c, &matching, true).map(|_| ()))?;
+    let Some(_permit) = memory_permit(store, governor)? else {
+        return Ok(());
+    };
+    let key = RunKey::of(thresholds);
+    let similarity = thresholds.face_similarity;
+    let sensitivity = thresholds.face_merge_sensitivity;
+    let (loaded, calibration, previous) = store.read(|c| {
+        // Prima la taratura (sui volti con la persona attuale), poi l'abbinamento ai nomi.
+        let base = load(c, &matching, similarity, &Default::default())?;
+        let cal = calibrate::calibrate(&base.faces, &base.confirmed, similarity, sensitivity);
+        let loaded = if refs.is_empty() && cal.params.ask == similarity {
+            base
+        } else {
+            load(c, &matching, cal.params.ask, refs)?
+        };
+        let previous: Option<RunKey> = c
+            .query_row(
+                "SELECT value FROM settings_kv WHERE key=?1",
+                [RUN_KEY],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok());
+        Ok((loaded, cal, previous))
     })?;
-    let (nodes, named, not_same) = store.read(|c| {
-        let not_same = people::not_same_pairs(c)?;
-        let mut nodes: Vec<_> = people::records(c, None)?
-            .into_iter()
-            .filter(|f| f.embedding.is_some() && !f.is_discarded(&matching))
-            .collect();
-        for f in &mut nodes {
-            if !f.manual {
-                let mut rejects = f.rejected.clone();
-                if let Some(pa) = f.person_id {
-                    for &(a, b) in &not_same {
-                        if a == pa && !rejects.contains(&b) {
-                            rejects.push(b);
-                        }
-                    }
-                }
-                // Lettura: un'identità non collegata non crea persone qui (lo fa il salvataggio).
-                if let Some(p) = people::named_match_refs(
-                    c,
-                    f.embedding.as_ref().expect("embedding"),
-                    &f.model,
-                    &rejects,
-                    similarity,
-                    refs,
-                    false,
-                )? {
-                    f.person_id = Some(p);
-                }
-            }
-        }
-        Ok((nodes, people::named_ids(c)?, not_same))
-    })?;
-    let labels = chinese_whispers_with(&nodes, &named, &not_same, similarity, control)?;
+    let mode = mode.unwrap_or(if previous == Some(key) {
+        Mode::Incremental
+    } else {
+        Mode::Full
+    });
+    let first_after_update = previous.is_none_or(|p| p.algorithm != ALGORITHM)
+        && loaded.faces.iter().any(|f| f.person.is_some());
+    let outcome = aggregate::aggregate(
+        &loaded.faces,
+        &loaded.people,
+        calibration.params,
+        mode,
+        control,
+    )?;
     if !control.checkpoint() {
         return Err(AppError::cancelled());
     }
+    let ask_match = people::FaceMatch {
+        similarity: calibration.params.ask,
+        ..matching
+    };
     store.write(move |c| {
         if !policy.is_current(generation) {
             return Ok(());
         }
-        let mut assignments: HashMap<Label, Vec<usize>> = HashMap::new();
-        for (i, label) in labels.iter().enumerate() {
-            assignments.entry(*label).or_default().push(i);
-        }
-        let mut used: HashSet<i64> = labels
-            .iter()
-            .filter_map(|l| {
-                if let Label::Person(p) = l {
-                    Some(*p)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let mut ordered: Vec<_> = assignments.into_iter().collect();
-        ordered.sort_by_key(|(label, _)| *label);
-        for (label, members) in ordered {
-            let person = match label {
-                Label::Person(id) => id,
-                Label::Seed(_) => {
-                    let mut candidates: BTreeMap<i64, usize> = BTreeMap::new();
-                    for i in &members {
-                        if let Some(p) = nodes[*i].person_id {
-                            if !used.contains(&p)
-                                && members.iter().all(|j| {
-                                    !nodes[*j].rejected.contains(&p)
-                                        && nodes[*j]
-                                            .person_id
-                                            .is_none_or(|pj| !not_same.contains(&(pj, p)))
-                                })
-                            {
-                                *candidates.entry(p).or_default() += 1;
-                            }
-                        }
-                    }
-                    match candidates.into_iter().max_by_key(|(_, n)| *n) {
-                        Some((p, _)) => p,
-                        None => people::create_person(c, None)?,
-                    }
-                }
-            };
-            used.insert(person);
-            for i in members {
-                let f = &nodes[i];
-                if !f.manual {
-                    c.execute(
-                        "UPDATE face SET person_id=?2,assigned_by='auto' WHERE id=?1",
-                        rusqlite::params![f.id, person],
-                    )?;
-                }
-            }
+        let auto = write_outcome(c, &loaded, &outcome)?;
+        save_run(c, key, &calibration)?;
+        if first_after_update {
+            review::save_first_summary(c, auto)?;
         }
         people::refresh_centroids_with(c, &matching)?;
-        people::refresh_merge_suggestions(c, &matching)?;
-        for id in nodes.iter().map(|f| f.media_id).collect::<HashSet<_>>() {
-            pc_store::repo::fts::refresh(c, id)?;
-        }
+        people::refresh_merge_suggestions(c, &ask_match)?;
+        let m = review::save_metrics(c, auto)?;
+        tracing::info!(
+            mode = ?mode,
+            faces = loaded.faces.len(),
+            auto_merges = auto,
+            questions = m.questions,
+            groups_per_named = m.groups_per_named,
+            single_face_share = m.single_face_share,
+            auto_merges_total = m.auto_merges,
+            auto_merges_undone = m.auto_merges_undone,
+            ask = calibration.params.ask,
+            auto = calibration.params.auto,
+            margin = calibration.params.margin,
+            calibrated = calibration.calibrated,
+            same_photo_pairs = calibration.same_photo_pairs,
+            "raggruppamento dei volti: misure"
+        );
         Ok(())
     })?;
     Ok(())
+}
+
+fn save_run(c: &Connection, key: RunKey, cal: &Calibration) -> pc_store::StoreResult<()> {
+    c.execute(
+        "INSERT INTO settings_kv(key,value) VALUES (?1,?2) \
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        rusqlite::params![RUN_KEY, serde_json::to_string(&key)?],
+    )?;
+    review::save_thresholds(
+        c,
+        &ThresholdsInUse {
+            ask: cal.params.ask,
+            auto: cal.params.auto,
+            margin: cal.params.margin,
+            calibrated: cal.calibrated,
+            same_photo_pairs: cal.same_photo_pairs as i64,
+            confirmed_pairs: cal.confirmed_pairs as i64,
+            too_strict: cal.too_strict,
+            sensitivity: cal.sensitivity,
+        },
+    )
+}
+
+/// Persona di ogni gruppo finale (design D5): le persone protette restano; un gruppo riprende
+/// l'id della persona da cui proviene almeno metà dei suoi volti già assegnati (con nome e
+/// copertina); gli altri ricevono una persona nuova.
+fn persons_for_groups(
+    c: &Connection,
+    loaded: &Loaded,
+    out: &Outcome,
+) -> pc_store::StoreResult<BTreeMap<Label, i64>> {
+    let mut members: BTreeMap<Label, Vec<usize>> = BTreeMap::new();
+    for (i, l) in out.labels.iter().enumerate() {
+        members.entry(*l).or_default().push(i);
+    }
+    let mut person_of: BTreeMap<Label, i64> = BTreeMap::new();
+    let mut used: HashSet<i64> = HashSet::new();
+    for label in members.keys() {
+        if let Label::Person(p) = label {
+            if loaded.people.protected.contains(p) {
+                person_of.insert(*label, *p);
+                used.insert(*p);
+            }
+        }
+    }
+    let mut candidates: Vec<(usize, Label, i64)> = Vec::new();
+    for (label, m) in &members {
+        if person_of.contains_key(label) {
+            continue;
+        }
+        if let Some(p) = aggregate::majority_person(&loaded.faces, m) {
+            let n = m
+                .iter()
+                .filter(|i| loaded.faces[**i].person == Some(p))
+                .count();
+            candidates.push((n, *label, p));
+        }
+    }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    for (_, label, p) in candidates {
+        if !used.contains(&p) && !person_of.contains_key(&label) {
+            person_of.insert(label, p);
+            used.insert(p);
+        }
+    }
+    for label in members.keys() {
+        if !person_of.contains_key(label) {
+            person_of.insert(*label, people::create_person(c, None)?);
+        }
+    }
+    Ok(person_of)
+}
+
+/// Scrive assegnazioni, unioni automatiche (storico) e domande; restituisce le unioni
+/// automatiche registrate.
+fn write_outcome(c: &Connection, loaded: &Loaded, out: &Outcome) -> pc_store::StoreResult<i64> {
+    let person_of = persons_for_groups(c, loaded, out)?;
+    let faces = &loaded.faces;
+    // Storico: prima delle scritture, con lo stato precedente dei volti.
+    let mut logs = Vec::new();
+    for m in out.visible_merges(faces) {
+        let target = person_of[&m.into];
+        let prev: HashSet<Option<i64>> = m.faces.iter().map(|i| faces[*i].person).collect();
+        let source = match m.from {
+            Label::Person(q) if q != target => q,
+            _ => match prev.iter().next() {
+                Some(Some(q)) if prev.len() == 1 && *q != target => *q,
+                _ => people::reserve_person_id(c)?,
+            },
+        };
+        let row = people::person_snapshot(c, source).ok();
+        let ids: Vec<i64> = m.faces.iter().map(|i| faces[*i].id).collect();
+        let cover = m
+            .faces
+            .iter()
+            .max_by(|a, b| {
+                faces[**a]
+                    .quality
+                    .total_cmp(&faces[**b].quality)
+                    .then(faces[**b].id.cmp(&faces[**a].id))
+            })
+            .map(|i| faces[*i].id);
+        logs.push((
+            target,
+            merge_log::SourceGroup {
+                person: source,
+                name: row.as_ref().and_then(|r| r.name.clone()),
+                identity_uid: row.as_ref().and_then(|r| r.identity_uid.clone()),
+                ignored_at: row.as_ref().and_then(|r| r.ignored_at),
+                ignored_faces: row.as_ref().map_or(0, |r| r.ignored_faces),
+                cover_face_id: row.as_ref().and_then(|r| r.cover_face_id),
+                cover,
+                faces: merge_log::faces_before(c, &ids)?,
+            },
+        ));
+    }
+    let mut media = HashSet::new();
+    {
+        let mut upd = c.prepare_cached(
+            "UPDATE face SET person_id=?2, assigned_by='auto' WHERE id=?1 \
+             AND COALESCE(assigned_by,'') <> 'manual'",
+        )?;
+        for (i, f) in faces.iter().enumerate() {
+            let target = person_of[&out.labels[i]];
+            // Anche i volti abbinati in lettura a una persona con nome vanno scritti.
+            if loaded.stored[i] != Some(target) {
+                upd.execute(rusqlite::params![f.id, target])?;
+                media.insert(f.media);
+            }
+        }
+    }
+    let auto = logs.len() as i64;
+    for (target, source) in logs {
+        let target_row = people::person_snapshot(c, target).ok();
+        merge_log::record(
+            c,
+            MergeOrigin::Auto,
+            target,
+            &merge_log::MergeSnapshot {
+                sources: vec![source],
+                target_name: target_row.as_ref().and_then(|t| t.name.clone()),
+                target_identity: target_row.and_then(|t| t.identity_uid),
+            },
+        )?;
+    }
+    let questions: Vec<NewQuestion> = out
+        .questions
+        .iter()
+        .map(|q| NewQuestion {
+            kind: match q.kind {
+                QuestionKind::GroupPerson => review::QuestionKind::GroupPerson,
+                QuestionKind::GroupGroup => review::QuestionKind::GroupGroup,
+                QuestionKind::GroupChoice => review::QuestionKind::GroupChoice,
+            },
+            a: person_of[&q.a],
+            b: person_of[&q.b],
+            c: q.c.map(|l| person_of[&l]),
+            score: q.score,
+            probability: q.probability,
+            faces: q.faces as i64,
+        })
+        .collect();
+    review::replace(c, &questions)?;
+    people::refresh_media_ids(c, &media)?;
+    Ok(auto)
+}
+
+/// Anteprima dell'effetto di nuove soglie sul raggruppamento, senza scrivere: unioni
+/// automatiche e domande di un ricalcolo completo.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Preview {
+    pub auto_merges: i64,
+    pub questions: i64,
+}
+
+pub fn preview(
+    store: &Store,
+    thresholds: &pc_core::AiThresholds,
+    control: &JobControl,
+) -> AppResult<Preview> {
+    let matching = crate::analyze::face_match(thresholds);
+    let (loaded, cal) = store.read(|c| {
+        let base = load(
+            c,
+            &matching,
+            thresholds.face_similarity,
+            &Default::default(),
+        )?;
+        let cal = calibrate::calibrate(
+            &base.faces,
+            &base.confirmed,
+            thresholds.face_similarity,
+            thresholds.face_merge_sensitivity,
+        );
+        Ok((base, cal))
+    })?;
+    if loaded.faces.is_empty() {
+        return Ok(Preview::default());
+    }
+    let out = aggregate::aggregate(
+        &loaded.faces,
+        &loaded.people,
+        cal.params,
+        Mode::Full,
+        control,
+    )?;
+    Ok(Preview {
+        auto_merges: out.visible_merges(&loaded.faces).count() as i64,
+        questions: out.questions.len() as i64,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::faces::SAME_PERSON;
-    fn node(
-        id: i64,
-        person: Option<i64>,
-        manual: bool,
-        rejected: Vec<i64>,
-        axis: usize,
-    ) -> FaceRecord {
+
+    fn node(id: i64, person: Option<i64>, axis: usize) -> Face {
         let mut v = vec![0.0; 128];
         v[axis] = 1.0;
-        FaceRecord {
+        Face {
             id,
-            media_id: id,
-            bbox: [0.1, 0.1, 0.2, 0.2],
-            quality: 0.99,
-            quality_score: 0.99,
-            embedding: Some(v),
-            person_id: person,
-            manual,
-            rejected,
+            media: id,
             model: "sface".into(),
+            embedding: v,
+            quality: 0.99,
+            person,
             ..Default::default()
         }
     }
+
     #[test]
     fn identities_and_refusals_survive_reclustering() {
-        let nodes = vec![
-            node(1, Some(10), true, vec![], 0),
-            node(2, None, false, vec![], 0),
-            node(3, None, false, vec![10], 0),
-            node(4, Some(20), true, vec![], 0),
-            node(5, None, false, vec![], 1),
-            node(6, None, false, vec![], 1),
+        let mut faces = vec![
+            node(1, Some(10), 0),
+            node(2, None, 0),
+            node(3, None, 0),
+            node(4, Some(20), 0),
+            node(5, None, 1),
+            node(6, None, 1),
         ];
-        let labels = chinese_whispers(
-            &nodes,
-            &HashSet::from([10]),
-            SAME_PERSON,
+        faces[2].rejected = vec![10];
+        let people = People {
+            protected: HashSet::from([10, 20]),
+            named: HashSet::from([10]),
+            ..Default::default()
+        };
+        let out = aggregate::aggregate(
+            &faces,
+            &people,
+            aggregate::Params::default(),
+            Mode::Full,
             &JobControl::new(),
         )
         .unwrap();
-        assert_eq!(labels[0], Label::Person(10));
-        assert_eq!(labels[3], Label::Person(20));
-        assert_ne!(labels[2], Label::Person(10));
-        assert_eq!(labels[4], labels[5]);
-        assert_ne!(labels[4], labels[0]);
+        let l = &out.labels;
+        assert_eq!(l[0], Label::Person(10));
+        assert_eq!(l[3], Label::Person(20));
+        assert_ne!(l[2], Label::Person(10), "il rifiuto resta");
+        assert_eq!(l[4], l[5]);
+        assert_ne!(l[4], l[0]);
     }
+
     #[test]
     fn persisted_corrections_survive_multiple_clustering_runs() {
         let tmp = tempfile::tempdir().unwrap();

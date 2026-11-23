@@ -1,6 +1,9 @@
 //! Catalogazione AI locale di photo-cat.
 
+pub mod aggregate;
 pub mod analyze;
+pub mod bench;
+pub mod calibrate;
 pub mod classify;
 pub mod clip;
 pub mod cluster;

@@ -6,3 +6,6 @@ node_modules/
 .DS_Store
 .tmp-people-data/
 .tmp-foto-snap.txt
+
+# Embedding dei volti esportati per il banco di prova: dati biometrici, mai nel repository.
+*.faces.jsonl
