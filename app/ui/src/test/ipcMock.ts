@@ -96,6 +96,9 @@ export const emitters = {
   rawReviewCameraLog: [] as Cb<CameraLogLine>[],
   rawReviewCameraDiagnostics: [] as Cb<CameraDiagnostics>[],
   rawReviewDeveloped: [] as Cb<RawReviewDeveloped>[],
+  updateProgress: [] as Cb<import("../bindings").UpdateProgress>[],
+  updateReady: [] as Cb<import("../bindings").UpdateReady>[],
+  updateFailed: [] as Cb<import("../bindings").UpdateFailed>[],
 };
 
 export function emit<K extends keyof typeof emitters>(
@@ -136,6 +139,12 @@ export const commandsMock = {
   bootRetry: vi.fn(async () => {}),
   bootChooseFolder: vi.fn(async () => null),
   appInfo: vi.fn(async () => appInfoFixture()),
+  // Aggiornamenti dell'app (app-updates).
+  checkUpdate: vi.fn<() => Promise<import("../bindings").UpdateInfo | null>>(async () => null),
+  downloadUpdate: vi.fn<(version: string) => Promise<null>>(async () => null),
+  cancelUpdateDownload: vi.fn(async () => undefined),
+  installUpdate: vi.fn<(version: string) => Promise<null>>(async () => null),
+  openReleasePage: vi.fn<(url: string) => Promise<null>>(async () => null),
   dismissCrashNotice: vi.fn(),
   takeUiRecovery: vi.fn(async () => null),
   reportLongTasks: vi.fn(async () => null),
@@ -584,6 +593,9 @@ export function ipcMockModule(tauri = false) {
       onRawReviewCameraLog: reg(emitters.rawReviewCameraLog),
       onRawReviewCameraDiagnostics: reg(emitters.rawReviewCameraDiagnostics),
       onRawReviewDeveloped: reg(emitters.rawReviewDeveloped),
+      onUpdateProgress: reg(emitters.updateProgress),
+      onUpdateReady: reg(emitters.updateReady),
+      onUpdateFailed: reg(emitters.updateFailed),
     },
   };
 }

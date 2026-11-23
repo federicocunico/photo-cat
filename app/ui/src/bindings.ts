@@ -514,6 +514,25 @@ export const commands = {
 	setAppMenu: (labels: MenuLabels, items: MenuItemSpec[]) => __TAURI_INVOKE<null>("set_app_menu", { labels, items }),
 	/**  Seleziona solo i percorsi falliti del job/fase, senza riscan completo. */
 	retryFailed: (jobId: number | null, phase: string | null) => __TAURI_INVOKE<number[]>("retry_failed", { jobId, phase }),
+	/**
+	 *  Ultima release pubblicata, se più recente della versione in uso (`None` se aggiornata).
+	 *  Riconosce l'installer già scaricato e verificato.
+	 */
+	checkUpdate: () => __TAURI_INVOKE<UpdateInfo | null>("check_update"),
+	/**
+	 *  Scarica in background l'installer dell'ultimo controllo. Avanzamento ed esito arrivano
+	 *  con gli eventi `update://progress`, `update://ready` e `update://failed`.
+	 */
+	downloadUpdate: (version: string) => __TAURI_INVOKE<null>("download_update", { version }),
+	/**  Interrompe il download: il file parziale resta e il prossimo "Aggiorna" riprende da lì. */
+	cancelUpdateDownload: () => __TAURI_INVOKE<void>("cancel_update_download"),
+	/**
+	 *  Avvia l'installer scaricato (di nuovo verificato) e chiude photo-cat in modo regolare,
+	 *  così l'utente prosegue con l'installazione.
+	 */
+	installUpdate: (version: string) => __TAURI_INVOKE<null>("install_update", { version }),
+	/**  Apre nel browser la pagina di una release del progetto (solo URL delle release). */
+	openReleasePage: (url: string) => __TAURI_INVOKE<null>("open_release_page", { url }),
 };
 
 /* Types */
@@ -1543,6 +1562,13 @@ export type ImportTarget =
 { kind: "newSource"; path: string } | 
 /**  La destinazione è dentro una sorgente: si aggiorna solo quella cartella. */
 { kind: "updateFolder"; sourceId: number; sourcePath: string; folder: string };
+
+export type InstallerAsset = {
+	name: string,
+	url: string,
+	size: number,
+	sha256: string,
+};
 
 export type JobRow = {
 	id: number,
@@ -2926,6 +2952,37 @@ export type UndatedItem = {
 	thumb: string | null,
 	/**  Data del file system (inaffidabile, solo indicativa). */
 	fileDate: string | null,
+};
+
+export type UpdateFailed = {
+	version: string,
+	message: string,
+	/**  Interrotto dall'utente: il file parziale resta per la ripresa. */
+	cancelled: boolean,
+};
+
+export type UpdateInfo = {
+	/**  Versione della release, senza "v". */
+	version: string,
+	/**  Versione in uso. */
+	current: string,
+	/**  Pagina della release ("Novità", e "Aggiorna" su macOS e Linux). */
+	pageUrl: string,
+	publishedAt: string | null,
+	/**  Installer per questa piattaforma (solo Windows x64). */
+	installer: InstallerAsset | null,
+	/**  Installer già scaricato e verificato nella cartella degli aggiornamenti. */
+	downloaded: boolean,
+};
+
+export type UpdateProgress = {
+	version: string,
+	done: number,
+	total: number,
+};
+
+export type UpdateReady = {
+	version: string,
 };
 
 /**  Riepilogo dell'ultimo aggiornamento di una sorgente. */

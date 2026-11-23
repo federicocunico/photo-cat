@@ -80,6 +80,7 @@ export const menu = {
       tips: "Mostra di nuovo i suggerimenti",
       report: "Segnala un problema",
       copyInfo: "Copia le informazioni di sistema",
+      checkUpdates: "Controlla aggiornamenti…",
       about: "Informazioni su photo-cat",
       infoCopied: "Informazioni di sistema copiate negli appunti",
       why: {
@@ -171,6 +172,7 @@ export const menu = {
       tips: "Show tips again",
       report: "Report a problem",
       copyInfo: "Copy system information",
+      checkUpdates: "Check for updates…",
       about: "About photo-cat",
       infoCopied: "System information copied to the clipboard",
       why: {

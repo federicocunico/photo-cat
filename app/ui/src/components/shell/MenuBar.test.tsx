@@ -262,6 +262,7 @@ describe("menu Aiuto", () => {
       "Mostra di nuovo i suggerimenti",
       "Segnala un problema",
       "Copia le informazioni di sistema",
+      "Controlla aggiornamenti…",
       "Informazioni su photo-cat",
     ]);
   });

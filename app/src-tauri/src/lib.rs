@@ -32,6 +32,7 @@ mod state;
 mod tags;
 mod timeline;
 mod ui_prefs;
+mod updates;
 #[cfg(windows)]
 mod webview_runtime;
 
@@ -314,6 +315,11 @@ pub fn bindings() -> Builder<tauri::Wry> {
             about::third_party_licenses,
             app_menu::set_app_menu,
             diagnostics::retry_failed,
+            updates::check_update,
+            updates::download_update,
+            updates::cancel_update_download,
+            updates::install_update,
+            updates::open_release_page,
         ])
         .typ::<pc_jobs::JobSnapshot>()
         .typ::<pc_governor::ResourceSnapshot>()
@@ -324,6 +330,10 @@ pub fn bindings() -> Builder<tauri::Wry> {
         // Varianti RAW: tipi dei metadati (task 3.3).
         .typ::<pc_raw_review::metadata::ImageMetadata>()
         .typ::<raw_review_develop::RawReviewDeveloped>()
+        // Aggiornamenti dell'app: eventi del download.
+        .typ::<updates::UpdateProgress>()
+        .typ::<updates::UpdateReady>()
+        .typ::<updates::UpdateFailed>()
         .error_handling(ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()
         .disable_serde_phases()
@@ -395,6 +405,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .manage(updates::Updates::default())
         .register_asynchronous_uri_scheme_protocol("thumb", library::thumb_protocol)
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .register_asynchronous_uri_scheme_protocol("review", raw_review::review_protocol)
@@ -441,6 +452,8 @@ fn initialize(
     boot: &boot::Boot,
 ) -> pc_core::AppResult<()> {
     let started = std::time::SystemTime::now();
+    // Installer di versioni già installate (app-updates): via, senza rallentare l'avvio.
+    updates::cleanup_in_background(paths.root().to_path_buf());
 
     let (store, app_store) = boot::open_stores(&paths, |phase| boot.phase(handle, phase))?;
     let config = Config::load(&paths.config_file()).unwrap_or_else(|e| {
