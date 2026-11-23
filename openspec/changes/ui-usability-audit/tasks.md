@@ -45,7 +45,7 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 - [x] 5.1 `build.rs`: `PC_BUILD_COMMIT`, `PC_BUILD_DATE` (da `SOURCE_DATE_EPOCH` se presente) e `PC_BUILD_PROFILE`, con commit vuoto senza git; aggiungere `repository` in `[workspace.package]`; verificare con un test Rust che `app_info` riporti versione, commit o "commit non disponibile", data e configurazione
 - [x] 5.2 `app_info` esteso con sistema, architettura, versione del motore della finestra, acceleratore attivo, autori, repository e licenza; rigenerare `bindings.ts`; verificare con il test del comando e con `npm run typecheck`
 - [x] 5.3 `scripts/licenses.mjs` (sostituisce `ui-licenses.mjs`): dipendenze Rust da `cargo metadata`, dipendenze di produzione dell'interfaccia e `assets/licenses/manual.json` per modelli e librerie native, uniti in `assets/licenses/third-party.json`; fallisce per una licenza non riconosciuta; verificare eseguendo lo script e con un test sul caso di licenza mancante
-- [ ] 5.4 CI: il job Linux rigenera `third-party.json` e fallisce se differisce da quello nel repository; verificare con `make test-linux`
+- [x] 5.4 CI: il job Linux rigenera `third-party.json` e fallisce se differisce da quello nel repository; verificare con `make test-linux`
 - [x] 5.5 Comando Rust `third_party_licenses` che legge il file dalle risorse installate; verificare con un test d'integrazione su un file di esempio
 - [x] 5.6 Componente `AboutPanel` con le schede "Informazioni" e "Licenze di terze parti" (ricerca, gruppi, testo completo, nota sulle sorgenti per LGPL), "Apri" accanto al percorso dei dati e "Copia informazioni" senza il percorso; verificare con test vitest della ricerca "LGPL" e del testo copiato
 - [x] 5.7 Finestra Informazioni dal menu Aiuto e sezione Impostazioni › Informazioni con lo stesso `AboutPanel`; verificare con i test di Impostazioni (ricerca "versione" porta alla sezione) e del menu Aiuto
@@ -75,7 +75,7 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 ## 8. Verifica d'insieme
 
 - [x] 8.1 Ripetere le misure dell'audit con lo script di inventario sull'app di prova: titoli nella stessa posizione, corpi solo 12/14/16/20, nessun maiuscolo, nessun pulsante d'azione disattivato in Persone senza selezione; riportare i valori in `audit.md` §2 come "dopo"
-- [ ] 8.2 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
+- [x] 8.2 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
 - [x] 8.3 Build NSIS locale (`npm --prefix app/ui run tauri -- build --ci --bundles nsis`) e verifica che `licenses/third-party.json` sia nell'installer
 - [ ] 8.4 Prova sull'app reale (per l'utente): primo avvio, revisione di Persone da tastiera, Sposta in e Unisci a, barra dei menu con Alt e F10, Informazioni e Copia informazioni, tema chiaro e scuro, finestra a 1024 px
 
