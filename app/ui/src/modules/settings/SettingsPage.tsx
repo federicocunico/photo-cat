@@ -13,6 +13,7 @@ import { Icon } from "../../components/icons";
 import { ModelsPage } from "../models/ModelsPage";
 import { DiagnosticsPage } from "../diagnostics/DiagnosticsPage";
 import { AdvancedSection } from "./AdvancedSection";
+import { AboutPanel } from "../../components/about/AboutPanel";
 import { AiSection } from "./AiSection";
 import { ApplyBar } from "./ApplyBar";
 import { ExternalAppsSection } from "./ExternalAppsSection";
@@ -29,6 +30,7 @@ const SECTIONS: SettingsSection[] = [
   "apps",
   "diagnostics",
   "advanced",
+  "about",
 ];
 
 /** Voci cercabili: id del campo, sezione e chiave dell'etichetta. */
@@ -37,7 +39,7 @@ const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
   { id: "language", section: "general", label: "settings.language" },
   { id: "doubleClick", section: "general", label: "externalApps.doubleClick" },
   { id: "dataDir", section: "general", label: "settings.path" },
-  { id: "rawReviewCache", section: "general", label: "settings.rawReviewCache.label" },
+  { id: "rawReviewCache", section: "advanced", label: "settings.rawReviewCache.label" },
   { id: "ignoredFolders", section: "library", label: "externalApps.ignoredFolders" },
   { id: "importFolders", section: "library", label: "settings.importFolders" },
   { id: "faces", section: "ai", label: "settings.faces" },
@@ -61,6 +63,9 @@ const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
   { id: "rawThresholds", section: "advanced", label: "settings.rawThresholds" },
   { id: "rawThresholds", section: "advanced", label: "settings.threshold" },
   { id: "purgeFaces", section: "advanced", label: "settings.purge" },
+  { id: "section", section: "about", label: "about.version" },
+  { id: "section", section: "about", label: "about.build" },
+  { id: "section", section: "about", label: "about.tabLicenses" },
 ];
 
 const norm = (s: string) => s.toLocaleLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -108,6 +113,8 @@ function SectionContent({ section }: { section: SettingsSection }) {
       return <DiagnosticsPage />;
     case "advanced":
       return <AdvancedSection />;
+    case "about":
+      return <AboutPanel />;
   }
 }
 

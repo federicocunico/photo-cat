@@ -47,8 +47,8 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 - [x] 5.3 `scripts/licenses.mjs` (sostituisce `ui-licenses.mjs`): dipendenze Rust da `cargo metadata`, dipendenze di produzione dell'interfaccia e `assets/licenses/manual.json` per modelli e librerie native, uniti in `assets/licenses/third-party.json`; fallisce per una licenza non riconosciuta; verificare eseguendo lo script e con un test sul caso di licenza mancante
 - [ ] 5.4 CI: il job Linux rigenera `third-party.json` e fallisce se differisce da quello nel repository; verificare con `make test-linux`
 - [x] 5.5 Comando Rust `third_party_licenses` che legge il file dalle risorse installate; verificare con un test d'integrazione su un file di esempio
-- [ ] 5.6 Componente `AboutPanel` con le schede "Informazioni" e "Licenze di terze parti" (ricerca, gruppi, testo completo, nota sulle sorgenti per LGPL), "Apri" accanto al percorso dei dati e "Copia informazioni" senza il percorso; verificare con test vitest della ricerca "LGPL" e del testo copiato
-- [ ] 5.7 Finestra Informazioni dal menu Aiuto e sezione Impostazioni › Informazioni con lo stesso `AboutPanel`; verificare con i test di Impostazioni (ricerca "versione" porta alla sezione) e del menu Aiuto
+- [x] 5.6 Componente `AboutPanel` con le schede "Informazioni" e "Licenze di terze parti" (ricerca, gruppi, testo completo, nota sulle sorgenti per LGPL), "Apri" accanto al percorso dei dati e "Copia informazioni" senza il percorso; verificare con test vitest della ricerca "LGPL" e del testo copiato
+- [x] 5.7 Finestra Informazioni dal menu Aiuto e sezione Impostazioni › Informazioni con lo stesso `AboutPanel`; verificare con i test di Impostazioni (ricerca "versione" porta alla sezione) e del menu Aiuto
 
 ## 6. Persone
 
@@ -70,7 +70,7 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 - [ ] 7.3 Sequenza: griglia che riempie la larghezza, nome della fotocamera non ripetuto in ogni miniatura (iniziale e colore restano), etichetta "JPGS" in parole, "Esporta sequenza…" nell'intestazione della pagina; verificare con i test di Sequenza
 - [ ] 7.4 Tag: colori predefiniti distinti per i tag del set Base, "Set attivo" come stato e non come pulsante disattivato, intestazioni senza maiuscolo; verificare con i test di `TagsPage`
 - [ ] 7.5 Libreria: badge delle miniature con etichetta accessibile e descrizione al passaggio del mouse; Inspector con le catalogazioni AI in parole e i volti con nome o "persona senza nome"; verificare con i test di `Grid` e `Inspector` (L3, L4)
-- [ ] 7.6 Impostazioni: cache delle anteprime di Varianti RAW in Avanzate; verificare con il test della ricerca "cache"
+- [x] 7.6 Impostazioni: cache delle anteprime di Varianti RAW in Avanzate; verificare con il test della ricerca "cache"
 
 ## 8. Verifica d'insieme
 

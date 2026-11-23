@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "./i18n";
-import { commandsMock, emit, ipcMockModule } from "./test/ipcMock";
+import { appInfoFixture, commandsMock, emit, ipcMockModule } from "./test/ipcMock";
 import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
@@ -75,12 +75,13 @@ function renderApp() {
   );
 }
 
-const info = (previousCrash: unknown) => ({
-  version: "0.1.0",
-  dataDir: "D:\\data",
-  logsDir: "D:\\data\\logs",
-  previousCrash,
-});
+const info = (previousCrash: unknown) =>
+  appInfoFixture({
+    version: "0.1.0",
+    dataDir: "D:\\data",
+    logsDir: "D:\\data\\logs",
+    previousCrash,
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();

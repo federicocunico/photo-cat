@@ -99,16 +99,9 @@ export function emit<K extends keyof typeof emitters>(
   for (const cb of emitters[kind] as Cb<typeof payload>[]) cb(payload);
 }
 
-export const commandsMock = {
-  bootStatus: vi.fn(async () => ({
-    phase: "ready",
-    ready: true,
-    error: null as string | null,
-    logsPath: "D:/logs",
-  })),
-  bootRetry: vi.fn(async () => {}),
-  bootChooseFolder: vi.fn(async () => null),
-  appInfo: vi.fn(async () => ({
+/** Informazioni sull'app di prova (app-about); i test cambiano solo i campi che servono. */
+export function appInfoFixture(overrides: Record<string, unknown> = {}) {
+  return {
     version: "0.5.1",
     commit: "a1b2c3d" as string | null,
     buildDate: "2026-11-23",
@@ -122,8 +115,21 @@ export const commandsMock = {
     license: "MIT OR Apache-2.0",
     dataDir: "D:/photo-cat",
     logsDir: "D:/photo-cat/logs",
-    previousCrash: null,
+    previousCrash: null as unknown,
+    ...overrides,
+  };
+}
+
+export const commandsMock = {
+  bootStatus: vi.fn(async () => ({
+    phase: "ready",
+    ready: true,
+    error: null as string | null,
+    logsPath: "D:/logs",
   })),
+  bootRetry: vi.fn(async () => {}),
+  bootChooseFolder: vi.fn(async () => null),
+  appInfo: vi.fn(async () => appInfoFixture()),
   dismissCrashNotice: vi.fn(),
   takeUiRecovery: vi.fn(async () => null),
   reportLongTasks: vi.fn(async () => null),
