@@ -118,6 +118,25 @@ export function AiSection() {
           />
         </div>
       </Setting>
+      <Setting
+        id="faceMerge"
+        label={t("thresholds.autoMerge")}
+        hint={t("thresholds.autoMergeHint")}
+      >
+        <div className="settings-sliders">
+          <SensitivitySlider
+            scale="face_merge_sensitivity"
+            label={t("thresholds.autoMergeScale")}
+            value={th.face_merge_sensitivity}
+            onChange={(v) => setTh({ face_merge_sensitivity: v })}
+            ends={{
+              left: t("thresholds.moreQuestions"),
+              right: t("thresholds.moreMerges"),
+              value: (percent) => t("thresholds.mergeValue", { percent }),
+            }}
+          />
+        </div>
+      </Setting>
       <Setting id="faceSize" label={t("settings.faceSizes.label")}>
         <SegmentedControl<FaceSize>
           label={t("settings.faceSizes.label")}

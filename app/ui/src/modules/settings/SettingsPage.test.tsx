@@ -27,6 +27,7 @@ const config = {
       face_min_sharpness: 0.35,
       face_similarity: 0.363,
       similar_photos: 0.8,
+      face_merge_sensitivity: 0.5,
     },
   },
   logging: { level: "info", max_files: 10, max_file_mb: 20 },
@@ -607,4 +608,42 @@ it("cache di Varianti RAW: si trova con la ricerca e si traduce in inglese", asy
   await act(() => i18n.changeLanguage("en"));
   expect(await screen.findByLabelText("RAW Variants preview cache (GB)")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Clear the cache" })).toBeDisabled();
+});
+
+it("Unione automatica: verso Più domande con anteprima delle unioni e Applica", async () => {
+  // Scenario "Sensibilità ridotta" (lato Impostazioni): la sensibilità si applica con
+  // "Applica" dopo l'anteprima del numero di unioni automatiche.
+  commandsMock.previewThresholds.mockResolvedValue({
+    ...impact,
+    autoMerges: 3,
+    autoMergesCurrent: 7,
+  });
+  renderSettings();
+  await open("Riconoscimento AI");
+  const slider = await screen.findByRole("slider", {
+    name: "Persone senza nome unite automaticamente",
+  });
+  expect(slider).toHaveAttribute("aria-valuetext", "50% verso Più unioni automatiche");
+  expect(screen.getByText("Più domande")).toBeInTheDocument();
+  fireEvent.change(slider, { target: { value: "20" } });
+  fireEvent.click(within(applyBar()).getByRole("button", { name: "Anteprima dell'effetto" }));
+  await waitFor(() =>
+    expect(commandsMock.previewThresholds).toHaveBeenCalledWith(
+      { ...defaultThresholds, face_merge_sensitivity: 0.2 },
+      null,
+    ),
+  );
+  expect(
+    await screen.findByText("3 unioni automatiche di persone senza nome (ora 7)"),
+  ).toBeInTheDocument();
+  fireEvent.click(within(applyBar()).getByRole("button", { name: "Applica" }));
+  await waitFor(() =>
+    expect(commandsMock.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ai: expect.objectContaining({
+          thresholds: expect.objectContaining({ face_merge_sensitivity: 0.2 }),
+        }),
+      }),
+    ),
+  );
 });

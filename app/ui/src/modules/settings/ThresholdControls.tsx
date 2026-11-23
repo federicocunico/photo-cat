@@ -62,20 +62,26 @@ export function ThresholdInput({
   );
 }
 
+/** Testi degli estremi della scala e del valore (con `{{percent}}`), già tradotti. */
+export type SliderEnds = { left: string; right: string; value: (percent: number) => string };
+
 /**
  * Sensibilità di una soglia su una scala comprensibile: a sinistra "Più risultati", a
- * destra "Più precisi", qualunque sia il verso del valore grezzo (tabella `SCALE`).
+ * destra "Più precisi", qualunque sia il verso del valore grezzo (tabella `SCALE`). Con
+ * `ends` gli estremi hanno altri nomi (es. "Più domande ↔ Più unioni automatiche").
  */
 export function SensitivitySlider({
   scale,
   label,
   value,
   onChange,
+  ends,
 }: {
   scale: keyof typeof SCALE;
   label: string;
   value: number;
   onChange: (v: number) => void;
+  ends?: SliderEnds;
 }) {
   const { t } = useTranslation();
   const id = useId();
@@ -90,7 +96,7 @@ export function SensitivitySlider({
       </label>
       <div className="settings-slider-row">
         <span className="muted" aria-hidden="true">
-          {t("settings.sensitivity.more")}
+          {ends?.left ?? t("settings.sensitivity.more")}
         </span>
         <input
           id={id}
@@ -99,11 +105,13 @@ export function SensitivitySlider({
           max={max}
           step={1}
           value={Math.min(max, Math.max(min, pos))}
-          aria-valuetext={t("settings.sensitivity.value", { percent: pos })}
+          aria-valuetext={
+            ends ? ends.value(pos) : t("settings.sensitivity.value", { percent: pos })
+          }
           onChange={(e) => onChange(fromPrecision(scale, Number(e.target.value)))}
         />
         <span className="muted" aria-hidden="true">
-          {t("settings.sensitivity.precise")}
+          {ends?.right ?? t("settings.sensitivity.precise")}
         </span>
       </div>
     </div>

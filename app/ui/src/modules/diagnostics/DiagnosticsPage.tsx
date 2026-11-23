@@ -18,6 +18,7 @@ import {
 } from "../../lib/ipc";
 import { ENTRY_LEVELS, LOG_LEVELS, PHASES, toQuery, useEntryLabels, useErrorText } from "./errors";
 import { ErrorGroups } from "./ErrorGroups";
+import { FaceClustering } from "./FaceClustering";
 import { fmtDateTime, fmtTime } from "../../lib/format";
 import { useLayout, type DiagFilter } from "../../store/layout";
 import { useLive } from "../../store/live";
@@ -311,6 +312,8 @@ export function DiagnosticsPage() {
           {notice.text}
         </InlineAlert>
       )}
+
+      <FaceClustering />
 
       <div
         data-setting="logLevel"

@@ -45,6 +45,7 @@ export function AdvancedSection() {
           face_min_sharpness: DEFAULTS.face_min_sharpness,
           face_similarity: DEFAULTS.face_similarity,
           similar_photos: DEFAULTS.similar_photos,
+          face_merge_sensitivity: DEFAULTS.face_merge_sensitivity,
         },
       },
     });
@@ -121,6 +122,16 @@ export function AdvancedSection() {
               label={t("thresholds.similarity")}
               value={th.face_similarity}
               onValid={(v) => setTh({ face_similarity: v ?? DEFAULTS.face_similarity })}
+            />
+          </label>
+          <label>
+            <span>{t("thresholds.mergeSensitivity")}</span>
+            <ThresholdInput
+              label={t("thresholds.mergeSensitivity")}
+              value={th.face_merge_sensitivity}
+              onValid={(v) =>
+                setTh({ face_merge_sensitivity: v ?? DEFAULTS.face_merge_sensitivity })
+              }
             />
           </label>
           <label title={t("similar.thresholdHint")}>
