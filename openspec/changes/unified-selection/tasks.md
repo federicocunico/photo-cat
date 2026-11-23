@@ -38,7 +38,7 @@ Ogni gruppo si integra da solo con test verdi (`npm --prefix app/ui test`, `type
 
 ## 6. Verifica d'insieme
 
-- [ ] 6.1 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
+- [x] 6.1 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
 - [ ] 6.2 Prova sull'app reale (per l'utente): Libreria, Sequenza, Persone (elenco e volti) e Cataloghi solo con la tastiera, poi solo con il mouse, confrontando il comportamento con Esplora file
 
 ## Workflow follow-up
