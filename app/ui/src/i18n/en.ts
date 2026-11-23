@@ -434,7 +434,7 @@ export const en: Messages = {
       tokenizer: "Label text",
       person_detection: "People detection and count",
       face_detection: "Face detection",
-      face_embedding: "Face identity",
+      face_embedding: "Face recognition",
       gazetteer: "Places from GPS coordinates",
     },
   },

@@ -33,7 +33,7 @@ export function Transfer({ onDone }: { onDone: () => void }) {
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
       if (!path) return;
-      await commands.exportIdentities(path, includeFaces);
+      await commands.exportIdentities(path, includeFaces, null);
       setMessage(t("identities.exported"));
     });
   const importFile = () =>

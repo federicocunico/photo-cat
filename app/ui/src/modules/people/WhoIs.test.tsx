@@ -83,19 +83,19 @@ it("suggests identities by name or alias, ordered by similarity", async () => {
   const input = await openUnnamed();
   fireEvent.change(input, { target: { value: "Giu" } });
   await screen.findByRole("option", { name: /Giulia Bianchi/ });
-  const options = within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole(
+  const options = within(screen.getByRole("listbox", { name: "Persone proposte" })).getAllByRole(
     "option",
   );
   expect(options.map((o) => o.textContent)).toEqual([
     "Giulia Bianchisomiglianza alta",
     "Giuseppe Verdi",
-    'Crea l\'identità "Giu"',
+    "Nuova persona «Giu»",
   ]);
   expect(commandsMock.suggestIdentities).toHaveBeenCalledWith(12, "Giu");
   fireEvent.change(input, { target: { value: "Nonna" } });
   await waitFor(() =>
     expect(
-      within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole("option")[0],
+      within(screen.getByRole("listbox", { name: "Persone proposte" })).getAllByRole("option")[0],
     ).toHaveTextContent("Rita Rossi"),
   );
 });
@@ -111,7 +111,7 @@ it("creates the identity when none matches, then links it", async () => {
   commandsMock.saveIdentity.mockResolvedValueOnce("new");
   const input = await openUnnamed();
   fireEvent.change(input, { target: { value: "Marco Russo" } });
-  await screen.findByRole("option", { name: 'Crea l\'identità "Marco Russo"' });
+  await screen.findByRole("option", { name: "Nuova persona «Marco Russo»" });
   fireEvent.keyDown(input, { key: "Enter" });
   await waitFor(() =>
     expect(commandsMock.saveIdentity).toHaveBeenCalledWith(null, {

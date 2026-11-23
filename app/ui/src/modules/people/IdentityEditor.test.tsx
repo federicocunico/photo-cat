@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import type { IdentitiesView, IdentityRow } from "../../bindings";
@@ -107,40 +108,45 @@ beforeEach(() => {
 });
 afterEach(checkedCleanup(A11Y_KNOWN.people));
 
-it("lists identities with group filter, link state and store location", async () => {
+const people = () => screen.getByRole("listbox", { name: "Persone" });
+
+it("elenca le persone con il filtro per cerchia, le foto nella libreria e l'archivio", async () => {
   await openPeopleSection();
-  const table = screen.getByRole("listbox", { name: "Identità" });
+  const table = people();
   expect(within(table).getByText("Giulia Bianchi")).toBeInTheDocument();
   expect(within(table).getByText(/412 foto$/)).toBeInTheDocument();
   expect(within(table).getByText(/nessuna foto in questa libreria$/)).toBeInTheDocument();
   expect(table).not.toHaveTextContent(/nessuno|non collegata/);
   expect(screen.getByRole("note")).toHaveTextContent("app.db");
-  fireEvent.click(screen.getByRole("button", { name: "Lavoro (1)" }));
-  expect(within(table).queryByText("Giulia Bianchi")).toBeNull();
+  // La cerchia è nel menu "Ordina e filtra", con i conteggi.
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Ordina e filtra" }));
+  await user.click(await screen.findByRole("menuitemcheckbox", { name: "Lavoro (1)" }));
+  await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
   expect(within(table).getByText("Elena Conti")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ordina e filtra" })).toHaveAttribute("data-active");
 });
 
-it("finds an identity by alias", async () => {
+it("trova una persona da un altro nome", async () => {
   await openPeopleSection();
-  fireEvent.change(screen.getByLabelText("Cerca nome o alias"), {
+  fireEvent.change(screen.getByLabelText("Cerca un nome o un altro nome"), {
     target: { value: "Nonna Rita" },
   });
   await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith("Nonna Rita", null));
-  const table = await waitFor(() => screen.getByRole("listbox", { name: "Identità" }));
-  await waitFor(() => expect(within(table).queryByText("Giulia Bianchi")).toBeNull());
-  expect(within(table).getByText("Rita Rossi")).toBeInTheDocument();
+  await waitFor(() => expect(within(people()).queryByText("Giulia Bianchi")).toBeNull());
+  expect(within(people()).getByText("Rita Rossi")).toBeInTheDocument();
 });
 
-it("creates an identity, leaving the short name to the default", async () => {
+it("«Nuova persona» è nell'intestazione e crea la persona lasciando il nome nei file predefinito", async () => {
   commandsMock.saveIdentity.mockResolvedValueOnce("new-uid");
   await openPeopleSection();
-  fireEvent.click(screen.getByText("+ Nuova identità"));
-  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
-    target: { value: "Marco Russo" },
+  fireEvent.click(screen.getByRole("button", { name: "Nuova persona" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Marco Russo" } });
+  expect(screen.getByLabelText("Nome nei file esportati")).toHaveAttribute("placeholder", "Marco");
+  fireEvent.change(screen.getByLabelText("Altri nomi"), {
+    target: { value: "Marco R., Il Russo" },
   });
-  expect(screen.getByLabelText("Nome breve (per i file)")).toHaveAttribute("placeholder", "Marco");
-  fireEvent.change(screen.getByLabelText("Alias"), { target: { value: "Marco R., Il Russo" } });
-  fireEvent.click(screen.getByRole("button", { name: "Crea identità" }));
+  fireEvent.click(screen.getByRole("button", { name: "Crea la persona" }));
   await waitFor(() =>
     expect(commandsMock.saveIdentity).toHaveBeenCalledWith(null, {
       name: "Marco Russo",
@@ -152,21 +158,59 @@ it("creates an identity, leaving the short name to the default", async () => {
   );
 });
 
-it("shows the conflict when the name already exists", async () => {
+it("«Nuova persona» compare solo nella sezione Persone", async () => {
+  renderModule();
+  await screen.findByRole("tablist");
+  expect(screen.queryByRole("button", { name: "Nuova persona" })).toBeNull();
+});
+
+it("mostra il conflitto quando il nome esiste già", async () => {
   commandsMock.saveIdentity.mockRejectedValueOnce({
     code: "INVALID_INPUT",
-    detail: 'conflitto: esiste già un\'identità "Giulia Bianchi"',
+    detail: "conflitto: esiste già una persona «Giulia Bianchi»",
   });
   await openPeopleSection();
-  fireEvent.click(screen.getByText("+ Nuova identità"));
-  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
-    target: { value: "Giulia Bianchi" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Crea identità" }));
+  fireEvent.click(screen.getByRole("button", { name: "Nuova persona" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Giulia Bianchi" } });
+  fireEvent.click(screen.getByRole("button", { name: "Crea la persona" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("esiste già");
 });
 
-it("asks which face to use when the reference image has several", async () => {
+it("i dettagli si salvano appena modificati, con «Salvato» accanto", async () => {
+  commandsMock.saveIdentity.mockResolvedValue("g");
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("Giulia Bianchi"));
+  const aliases = await screen.findByLabelText("Altri nomi");
+  expect(aliases).toHaveValue("Giuli");
+  expect(screen.queryByRole("button", { name: "Salva" })).toBeNull();
+  fireEvent.change(aliases, { target: { value: "Giuli, Giugi" } });
+  fireEvent.blur(aliases);
+  await waitFor(() =>
+    expect(commandsMock.saveIdentity).toHaveBeenCalledWith("g", {
+      name: "Giulia Bianchi",
+      shortName: "Giulia",
+      group: "Famiglia",
+      threshold: null,
+      aliases: ["Giuli", "Giugi"],
+    }),
+  );
+  expect(await screen.findByText("Salvato")).toBeInTheDocument();
+  // Uscire da un campo non modificato non salva di nuovo.
+  fireEvent.blur(screen.getByLabelText("Nome"));
+  expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
+});
+
+it("la sensibilità del riconoscimento è una scala senza numeri", async () => {
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("Giulia Bianchi"));
+  const slider = await screen.findByRole("slider", { name: "Riconoscimento" });
+  expect(slider).toHaveAttribute("aria-valuetext", "Predefinito");
+  expect(screen.getByText("Più risultati")).toBeInTheDocument();
+  expect(screen.getByText("Più precisi")).toBeInTheDocument();
+  expect(screen.queryByText("0,36")).toBeNull();
+});
+
+it("i volti di riferimento sono una scheda accanto ai volti nella libreria", async () => {
   commandsMock.addIdentityReferenceFile
     .mockResolvedValueOnce({
       outcome: "choose",
@@ -179,7 +223,13 @@ it("asks which face to use when the reference image has several", async () => {
     .mockResolvedValueOnce({ outcome: "added", id: 9 });
   await openPeopleSection();
   fireEvent.click(screen.getByText("Giulia Bianchi"));
-  fireEvent.click(await screen.findByRole("button", { name: "+ Da file…" }));
+  const faces = await screen.findByRole("tablist", { name: "Volti" });
+  expect(
+    within(faces).getByRole("tab", { name: "Volti nella libreria · 412" }),
+  ).toBeInTheDocument();
+  const refs = within(faces).getByRole("tab", { name: "Volti di riferimento · 8" });
+  fireEvent.mouseDown(refs, { button: 0 });
+  fireEvent.click(await screen.findByRole("button", { name: "Da un file…" }));
   const group = await screen.findByRole("group", { name: /più volti/ });
   expect(within(group).getAllByRole("button")).toHaveLength(3);
   fireEvent.click(within(group).getByRole("button", { name: "Volto 2" }));
@@ -188,34 +238,53 @@ it("asks which face to use when the reference image has several", async () => {
   );
 });
 
-it("shows identities without photos in the library as editable", async () => {
+it("una persona senza foto nella libreria resta modificabile; ⋯ offre Unisci, Esporta ed Elimina", async () => {
   await openPeopleSection();
-  const table = screen.getByRole("listbox", { name: "Identità" });
-  expect(within(table).getByText("Elena Conti")).toBeInTheDocument();
-  expect(within(table).getByText(/nessuna foto in questa libreria$/)).toBeInTheDocument();
-  fireEvent.click(within(table).getByText("Elena Conti"));
-  expect(await screen.findByLabelText("Nome visualizzato")).toHaveValue("Elena Conti");
-  expect(screen.getByRole("button", { name: "Salva" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Esporta/ })).toBeInTheDocument();
-  const card = screen.getByLabelText("Scheda del gruppo");
-  expect(within(card).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+  fireEvent.click(within(people()).getByText("Elena Conti"));
+  expect(await screen.findByLabelText("Nome")).toHaveValue("Elena Conti");
+  const card = screen.getByRole("complementary", { name: "Scheda" });
+  expect(within(card).getByText(/nessuna foto in questa libreria/)).toBeInTheDocument();
+  expect(within(card).queryByRole("button", { name: "Mostra in Libreria" })).toBeNull();
+  const user = userEvent.setup();
+  await user.click(within(card).getByRole("button", { name: "Altre azioni per Elena Conti" }));
+  expect(await screen.findByRole("menuitem", { name: "Unisci a…" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Esporta…" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Elimina persona…" })).toBeInTheDocument();
 });
 
-it("Doppio clic su Salva: il salvataggio parte una sola volta", async () => {
+it("«Esporta…» dal menu della persona esporta solo lei", async () => {
+  const dialog = await import("@tauri-apps/plugin-dialog");
+  vi.mocked(dialog.save).mockResolvedValueOnce("D:\\out\\Giulia.photocat-people.json");
+  await openPeopleSection();
+  fireEvent.click(screen.getByText("Giulia Bianchi"));
+  const card = screen.getByRole("complementary", { name: "Scheda" });
+  const user = userEvent.setup();
+  await user.click(
+    await within(card).findByRole("button", { name: "Altre azioni per Giulia Bianchi" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Esporta…" }));
+  await waitFor(() =>
+    expect(commandsMock.exportIdentities).toHaveBeenCalledWith(
+      "D:\\out\\Giulia.photocat-people.json",
+      true,
+      ["g"],
+    ),
+  );
+});
+
+it("Doppio clic su «Crea la persona»: il salvataggio parte una sola volta", async () => {
   const pending = deferred<string>();
   commandsMock.saveIdentity.mockImplementationOnce(() => pending.promise);
   await openPeopleSection();
-  fireEvent.click(screen.getByText("+ Nuova identità"));
-  fireEvent.change(screen.getByLabelText("Nome visualizzato"), {
-    target: { value: "Test identity" },
-  });
-  const save = screen.getByRole("button", { name: "Crea identità" });
+  fireEvent.click(screen.getByRole("button", { name: "Nuova persona" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Test persona" } });
+  const save = screen.getByRole("button", { name: "Crea la persona" });
   fireEvent.click(save);
   fireEvent.click(save);
   fireEvent.submit(save.closest("form")!);
   await waitFor(() => expect(save).toHaveAttribute("aria-busy", "true"));
   expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
-  pending.resolve("new-uid");
+  await act(async () => pending.resolve("new-uid"));
   await waitFor(() => expect(commandsMock.listIdentities.mock.calls.length).toBeGreaterThan(1));
   expect(commandsMock.saveIdentity).toHaveBeenCalledOnce();
 });

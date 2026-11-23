@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
 import {
+  ActionBar,
   Button,
   ConfirmDialog,
   Dialog,
@@ -14,6 +15,7 @@ import {
   Menu,
   Popover,
   SearchPicker,
+  type BarAction,
   type MenuItem,
 } from "../../components/ui";
 import { commands, isTauri, type BulkAction, type Target } from "../../lib/ipc";
@@ -254,160 +256,186 @@ export function SelectionBar() {
     { label: t("selection.removeLibrary"), danger: true, onSelect: () => setRemoving(true) },
   ];
 
-  return (
-    <div role="toolbar" aria-label={t("selection.label")} className="lib-header lib-selection">
-      {trash.dialog}
-      <IconButton
-        label={t("selection.clear")}
-        shortcut="Esc"
-        onClick={clear}
-        icon={<Icon.Close size={16} />}
-      />
-      <strong data-testid="bulk-count">{t("selection.count", { count })}</strong>
-
-      <PickerButton
-        label={t("selection.tag")}
-        icon={<Icon.Tags size={14} />}
-        open={picker.open === "tag"}
-        onOpenChange={(o) => picker.set(o ? "tag" : null)}
-      >
-        {(close) => (
-          <SearchPicker
-            label={t("selection.tagSearch")}
-            placeholder={t("selection.tagSearch")}
-            options={tagOptions}
-            createLabel={(name) => t("selection.tagCreate", { name })}
-            onPick={(name) => {
-              close();
-              return start({ action: "add_tag", name }, "add_tag", name);
-            }}
-          />
-        )}
-      </PickerButton>
-
-      {openCatalog?.system && (
-        <Button
-          variant="primary"
-          icon={<Icon.Undo size={14} />}
-          onClick={() =>
-            start(
-              { action: "restore_from_system", catalog: openCatalog.id },
-              "restore_from_system",
-              catalogLabel(openCatalog, t),
-            )
-          }
+  // Barra delle azioni condivisa (ui-usability-audit D2): i selettori restano sempre visibili,
+  // "Apri con" ed "Esporta" passano in "Altro" quando la barra è stretta.
+  const actions: BarAction[] = [
+    {
+      id: "tag",
+      label: t("selection.tag"),
+      render: () => (
+        <PickerButton
+          label={t("selection.tag")}
+          icon={<Icon.Tags size={14} />}
+          open={picker.open === "tag"}
+          onOpenChange={(o) => picker.set(o ? "tag" : null)}
         >
-          {t("selection.restore")}
-        </Button>
-      )}
-      {openCatalog && !openCatalog.system && (
-        <Button
-          variant="ghost"
-          disabled={catalogAction.busy}
-          onClick={() =>
-            catalogAction.act(
-              { target, count },
-              openCatalog.id,
-              openCatalog.name,
-              filter.excludedFrom != null,
-            )
-          }
+          {(close) => (
+            <SearchPicker
+              label={t("selection.tagSearch")}
+              placeholder={t("selection.tagSearch")}
+              options={tagOptions}
+              createLabel={(name) => t("selection.tagCreate", { name })}
+              onPick={(name) => {
+                close();
+                return start({ action: "add_tag", name }, "add_tag", name);
+              }}
+            />
+          )}
+        </PickerButton>
+      ),
+    },
+    ...(openCatalog?.system
+      ? [
+          {
+            id: "restore",
+            label: t("selection.restore"),
+            variant: "primary" as const,
+            icon: <Icon.Undo size={14} />,
+            onSelect: () =>
+              start(
+                { action: "restore_from_system", catalog: openCatalog.id },
+                "restore_from_system",
+                catalogLabel(openCatalog, t),
+              ),
+          },
+        ]
+      : []),
+    ...(openCatalog && !openCatalog.system
+      ? [
+          {
+            id: "exclude",
+            label: t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude"),
+            variant: "ghost" as const,
+            disabled: catalogAction.busy,
+            onSelect: () =>
+              catalogAction.act(
+                { target, count },
+                openCatalog.id,
+                openCatalog.name,
+                filter.excludedFrom != null,
+              ),
+          },
+        ]
+      : []),
+    {
+      id: "catalog",
+      label: t("selection.catalog"),
+      render: () => (
+        <PickerButton
+          label={t("selection.catalog")}
+          icon={<Icon.Catalogs size={14} />}
+          open={picker.open === "catalog"}
+          onOpenChange={(o) => picker.set(o ? "catalog" : null)}
         >
-          {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
-        </Button>
-      )}
-      <PickerButton
-        label={t("selection.catalog")}
-        icon={<Icon.Catalogs size={14} />}
-        open={picker.open === "catalog"}
-        onOpenChange={(o) => picker.set(o ? "catalog" : null)}
-      >
-        {(close) => (
-          <SearchPicker
-            label={t("selection.catalogSearch")}
-            placeholder={t("selection.catalogSearch")}
-            options={catalogOptions}
-            emptyLabel={t("selection.noCatalogs")}
-            onPick={(value) => {
-              close();
-              return pickCatalog(value);
-            }}
-          />
-        )}
-      </PickerButton>
-
-      <PickerButton label={t("selection.person")} icon={<Icon.People size={14} />}>
-        {(close) => (
-          <SearchPicker
-            label={t("selection.personSearch")}
-            placeholder={t("selection.personSearch")}
-            options={peopleOptions}
-            emptyLabel={t("selection.noPeople")}
-            onPick={(value) => {
-              close();
-              const p = peopleOptions.find((o) => o.value === value);
-              setAssigning({ id: Number(value), name: p?.label ?? "" });
-            }}
-          />
-        )}
-      </PickerButton>
-
-      <PickerButton label={t("selection.place")} icon={<Icon.Library size={14} />}>
-        {(close) => (
-          <SearchPicker
-            label={t("selection.placeSearch")}
-            placeholder={t("selection.placeSearch")}
-            options={[{ value: "", label: t("selection.placeReset") }]}
-            createLabel={(name) => t("selection.placeCreate", { name })}
-            onPick={(value, created) => {
-              close();
-              return created
-                ? start({ action: "set_place", place: { name: value } }, "set_place", value)
-                : start({ action: "set_place", place: null }, "reset_place");
-            }}
-          />
-        )}
-      </PickerButton>
-
-      {ids ? (
-        <Menu
-          trigger={
-            <button type="button" className="btn btn-ghost">
+          {(close) => (
+            <SearchPicker
+              label={t("selection.catalogSearch")}
+              placeholder={t("selection.catalogSearch")}
+              options={catalogOptions}
+              emptyLabel={t("selection.noCatalogs")}
+              onPick={(value) => {
+                close();
+                return pickCatalog(value);
+              }}
+            />
+          )}
+        </PickerButton>
+      ),
+    },
+    {
+      id: "person",
+      label: t("selection.person"),
+      render: () => (
+        <PickerButton label={t("selection.person")} icon={<Icon.People size={14} />}>
+          {(close) => (
+            <SearchPicker
+              label={t("selection.personSearch")}
+              placeholder={t("selection.personSearch")}
+              options={peopleOptions}
+              emptyLabel={t("selection.noPeople")}
+              onPick={(value) => {
+                close();
+                const p = peopleOptions.find((o) => o.value === value);
+                setAssigning({ id: Number(value), name: p?.label ?? "" });
+              }}
+            />
+          )}
+        </PickerButton>
+      ),
+    },
+    {
+      id: "place",
+      label: t("selection.place"),
+      render: () => (
+        <PickerButton label={t("selection.place")} icon={<Icon.Library size={14} />}>
+          {(close) => (
+            <SearchPicker
+              label={t("selection.placeSearch")}
+              placeholder={t("selection.placeSearch")}
+              options={[{ value: "", label: t("selection.placeReset") }]}
+              createLabel={(name) => t("selection.placeCreate", { name })}
+              onPick={(value, created) => {
+                close();
+                return created
+                  ? start({ action: "set_place", place: { name: value } }, "set_place", value)
+                  : start({ action: "set_place", place: null }, "reset_place");
+              }}
+            />
+          )}
+        </PickerButton>
+      ),
+    },
+    ids
+      ? {
+          id: "openWith",
+          label: t("selection.openWith"),
+          variant: "ghost" as const,
+          priority: 2,
+          items: openWithItems,
+        }
+      : {
+          id: "openWith",
+          label: t("selection.openWith"),
+          render: () => (
+            <Button
+              variant="ghost"
+              disabledReason={t("selection.openWithIds")}
+              onClick={() => undefined}
+            >
               {t("selection.openWith")}
-              <Icon.ChevronDown size={14} aria-hidden="true" />
-            </button>
-          }
-          items={openWithItems}
-        />
-      ) : (
-        <Button
-          variant="ghost"
-          disabledReason={t("selection.openWithIds")}
-          onClick={() => undefined}
-        >
-          {t("selection.openWith")}
-        </Button>
-      )}
-      <Button
-        variant="ghost"
-        icon={<Icon.Export size={14} />}
-        onClick={() => useLayout.getState().openModule({ module: "organize" })}
-      >
-        {t("selection.export")}
-      </Button>
+            </Button>
+          ),
+        },
+    {
+      id: "export",
+      label: t("selection.export"),
+      variant: "ghost",
+      icon: <Icon.Export size={14} />,
+      priority: 3,
+      onSelect: () => useLayout.getState().openModule({ module: "organize" }),
+    },
+  ];
 
-      <div className="lib-header-actions">
-        <Menu
-          align="end"
-          trigger={
-            <button type="button" className="btn btn-ghost">
-              {t("common.more")}
-              <Icon.More size={14} aria-hidden="true" />
-            </button>
-          }
-          items={more}
-        />
-      </div>
+  return (
+    <div className="lib-header lib-selection">
+      {trash.dialog}
+      <ActionBar
+        label={t("selection.label")}
+        className="lib-selection-bar"
+        lead={
+          <>
+            <IconButton
+              label={t("selection.clear")}
+              shortcut="Esc"
+              onClick={clear}
+              icon={<Icon.Close size={16} />}
+            />
+            <strong data-testid="bulk-count">{t("selection.count", { count })}</strong>
+          </>
+        }
+        actions={actions}
+        menu={more}
+      />
 
       <Dialog open={removeTagOpen} onOpenChange={setRemoveTagOpen} title={t("selection.tagRemove")}>
         <SearchPicker

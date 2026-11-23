@@ -459,7 +459,7 @@ describe("Revisione da tastiera", () => {
     expect(who).toHaveFocus();
 
     fireEvent.change(who, { target: { value: "Marco" } });
-    await screen.findByRole("option", { name: /Crea l'identità "Marco"/i });
+    await screen.findByRole("option", { name: "Nuova persona «Marco»" });
     fireEvent.keyDown(who, { key: "Enter" });
 
     await waitFor(() => expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(1, "uid-new"));

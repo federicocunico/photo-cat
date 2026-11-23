@@ -95,7 +95,7 @@ beforeEach(() => {
 afterEach(checkedCleanup(A11Y_KNOWN.people));
 
 describe("Unione persone", () => {
-  it("apre il dialogo e unisce «Senza nome» con Giulia", async () => {
+  it("«Unisci a un altro gruppo…» unisce subito «Persona senza nome» a Giulia e si annulla", async () => {
     const unnamed = row({ id: 12, faces: 61, photos: 58, section: "review" });
     const giulia = row({
       id: 7,
@@ -113,21 +113,11 @@ describe("Unione persone", () => {
 
     renderModule();
     fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
-
-    const mergeSelect = await screen.findByLabelText(/Gruppo o persona di destinazione/i);
-    await waitFor(() =>
-      expect(
-        [...(mergeSelect as HTMLSelectElement).options].some((o) =>
-          o.textContent?.includes("Giulia"),
-        ),
-      ).toBe(true),
-    );
-    fireEvent.change(mergeSelect, { target: { value: "7" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Unisci con$/i }));
-
-    const dialog = await screen.findByRole("dialog", { name: /Unisci gruppi/i });
-    expect(within(dialog).getByText(/61 volti diventano di «Giulia»/i)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: /Unisci a Giulia/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unisci a un altro gruppo…" }));
+    // Il gruppo aperto non è tra le destinazioni; l'unione si annulla, quindi niente conferma.
+    const giuliaOption = await screen.findByRole("option", { name: /^Giulia/ });
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    fireEvent.click(giuliaOption);
 
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
@@ -152,7 +142,7 @@ describe("Unione persone", () => {
     } as never);
     renderModule();
     fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
-    await screen.findByRole("button", { name: /Ignora questa persona/i });
+    await screen.findByRole("button", { name: "Ignora questo gruppo" });
     fireEvent.keyDown(document.body, { key: "i" });
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "ignore", group: 12 }),
@@ -188,19 +178,12 @@ describe("Unione persone", () => {
 
     renderModule();
     fireEvent.click(await screen.findByText("Marco"));
-    const mergeSelect = await screen.findByLabelText(/Gruppo o persona di destinazione/i);
-    await waitFor(() =>
-      expect(
-        [...(mergeSelect as HTMLSelectElement).options].some((o) =>
-          o.textContent?.includes("Giulia"),
-        ),
-      ).toBe(true),
-    );
-    fireEvent.change(mergeSelect, { target: { value: "7" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Unisci con$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unisci a un altro gruppo…" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^Giulia/ }));
 
     const dialog = await screen.findByRole("dialog", { name: /Unisci gruppi/i });
     expect(within(dialog).getByText(/Quale nome tenere/i)).toBeInTheDocument();
+    expect(commandsMock.correctPerson).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByLabelText("Marco"));
     fireEvent.click(within(dialog).getByRole("button", { name: /Unisci a Marco/i }));
 
@@ -214,9 +197,9 @@ describe("Unione persone", () => {
   });
 });
 
-describe("Persone diverse", () => {
-  it("segna la coppia e permette di annullare", async () => {
-    const g = row({
+describe("Domanda nella scheda", () => {
+  const similar = () =>
+    row({
       id: 1,
       faces: 40,
       photos: 35,
@@ -229,17 +212,20 @@ describe("Persone diverse", () => {
         score: 0.58,
       },
     });
+
+  it("«No» segna la coppia come persone diverse e si annulla", async () => {
     commandsMock.listGroups.mockResolvedValue({
-      items: [g],
+      items: [similar()],
       next: null,
       total: 1,
     } as never);
 
     renderModule();
     fireEvent.click(await screen.findByText(/Persona senza nome · 35 foto/i));
-    expect(await screen.findByText(/Somiglia a/i)).toBeInTheDocument();
+    const question = await screen.findByRole("region", { name: "È la stessa persona?" });
+    expect(question).toHaveTextContent(/Somiglianza (alta|media) con i 17 volti/);
 
-    fireEvent.click(screen.getByRole("button", { name: /Sono persone diverse/i }));
+    fireEvent.click(within(question).getByRole("button", { name: "No" }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "not_same",
@@ -248,10 +234,29 @@ describe("Persone diverse", () => {
       }),
     );
 
-    const toast = await screen.findByRole("status");
-    expect(toast).toHaveTextContent(/persone diverse/i);
-    fireEvent.click(within(toast).getByRole("button", { name: /^Annulla operazione$/i }));
+    const toast = await screen.findByText("Segnati come persone diverse");
+    const notice = toast.closest('[role="status"]') as HTMLElement;
+    fireEvent.click(within(notice).getByRole("button", { name: /^Annulla operazione$/i }));
     await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
+  });
+
+  it("«Sì» unisce l'altro gruppo senza conferma", async () => {
+    commandsMock.listGroups.mockResolvedValue({
+      items: [similar()],
+      next: null,
+      total: 1,
+    } as never);
+    renderModule();
+    fireEvent.click(await screen.findByText(/Persona senza nome · 35 foto/i));
+    const question = await screen.findByRole("region", { name: "È la stessa persona?" });
+    fireEvent.click(within(question).getByRole("button", { name: "Sì" }));
+    await waitFor(() =>
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+        action: "merge",
+        from: 1,
+        to: 9,
+      }),
+    );
   });
 });
 
@@ -306,8 +311,9 @@ describe("Correzioni su librerie grandi (issue #31, #28, #30)", () => {
     fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-2"), { ctrlKey: true });
-    const reject = screen.getByRole("button", { name: "Non è questa persona (2)" });
-    fireEvent.click(reject);
+    const bar = screen.getByRole("toolbar", { name: "Azioni sui volti" });
+    expect(within(bar).getByText("2 selezionati")).toBeInTheDocument();
+    fireEvent.click(within(bar).getByRole("button", { name: "Non è questa persona" }));
     await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1));
     expect(commandsMock.correctPerson).toHaveBeenCalledWith({
       action: "reject",
@@ -317,6 +323,44 @@ describe("Correzioni su librerie grandi (issue #31, #28, #30)", () => {
     await act(async () => finish());
     await waitFor(() => expect(screen.queryByText(/Elaborazione/)).not.toBeInTheDocument());
     expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Rimuovi volto" })).toBeInTheDocument();
+    // I comandi sui volti sono di nuovo disponibili.
+    fireEvent.click(screen.getByTestId("face-1"));
+    expect(
+      within(screen.getByRole("toolbar", { name: "Azioni sui volti" })).getByRole("button", {
+        name: "Non è questa persona",
+      }),
+    ).toBeEnabled();
+  });
+});
+
+describe("Somiglianze in parole (P9)", () => {
+  it("in Persone nessun punteggio compare come numero «0,xx»", async () => {
+    commandsMock.listGroups.mockResolvedValue({
+      items: [
+        row({
+          id: 1,
+          faces: 40,
+          photos: 35,
+          nameHint: { uid: "g", name: "Giulia", shortName: "Giulia", group: null, score: 0.62 },
+          mergeHint: {
+            otherId: 9,
+            otherName: "Giulia",
+            otherFaces: 17,
+            otherPhotos: 15,
+            otherCover: null,
+            score: 0.48,
+          },
+        }),
+      ],
+      next: null,
+      total: 1,
+    } as never);
+    renderModule();
+    expect(await screen.findByText("forse Giulia · somiglianza alta")).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Persona senza nome · 35 foto/i));
+    const question = await screen.findByRole("region", { name: "È Giulia?" });
+    expect(question).toHaveTextContent("Somiglianza media con i 17 volti di Giulia");
+    await screen.findByTestId("face-1");
+    expect(document.body.textContent).not.toMatch(/\b0[,.]\d{2}\b/);
   });
 });

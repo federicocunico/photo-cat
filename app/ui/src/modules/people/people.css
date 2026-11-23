@@ -291,32 +291,6 @@
   gap: 10px;
   border-bottom: 1px solid var(--pc-border);
 }
-.people-tabs {
-  display: flex;
-  gap: var(--pc-space-1);
-  flex-wrap: wrap;
-}
-.people-tab {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  padding: 6px 10px;
-  min-height: 0;
-  text-align: left;
-}
-.people-tab {
-  background: transparent;
-  border-color: transparent;
-}
-.people-tab[aria-selected="true"] {
-  background: var(--pc-raised);
-  border-color: var(--pc-border);
-}
-.people-tab-label {
-  font-weight: 600;
-}
 .people-stretch {
   align-self: stretch;
 }
@@ -640,4 +614,164 @@
 
 .people-suggest-item[aria-selected="true"] {
   background: var(--pc-selection-bg);
+}
+
+/* Comandi di vista sopra i volti (a destra) e barra delle azioni sui volti selezionati. */
+.people-view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+  margin-left: auto;
+  flex: none;
+}
+.people-face-actions {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--pc-border);
+}
+/* Volto di qualità bassa: icona con la spiegazione (niente punteggi sotto i volti). */
+.people-face-tile {
+  position: relative;
+}
+.people-face-flag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--pc-radius-sm);
+  background: var(--pc-panel);
+  color: var(--pc-warn);
+}
+
+/* Scheda del gruppo: domanda "È {nome}?" in cima (face-recognition). */
+.people-card-title {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+.people-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  padding: var(--pc-space-3);
+  border: 1px solid var(--pc-accent);
+  border-radius: var(--pc-radius-md);
+  background: var(--pc-panel);
+}
+.people-question-covers {
+  display: flex;
+  gap: var(--pc-space-2);
+}
+.people-question-title {
+  margin: 0;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+}
+.people-question-actions {
+  display: flex;
+  gap: var(--pc-space-2);
+}
+/* Elenco: ricerca e "Ordina e filtra" su una riga; barra delle azioni in blocco in fondo. */
+.people-list-head {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.people-list-search {
+  flex: 1;
+  min-width: 0;
+}
+.people-filter-btn[data-active] {
+  color: var(--pc-accent-text);
+}
+.people-bulk-bar {
+  padding: var(--pc-space-2);
+  border-top: 1px solid var(--pc-border);
+}
+/* Schede "Da rivedere / Persone / Ignorati" nell'intestazione: etichetta e conteggio su una riga. */
+.people-tabs {
+  display: flex;
+  gap: var(--pc-space-1);
+}
+.people-tab {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--pc-space-2);
+  background: transparent;
+  border-color: transparent;
+}
+.people-tab[aria-selected="true"] {
+  background: var(--pc-raised);
+  border-color: var(--pc-border);
+}
+.people-tab-label {
+  font-weight: 600;
+}
+
+/* Casella della riga: al passaggio del mouse, sempre visibile quando c'è una selezione. */
+.people-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--pc-border-strong);
+  border-radius: 4px;
+  background: var(--pc-bg);
+  color: var(--pc-on-accent);
+  cursor: pointer;
+  opacity: 0;
+}
+.people-list-item:hover .people-check,
+.people-virt[data-selecting] .people-check,
+.people-check[data-checked] {
+  opacity: 1;
+}
+.people-check[data-checked] {
+  background: var(--pc-accent);
+  border-color: var(--pc-accent);
+}
+
+/* Scheda della persona: copertina, nome e riepilogo, menu ⋯; i nomi lunghi vanno a capo. */
+.people-person-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pc-space-3);
+}
+.people-person-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.people-person-title .people-card-title {
+  overflow-wrap: anywhere;
+}
+.people-saved {
+  margin-left: auto;
+}
+.people-scale {
+  display: flex;
+  justify-content: space-between;
+}
+.people-card-pane {
+  overflow-x: hidden;
+}
+
+/* Colonna dei volti di una persona: schede "Volti nella libreria" e "Volti di riferimento". */
+.people-faces-pane > .ui-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.people-faces-pane > .ui-tabs > .ui-tab-list {
+  padding: 0 var(--pc-space-3);
+}
+.people-faces-pane > .ui-tabs > .ui-tab-panel[data-state="active"] {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 0;
 }

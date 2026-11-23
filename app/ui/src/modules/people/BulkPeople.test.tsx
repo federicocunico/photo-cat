@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -132,13 +133,20 @@ afterEach(() => {
   useCommandStore.setState({ commands: [] });
 });
 
-const pickFilter = (value: string) =>
-  fireEvent.change(screen.getByRole("combobox", { name: "Mostra solo con poche foto" }), {
-    target: { value },
-  });
+/** Filtro per numero di foto: nel menu "Ordina e filtra" dell'elenco (ui-usability-audit 6.4). */
+async function pickFilter(label: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Ordina e filtra" }));
+  await user.click(await screen.findByRole("menuitemcheckbox", { name: label }));
+}
+
+/** Barra delle azioni in blocco, in fondo all'elenco: compare con due o più elementi. */
+const BULK = { name: "Selezione e azioni in blocco" };
+const findBulkBar = () => screen.findByRole("toolbar", BULK);
+const bulkCount = async (text: string) => within(await findBulkBar()).findByText(text);
 
 async function openMergeDialog() {
-  fireEvent.click(await screen.findByRole("button", { name: "Unisci in…" }));
+  fireEvent.click(within(await findBulkBar()).getByRole("button", { name: "Unisci a…" }));
   return screen.findByRole("dialog");
 }
 
@@ -148,18 +156,27 @@ async function chooseDestination(dialog: HTMLElement, search: string, option: st
   fireEvent.click(await within(dialog).findByRole("option", { name: new RegExp(option) }));
 }
 
+/** Due persone selezionate con Ctrl+clic. */
+async function selectTwo(a: string, b: string) {
+  fireEvent.click(await screen.findByText(a));
+  fireEvent.click(screen.getByText(b), { ctrlKey: true });
+  await bulkCount("2 persone selezionate");
+}
+
 vi.setConfig({ testTimeout: 20000 });
 
-describe("Persone: unione di più identità", () => {
-  it("molte identità piccole: filtro, Seleziona tutto, conferma con i conteggi e unione", async () => {
+describe("Persone: unione di più persone", () => {
+  it("molte persone piccole: filtro, Ctrl+A, conferma con i conteggi e unione", async () => {
     renderModule();
     await screen.findByText("Sconosciuto 0");
-    pickFilter("2");
+    await pickFilter("Fino a 2 foto");
     await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalledWith(null, 2));
     await waitFor(() => expect(screen.queryByText("Sconosciuti")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Ordina e filtra" })).toHaveAttribute("data-active");
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleziona tutto" }));
-    await screen.findByText("340 selezionati");
+    screen.getByRole("listbox", { name: "Persone" }).focus();
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    await bulkCount("340 persone selezionate");
     expect(commandsMock.identitySelectionUids).toHaveBeenCalledWith(null, 2);
 
     const dialog = await openMergeDialog();
@@ -167,10 +184,10 @@ describe("Persone: unione di più identità", () => {
     await waitFor(() =>
       expect(commandsMock.mergeIdentitiesPreview).toHaveBeenCalledWith(SMALL_UIDS, "dest"),
     );
-    expect(await within(dialog).findByText("Unire 340 identità in «Sconosciuti»?")).toBeVisible();
+    expect(await within(dialog).findByText("Unire 340 persone a «Sconosciuti»?")).toBeVisible();
     expect(
       within(dialog).getByText(
-        /^512 foto in questa libreria e 40 volti di riferimento passeranno a «Sconosciuti»\. Le identità selezionate verranno eliminate: i loro nomi resteranno come alias di «Sconosciuti».*L'operazione non si può annullare\.$/,
+        /^512 foto in questa libreria e 40 volti di riferimento passeranno a «Sconosciuti»\. Le persone selezionate verranno eliminate: i loro nomi resteranno come altri nomi di «Sconosciuti».*L'operazione non si può annullare\.$/,
       ),
     ).toBeVisible();
     // Chi sparisce, non solo quante.
@@ -180,22 +197,21 @@ describe("Persone: unione di più identità", () => {
       ),
     ).toBeVisible();
     expect(within(dialog).queryByText(/non hanno foto in questa libreria/)).not.toBeInTheDocument();
-    // Senza il pulsante esplicito non succede nulla.
+    // L'unione di persone non si annulla: senza il pulsante esplicito non succede nulla.
     expect(commandsMock.mergeIdentitiesMany).not.toHaveBeenCalled();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Unisci in «Sconosciuti»" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unisci a «Sconosciuti»" }));
     await waitFor(() =>
       expect(commandsMock.mergeIdentitiesMany).toHaveBeenCalledWith(SMALL_UIDS, "dest"),
     );
-    expect(await screen.findByText("340 identità unite in «Sconosciuti»")).toBeInTheDocument();
+    expect(await screen.findByText("340 persone unite a «Sconosciuti»")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.queryByText("340 selezionati")).not.toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument();
   });
 
   it("senza conferma non unisce nulla: Indietro e Annulla non chiamano mergeIdentitiesMany", async () => {
     renderModule();
-    await screen.findByText("Sconosciuto 0");
-    fireEvent.click(screen.getByText("Sconosciuto 1"));
+    await selectTwo("Sconosciuto 1", "Sconosciuto 2");
     const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Sconos", "^Sconosciuti");
     fireEvent.click(await within(dialog).findByRole("button", { name: "Indietro" }));
@@ -222,13 +238,13 @@ describe("Persone: unione di più identità", () => {
     fireEvent.click(await screen.findByText("G. Bianchi"));
     fireEvent.click(screen.getByText("Giulia B."), { ctrlKey: true });
     fireEvent.click(screen.getByText("Giulia Bianchi"), { ctrlKey: true });
-    await screen.findByText("3 selezionati");
+    await bulkCount("3 persone selezionate");
 
     const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Giulia Bianchi", "Giulia Bianchi");
-    await within(dialog).findByText("Unire 2 identità in «Giulia Bianchi»?");
+    await within(dialog).findByText("Unire 2 persone a «Giulia Bianchi»?");
     expect(commandsMock.mergeIdentitiesPreview).toHaveBeenCalledWith(["a", "b", "c"], "c");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Unisci in «Giulia Bianchi»" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unisci a «Giulia Bianchi»" }));
     await waitFor(() =>
       expect(commandsMock.mergeIdentitiesMany).toHaveBeenCalledWith(["a", "b", "c"], "c"),
     );
@@ -238,38 +254,38 @@ describe("Persone: unione di più identità", () => {
     renderModule();
     fireEvent.click(await screen.findByText("Sconosciuto 1"));
     fireEvent.click(screen.getByText("Sconosciuto 4"), { shiftKey: true });
-    await screen.findByText("4 selezionati");
+    await bulkCount("4 persone selezionate");
 
-    screen.getByRole("listbox", { name: "Identità" }).focus();
+    screen.getByRole("listbox", { name: "Persone" }).focus();
 
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("340 selezionati");
+    await bulkCount("340 persone selezionate");
     expect(commandsMock.identitySelectionUids).toHaveBeenCalledWith(null, null);
 
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText("340 selezionati")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument());
   });
 
-  it("un clic semplice apre ancora la scheda dell'identità", async () => {
+  it("un clic semplice apre la scheda della persona, senza barra in blocco", async () => {
     commandsMock.listIdentities.mockResolvedValue(view([identity("x", "Marco Rossi")]));
     renderModule();
     fireEvent.click(await screen.findByText("Marco Rossi"));
     expect((await screen.findAllByDisplayValue("Marco Rossi")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument();
   });
 
   it("un errore dell'unione resta visibile con il motivo e non annuncia successo", async () => {
     commandsMock.mergeIdentitiesMany.mockRejectedValue({ detail: "Archivio bloccato" });
     renderModule();
-    await screen.findByText("Sconosciuto 0");
-    fireEvent.click(screen.getByText("Sconosciuto 1"));
+    await selectTwo("Sconosciuto 1", "Sconosciuto 2");
     const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Sconos", "^Sconosciuti");
-    fireEvent.click(await within(dialog).findByRole("button", { name: "Unisci in «Sconosciuti»" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Unisci a «Sconosciuti»" }));
     expect(await within(dialog).findByText("Archivio bloccato")).toBeVisible();
-    expect(screen.queryByText(/identità unit/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/persone unit/)).not.toBeInTheDocument();
   });
 
-  it("avvisa se tra le identità unite ce ne sono senza foto in questa libreria", async () => {
+  it("avvisa se tra le persone unite ce ne sono senza foto in questa libreria", async () => {
     commandsMock.mergeIdentitiesPreview.mockResolvedValue({
       identities: 3,
       photos: 2,
@@ -284,7 +300,7 @@ describe("Persone: unione di più identità", () => {
     await chooseDestination(dialog, "Sconos", "^Sconosciuti");
     expect(
       await within(dialog).findByText(
-        /^2 di queste identità non hanno foto in questa libreria: se usi altre librerie/,
+        /^2 di queste persone non hanno foto in questa libreria: se usi altre librerie/,
       ),
     ).toBeVisible();
     expect(
@@ -296,33 +312,35 @@ describe("Persone: unione di più identità", () => {
     renderModule();
     fireEvent.click(await screen.findByText("Sconosciuto 1"));
     fireEvent.click(screen.getByText("Sconosciuto 3"), { shiftKey: true });
-    await screen.findByText("3 selezionati");
-    pickFilter("2");
-    await waitFor(() => expect(screen.queryByText("3 selezionati")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Unisci in…" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    await bulkCount("3 persone selezionate");
+    await pickFilter("Fino a 2 foto");
+    await waitFor(() => expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument());
   });
 
-  it("l'elenco è virtualizzato: con 3000 identità ne disegna poche ma Ctrl+A le seleziona tutte", async () => {
+  it("l'elenco è virtualizzato: con 3000 persone ne disegna poche ma Ctrl+A le seleziona tutte", async () => {
     const MANY = Array.from({ length: 3000 }, (_, i) => identity(`m${i}`, `Persona ${i}`));
     commandsMock.listIdentities.mockResolvedValue(view(MANY));
     commandsMock.identitySelectionUids.mockResolvedValue(MANY.map((i) => i.uid));
     renderModule();
     await screen.findByText("Persona 0");
-    const list = screen.getByRole("listbox", { name: "Identità" });
+    const list = screen.getByRole("listbox", { name: "Persone" });
     expect(within(list).getAllByRole("option").length).toBeLessThan(100);
     expect(screen.queryByText("Persona 2999")).not.toBeInTheDocument();
     list.focus();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    expect(await screen.findByText("3000 selezionati")).toBeInTheDocument();
+    expect(await bulkCount("3000 persone selezionate")).toBeInTheDocument();
   });
 });
 
-describe("Da rivedere: assegnazione in blocco", () => {
+describe("Da rivedere: azioni in blocco sui gruppi", () => {
   const IDS = Array.from({ length: 420 }, (_, i) => i + 1);
-  const PIERO = group(9, { name: "Nonno Piero", section: "people", photos: 120, faces: 130 });
+  // Un id fuori dai gruppi selezionati: il gruppo aperto e i selezionati non sono destinazioni.
+  const PIERO = group(20_000, {
+    name: "Nonno Piero",
+    section: "people",
+    photos: 120,
+    faces: 130,
+  });
 
   beforeEach(() => {
     useLayout.setState({ peopleSection: "review" });
@@ -338,9 +356,16 @@ describe("Da rivedere: assegnazione in blocco", () => {
       goodCount: 1,
       discardedCount: 0,
     } as never);
+    commandsMock.assignGroups.mockResolvedValue({
+      person: 20_000,
+      created: false,
+      groups: 420,
+      faces: 435,
+      skippedFaces: 0,
+    });
   });
 
-  /** Le righe dei gruppi (non le voci del filtro per numero di foto, anch'esse "option"). */
+  /** Le righe dei gruppi nell'elenco. */
   const groupRows = async () =>
     within(await screen.findByRole("listbox", { name: "Elenco persone e gruppi" })).findAllByRole(
       "option",
@@ -349,7 +374,7 @@ describe("Da rivedere: assegnazione in blocco", () => {
 
   async function selectAllOnes() {
     await groupRows();
-    pickFilter("1");
+    await pickFilter("1 foto");
     await waitFor(() =>
       expect(commandsMock.listGroups).toHaveBeenCalledWith(
         "review",
@@ -363,49 +388,37 @@ describe("Da rivedere: assegnazione in blocco", () => {
     const first = (await groupRows())[0]!;
     first.focus();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("420 selezionati");
+    await bulkCount("420 gruppi selezionati");
     expect(commandsMock.groupSelectionIds).toHaveBeenCalledWith("review", null, 1);
   }
 
-  it("filtro 1 foto, Ctrl+A, Assegna a una persona esistente con avviso e Annulla", async () => {
+  it("filtro 1 foto, Ctrl+A, «Unisci a…» una persona: subito, con avviso e Annulla operazione", async () => {
     renderModule();
     await selectAllOnes();
-    commandsMock.assignGroups.mockResolvedValue({
-      person: 9,
-      created: false,
-      groups: 420,
-      faces: 435,
-      skippedFaces: 0,
-    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Nonno", "Nonno Piero");
-    expect(await within(dialog).findByText("Assegnare 420 gruppi a «Nonno Piero»?")).toBeVisible();
-    expect(commandsMock.assignGroups).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Assegna a «Nonno Piero»" }));
-
     await waitFor(() =>
-      expect(commandsMock.assignGroups).toHaveBeenCalledWith(IDS, { kind: "person", person: 9 }),
+      expect(commandsMock.assignGroups).toHaveBeenCalledWith(IDS, {
+        kind: "person",
+        person: 20_000,
+      }),
     );
-    const notice = await screen.findByText("420 gruppi assegnati a «Nonno Piero» (435 volti)");
-    expect(notice).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText("420 selezionati")).not.toBeInTheDocument());
+    const notice = (await screen.findByText("420 gruppi uniti a Nonno Piero")).closest(
+      '[role="status"]',
+    ) as HTMLElement;
+    await waitFor(() => expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: /^Annulla/ }));
+    fireEvent.click(within(notice).getByRole("button", { name: /^Annulla operazione$/ }));
     await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));
   });
 
-  it("nuova persona: saveIdentity e poi assignGroups verso l'identità", async () => {
+  it("nuova persona: saveIdentity e poi assignGroups verso la persona creata", async () => {
     commandsMock.saveIdentity.mockResolvedValue("nuova-uid");
     renderModule();
     await selectAllOnes();
-    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Vicino di casa", "Nuova persona «Vicino di casa»");
-    fireEvent.click(
-      await within(dialog).findByRole("button", { name: "Assegna a «Vicino di casa»" }),
-    );
     await waitFor(() =>
       expect(commandsMock.assignGroups).toHaveBeenCalledWith(IDS, {
         kind: "identity",
@@ -421,9 +434,9 @@ describe("Da rivedere: assegnazione in blocco", () => {
     );
   });
 
-  it("spiega i volti non assegnati perché rifiutati", async () => {
+  it("spiega i volti non spostati perché rifiutati", async () => {
     commandsMock.assignGroups.mockResolvedValue({
-      person: 9,
+      person: 20_000,
       created: false,
       groups: 418,
       faces: 430,
@@ -431,10 +444,8 @@ describe("Da rivedere: assegnazione in blocco", () => {
     });
     renderModule();
     await selectAllOnes();
-    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Nonno", "Nonno Piero");
-    fireEvent.click(await within(dialog).findByRole("button", { name: "Assegna a «Nonno Piero»" }));
     expect(
       await screen.findByText(
         /3 volti erano stati indicati come non di questa persona e restano da rivedere\./,
@@ -442,17 +453,13 @@ describe("Da rivedere: assegnazione in blocco", () => {
     ).toBeInTheDocument();
   });
 
-  it("nuova persona: se l'assegnazione fallisce l'identità appena creata viene eliminata", async () => {
+  it("nuova persona: se l'unione fallisce la persona appena creata viene eliminata", async () => {
     commandsMock.saveIdentity.mockResolvedValue("nuova-uid");
     commandsMock.assignGroups.mockRejectedValue({ detail: "Libreria bloccata" });
     renderModule();
     await selectAllOnes();
-    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Vicino di casa", "Nuova persona «Vicino di casa»");
-    fireEvent.click(
-      await within(dialog).findByRole("button", { name: "Assegna a «Vicino di casa»" }),
-    );
     expect(await within(dialog).findByText("Libreria bloccata")).toBeVisible();
     await waitFor(() => expect(commandsMock.deleteIdentity).toHaveBeenCalledWith("nuova-uid"));
   });
@@ -460,27 +467,21 @@ describe("Da rivedere: assegnazione in blocco", () => {
   it("cambiare il filtro azzera la selezione dei gruppi", async () => {
     renderModule();
     await selectAllOnes();
-    pickFilter("2");
-    await waitFor(() => expect(screen.queryByText("420 selezionati")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Assegna a…" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    await pickFilter("Fino a 2 foto");
+    await waitFor(() => expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument());
   });
 
-  it("oltre 10.000 gruppi spiega il limite prima della conferma", async () => {
+  it("oltre 10.000 gruppi spiega il limite e non unisce nulla", async () => {
     const HUGE = Array.from({ length: 10_001 }, (_, i) => i + 1);
     commandsMock.groupSelectionIds.mockResolvedValue(HUGE);
     renderModule();
     const first = (await groupRows())[0]!;
     first.focus();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("10001 selezionati");
-    fireEvent.click(screen.getByRole("button", { name: "Assegna a…" }));
-    const dialog = await screen.findByRole("dialog");
+    await bulkCount("10001 gruppi selezionati");
+    const dialog = await openMergeDialog();
     await chooseDestination(dialog, "Nonno", "Nonno Piero");
     expect(await within(dialog).findByText(/al massimo 10\.000 gruppi alla volta/)).toBeVisible();
-    expect(within(dialog).queryByRole("button", { name: /^Assegna a «/ })).not.toBeInTheDocument();
     expect(commandsMock.assignGroups).not.toHaveBeenCalled();
   });
 
@@ -503,16 +504,31 @@ describe("Da rivedere: assegnazione in blocco", () => {
     await waitFor(() => expect(commandsMock.groupSelectionIds).toHaveBeenCalled());
   });
 
-  it("senza selezione Assegna a… spiega perché non è disponibile", async () => {
+  it("la barra in blocco compare da due gruppi; «Ignora» li ignora tutti e si annulla", async () => {
+    commandsMock.correctPerson.mockResolvedValue(null);
+    commandsMock.undoPeople.mockResolvedValue(null);
     renderModule();
-    await screen.findAllByRole("option", { name: /1 foto/ });
-    const button = screen.getByRole("button", { name: "Assegna a…" });
-    expect(button).toHaveAttribute("aria-disabled", "true");
+    const rows = await groupRows();
+    fireEvent.click(rows[0]!);
+    expect(screen.queryByRole("toolbar", BULK)).not.toBeInTheDocument();
+    fireEvent.click(rows[1]!, { ctrlKey: true });
+    const bar = await findBulkBar();
+    expect(within(bar).getByText("2 gruppi selezionati")).toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: "Ignora" }));
+    await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalledTimes(2));
+    expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "ignore", group: 1 });
+    expect(commandsMock.correctPerson).toHaveBeenCalledWith({ action: "ignore", group: 2 });
+    const notice = (await screen.findByText("2 gruppi ignorati")).closest(
+      '[role="status"]',
+    ) as HTMLElement;
+    fireEvent.click(within(notice).getByRole("button", { name: /^Annulla operazione$/ }));
+    await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(2));
   });
 });
 
-describe("Singoli: assegnazione in blocco", () => {
-  it("Ctrl+A sui volti e Assegna a… usa correctPerson", async () => {
+describe("Singoli: spostamento in blocco", () => {
+  it("Ctrl+A sui volti e «Sposta in…» usa correctPerson", async () => {
     useLayout.setState({ peopleSection: "review" });
     commandsMock.peopleSections.mockResolvedValue({
       review: 1,
@@ -543,17 +559,14 @@ describe("Singoli: assegnazione in blocco", () => {
     // Un clic su un volto sposta il focus nella griglia: Ctrl+A seleziona tutti i volti.
     fireEvent.click(screen.getByTestId("face-1"));
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findAllByText("230 selezionati");
+    const faces = { name: "Azioni sui volti" };
+    await within(await screen.findByRole("toolbar", faces)).findByText("230 selezionati");
 
     fireEvent.click(
-      within(screen.getByRole("toolbar", { name: "Azioni sui volti" })).getByRole("button", {
-        name: "Assegna a…",
-      }),
+      within(screen.getByRole("toolbar", faces)).getByRole("button", { name: "Sposta in…" }),
     );
     const dialog = await screen.findByRole("dialog");
     await chooseDestination(dialog, "Sconos", "^Sconosciuti");
-    expect(await within(dialog).findByText("Assegnare 230 volti a «Sconosciuti»?")).toBeVisible();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Assegna a «Sconosciuti»" }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "assign_identity",
@@ -561,6 +574,6 @@ describe("Singoli: assegnazione in blocco", () => {
         faces: ALL,
       }),
     );
-    expect(await screen.findByText("230 volti assegnati a «Sconosciuti»")).toBeInTheDocument();
+    expect(await screen.findByText("230 volti spostati in «Sconosciuti»")).toBeInTheDocument();
   });
 });

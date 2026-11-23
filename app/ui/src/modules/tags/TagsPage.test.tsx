@@ -147,7 +147,7 @@ it("proposes a merge next to the name when the new name exists, and merges only 
 it("merges into another tag without a dialog, with undo", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: /^Sunset/ }));
-  fireEvent.click(screen.getByText("Unisci in un altro tag…"));
+  fireEvent.click(screen.getByText("Unisci a un altro tag…"));
   fireEvent.change(screen.getByLabelText("Tag di destinazione"), {
     target: { value: "Tramonti" },
   });

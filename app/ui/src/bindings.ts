@@ -224,7 +224,7 @@ export const commands = {
 	 */
 	linkPersonIdentity: (person: number, uid: string | null) => __TAURI_INVOKE<number>("link_person_identity", { person, uid }),
 	suggestIdentities: (person: number, query: string) => __TAURI_INVOKE<IdentitySuggestion[]>("suggest_identities", { person, query }),
-	exportIdentities: (destination: string, includeFaces: boolean) => __TAURI_INVOKE<null>("export_identities", { destination, includeFaces }),
+	exportIdentities: (destination: string, includeFaces: boolean, only: string[] | null) => __TAURI_INVOKE<null>("export_identities", { destination, includeFaces, only }),
 	previewIdentityImport: (path: string) => __TAURI_INVOKE<ImportPreview>("preview_identity_import", { path }),
 	/**
 	 *  Importa le identità; quelle con nome già presente vengono unite solo se

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -95,23 +95,25 @@ beforeEach(() => {
   ) => ALL.filter((i) => !except.includes(i))) as never);
   commandsMock.correctPerson.mockResolvedValue(null);
 });
+/** Il numero dei selezionati, nella barra delle azioni sui volti. */
+const count = async (text: string) =>
+  within(await screen.findByRole("toolbar", { name: "Azioni sui volti" })).findByText(text);
+
 afterEach(() => {
   cleanup();
   useCommandStore.setState({ commands: [] });
 });
 
 describe("FaceGrid Seleziona tutto", () => {
-  it("Ctrl+A seleziona i 400 volti e Riassegna invia gli id risolti dal backend", async () => {
+  it("Ctrl+A seleziona i 400 volti e Sposta in… invia gli id risolti dal backend", async () => {
     renderGrid();
     await screen.findByTestId("face-1");
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("400 selezionati");
+    await count("400 selezionati");
     expect(commandsMock.faceSelection).toHaveBeenCalledWith({ kind: "group", group: 1 });
 
-    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
-    await waitFor(() => expect(move.options.length).toBe(2));
-    fireEvent.change(move, { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Sposta in…" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^Marco/ }));
     await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalled());
     expect(commandsMock.faceSelectionIds).toHaveBeenCalledWith(
       { kind: "group", group: 1 },
@@ -131,7 +133,7 @@ describe("FaceGrid Seleziona tutto", () => {
     renderGrid();
     await screen.findByTestId("face-1");
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("400 selezionati");
+    await count("400 selezionati");
     fireEvent.click(screen.getByRole("button", { name: /Non è questa persona/i }));
     await waitFor(() => expect(commandsMock.correctPerson).toHaveBeenCalled());
     expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
@@ -146,13 +148,19 @@ describe("FaceGrid Seleziona tutto", () => {
     renderGrid();
     await screen.findByTestId("face-1");
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("400 selezionati");
+    await count("400 selezionati");
     fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
-    await screen.findByText("399 selezionati");
+    await count("399 selezionati");
     expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: "Inverti selezione" }));
-    await screen.findByText("1 selezionato");
+    act(() => {
+      fireEvent.keyDown(screen.getByTestId("face-grid-scroll"), {
+        key: "I",
+        ctrlKey: true,
+        shiftKey: true,
+      });
+    });
+    await count("1 selezionato");
     expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("face-1").getAttribute("aria-selected")).toBe("false");
   });
@@ -166,9 +174,9 @@ describe("FaceGrid Seleziona tutto", () => {
     renderGrid();
     await screen.findByTestId("face-1");
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("400 selezionati");
+    await count("400 selezionati");
     fireEvent.click(screen.getByTestId("face-5"), { ctrlKey: true });
-    await screen.findByText("399 selezionati");
+    await count("399 selezionati");
     fireEvent.contextMenu(screen.getByTestId("face-2"));
     fireEvent.click(await screen.findByRole("menuitem", { name: /Mostra nella cartella/ }));
     await waitFor(() => expect(commandsMock.openWith).toHaveBeenCalled());
@@ -185,9 +193,11 @@ describe("FaceGrid Seleziona tutto", () => {
     renderGrid();
     await screen.findByTestId("face-1");
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    await screen.findByText("400 selezionati");
+    await count("400 selezionati");
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText("400 selezionati")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("toolbar", { name: "Azioni sui volti" })).toBeNull(),
+    );
     expect(screen.getByTestId("face-1").getAttribute("aria-selected")).toBe("false");
   });
 });

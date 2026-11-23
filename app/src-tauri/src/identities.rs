@@ -627,10 +627,15 @@ pub async fn export_identities(
     state: State<'_, AppState>,
     destination: String,
     include_faces: bool,
+    only: Option<Vec<String>>,
 ) -> AppResult<()> {
     let app = state.app_store.clone();
     blocking(move || {
-        let file = app.with(|c| transfer::export(c, include_faces))?;
+        let mut file = app.with(|c| transfer::export(c, include_faces))?;
+        // "Esporta" dal menu di una persona: solo quella (identity-registry).
+        if let Some(only) = &only {
+            file.identities.retain(|i| only.contains(&i.uid));
+        }
         let dest = Path::new(&destination);
         let parent = dest
             .parent()

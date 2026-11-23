@@ -1,10 +1,14 @@
-import { useId, useMemo, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 
 export type PickerOption = {
   value: string;
   label: string;
   /** Testo secondario a destra (es. numero di foto). */
   hint?: string;
+  /** Immagine a sinistra (es. il volto di copertina). */
+  icon?: ReactNode;
+  /** Intestazione del gruppo di opzioni (es. "Persone", "Gruppi senza nome"). */
+  group?: string;
 };
 
 /**
@@ -87,7 +91,14 @@ export function SearchPicker({
         onKeyDown={onKeyDown}
       />
       <ul id={`${id}-list`} role="listbox" aria-label={label} className="ui-picker-list">
-        {items.map((item, i) => (
+        {items.map((item, i) => [
+          "group" in item &&
+          item.group &&
+          (i === 0 || (items[i - 1] as PickerOption | undefined)?.group !== item.group) ? (
+            <li key={`group-${item.group}`} role="presentation" className="ui-picker-group">
+              {item.group}
+            </li>
+          ) : null,
           <li
             key={`${item.created}-${item.value}`}
             id={`${id}-${i}`}
@@ -99,10 +110,11 @@ export function SearchPicker({
             onMouseEnter={() => setActive(i)}
             onClick={() => pick(i)}
           >
-            <span>{item.label}</span>
+            {"icon" in item && item.icon}
+            <span className="ui-picker-label">{item.label}</span>
             {"hint" in item && item.hint && <span className="muted">{item.hint}</span>}
-          </li>
-        ))}
+          </li>,
+        ])}
       </ul>
       {items.length === 0 && emptyLabel && <p className="muted ui-picker-empty">{emptyLabel}</p>}
     </div>

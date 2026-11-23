@@ -436,7 +436,7 @@ export const it = {
       tokenizer: "Testo delle etichette",
       person_detection: "Rilevamento e conteggio persone",
       face_detection: "Rilevamento volti",
-      face_embedding: "Identità dei volti",
+      face_embedding: "Riconoscimento dei volti",
       gazetteer: "Luoghi da coordinate GPS",
     },
   },

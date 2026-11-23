@@ -7,6 +7,7 @@ export { PageHeader, Card, InlineAlert, EmptyState, Badge, Kbd, type Tone } from
 export { FormField } from "./FormField";
 export { SegmentedControl, Tabs, Disclosure, type Option } from "./controls";
 export { Menu, ContextMenu, Popover, type MenuItem } from "./Menu";
+export { ActionBar, type BarAction } from "./ActionBar";
 export { Dialog, ConfirmDialog } from "./Dialog";
 export { FolderPicker, chooseFolder } from "./FolderPicker";
 export { DataTable, type Column } from "./DataTable";

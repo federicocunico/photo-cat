@@ -72,7 +72,7 @@ export const selection = {
         "Tutti i volti di {{count}} foto vengono assegnati a {{name}}. Non si può annullare da qui: eventuali errori si correggono nel modulo Persone.",
       assignBody_other:
         "Tutti i volti di {{count}} foto vengono assegnati a {{name}}. Non si può annullare da qui: eventuali errori si correggono nel modulo Persone.",
-      assignConfirm: "Assegna a {{name}}",
+      assignConfirm: "Assegna le foto a {{name}}",
       rateMenu: "Valutazione",
       colorMenu: "Colore",
       setDateMenu: "Imposta data di scatto…",

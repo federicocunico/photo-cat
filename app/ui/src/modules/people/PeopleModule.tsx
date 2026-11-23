@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -10,16 +10,19 @@ import {
   type LocateFaceRequest,
   type PeopleSection,
 } from "../../lib/ipc";
-import { listAllGroups } from "./allGroups";
 import { useLayout, type PeopleTarget } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { FaceGrid, type FaceGridHandle, type FaceHighlight } from "./FaceGrid";
 import { GroupList, type GroupListHandle, type GroupListTarget } from "./GroupList";
 import { MergeDialog } from "./MergeDialog";
 import { PersonCard, type PersonCardHandle } from "./PersonCard";
+import { PeopleTabs } from "./PeopleTabs";
+import { peopleTabId } from "./peopleTabId";
+import { ReferenceFaces } from "./ReferenceFaces";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { usePeopleHotkeys } from "./usePeopleHotkeys";
-import { Button } from "../../components/ui";
+import { Button, Tabs } from "../../components/ui";
+import { Icon } from "../../components/icons";
 import { notify, notifyError } from "../../store/toasts";
 import { runUndo, useUndo } from "../../store/undo";
 import { notifyPeopleUndo, refreshPeopleFast } from "./peopleUndo";
@@ -75,7 +78,8 @@ export function PeopleModule() {
   const [group, setGroup] = useState<GroupRow | null>(null);
   const [identity, setIdentity] = useState<IdentityRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [selectedFaceIds, setSelectedFaceIds] = useState<number[]>([]);
+  // Volti selezionati nella griglia (la scheda non li usa più: le azioni sono nella barra dei volti).
+  const [, setSelectedFaceIds] = useState<number[]>([]);
   const [arrival, setArrival] = useState<Arrival | null>(null);
   const [catalog, setCatalog] = useState<GroupRow[]>([]);
   const [multiMerge, setMultiMerge] = useState<GroupRow[] | null>(null);
@@ -93,27 +97,6 @@ export function PeopleModule() {
   groupRef.current = group;
   const sectionRef = useRef(section);
   sectionRef.current = section;
-
-  const mergeCandidates = useQuery({
-    queryKey: ["people-groups", "review", "", "photos_desc", "merge-candidates"],
-    queryFn: () => listAllGroups("review", "photos_desc"),
-    enabled: isTauri() && section !== "people",
-  });
-  const peopleCandidates = useQuery({
-    queryKey: ["people-groups", "people", "", "photos_desc", "merge-candidates"],
-    queryFn: () => listAllGroups("people", "photos_desc"),
-    enabled: isTauri() && section !== "people",
-  });
-  const candidates = (() => {
-    const seen = new Set<number>();
-    const out: GroupRow[] = [];
-    for (const g of [...(mergeCandidates.data ?? []), ...(peopleCandidates.data ?? [])]) {
-      if (seen.has(g.id)) continue;
-      seen.add(g.id);
-      out.push(g);
-    }
-    return out;
-  })();
 
   const clearSelection = () => {
     setTarget(null);
@@ -210,6 +193,21 @@ export function PeopleModule() {
     };
   }, [qc]);
 
+  // Scheda dei volti di una persona: quelli della libreria o quelli di riferimento.
+  const [personTab, setPersonTab] = useState<"library" | "references">("library");
+  const personUid =
+    identity?.uid ?? (target?.kind === "identity" ? target.uid : (group?.identityUid ?? null));
+
+  /** "Nuova persona": l'editor vuoto nella scheda (sezione Persone). */
+  const createPerson = () => {
+    setCreating(true);
+    setIdentity(null);
+    setGroup(null);
+    setTarget(null);
+    setSelectedIds([]);
+    setArrival(null);
+  };
+
   // Le frecce non sono più scorciatoie del modulo: agiscono sul riquadro attivo (elenco o volti)
   // con il modello di selezione comune, nell'ordine in cui l'elenco è mostrato.
   usePeopleHotkeys({
@@ -220,7 +218,7 @@ export function PeopleModule() {
       personCardRef.current?.focusWhoIs();
     },
     focusMove() {
-      faceGridRef.current?.focusMoveSelect();
+      faceGridRef.current?.openMoveTo();
     },
     notSame() {
       faceGridRef.current?.runNotSame();
@@ -234,9 +232,7 @@ export function PeopleModule() {
           return;
         }
       }
-      if (!personCardRef.current?.openMergeIfReady()) {
-        personCardRef.current?.focusMergeSelect();
-      }
+      personCardRef.current?.openMerge();
     },
     ignore() {
       if (personCardRef.current?.ignoreGroup()) return;
@@ -358,8 +354,32 @@ export function PeopleModule() {
   }, [peopleTarget, clearPeopleTarget, setPeopleSection]);
 
   return (
-    <ModulePage title={t("modules.people")} scroll={false}>
-      <section aria-label={t("people.title")} className="people-workspace">
+    <ModulePage
+      title={t("modules.people")}
+      scroll={false}
+      tabs={
+        <PeopleTabs
+          section={section}
+          onChange={(s) => {
+            setPeopleSection(s);
+            clearSelection();
+          }}
+        />
+      }
+      actions={
+        section === "people" && (
+          <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={createPerson}>
+            {t("identities.newButton")}
+          </Button>
+        )
+      }
+    >
+      <section
+        id="people-workspace"
+        role="tabpanel"
+        aria-labelledby={peopleTabId(section)}
+        className="people-workspace"
+      >
         {arrival && (
           <div role="status" data-testid="people-arrival" className="people-arrival">
             <span>{t("people.highlightedFrom", { name: arrival.mediaName })}</span>
@@ -379,22 +399,10 @@ export function PeopleModule() {
         <GroupList
           ref={groupListRef}
           section={section}
-          onSectionChange={(s) => {
-            setPeopleSection(s);
-            clearSelection();
-          }}
           target={target}
           selectedIds={selectedIds}
           onCatalogChange={onCatalogChange}
           onSelectedIdsChange={setSelectedIds}
-          onCreateIdentity={() => {
-            setCreating(true);
-            setIdentity(null);
-            setGroup(null);
-            setTarget(null);
-            setSelectedIds([]);
-            setArrival(null);
-          }}
           onSelect={({ target: next, selectedIds: ids, group: g, identity: id }) => {
             setTarget(next);
             setSelectedIds(ids);
@@ -407,7 +415,47 @@ export function PeopleModule() {
         />
 
         <section aria-label={t("people.facesLabel")} className="people-faces-pane">
-          {target?.kind === "identity" ? (
+          {section === "people" && personUid ? (
+            // Una persona: i suoi volti nella libreria e i volti di riferimento (identity-registry).
+            <Tabs
+              label={t("people.facesLabel")}
+              value={personTab}
+              onChange={setPersonTab}
+              tabs={[
+                {
+                  value: "library",
+                  label: t("people.libraryFacesTab", {
+                    count: group?.photos ?? identity?.photos ?? 0,
+                  }),
+                  content:
+                    target?.kind === "group" ? (
+                      <FaceGrid
+                        ref={faceGridRef}
+                        target={target}
+                        group={group}
+                        highlight={arrival?.highlight ?? null}
+                        onSelectedFacesChange={setSelectedFaceIds}
+                      />
+                    ) : (
+                      <div className="people-pad">
+                        <p className="muted people-muted-reset">{t("people.noPhotosInLibrary")}</p>
+                      </div>
+                    ),
+                },
+                {
+                  value: "references",
+                  label: t("people.refFacesTab", { count: identity?.faces ?? 0 }),
+                  content: (
+                    <ReferenceFaces
+                      uid={personUid}
+                      name={identity?.name ?? group?.name ?? ""}
+                      person={target?.kind === "group" ? target.id : null}
+                    />
+                  ),
+                },
+              ]}
+            />
+          ) : target?.kind === "identity" ? (
             <div className="people-pad">
               <p className="muted people-muted-reset">{t("people.noPhotosInLibrary")}</p>
             </div>
@@ -430,8 +478,6 @@ export function PeopleModule() {
             group={group}
             identity={identity}
             creating={creating}
-            selectedFaceIds={selectedFaceIds}
-            mergeCandidates={candidates}
             onLinked={advanceAfterLink}
             onIdentitySaved={(uid) => {
               setCreating(false);
