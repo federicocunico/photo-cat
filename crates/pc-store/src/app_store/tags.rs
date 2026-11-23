@@ -686,8 +686,7 @@ mod tests {
             "Viaggi",
             "Lavoro",
         ];
-        let colors: std::collections::HashSet<_> =
-            base.iter().map(|n| default_color(n)).collect();
+        let colors: std::collections::HashSet<_> = base.iter().map(|n| default_color(n)).collect();
         assert_eq!(colors.len(), base.len());
         assert!(colors.iter().all(|c| PALETTE.contains(c)));
         assert_eq!(default_color("PREFERITE"), "yellow");
