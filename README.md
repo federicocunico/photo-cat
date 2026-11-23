@@ -9,9 +9,11 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 
 **Primo avvio.** Tre passi, ognuno saltabile con "Lo faccio dopo": lingua e tema, la prima cartella di foto (scelta o trascinata; i file non vengono spostati né modificati), le funzioni AI con un riepilogo del computer in parole e il download dei modelli in background. Alla fine si apre la Libreria, dove le foto compaiono man mano che l'importazione procede, insieme alla lista **Primi passi** (importare una cartella, scaricare i modelli, dare un nome a una persona, creare un catalogo, usare un set di tag), che si spunta da sola anche se l'azione si fa da un'altra parte. Aiuto › "Rivedi l'introduzione" la ripropone senza cambiare nulla finché non si conferma un passo.
 
-**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag), **AI** e **Importa ed esporta** (Importa, Esporta, Varianti RAW), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
+**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag, Analisi AI) e **Importa ed esporta** (Importa, Esporta, Varianti RAW), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. Ogni modulo ha in alto la stessa intestazione (titolo, schede e comandi della pagina) e scorre solo il suo contenuto. La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento in linea, che non copre i comandi.
 
-**Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera):
+**Barra dei menu.** Accanto al nome dell'app ci sono i menu **File** (importare, esportare, aprire una cartella di RAW o un progetto FujiView, la cartella dei dati, Impostazioni, Esci), **Modifica** (annulla, selezione, tag del set attivo, valutazione, cataloghi, Cestino), **Vista** (navigazione compatta, pannelli, Inspector, miniature, foto simili, mappa, tema, schermo intero), **Vai** (i moduli e la ricerca dei comandi), **Strumenti** (rianalisi, duplicati, qualità, modelli AI, diagnostica) e **Aiuto** (guida, scorciatoie, primi passi, introduzione, suggerimenti, segnala un problema, copia le informazioni di sistema, Informazioni su photo-cat). Le voci hanno lo stesso nome e la stessa scorciatoia della ricerca dei comandi; una voce che ora non si può usare resta visibile, disattivata, e dice perché. Alt (premuto e rilasciato da solo) o F10 portano il focus sul primo menu: frecce per spostarsi, Invio per scegliere, Esc per tornare dove si era, la lettera sottolineata per aprire un menu. Su macOS gli stessi menu sono nella barra del sistema. **Informazioni su photo-cat** mostra versione, build (commit, data, configurazione), sistema, motore della finestra, acceleratore AI, autori, licenza e le licenze di tutti i componenti di terze parti, con una ricerca; "Copia informazioni" mette negli appunti i dati per una segnalazione, senza il percorso dei dati. Le stesse informazioni sono in Impostazioni › Informazioni.
+
+**Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera, e accanto alle voci dei menu):
 
 | Tasto | Azione |
 |---|---|
@@ -19,6 +21,9 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 | Ctrl+1…9 | apre i moduli nell'ordine della navigazione (Ctrl+9: Varianti RAW); Ctrl+, apre Impostazioni |
 | Ctrl+B | riduce o espande la navigazione |
 | Ctrl+Z | annulla l'ultima operazione annullabile |
+| Ctrl+O, Ctrl+E | importa una cartella, esporta |
+| Alt, F10 | porta il focus sulla barra dei menu |
+| F11 | schermo intero |
 | ? | foglio delle scorciatoie |
 | 1–9, 0 | in Libreria e Sequenza, aggiunge il tag del set attivo alle foto selezionate (0 toglie i tag del set) |
 | Maiusc+1…9, Invio, 1–5, 0, Spazio | in Varianti RAW, sceglie la variante migliore e dà le stelle (vedi la sezione dedicata) |
@@ -335,7 +340,7 @@ args = ["--library", ":memory:", "{file}"]
 
 ## Varianti RAW (Fujifilm X-T5)
 
-Il modulo **Varianti RAW (Fujifilm X-T5)** sta nel gruppo "Importa ed esporta" (Ctrl+9; anche dalla ricerca dei comandi, Ctrl+K). Dopo uno shooting con la X-T5:
+Il modulo **Varianti RAW** (per la Fujifilm X-T5, come dice il sottotitolo della pagina) sta nel gruppo "Importa ed esporta" (Ctrl+9; anche dalla ricerca dei comandi, Ctrl+K). Dopo uno shooting con la X-T5:
 
 1. apre la cartella dei RAF **senza importarla** in libreria;
 2. mette a confronto le varianti di simulazione pellicola (le ricette C1–C7 della fotocamera e "Come scattato") di ogni scatto;
@@ -430,7 +435,7 @@ L'analisi dei gruppi è incrementale e parte da sola dopo ogni import: vengono c
 
 ## Modulo AI
 
-Il modulo **AI** (Ctrl+6) controlla lo stato delle analisi; soglie e modelli restano in Impostazioni.
+Il modulo **Analisi AI** (Ctrl+6) controlla lo stato delle analisi; soglie e modelli restano in Impostazioni.
 
 - **Panoramica**: per ogni fase (classificazione, persone, volti, gruppi di simili, impronte) quante foto sono analizzate, da aggiornare, in coda o mai analizzate. Si aggiorna durante le attività e ogni conteggio apre la Libreria filtrata.
 - **Rianalisi**: tutta la libreria, uno o più cataloghi, la selezione o i risultati filtrati della Libreria. Si scelgono le fasi e la modalità (solo mancanti, oppure "forza"), con un'anteprima delle foto da elaborare. Le correzioni manuali restano sempre valide.

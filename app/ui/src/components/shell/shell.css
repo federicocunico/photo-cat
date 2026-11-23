@@ -317,3 +317,69 @@
   font-size: 20px;
   font-weight: 600;
 }
+
+/* Barra dei menu (application-menu) */
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.menubar-trigger {
+  height: 28px;
+  padding: 0 var(--pc-space-2);
+  border: 0;
+  border-radius: var(--pc-radius-sm);
+  background: transparent;
+  color: var(--pc-text);
+  font: var(--pc-font-base) var(--pc-font-ui);
+  cursor: pointer;
+}
+.menubar-trigger:hover,
+.menubar-trigger[data-state="open"],
+.menubar-trigger:focus-visible {
+  background: var(--pc-raised);
+}
+/* La lettera d'accesso si sottolinea quando la barra è attiva da tastiera (Alt o F10). */
+.menubar[data-keyboard] .menubar-access {
+  text-decoration: underline;
+}
+.menubar-content {
+  min-width: 260px;
+}
+.menubar-item {
+  justify-content: space-between;
+}
+.menubar-item[aria-disabled="true"] {
+  color: var(--pc-text-secondary);
+  cursor: default;
+}
+.menubar-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* Motivo di una voce disattivata: visibile al passaggio del mouse o al focus. */
+.menubar-reason {
+  display: none;
+  font-size: 12px;
+  color: var(--pc-text-secondary);
+}
+.menubar-item[data-highlighted] .menubar-reason {
+  display: block;
+}
+.menubar-keys {
+  flex: none;
+  font-size: 12px;
+  color: var(--pc-text-secondary);
+}
+.menubar-check {
+  position: absolute;
+  left: 6px;
+  display: inline-flex;
+}
+.menubar-content [role="menuitemcheckbox"] {
+  position: relative;
+  padding-left: 26px;
+}

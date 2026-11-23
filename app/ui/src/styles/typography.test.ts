@@ -75,6 +75,7 @@ describe("scala tipografica", () => {
   it("monospazio solo per percorsi e codici, mai per conteggi, date e nomi di file", () => {
     // File con percorsi, testo tecnico, tasti o modelli di nome: gli unici che possono usarlo.
     const ALLOWED = new Set([
+      "components/about/AboutPanel.tsx",
       "components/feedback/BootScreen.tsx",
       "components/shell/AppShell.tsx",
       "components/shell/TopBar.tsx",

@@ -1,0 +1,89 @@
+/* Informazioni su photo-cat (app-about) */
+.about-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.about-title {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-3);
+  margin: 0;
+}
+.about-title > span {
+  display: flex;
+  flex-direction: column;
+}
+.about-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--pc-space-1) var(--pc-space-4);
+  margin: 0;
+}
+.about-list dt {
+  color: var(--pc-text-secondary);
+}
+.about-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.about-path {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-space-2);
+}
+.about-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.about-licenses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  min-height: 0;
+}
+.about-licenses-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.about-licenses-list ul {
+  list-style: none;
+  margin: 0 0 var(--pc-space-3);
+  padding: 0;
+}
+.about-license-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--pc-space-3);
+  width: 100%;
+  padding: var(--pc-space-1) var(--pc-space-2);
+  border: 0;
+  border-radius: var(--pc-radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.about-license-row:hover,
+.about-license-row[aria-expanded="true"] {
+  background: var(--pc-raised);
+}
+.about-license-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.about-license-id {
+  color: var(--pc-text-secondary);
+}
+.about-license-text pre {
+  max-height: 240px;
+  overflow: auto;
+  margin: var(--pc-space-1) 0 var(--pc-space-2);
+  padding: var(--pc-space-2);
+  white-space: pre-wrap;
+  font-size: 12px;
+  background: var(--pc-panel-alt);
+  border-radius: var(--pc-radius-sm);
+}

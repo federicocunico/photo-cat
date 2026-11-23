@@ -17,17 +17,21 @@ function usePanelCommands(hasRight: boolean) {
   useCommands([
     {
       id: "panels.inspector",
-      label: t("commands.toggleInspector"),
+      label: t("menu.inspector"),
       group: "library",
       shortcut: { key: "i", mod: true },
+      menu: { menu: "view", section: 0, order: 2 },
+      checked: () => useLayout.getState().rightOpen,
       when: () => hasRight,
       run: () => useLayout.getState().toggleRight(),
     },
     {
       id: "panels.sides",
-      label: t("commands.toggleSidePanels"),
+      label: t("menu.sidePanels"),
       group: "library",
       shortcut: { key: "b", mod: true, shift: true },
+      menu: { menu: "view", section: 0, order: 1 },
+      checked: () => useLayout.getState().leftOpen || useLayout.getState().rightOpen,
       run: () => useLayout.getState().toggleSidePanels(),
     },
   ]);

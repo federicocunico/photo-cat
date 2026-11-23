@@ -127,6 +127,9 @@ export function useUndoHotkey() {
       label: i18n.t("commands.undo"),
       group: "general",
       shortcut: { key: "z", mod: true },
+      menu: { menu: "edit", section: 0, order: 0 },
+      disabledReason: () =>
+        useUndo.getState().last != null ? undefined : i18n.t("menu.why.nothingToUndo"),
       when: () => useUndo.getState().last != null,
       run: () => runUndo(),
     },

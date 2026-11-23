@@ -65,12 +65,23 @@ pub async fn export_diagnostics(
 #[tauri::command]
 #[specta::specta]
 pub fn open_logs(state: State<'_, AppState>) -> AppResult<()> {
-    let dir = state.paths.logs();
+    open_in_file_manager(state.paths.logs(), "dei log")
+}
+
+/// Apre la cartella dei dati dell'app (File › "Mostra la cartella dei dati", Informazioni).
+#[tauri::command]
+#[specta::specta]
+pub fn open_data_dir(state: State<'_, AppState>) -> AppResult<()> {
+    open_in_file_manager(state.paths.root().to_path_buf(), "dei dati")
+}
+
+/// Apre `dir` nel gestore di file del sistema; `what` completa i messaggi ("dei log").
+fn open_in_file_manager(dir: std::path::PathBuf, what: &str) -> AppResult<()> {
     let unavailable = |why: String| {
         AppError::new(
             pc_core::ErrorCode::Io,
             format!(
-                "Impossibile aprire la cartella dei log ({why}). Si trova in: {}",
+                "Impossibile aprire la cartella {what} ({why}). Si trova in: {}",
                 dir.display()
             ),
         )
@@ -96,7 +107,7 @@ pub fn open_logs(state: State<'_, AppState>) -> AppResult<()> {
                 code = "IO",
                 path = %dir.display(),
                 ?status,
-                "{opener} non ha aperto la cartella dei log: nessun file manager associato?"
+                "{opener} non ha aperto la cartella: nessun file manager associato?"
             ),
             Err(e) => tracing::warn!(code = "IO", detail = %e, "attesa di {opener} fallita"),
             Ok(_) => {}

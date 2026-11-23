@@ -53,10 +53,14 @@ async function openAndType(text: string) {
 }
 
 describe("palette dei comandi", () => {
-  it("Vai a un modulo: Ctrl+K, «pers», Invio su Vai a Persone", async () => {
+  it("Vai a un modulo: Ctrl+K, «pers», Invio su Persone (stesso nome del menu Vai)", async () => {
     renderShell();
     const { user } = await openAndType("pers");
-    expect(await screen.findByRole("option", { name: /Vai a Persone/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", {
+        name: (n) => n.startsWith("Persone") && n.includes("Ctrl+4"),
+      }),
+    ).toBeInTheDocument();
     await user.keyboard("{Enter}");
     expect(useLayout.getState().module).toBe("people");
     expect(usePalette.getState().open).toBe(false);
@@ -66,11 +70,11 @@ describe("palette dei comandi", () => {
     renderShell();
     const { user } = await openAndType("varianti");
     expect(
-      await screen.findByRole("option", { name: /Varianti RAW: apri cartella…/ }),
+      await screen.findByRole("option", { name: /Apri una cartella di RAW…/ }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("option", {
-        name: (n) => n.startsWith("Vai a Varianti RAW") && n.includes("Ctrl+9"),
+        name: (n) => n.startsWith("Varianti RAW") && n.includes("Ctrl+9"),
       }),
     ).toBeInTheDocument();
     await user.keyboard("{Enter}");
@@ -81,12 +85,12 @@ describe("palette dei comandi", () => {
   it("i comandi mostrano la scorciatoia; usati di recente compaiono a palette vuota", async () => {
     renderShell();
     const { user } = await openAndType("catalog");
-    const go = await screen.findByRole("option", { name: /Vai a Cataloghi/ });
+    const go = await screen.findByRole("option", { name: /^Cataloghi/ });
     expect(go).toHaveTextContent(/Ctrl\+3/);
     await user.keyboard("{Enter}");
     await openAndType("");
     const recent = await screen.findByRole("group", { name: "Recenti" });
-    expect(within(recent).getByRole("option", { name: /Vai a Cataloghi/ })).toBeInTheDocument();
+    expect(within(recent).getByRole("option", { name: /^Cataloghi/ })).toBeInTheDocument();
   });
 
   it("Nessun risultato: lo dice e propone la ricerca nei nomi dei file", async () => {

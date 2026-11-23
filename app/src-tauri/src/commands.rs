@@ -12,10 +12,27 @@ use pc_store::errorlog::{self, ErrorEntry, ErrorQuery};
 use serde::Serialize;
 use tauri::State;
 
+/// Informazioni sull'app installata (app-about): versione, build, sistema, autori e licenza.
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
     pub version: String,
+    /// Commit abbreviato della build; `None` per una build senza git (archivio dei sorgenti).
+    pub commit: Option<String>,
+    /// Data della build, "AAAA-MM-GG".
+    pub build_date: String,
+    /// Configurazione della build ("release", "debug").
+    pub profile: String,
+    /// Sistema operativo con la versione, ad esempio "Windows 11 Pro".
+    pub os: String,
+    pub arch: String,
+    /// Versione del motore della finestra (WebView2, WebKitGTK, WKWebView), se nota.
+    pub webview: Option<String>,
+    /// Acceleratore dell'analisi AI secondo la preferenza e i provider disponibili.
+    pub accelerator: String,
+    pub authors: String,
+    pub repository: Option<String>,
+    pub license: String,
     pub data_dir: String,
     pub logs_dir: String,
     pub previous_crash: Option<CrashInfo>,
@@ -24,11 +41,64 @@ pub struct AppInfo {
 #[tauri::command]
 #[specta::specta]
 pub fn app_info(state: State<'_, AppState>) -> AppInfo {
+    let preferred = state.config.read().ai.execution_provider;
     AppInfo {
-        version: env!("CARGO_PKG_VERSION").into(),
         data_dir: state.paths.root().display().to_string(),
         logs_dir: state.paths.logs().display().to_string(),
         previous_crash: state.previous_crash.lock().clone(),
+        ..about(
+            preferred,
+            &pc_models::runtime::available_providers(),
+            tauri::webview_version().ok(),
+        )
+    }
+}
+
+/// Parte di [`AppInfo`] che non dipende dallo stato dell'app.
+pub fn about(
+    preferred: pc_core::config::ExecutionProvider,
+    available: &[pc_models::runtime::Provider],
+    webview: Option<String>,
+) -> AppInfo {
+    let non_empty = |s: &str| (!s.is_empty()).then(|| s.to_string());
+    AppInfo {
+        version: env!("CARGO_PKG_VERSION").into(),
+        commit: non_empty(env!("PC_BUILD_COMMIT")),
+        build_date: env!("PC_BUILD_DATE").into(),
+        profile: env!("PC_BUILD_PROFILE").into(),
+        os: sysinfo::System::long_os_version().unwrap_or_else(|| std::env::consts::OS.to_string()),
+        arch: std::env::consts::ARCH.into(),
+        webview,
+        accelerator: accelerator(preferred, available).into(),
+        authors: env!("CARGO_PKG_AUTHORS").replace(':', ", "),
+        repository: non_empty(env!("CARGO_PKG_REPOSITORY")),
+        license: env!("CARGO_PKG_LICENSE").into(),
+        data_dir: String::new(),
+        logs_dir: String::new(),
+        previous_crash: None,
+    }
+}
+
+/// Nome dell'acceleratore che l'analisi usa, con la stessa scelta di `runtime::load`.
+fn accelerator(
+    preferred: pc_core::config::ExecutionProvider,
+    available: &[pc_models::runtime::Provider],
+) -> &'static str {
+    use pc_core::config::ExecutionProvider as Pref;
+    use pc_models::runtime::Provider as P;
+    let gpu = |p: P| available.contains(&p).then_some(p);
+    let chosen = match preferred {
+        Pref::Cpu => None,
+        Pref::Auto => available.iter().copied().find(|p| *p != P::Cpu),
+        Pref::DirectMl => gpu(P::DirectMl),
+        Pref::Cuda => gpu(P::Cuda),
+        Pref::CoreMl => gpu(P::CoreMl),
+    };
+    match chosen.unwrap_or(P::Cpu) {
+        P::Cpu => "CPU",
+        P::DirectMl => "DirectML",
+        P::Cuda => "CUDA",
+        P::CoreMl => "Core ML",
     }
 }
 
@@ -249,4 +319,53 @@ pub async fn list_job_history(app: tauri::AppHandle, limit: u32) -> AppResult<Ve
         Ok(pc_jobs::persist::recent(&state.store, limit.min(500))?)
     })
     .await
+}
+
+#[cfg(test)]
+mod about_tests {
+    use super::*;
+    use pc_core::config::ExecutionProvider as Pref;
+    use pc_models::runtime::Provider as P;
+
+    #[test]
+    fn informazioni_su_versione_build_e_licenza() {
+        let info = about(Pref::Cpu, &[P::Cpu], Some("131.0".into()));
+        assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+        // Commit abbreviato, oppure nessuno per una build senza git: mai una stringa vuota.
+        assert_ne!(info.commit.as_deref(), Some(""));
+        let date = info.build_date.as_bytes();
+        assert_eq!(date.len(), 10, "data {}", info.build_date);
+        assert!(date.iter().enumerate().all(|(i, c)| if i == 4 || i == 7 {
+            *c == b'-'
+        } else {
+            c.is_ascii_digit()
+        }));
+        assert!(["debug", "release"].contains(&info.profile.as_str()));
+        assert_eq!(info.license, "MIT OR Apache-2.0");
+        assert_eq!(info.authors, "photo-cat contributors");
+        assert_eq!(
+            info.repository.as_deref(),
+            Some("https://github.com/federicocunico/photo-cat")
+        );
+        assert_eq!(info.webview.as_deref(), Some("131.0"));
+        assert!(!info.os.is_empty() && !info.arch.is_empty());
+    }
+
+    #[test]
+    fn acceleratore_secondo_preferenza_e_disponibilita() {
+        assert_eq!(
+            about(Pref::Cpu, &[P::Cpu, P::DirectMl], None).accelerator,
+            "CPU"
+        );
+        assert_eq!(
+            about(Pref::Auto, &[P::Cpu, P::DirectMl], None).accelerator,
+            "DirectML"
+        );
+        assert_eq!(about(Pref::Auto, &[P::Cpu], None).accelerator, "CPU");
+        // Provider scelto ma non disponibile: l'analisi usa la CPU.
+        assert_eq!(
+            about(Pref::Cuda, &[P::Cpu, P::DirectMl], None).accelerator,
+            "CPU"
+        );
+    }
 }

@@ -19,34 +19,34 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 
 ## 3. Shell e fondamenta visive
 
-- [ ] 3.1 Token tipografici 12/14/16/20 e stile unico `.section-title` (D10); riportare 11, 13, 17 e 18 px ai token in tutti i CSS; verificare con un nuovo test di stile che fallisce su `font-size` fuori scala e su `text-transform: uppercase` (E1, E3)
-- [ ] 3.2 Monospazio solo per percorsi e codici: togliere la classe `mono` da conteggi, date, nomi di file e segnaposto, con un elenco consentito nel test di stile; verificare che il test passi e che in Persone, Libreria e Attività i conteggi usino il carattere del testo (E2)
-- [ ] 3.3 Chip colorati solo per stati, mai per uno zero: in `FaceGrid`, Importa ("Errori 0") e Attività; verificare con i test dei componenti (E4, P13)
+- [x] 3.1 Token tipografici 12/14/16/20 e stile unico `.section-title` (D10); riportare 11, 13, 17 e 18 px ai token in tutti i CSS; verificare con un nuovo test di stile che fallisce su `font-size` fuori scala e su `text-transform: uppercase` (E1, E3)
+- [x] 3.2 Monospazio solo per percorsi e codici: togliere la classe `mono` da conteggi, date, nomi di file e segnaposto, con un elenco consentito nel test di stile; verificare che il test passi e che in Persone, Libreria e Attività i conteggi usino il carattere del testo (E2)
+- [x] 3.3 Chip colorati solo per stati, mai per uno zero: in `FaceGrid`, Importa ("Errori 0") e Attività; verificare con i test dei componenti (E4, P13)
 - [ ] 3.4 `ModulePage` con `subtitle`, `tabs` e `actions`; adottarla in Cataloghi, Attività, Libreria e Varianti RAW; verificare con un test che il titolo di ogni modulo stia nello stesso contenitore e con la misura del titolo (x, y) uguale in tutti i moduli, usando lo script di inventario dell'audit (S6)
 - [ ] 3.5 Un solo contenitore scorrevole per modulo, con `html/body` senza scorrimento; verificare con un test di layout su Esporta e, sull'app reale, che la finestra non abbia barra di scorrimento propria (F5, S4)
-- [ ] 3.6 Barra di stato su una riga, che resta in fondo anche durante i caricamenti; Sequenza non vi aggiunge scorciatoie né set attivo; verificare con i test di `StatusBar` e di Sequenza (F6, S5)
-- [ ] 3.7 Navigazione: gruppo `ai` unito in coda a `organize`, etichetta "Analisi AI", voce "Varianti RAW" con la fotocamera nel sottotitolo, etichette dei gruppi senza maiuscolo; verificare con un test che Ctrl+1…9 aprano gli stessi moduli di prima (D9, S3)
-- [ ] 3.8 Un solo comando per richiudere ogni pannello, nell'intestazione della colonna; togliere i doppioni "<" e ">" in Libreria; verificare con i test di `Panels` e `LibraryHeader` (S7)
-- [ ] 3.9 Coachmark in linea, con `placement` vincolato, che non copre comandi (D12); verificare con un test che il suo rettangolo non intersechi i pulsanti di Persone, Sequenza, Cataloghi e Tag (S9)
-- [ ] 3.10 Stati selezionati dalle classi condivise (`data-selected`, `aria-current`) al posto degli stili inline in `GroupList` e `FaceGrid`; verificare con `rg "style=\{\{\s*border"` senza risultati nel modulo Persone (E5, P15)
+- [x] 3.6 Barra di stato su una riga, che resta in fondo anche durante i caricamenti; Sequenza non vi aggiunge scorciatoie né set attivo; verificare con i test di `StatusBar` e di Sequenza (F6, S5)
+- [x] 3.7 Navigazione: gruppo `ai` unito in coda a `organize`, etichetta "Analisi AI", voce "Varianti RAW" con la fotocamera nel sottotitolo, etichette dei gruppi senza maiuscolo; verificare con un test che Ctrl+1…9 aprano gli stessi moduli di prima (D9, S3)
+- [x] 3.8 Un solo comando per richiudere ogni pannello, nell'intestazione della colonna; togliere i doppioni "<" e ">" in Libreria; verificare con i test di `Panels` e `LibraryHeader` (S7)
+- [x] 3.9 Coachmark in linea, con `placement` vincolato, che non copre comandi (D12); verificare con un test che il suo rettangolo non intersechi i pulsanti di Persone, Sequenza, Cataloghi e Tag (S9)
+- [x] 3.10 Stati selezionati dalle classi condivise (`data-selected`, `aria-current`) al posto degli stili inline in `GroupList` e `FaceGrid`; verificare con `rg "style=\{\{\s*border"` senza risultati nel modulo Persone (E5, P15)
 
 ## 4. Barra dei menu
 
-- [ ] 4.1 Registro dei comandi: campi `menu` e `disabledReason` (D6), con i comandi globali che mancano (Importa una cartella…, Esporta…, Apri una cartella di RAW…, Apri un progetto FujiView…, Mostra la cartella dei dati, Esci, Rianalizza le foto…, Metti da parte i duplicati, Controlla la qualità, Mappa delle foto, Schermo intero, Copia le informazioni di sistema); verificare con un test che ogni voce dei requisiti di `application-menu` esista nel registro con lo stesso nome della palette
-- [ ] 4.2 Scorciatoie Ctrl+O e Ctrl+E; verificare con i test del registro che non entrino in conflitto con altre scorciatoie e che compaiano nel foglio delle scorciatoie
-- [ ] 4.3 Componente `MenuBar` (Radix Menubar) nella `TopBar` con File, Modifica, Vista, Vai, Strumenti e Aiuto, voci disattivate con il motivo; verificare con test vitest dell'apertura, delle scorciatoie accanto alle voci e del motivo di una voce disattivata
-- [ ] 4.4 Tastiera: Alt premuto e rilasciato da solo, oppure F10, porta il focus sul primo menu; frecce, Invio, Esc e lettere di accesso; verificare con test che Alt+1 non apra il menu e che Esc riporti il focus dov'era
-- [ ] 4.5 Rimuovere `HelpMenu` dalla `TopBar` e portarne le voci nel menu Aiuto, insieme a "Copia le informazioni di sistema"; verificare con il test del menu Aiuto (in-app-guidance)
-- [ ] 4.6 macOS: comando `set_app_menu`, menu nativo di Tauri con il menu dell'app (Informazioni, Impostazioni… ⌘,, Esci ⌘Q), evento `menu://command` inoltrato al registro, ricostruzione al cambio di lingua; `MenuBar` nascosto su macOS; verificare con un test Rust sulla costruzione dell'elenco delle voci e con un test vitest sull'inoltro dell'evento
-- [ ] 4.7 Aggiornare il README (Uso dell'app: barra dei menu, Alt/F10, nuove scorciatoie) e verificare che la tabella delle scorciatoie coincida con il foglio delle scorciatoie
+- [x] 4.1 Registro dei comandi: campi `menu` e `disabledReason` (D6), con i comandi globali che mancano (Importa una cartella…, Esporta…, Apri una cartella di RAW…, Apri un progetto FujiView…, Mostra la cartella dei dati, Esci, Rianalizza le foto…, Metti da parte i duplicati, Controlla la qualità, Mappa delle foto, Schermo intero, Copia le informazioni di sistema); verificare con un test che ogni voce dei requisiti di `application-menu` esista nel registro con lo stesso nome della palette
+- [x] 4.2 Scorciatoie Ctrl+O e Ctrl+E; verificare con i test del registro che non entrino in conflitto con altre scorciatoie e che compaiano nel foglio delle scorciatoie
+- [x] 4.3 Componente `MenuBar` (Radix Menubar) nella `TopBar` con File, Modifica, Vista, Vai, Strumenti e Aiuto, voci disattivate con il motivo; verificare con test vitest dell'apertura, delle scorciatoie accanto alle voci e del motivo di una voce disattivata
+- [x] 4.4 Tastiera: Alt premuto e rilasciato da solo, oppure F10, porta il focus sul primo menu; frecce, Invio, Esc e lettere di accesso; verificare con test che Alt+1 non apra il menu e che Esc riporti il focus dov'era
+- [x] 4.5 Rimuovere `HelpMenu` dalla `TopBar` e portarne le voci nel menu Aiuto, insieme a "Copia le informazioni di sistema"; verificare con il test del menu Aiuto (in-app-guidance)
+- [x] 4.6 macOS: comando `set_app_menu`, menu nativo di Tauri con il menu dell'app (Informazioni, Impostazioni… ⌘,, Esci ⌘Q), evento `menu://command` inoltrato al registro, ricostruzione al cambio di lingua; `MenuBar` nascosto su macOS; verificare con un test Rust sulla costruzione dell'elenco delle voci e con un test vitest sull'inoltro dell'evento
+- [x] 4.7 Aggiornare il README (Uso dell'app: barra dei menu, Alt/F10, nuove scorciatoie) e verificare che la tabella delle scorciatoie coincida con il foglio delle scorciatoie
 
 ## 5. Informazioni su photo-cat
 
-- [ ] 5.1 `build.rs`: `PC_BUILD_COMMIT`, `PC_BUILD_DATE` (da `SOURCE_DATE_EPOCH` se presente) e `PC_BUILD_PROFILE`, con commit vuoto senza git; aggiungere `repository` in `[workspace.package]`; verificare con un test Rust che `app_info` riporti versione, commit o "commit non disponibile", data e configurazione
-- [ ] 5.2 `app_info` esteso con sistema, architettura, versione del motore della finestra, acceleratore attivo, autori, repository e licenza; rigenerare `bindings.ts`; verificare con il test del comando e con `npm run typecheck`
-- [ ] 5.3 `scripts/licenses.mjs` (sostituisce `ui-licenses.mjs`): dipendenze Rust da `cargo metadata`, dipendenze di produzione dell'interfaccia e `assets/licenses/manual.json` per modelli e librerie native, uniti in `assets/licenses/third-party.json`; fallisce per una licenza non riconosciuta; verificare eseguendo lo script e con un test sul caso di licenza mancante
+- [x] 5.1 `build.rs`: `PC_BUILD_COMMIT`, `PC_BUILD_DATE` (da `SOURCE_DATE_EPOCH` se presente) e `PC_BUILD_PROFILE`, con commit vuoto senza git; aggiungere `repository` in `[workspace.package]`; verificare con un test Rust che `app_info` riporti versione, commit o "commit non disponibile", data e configurazione
+- [x] 5.2 `app_info` esteso con sistema, architettura, versione del motore della finestra, acceleratore attivo, autori, repository e licenza; rigenerare `bindings.ts`; verificare con il test del comando e con `npm run typecheck`
+- [x] 5.3 `scripts/licenses.mjs` (sostituisce `ui-licenses.mjs`): dipendenze Rust da `cargo metadata`, dipendenze di produzione dell'interfaccia e `assets/licenses/manual.json` per modelli e librerie native, uniti in `assets/licenses/third-party.json`; fallisce per una licenza non riconosciuta; verificare eseguendo lo script e con un test sul caso di licenza mancante
 - [ ] 5.4 CI: il job Linux rigenera `third-party.json` e fallisce se differisce da quello nel repository; verificare con `make test-linux`
-- [ ] 5.5 Comando Rust `third_party_licenses` che legge il file dalle risorse installate; verificare con un test d'integrazione su un file di esempio
+- [x] 5.5 Comando Rust `third_party_licenses` che legge il file dalle risorse installate; verificare con un test d'integrazione su un file di esempio
 - [ ] 5.6 Componente `AboutPanel` con le schede "Informazioni" e "Licenze di terze parti" (ricerca, gruppi, testo completo, nota sulle sorgenti per LGPL), "Apri" accanto al percorso dei dati e "Copia informazioni" senza il percorso; verificare con test vitest della ricerca "LGPL" e del testo copiato
 - [ ] 5.7 Finestra Informazioni dal menu Aiuto e sezione Impostazioni › Informazioni con lo stesso `AboutPanel`; verificare con i test di Impostazioni (ricerca "versione" porta alla sezione) e del menu Aiuto
 

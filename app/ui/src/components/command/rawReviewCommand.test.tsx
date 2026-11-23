@@ -41,11 +41,11 @@ async function runCommand() {
   );
   const user = userEvent.setup();
   await user.keyboard("{Control>}k{/Control}");
-  await user.type(await screen.findByRole("combobox"), "Varianti RAW: apri");
-  await user.click(await screen.findByRole("option", { name: /^Varianti RAW: apri cartella/ }));
+  await user.type(await screen.findByRole("combobox"), "Apri una cartella di RAW");
+  await user.click(await screen.findByRole("option", { name: /^Apri una cartella di RAW/ }));
 }
 
-describe("comando «Varianti RAW: apri cartella…»", () => {
+describe("comando «Apri una cartella di RAW…»", () => {
   it("apre il dialogo di scelta cartella e porta la cartella nel modulo", async () => {
     vi.mocked(open).mockResolvedValue("D:/Foto/Dolomiti");
     await runCommand();

@@ -18,6 +18,7 @@ import { commands, type OpenedReview, type ShotDecision } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
 import { useGuide } from "../../store/guide";
 import { useLayout } from "../../store/layout";
+import { useMenuIntent } from "../../store/menuIntent";
 import {
   candidatesOf,
   chooseWinner,
@@ -112,6 +113,13 @@ export function RawReviewPage() {
     const file = await chooseProject().catch(() => null);
     if (file) await run(() => commands.rawReviewOpenFujiview(file), false);
   };
+
+  // File › "Apri un progetto FujiView…": lo stesso comando del pulsante della pagina.
+  const intent = useMenuIntent((s) => s.intent);
+  useEffect(() => {
+    if (useMenuIntent.getState().take("rawReview.project")) void pickProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo alla richiesta del menu
+  }, [intent]);
 
   const forget = async (root: string) => {
     try {

@@ -39,11 +39,16 @@ function useNavCommands() {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
   useCommands([
-    ...MODULES.map((m): Command => ({
+    ...MODULES.map((m, i): Command => ({
       id: `nav.${m.id}`,
-      label: t("commands.goTo", { name: t(`modules.${m.id}`) }),
+      // Stesso nome nella palette e nel menu Vai (application-menu).
+      label: t(`modules.${m.id}`),
       group: "navigation",
-      keywords: t(`modules.${m.id}`),
+      keywords: t("commands.goTo", { name: t(`modules.${m.id}`) }),
+      menu: [
+        { menu: "go" as const, section: m.group === "bottom" ? 1 : 0, order: i },
+        ...(m.id === "settings" ? [{ menu: "file" as const, section: 2, order: 1 }] : []),
+      ],
       shortcut: m.shortcut
         ? { key: String(m.shortcut), mod: true }
         : m.id === "settings"
@@ -53,8 +58,9 @@ function useNavCommands() {
     })),
     {
       id: "nav.raw-review.open",
-      label: t("commands.rawReviewOpen"),
+      label: t("menu.openRawFolder"),
       group: "navigation",
+      menu: { menu: "file", section: 1, order: 0 },
       keywords: `${t("modules.raw-review")} RAW Fujifilm X-T5 FujiView`,
       // Apre il dialogo di scelta cartella e porta la cartella scelta nel modulo.
       run: async () => {
@@ -64,16 +70,29 @@ function useNavCommands() {
     },
     ...(["overview", "reprocess", "cleanup", "map"] as const).map((section): Command => ({
       id: `nav.ai.${section}`,
-      label: section === "map" ? t("aiMap.command") : t(`ai.commands.${section}`),
+      label:
+        section === "map"
+          ? t("menu.photoMap")
+          : section === "reprocess"
+            ? t("menu.reanalyze")
+            : t(`ai.commands.${section}`),
       group: "navigation",
       keywords: t("modules.ai"),
+      menu:
+        section === "map"
+          ? { menu: "view", section: 2, order: 0 }
+          : section === "reprocess"
+            ? { menu: "tools", section: 0, order: 0 }
+            : undefined,
       run: () => openModule({ module: "ai", section }),
     })),
     {
       id: "nav.toggle",
-      label: t("commands.toggleNav"),
+      label: t("menu.compactNav"),
       group: "navigation",
       shortcut: { key: "b", mod: true },
+      menu: { menu: "view", section: 0, order: 0 },
+      checked: () => useLayout.getState().navCompact,
       run: () => useLayout.getState().toggleNav(),
     },
   ]);

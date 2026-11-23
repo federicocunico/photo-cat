@@ -468,6 +468,14 @@ export const commands = {
 	completeOnboarding: () => __TAURI_INVOKE<null>("complete_onboarding"),
 	exportDiagnostics: (destination: string) => __TAURI_INVOKE<null>("export_diagnostics", { destination }),
 	openLogs: () => __TAURI_INVOKE<null>("open_logs"),
+	/**  Apre la cartella dei dati dell'app (File › "Mostra la cartella dei dati", Informazioni). */
+	openDataDir: () => __TAURI_INVOKE<null>("open_data_dir"),
+	thirdPartyLicenses: () => __TAURI_INVOKE<ThirdPartyLicenses>("third_party_licenses"),
+	/**
+	 *  Aggiorna il menu nativo (solo macOS): l'interfaccia lo richiama quando cambiano lingua o
+	 *  disponibilità dei comandi.
+	 */
+	setAppMenu: (labels: MenuLabels, items: MenuItemSpec[]) => __TAURI_INVOKE<null>("set_app_menu", { labels, items }),
 	/**  Seleziona solo i percorsi falliti del job/fase, senza riscan completo. */
 	retryFailed: (jobId: number | null, phase: string | null) => __TAURI_INVOKE<number[]>("retry_failed", { jobId, phase }),
 };
@@ -544,8 +552,25 @@ export type AppError = {
 	retriable: boolean,
 };
 
+/**  Informazioni sull'app installata (app-about): versione, build, sistema, autori e licenza. */
 export type AppInfo = {
 	version: string,
+	/**  Commit abbreviato della build; `None` per una build senza git (archivio dei sorgenti). */
+	commit: string | null,
+	/**  Data della build, "AAAA-MM-GG". */
+	buildDate: string,
+	/**  Configurazione della build ("release", "debug"). */
+	profile: string,
+	/**  Sistema operativo con la versione, ad esempio "Windows 11 Pro". */
+	os: string,
+	arch: string,
+	/**  Versione del motore della finestra (WebView2, WebKitGTK, WKWebView), se nota. */
+	webview: string | null,
+	/**  Acceleratore dell'analisi AI secondo la preferenza e i provider disponibili. */
+	accelerator: string,
+	authors: string,
+	repository: string | null,
+	license: string,
 	dataDir: string,
 	logsDir: string,
 	previousCrash: CrashInfo | null,
@@ -1526,6 +1551,20 @@ export type LibraryFilter = {
 	geoBbox?: GeoBboxFilter | null,
 };
 
+/**  Un componente distribuito con l'app. */
+export type LicenseComponent = {
+	name: string,
+	version: string,
+	/**  Espressione SPDX (es. "MIT OR Apache-2.0"). */
+	license: string,
+	/**  "model", "native", "ui" o "rust". */
+	kind: string,
+	/**  Chiave del testo in [`ThirdPartyLicenses::texts`]. */
+	text: string,
+	/**  Sorgenti corrispondenti nell'installazione (componenti LGPL), relative a `root`. */
+	sources: string | null,
+};
+
 export type LocateFaceRequest = { kind: "face"; face_id: number } | { kind: "media"; media_id: number; person_id: number | null };
 
 export type LocatedFace = {
@@ -1642,6 +1681,32 @@ export type MemorySummary = {
 	/**  RAM disponibile nel sistema. */
 	availableMb: number,
 	totalMb: number,
+};
+
+/**  Una voce di menu dal registro dei comandi. */
+export type MenuItemSpec = {
+	id: string,
+	label: string,
+	/**  "file", "edit", "view", "go", "tools" o "help". */
+	menu: string,
+	section: number,
+	order: number,
+	/**  Voce raggruppata sotto un sottomenu con questo nome (es. "Tema"). */
+	submenu: string | null,
+	/**  Scorciatoia nel formato di Tauri (es. "CmdOrCtrl+Shift+I"). */
+	accelerator: string | null,
+	enabled: boolean,
+	checked: boolean | null,
+};
+
+/**  Nomi tradotti dei menu e delle voci del menu dell'app. */
+export type MenuLabels = {
+	appName: string,
+	about: string,
+	settings: string,
+	quit: string,
+	/**  Nomi dei menu nell'ordine: File, Modifica, Vista, Vai, Strumenti, Aiuto. */
+	menus: ([string, string])[],
 };
 
 export type MergeHint = {
@@ -2556,6 +2621,14 @@ export type TemplateErrorKind = "unknown_token" | "unavailable_token" | "invalid
 export type Theme = 
 /**  Segue il tema del sistema operativo: predefinito per le nuove installazioni. */
 "system" | "dark" | "light";
+
+export type ThirdPartyLicenses = {
+	components: LicenseComponent[],
+	/**  Testi delle licenze, una volta sola per testo. */
+	texts: { [key in string]: string },
+	/**  Cartella dell'installazione che contiene `sources` (riempita dal comando). */
+	root?: string,
+};
 
 /**  Effetto di nuove soglie sulla libreria, calcolato dai risultati salvati. */
 export type ThresholdImpact = {

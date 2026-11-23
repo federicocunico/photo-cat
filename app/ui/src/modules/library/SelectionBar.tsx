@@ -149,6 +149,14 @@ export function SelectionBar() {
     },
   ]);
 
+  // Modifica › "Sposta nel Cestino": stessa azione del menu della barra (con la conferma se serve).
+  useEffect(() => {
+    if (picker.open !== "trash") return;
+    picker.set(null);
+    if (count > 0) void trash.moveToTrash(target, count);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo alla richiesta
+  }, [picker.open]);
+
   const start = (operation: BulkAction, kind: DoneKind, name = "") =>
     bulk.start(target, operation, t(`selection.done.${kind}`, { name, count }));
 
@@ -308,7 +316,12 @@ export function SelectionBar() {
           {t(filter.excludedFrom != null ? "exclusions.restore" : "exclusions.exclude")}
         </Button>
       )}
-      <PickerButton label={t("selection.catalog")} icon={<Icon.Catalogs size={14} />}>
+      <PickerButton
+        label={t("selection.catalog")}
+        icon={<Icon.Catalogs size={14} />}
+        open={picker.open === "catalog"}
+        onOpenChange={(o) => picker.set(o ? "catalog" : null)}
+      >
         {(close) => (
           <SearchPicker
             label={t("selection.catalogSearch")}

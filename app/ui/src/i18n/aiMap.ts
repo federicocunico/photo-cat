@@ -2,7 +2,6 @@
 export const aiMap = {
   it: {
     aiMap: {
-      command: "AI: Mappa",
       intro: "Dove sono state scattate le foto. Fai clic su un gruppo per vederlo in Libreria.",
       mapLabel: "Mappa delle foto",
       zoomIn: "Ingrandisci",
@@ -50,7 +49,6 @@ export const aiMap = {
   },
   en: {
     aiMap: {
-      command: "AI: Map",
       intro: "Where your photos were taken. Click a group to see it in the Library.",
       mapLabel: "Photo map",
       zoomIn: "Zoom in",

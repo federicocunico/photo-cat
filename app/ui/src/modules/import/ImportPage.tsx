@@ -25,6 +25,7 @@ import {
 } from "../../lib/ipc";
 import { fmtDayMonth, fmtHourMinute, fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
+import { useMenuIntent } from "../../store/menuIntent";
 import { activeJobs, useLive } from "../../store/live";
 import { notify, notifyError } from "../../store/toasts";
 import { FORMAT_GROUPS, splitPatterns } from "./formats";
@@ -308,6 +309,17 @@ export function ImportPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [path, setPath] = useState("");
+  // File › "Importa una cartella…" (Ctrl+O): lo stesso selettore del pulsante della pagina.
+  const intent = useMenuIntent((s) => s.intent);
+  useEffect(() => {
+    if (!useMenuIntent.getState().take("import.pick")) return;
+    void pickFolder().then((p) => {
+      if (p) {
+        setPath(p);
+        setError(null);
+      }
+    });
+  }, [intent]);
   const [recursive, setRecursive] = useState(true);
   const [watch, setWatch] = useState(false);
   const [formats, setFormats] = useState(() =>
