@@ -49,7 +49,7 @@ Ogni gruppo si integra da solo con test verdi (`cargo test` con `CARGO_BUILD_JOB
 
 ## 8. Verifica d'insieme
 
-- [ ] 8.1 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
+- [x] 8.1 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
 - [x] 8.2 Aggiornare README (Persone: coda, storico, sensibilità) e `research.md` con i risultati del banco di prova
 - [ ] 8.3 Prova sull'app reale (per l'utente): libreria di prova da `D:\Foto` con un catalogo isolato; confronto prima/dopo delle misure in Diagnostica, delle unioni automatiche e del numero di domande per sistemare i gruppi piccoli
 
