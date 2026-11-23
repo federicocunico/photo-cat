@@ -71,7 +71,6 @@ function SetList({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -97,10 +96,8 @@ function SetList({
   });
   return (
     <section aria-label={t("tags.sets")} className="tags-sets">
-      <h2 ref={tipAnchor} className="section-title tags-sets-title">
-        {t("tags.sets")}
-      </h2>
-      <Coachmark tip="tags" anchor={tipAnchor} side="right" learnMore="tags" />
+      <h2 className="section-title tags-sets-title">{t("tags.sets")}</h2>
+      <Coachmark tip="tags" learnMore="tags" />
       {sets.map((s, i) => {
         const selected = s.id === current;
         const meta = s.isBase
@@ -295,13 +292,20 @@ function SetDetail({
               {t("tags.deleteSet")}
             </Button>
           )}
-          <BusyButton
-            className="btn btn-primary"
-            disabled={isActive}
-            onClick={async () => await run(() => commands.setActiveTagSet(set.id))}
-          >
-            {isActive ? t("tags.isActive") : t("tags.useActive")}
-          </BusyButton>
+          {/* Il set attivo è uno stato, non un pulsante disattivato. */}
+          {isActive ? (
+            <span className="tags-active-state">
+              <Icon.Check size={14} aria-hidden="true" />
+              {t("tags.isActive")}
+            </span>
+          ) : (
+            <BusyButton
+              className="btn btn-primary"
+              onClick={async () => await run(() => commands.setActiveTagSet(set.id))}
+            >
+              {t("tags.useActive")}
+            </BusyButton>
+          )}
         </div>
       </div>
       <div className="tags-options">
@@ -371,7 +375,7 @@ function SetDetail({
                 {x.name}
               </BusyButton>
             </span>
-            <span role="cell" className="mono tags-small">
+            <span role="cell" className="tags-small">
               {fmtInt(count(x.name))}
             </span>
             <span role="cell" className="tags-row-actions">
@@ -697,7 +701,7 @@ export function TagsPage() {
     }
   };
   return (
-    <ModulePage title={t("modules.tags")}>
+    <ModulePage title={t("modules.tags")} scroll={false}>
       <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
         {() => (
           <div className="tags-page">
@@ -766,7 +770,7 @@ export function TagsPage() {
                       >
                         <Swatch color={x.color} size={10} />
                         <span>{x.name}</span>
-                        <span className="muted mono tags-small">{fmtInt(x.count)}</span>
+                        <span className="muted tags-small">{fmtInt(x.count)}</span>
                       </BusyButton>
                     );
                   })}

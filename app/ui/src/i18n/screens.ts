@@ -69,7 +69,8 @@ export const screens = {
         catalog: "Catalogo",
         filter: "Libreria filtrata",
       },
-      scopeSelection: "Selezione ({{count}} foto)",
+      scopeSelection_one: "Selezione ({{count}} foto)",
+      scopeSelection_other: "Selezione ({{count}} foto)",
       scopeFilterHint: "Le foto che la Libreria mostra con i filtri attivi.",
       noSelection: "Nessuna foto selezionata: seleziona foto in Libreria o scegli un altro ambito",
       chooseCatalog: "Scegli il catalogo da esportare",
@@ -135,7 +136,9 @@ export const screens = {
       createReady: "Pronto",
       needSteps: "Completa prima l'anteprima e la verifica del metodo",
       needMethod: "Il metodo non è disponibile: scegli l'alternativa proposta e ripeti i passi",
-      summary:
+      summary_one:
+        "{{count}} file · {{conflicts}} conflitti di nome risolti · spazio richiesto {{space}}",
+      summary_other:
         "{{count}} file · {{conflicts}} conflitti di nome risolti · spazio richiesto {{space}}",
       folderCount: "{{path}} · {{n}}",
       available: "Metodo disponibile su questa destinazione.",
@@ -150,7 +153,8 @@ export const screens = {
         hardlink_unsupported: "Collegamenti fissi non supportati su questa destinazione.",
       },
       start: "Crea cartelle",
-      createTitle: "Creare {{count}} file in {{path}}?",
+      createTitle_one: "Creare {{count}} file in {{path}}?",
+      createTitle_other: "Creare {{count}} file in {{path}}?",
       createBody: {
         copy: "Le foto vengono copiate nelle nuove cartelle. Gli originali non vengono toccati.",
         hardlink:
@@ -195,6 +199,7 @@ export const screens = {
         apps: "Applicazioni esterne",
         diagnostics: "Diagnostica",
         advanced: "Avanzate",
+        about: "Informazioni",
       },
       search: "Cerca nelle impostazioni",
       noResults: "Nessuna impostazione trovata.",
@@ -240,7 +245,9 @@ export const screens = {
       autoModels: "Scarica e verifica i modelli all'avvio",
       faces: "Riconoscimento volti",
       purge: "Elimina tutti i dati dei volti",
-      purgeConfirm:
+      purgeConfirm_one:
+        "Eliminare definitivamente {{count}} volto, con l'impronta e il ritaglio? Il conteggio persone resta.",
+      purgeConfirm_other:
         "Eliminare definitivamente {{count}} volti, con le impronte e i ritagli? Il conteggio persone resta.",
       purged: "Dati dei volti eliminati.",
       log: "Livello di log",
@@ -276,7 +283,8 @@ export const screens = {
         catalog: "Catalog",
         filter: "Filtered library",
       },
-      scopeSelection: "Selection ({{count}} photos)",
+      scopeSelection_one: "Selection ({{count}} photo)",
+      scopeSelection_other: "Selection ({{count}} photos)",
       scopeFilterHint: "The photos the Library shows with the active filters.",
       noSelection: "No photos selected: select photos in the Library or choose another scope",
       chooseCatalog: "Choose the catalog to export",
@@ -343,7 +351,10 @@ export const screens = {
       needSteps: "Complete the preview and the method check first",
       needMethod:
         "The method is not available: choose the suggested alternative and repeat the steps",
-      summary: "{{count}} files · {{conflicts}} name conflicts resolved · space required {{space}}",
+      summary_one:
+        "{{count}} file · {{conflicts}} name conflicts resolved · space required {{space}}",
+      summary_other:
+        "{{count}} files · {{conflicts}} name conflicts resolved · space required {{space}}",
       folderCount: "{{path}} · {{n}}",
       available: "Method available at this destination.",
       unavailable: "Method not available at this destination.",
@@ -357,7 +368,8 @@ export const screens = {
         hardlink_unsupported: "Hard links are not supported at this destination.",
       },
       start: "Create folders",
-      createTitle: "Create {{count}} files in {{path}}?",
+      createTitle_one: "Create {{count}} file in {{path}}?",
+      createTitle_other: "Create {{count}} files in {{path}}?",
       createBody: {
         copy: "The photos are copied into the new folders. Originals are not touched.",
         hardlink:
@@ -402,6 +414,7 @@ export const screens = {
         apps: "External applications",
         diagnostics: "Diagnostics",
         advanced: "Advanced",
+        about: "About",
       },
       search: "Search settings",
       noResults: "No settings found.",
@@ -448,7 +461,9 @@ export const screens = {
       autoModels: "Download and verify models at startup",
       faces: "Face recognition",
       purge: "Delete all face data",
-      purgeConfirm:
+      purgeConfirm_one:
+        "Permanently delete {{count}} face, with its fingerprint and crop? People counts are kept.",
+      purgeConfirm_other:
         "Permanently delete {{count}} faces, with their fingerprints and crops? People counts are kept.",
       purged: "Face data deleted.",
       log: "Log level",

@@ -77,7 +77,7 @@ function ModelRow({ m }: { m: ModelStatus }) {
       <td className="models-td--first">{m.entry.name}</td>
       <td className="models-td models-td--soft">{t(`models.roles.${m.entry.role}`)}</td>
       <td className="mono models-td models-td--small">{m.entry.version}</td>
-      <td className="mono models-td models-td--small">{fmtBytes(m.entry.sizeBytes)}</td>
+      <td className="models-td models-td--small">{fmtBytes(m.entry.sizeBytes)}</td>
       <td className="mono muted models-td models-td--small" title={m.entry.sha256}>
         {m.entry.sha256.slice(0, 4)}…{m.entry.sha256.slice(-4)}
       </td>
@@ -90,7 +90,7 @@ function ModelRow({ m }: { m: ModelStatus }) {
                 <span style={{ width: `${pct}%` }} />
               </div>
               {s.state === "downloading" && (
-                <span className="mono muted models-small">
+                <span className="muted models-small">
                   {fmtBytes(s.done_bytes)} / {fmtBytes(s.total_bytes)} ·{" "}
                   {fmtBytes(s.bytes_per_second ?? 0)}/s
                 </span>

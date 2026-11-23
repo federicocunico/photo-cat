@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "../../i18n";
 import i18n from "../../i18n";
-import { commandsMock, ipcMockModule } from "../../test/ipcMock";
+import { appInfoFixture, commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
 import { useToast } from "../../store/toasts";
 import { checkedCleanup } from "../../test/a11y";
@@ -79,12 +79,13 @@ beforeEach(() => {
     executionProvider: "auto",
     resourceProfile: "balanced",
   } as never);
-  commandsMock.appInfo.mockResolvedValue({
-    version: "0.1.0",
-    dataDir: "C:\\Users\\u\\AppData\\Local\\photo-cat",
-    logsDir: "",
-    previousCrash: null,
-  } as never);
+  commandsMock.appInfo.mockResolvedValue(
+    appInfoFixture({
+      version: "0.1.0",
+      dataDir: "C:\\Users\\u\\AppData\\Local\\photo-cat",
+      logsDir: "",
+    }) as never,
+  );
 });
 afterEach(async () => {
   checkedCleanup(A11Y_KNOWN.none)();
@@ -119,6 +120,7 @@ it("le sezioni sono quelle della spec e nessun Salva a metà pagina", async () =
     "Applicazioni esterne",
     "Diagnostica",
     "Avanzate",
+    "Informazioni",
   ]);
   expect(screen.queryByRole("button", { name: /^Salva/ })).toBeNull();
 });
@@ -561,6 +563,7 @@ it("cache delle anteprime di Varianti RAW: limite in GB, spazio in uso e Svuota"
   } as never);
   commandsMock.rawReviewClearCache.mockResolvedValue((3 * 1024 ** 3) as never);
   renderSettings();
+  await open("Avanzate");
   const field = await screen.findByLabelText("Cache delle anteprime di Varianti RAW (GB)");
   expect(await screen.findByText("In uso: 3,0 GB su 20,0 GB")).toBeInTheDocument();
   // Un valore sotto 1 GB non si salva.
@@ -604,7 +607,8 @@ it("cache di Varianti RAW: si trova con la ricerca e si traduce in inglese", asy
     target: { value: "varianti" },
   });
   fireEvent.click(screen.getByRole("button", { name: /Cache delle anteprime di Varianti RAW/ }));
-  expect(useLayout.getState().settingsSection).toBe("general");
+  // 7.6: la cache sta in Avanzate, non in Generale.
+  expect(useLayout.getState().settingsSection).toBe("advanced");
   await act(() => i18n.changeLanguage("en"));
   expect(await screen.findByLabelText("RAW Variants preview cache (GB)")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Clear the cache" })).toBeDisabled();
@@ -646,4 +650,26 @@ it("Unione automatica: verso Più domande con anteprima delle unioni e Applica",
       }),
     ),
   );
+});
+
+it("7.6: «cache» porta alla cache delle anteprime RAW in Avanzate, non in Generale", async () => {
+  renderSettings();
+  fireEvent.change(await screen.findByLabelText("Cerca nelle impostazioni"), {
+    target: { value: "cache" },
+  });
+  const result = screen.getByRole("button", { name: /Cache delle anteprime di Varianti RAW/ });
+  expect(result).toHaveTextContent("Avanzate");
+  expect(result).not.toHaveTextContent("Generale");
+});
+
+it("5.7: «versione» porta a Impostazioni › Informazioni, con versione, build e licenze", async () => {
+  renderSettings();
+  fireEvent.change(await screen.findByLabelText("Cerca nelle impostazioni"), {
+    target: { value: "versione" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Versione/ }));
+  expect(useLayout.getState().settingsSection).toBe("about");
+  expect(await screen.findByText("photo-cat 0.1.0")).toBeInTheDocument();
+  expect(screen.getByText(/^a1b2c3d · .+ · release$/)).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Licenze di terze parti" })).toBeInTheDocument();
 });

@@ -17,7 +17,7 @@ Il sistema SHALL conservare le identità in un archivio dell'app separato dalla 
 - **THEN** le identità e i loro volti di riferimento restano
 
 ### Requirement: Dati di un'identità
-Ogni identità SHALL avere un nome visualizzato obbligatorio e univoco, un nome breve per i nomi dei file, alias facoltativi, un gruppo facoltativo e una soglia di somiglianza propria con un valore predefinito.
+Ogni identità SHALL avere un nome visualizzato obbligatorio e univoco, un nome breve per i nomi dei file, alias facoltativi, una cerchia facoltativa (ad esempio "Famiglia" o "Lavoro") e una soglia di somiglianza propria con un valore predefinito. Nell'interfaccia la cerchia SHALL chiamarsi "Cerchia", gli alias "Altri nomi" e la soglia SHALL essere presentata come sensibilità del riconoscimento.
 
 #### Scenario: Nome duplicato
 - **WHEN** l'utente crea un'identità "Giulia Bianchi" e ne esiste già una con lo stesso nome
@@ -27,8 +27,12 @@ Ogni identità SHALL avere un nome visualizzato obbligatorio e univoco, un nome 
 - **WHEN** l'utente crea "Giulia Bianchi" senza indicare il nome breve
 - **THEN** il nome breve è "Giulia"
 
+#### Scenario: Cerchia nell'elenco
+- **WHEN** "Gioia" ha la cerchia "Famiglia" e 26 foto nella libreria
+- **THEN** la sua riga nell'elenco delle persone mostra "Famiglia · 26 foto", e senza cerchia mostra solo "26 foto"
+
 ### Requirement: Gestione delle identità
-L'utente SHALL poter creare, modificare, unire ed eliminare identità dalla sezione "Persone" del modulo Persone, con filtro per gruppo e ricerca su nome e alias.
+L'utente SHALL poter creare, modificare, unire ed eliminare identità dalla sezione "Persone" del modulo Persone, con filtro per cerchia e ricerca su nome e alias. Le modifiche ai dettagli SHALL essere salvate appena fatte, con la conferma "Salvato" accanto. "Unisci a…", "Esporta" ed "Elimina persona…" SHALL stare nel menu delle altre azioni della persona, separati dai dettagli.
 
 #### Scenario: Ricerca per alias
 - **WHEN** l'utente cerca "Nonna Rita"
@@ -41,6 +45,10 @@ L'utente SHALL poter creare, modificare, unire ed eliminare identità dalla sezi
 #### Scenario: Identità senza foto nella libreria
 - **WHEN** un'identità non ha volti nella libreria aperta
 - **THEN** la sezione "Persone" la mostra con l'indicazione "nessuna foto in questa libreria", e resta modificabile ed esportabile
+
+#### Scenario: Dettagli salvati subito
+- **WHEN** l'utente cambia la cerchia di "Gioia" in "Amici" ed esce dal campo
+- **THEN** la modifica è salvata senza premere alcun pulsante e accanto compare "Salvato"
 
 ### Requirement: Volti di riferimento
 L'utente SHALL poter aggiungere a un'identità volti di riferimento scelti tra i volti della libreria o da un file immagine, e rimuoverli; per ogni volto di riferimento l'archivio conserva il ritaglio e l'embedding, non la foto originale.

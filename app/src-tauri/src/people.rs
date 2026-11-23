@@ -445,7 +445,11 @@ pub async fn assign_groups(
 /// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento (gruppi
 /// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse") e
 /// una voce nello storico delle unioni ("Unioni recenti").
-fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {
+pub(crate) fn merge_with_undo(
+    c: &rusqlite::Connection,
+    from: Vec<i64>,
+    to: i64,
+) -> pc_store::StoreResult<()> {
     if from.iter().all(|f| *f == to) {
         return Err(pc_store::StoreError::Invalid("persone coincidenti".into()));
     }

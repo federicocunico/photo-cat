@@ -8,6 +8,7 @@ import { BarChart, ColumnSeries, Histogram } from "../../components/charts";
 import type { HistogramBin, HistogramRange } from "../../components/charts";
 import { Button, InlineAlert } from "../../components/ui";
 import { commands, isTauri, type LibraryFilter } from "../../lib/ipc";
+import { fmtDec } from "../../lib/format";
 import { useLayout } from "../../store/layout";
 import { emptyFilter } from "../../store/library";
 import { useLabelName, useTaxonomy } from "../library/labelName";
@@ -15,7 +16,7 @@ import { openCleanupWith, openLibraryWith } from "./results/navigate";
 
 const BINS = 20;
 const ALL = "all";
-const f2 = (n: number) => n.toFixed(2);
+const f2 = (n: number) => fmtDec(n, 2);
 
 export function ResultsSection() {
   const { t } = useTranslation();

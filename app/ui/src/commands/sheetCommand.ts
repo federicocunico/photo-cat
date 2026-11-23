@@ -11,6 +11,7 @@ export function useSheetCommand() {
       label: t("commands.shortcuts"),
       group: "general",
       shortcut: { key: "?" },
+      menu: { menu: "help", section: 0, order: 1 },
       run: () => useShortcutSheet.getState().setOpen(true),
     },
   ]);

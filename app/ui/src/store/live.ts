@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { notify } from "./toasts";
+import { jobDoneMessage, paramsOf } from "../lib/jobs";
 import i18n from "../i18n";
 import { commands, events, isTauri } from "../lib/ipc";
 import type { ErrorBatch, ErrorRecord, JobSnapshot, LogLine, ResourceSnapshot } from "../lib/ipc";
@@ -60,6 +61,25 @@ export const activeJobs = (jobs: Record<number, JobSnapshot>) =>
     .filter((j) => j.state === "running" || j.state === "paused" || j.state === "queued")
     .sort((a, b) => b.id - a.id);
 
+/**
+ * Avviso di fine attività con oggetto e numero di foto: parametri e cartelle si leggono dallo
+ * storico solo a fine attività; se non sono disponibili, il titolo resta senza oggetto.
+ */
+async function notifyJobDone(job: JobSnapshot) {
+  let params: Parameters<typeof jobDoneMessage>[2] = null;
+  let sources: Awaited<ReturnType<typeof commands.listSources>> = [];
+  if (isTauri()) {
+    try {
+      params = paramsOf(await commands.listJobHistory(20), job.id);
+      if (job.kind === "import") sources = await commands.listSources();
+    } catch {
+      // Senza storico l'avviso dice comunque che cosa è stato completato.
+    }
+  }
+  const path = (id: number) => sources.find((s) => s.source.id === id)?.source.path;
+  notify({ tone: "ok", message: jobDoneMessage(i18n.t, job, params, path) });
+}
+
 /** Sottoscrive gli eventi del backend e carica lo stato iniziale. */
 export function useLiveEvents() {
   useEffect(() => {
@@ -70,21 +90,18 @@ export function useLiveEvents() {
         if (!started.has(job.id)) started.set(job.id, Date.now());
       } else {
         const since = started.get(job.id);
-        if (since !== undefined && Date.now() - since >= 1000)
-          notify({
-            tone:
-              job.state === "completed"
-                ? "ok"
-                : job.state === "completed_with_errors" || job.state === "failed"
-                  ? "error"
-                  : "info",
-            message:
-              job.state === "completed"
-                ? i18n.t("feedback.done")
-                : job.state === "completed_with_errors" || job.state === "failed"
+        if (since !== undefined && Date.now() - since >= 1000) {
+          if (job.state === "completed") void notifyJobDone(job);
+          else
+            notify({
+              tone:
+                job.state === "completed_with_errors" || job.state === "failed" ? "error" : "info",
+              message:
+                job.state === "completed_with_errors" || job.state === "failed"
                   ? i18n.t("feedback.failed")
                   : i18n.t(`jobs.states.${job.state}`),
-          });
+            });
+        }
         started.delete(job.id);
       }
       s.upsertJob(job);

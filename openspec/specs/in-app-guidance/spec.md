@@ -13,11 +13,15 @@ Dopo il primo avvio la Libreria SHALL mostrare una lista "Primi passi" con:
 - creare un catalogo;
 - usare un set di tag.
 
-Ogni voce SHALL avere un comando che porta al punto giusto e SHALL risultare completata quando l'utente fa quell'azione, anche per un'altra strada.
+Ogni voce SHALL avere un comando che porta al punto giusto e SHALL risultare completata quando l'utente fa quell'azione, anche per un'altra strada. I cataloghi di sistema (Cestino, Duplicati, Qualità insufficiente) MUST NOT completare la voce "Crea un catalogo". La lista SHALL avere il comando di chiusura in alto a destra.
 
 #### Scenario: Passo completato altrove
 - **WHEN** l'utente crea un catalogo dalla barra delle azioni della Libreria
 - **THEN** la voce "Crea un catalogo" della lista risulta completata
+
+#### Scenario: Solo cataloghi di sistema
+- **WHEN** la libreria ha solo i cataloghi di sistema
+- **THEN** la voce "Crea un catalogo" non risulta completata
 
 ### Requirement: Persistenza dei primi passi
 La lista "Primi passi" SHALL sparire quando tutte le voci sono completate o quando l'utente la nasconde, e SHALL poter essere riaperta dal menu Aiuto. Il suo stato SHALL sopravvivere a riavvii e reinstallazioni.
@@ -27,7 +31,7 @@ La lista "Primi passi" SHALL sparire quando tutte le voci sono completate o quan
 - **THEN** la lista non compare, e Aiuto › "Primi passi" la riapre
 
 ### Requirement: Suggerimenti al primo uso
-La prima volta che l'utente apre Persone, Cataloghi, Tag o Sequenza, il modulo SHALL mostrare un suggerimento breve e non modale, con "Scopri di più" e "Ho capito". I suggerimenti MUST NOT bloccare l'interfaccia né comparire più di una volta per modulo, salvo reimpostazione dal menu Aiuto. L'app MUST NOT presentare tour a schede obbligatori.
+La prima volta che l'utente apre Persone, Cataloghi, Tag o Sequenza, il modulo SHALL mostrare un suggerimento breve e non modale, con "Scopri di più" e "Ho capito". I suggerimenti MUST NOT bloccare l'interfaccia, MUST NOT coprire comandi o il contenuto principale del modulo, e MUST NOT comparire più di una volta per modulo, salvo reimpostazione dal menu Aiuto. L'app MUST NOT presentare tour a schede obbligatori.
 
 #### Scenario: Primo ingresso in Tag
 - **WHEN** l'utente apre Tag per la prima volta
@@ -37,16 +41,25 @@ La prima volta che l'utente apre Persone, Cataloghi, Tag o Sequenza, il modulo S
 - **WHEN** l'utente sceglie Aiuto › "Mostra di nuovo i suggerimenti"
 - **THEN** i suggerimenti ricompaiono al successivo ingresso in ciascun modulo
 
+#### Scenario: Comandi liberi
+- **WHEN** compare il suggerimento al primo ingresso in Sequenza
+- **THEN** tutti i comandi della barra di Sequenza restano visibili e utilizzabili
+
 ### Requirement: Menu Aiuto
-La barra superiore SHALL offrire un menu Aiuto con:
-- Scorciatoie da tastiera;
-- Rivedi l'introduzione;
-- Primi passi;
-- Mostra di nuovo i suggerimenti;
+La barra dei menu SHALL offrire un menu Aiuto con:
 - Guida;
+- Scorciatoie da tastiera;
+- Primi passi;
+- Rivedi l'introduzione;
+- Mostra di nuovo i suggerimenti;
 - Segnala un problema;
-- Informazioni su photo-cat (versione e percorso dei dati).
+- Copia le informazioni di sistema;
+- Informazioni su photo-cat (versione, build, sistema, autori e licenze).
 
 #### Scenario: Segnalare un problema
 - **WHEN** l'utente sceglie Aiuto › "Segnala un problema"
 - **THEN** si apre Impostazioni › Diagnostica con il comando di esportazione del pacchetto diagnostico in evidenza
+
+#### Scenario: Informazioni dal menu
+- **WHEN** l'utente sceglie Aiuto › "Informazioni su photo-cat"
+- **THEN** si apre la finestra Informazioni con versione e build

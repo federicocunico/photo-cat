@@ -45,9 +45,7 @@
 }
 .palette [cmdk-group-heading] {
   padding: var(--pc-space-2) var(--pc-space-2) var(--pc-space-1);
-  font: 600 var(--pc-font-xs) var(--pc-font-ui);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font: 600 var(--pc-font-sm) var(--pc-font-ui);
   color: var(--pc-text-secondary);
 }
 .palette [cmdk-item] {
@@ -70,7 +68,7 @@
   white-space: nowrap;
 }
 .palette-keys {
-  font: var(--pc-font-xs) var(--pc-font-mono);
+  font: var(--pc-font-sm) var(--pc-font-mono);
   color: var(--pc-text-secondary);
 }
 .palette-empty {
@@ -88,7 +86,7 @@
 }
 .shortcut-sheet h3 {
   margin: 0 0 var(--pc-space-2);
-  font: 600 var(--pc-font-md) var(--pc-font-ui);
+  font: 600 var(--pc-font-base) var(--pc-font-ui);
 }
 .shortcut-sheet dl {
   margin: 0;

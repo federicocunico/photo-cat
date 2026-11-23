@@ -347,6 +347,8 @@ it("importazione in corso: 'Segui l'importazione' apre Attività su quell'attivi
   renderPage();
   const panel = screen.getByRole("region", { name: "Importazione in corso" });
   expect(within(panel).getByText("120")).toBeInTheDocument();
+  // E4: zero errori non è un allarme.
+  expect(within(panel).getByText("Errori")).not.toHaveClass("ui-text-danger");
   fireEvent.click(within(panel).getByRole("button", { name: "Segui l'importazione" }));
   expect(useLayout.getState().module).toBe("jobs");
   expect(useLayout.getState().jobFocus).toBe(5);

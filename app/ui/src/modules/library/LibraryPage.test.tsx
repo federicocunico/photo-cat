@@ -297,6 +297,15 @@ describe("Libreria", () => {
     expect(first.querySelector("img")).toHaveAttribute("src", "http://thumb.localhost/abcdef10000");
     expect(screen.getByTestId("thumb-3")).toHaveTextContent("Mancante");
     expect(screen.getByTestId("thumb-2")).toHaveTextContent("3");
+    // Badge con etichetta accessibile e descrizione al passaggio del mouse (L3).
+    const faces = within(screen.getByTestId("thumb-2")).getByRole("img", { name: "3 volti" });
+    expect(faces).toHaveAttribute("title", "3 volti");
+    const queued = within(screen.getByTestId("thumb-2")).getByRole("img", { name: /^In coda/ });
+    expect(queued).toHaveTextContent("In coda");
+    expect(queued).toHaveAttribute("title", expect.stringMatching(/volti, soggetti e luogo/));
+    expect(
+      within(screen.getByTestId("thumb-3")).getByRole("img", { name: /File non trovato/ }),
+    ).toHaveTextContent("Mancante");
     // Chip colorato del tag sulla miniatura.
     expect(screen.getByLabelText("Tag Tramonti")).toHaveAttribute("data-tag-color", "yellow");
 
@@ -313,7 +322,9 @@ describe("Libreria", () => {
     expect(
       within(insp).getByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
     ).toBeInTheDocument();
-    expect(insp).toHaveTextContent("0,82");
+    // Affidabilità in parole, senza punteggi 0–1.
+    expect(insp).toHaveTextContent("molto probabile");
+    expect(insp).not.toHaveTextContent("0,82");
     expect(insp).toHaveTextContent("Giulia");
     expect(insp).toHaveTextContent("tramonto");
     expect(commandsMock.mediaDetail).toHaveBeenCalledWith(1);
@@ -915,7 +926,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
       jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
+  expect((await screen.findByText(/1 foto reinserita/)).closest('[role="status"]')).not.toBeNull();
   // Il percorso riporta al catalogo.
   fireEvent.click(
     within(screen.getByRole("navigation", { name: "Percorso" })).getByRole("button", {
@@ -949,7 +960,7 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
     }),
   );
   expect(
-    (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
+    (await screen.findByText(/Il file non è stato toccato/)).closest('[role="status"]'),
   ).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Annulla operazione" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
@@ -1349,6 +1360,14 @@ describe("trascinamento sui cataloghi e barra laterale dei cataloghi", () => {
     expect(at("Nuovo catalogo")).toBeLessThan(at("Cestino"));
     expect(at("Cestino")).toBeLessThan(at("Duplicati"));
     expect(within(section).getByRole("separator")).toBeTruthy();
+    // F9: la riga d'azione non ha conteggio né stato premuto.
+    const add = within(section).getByRole("button", { name: /Nuovo catalogo/ });
+    expect(add).toHaveTextContent(/^Nuovo catalogo$/);
+    expect(add).not.toHaveAttribute("aria-pressed");
+    // S7: l'Inspector ha un solo comando, nella sua colonna (niente doppione nella barra).
+    expect(screen.getAllByRole("button", { name: /^(Comprimi|Espandi) ispettore$/ })).toHaveLength(
+      1,
+    );
   });
 
   it("creazione sul posto: Invio crea, Esc annulla", async () => {

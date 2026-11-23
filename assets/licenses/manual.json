@@ -1,0 +1,74 @@
+[
+  {
+    "name": "CLIP ViT-B/32 (conversione ONNX di Xenova)",
+    "version": "clip-vit-base-patch32",
+    "license": "MIT",
+    "kind": "model",
+    "text": "MIT License\n\nCopyright (c) 2021 OpenAI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+    "name": "YOLOX-Tiny",
+    "version": "0.1.1rc0",
+    "license": "Apache-2.0",
+    "kind": "model",
+    "spdx": "Apache-2.0"
+  },
+  {
+    "name": "YuNet (OpenCV Zoo)",
+    "version": "2023mar",
+    "license": "MIT",
+    "kind": "model",
+    "text": "MIT License\n\nCopyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+  },
+  {
+    "name": "SFace (OpenCV Zoo)",
+    "version": "2021dec",
+    "license": "Apache-2.0",
+    "kind": "model",
+    "spdx": "Apache-2.0"
+  },
+  {
+    "name": "GeoNames cities15000",
+    "version": "2026-11-01",
+    "license": "CC-BY-4.0",
+    "kind": "model",
+    "text": "Dati geografici derivati da GeoNames (https://www.geonames.org/), © GeoNames.\nGeographical data derived from GeoNames (https://www.geonames.org/), © GeoNames.\n\nCreative Commons Attribution 4.0 International (CC BY 4.0).\nTesto completo / full legal code: https://creativecommons.org/licenses/by/4.0/legalcode"
+  },
+  {
+    "name": "ONNX Runtime",
+    "version": "1.24.4",
+    "license": "MIT",
+    "kind": "native",
+    "files": ["onnxruntime-LICENSE.txt", "onnxruntime-ThirdPartyNotices.txt"]
+  },
+  {
+    "name": "DirectML",
+    "version": "1.15.4",
+    "license": "LicenseRef-Microsoft-DirectML",
+    "kind": "native",
+    "files": ["DirectML-LICENSE.txt", "DirectML-ThirdPartyNotices.txt"]
+  },
+  {
+    "name": "libheif",
+    "version": "1.23.7",
+    "license": "LGPL-3.0-or-later",
+    "kind": "native",
+    "files": ["libheif-LICENSE.txt", "HEIF-BUILD.md"],
+    "sources": "native-sources/libheif-1.23.7.tar.gz"
+  },
+  {
+    "name": "libde265",
+    "version": "1.1.3",
+    "license": "LGPL-3.0-or-later",
+    "kind": "native",
+    "files": ["libde265-LICENSE.txt", "HEIF-BUILD.md"],
+    "sources": "native-sources/libde265-1.1.3.tar.gz"
+  },
+  {
+    "name": "Microsoft Visual C++ Runtime",
+    "version": "14.44.35112",
+    "license": "LicenseRef-Microsoft-VC-Redist",
+    "kind": "native",
+    "files": ["VCRedist-NOTICE.md"]
+  }
+]

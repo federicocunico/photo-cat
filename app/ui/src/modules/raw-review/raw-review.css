@@ -1,16 +1,7 @@
 /* Varianti RAW: pagina iniziale e riepilogo della cartella aperta. */
 .raw-review-page {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
   gap: var(--pc-space-4);
-  overflow: auto;
-  padding-bottom: var(--pc-space-5);
-}
-/* L'intestazione ha già i suoi margini: il resto della pagina si allinea a lei. */
-.raw-review-page > :not(.ui-page-header) {
-  margin-inline: var(--pc-space-5);
+  padding: var(--pc-space-4) var(--pc-space-5) var(--pc-space-5);
 }
 .raw-review-start {
   display: flex;
@@ -72,9 +63,8 @@
 
 /* Cartella aperta: la pagina diventa un'area di lavoro a tutta altezza. */
 .raw-review-page.is-open {
-  overflow: hidden;
   gap: var(--pc-space-2);
-  padding-bottom: var(--pc-space-3);
+  padding: var(--pc-space-2) var(--pc-space-5) var(--pc-space-3);
 }
 .rr-review {
   flex: 1;
@@ -230,7 +220,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: var(--pc-font-md) var(--pc-font-ui);
+  font: var(--pc-font-base) var(--pc-font-ui);
 }
 .rr-shot.is-current .rr-shot-name {
   font-weight: var(--pc-weight-medium);
@@ -240,7 +230,7 @@
   display: flex;
   align-items: center;
   gap: var(--pc-space-1);
-  font: var(--pc-font-xs) var(--pc-font-ui);
+  font: var(--pc-font-sm) var(--pc-font-ui);
   color: var(--pc-text-soft);
 }
 .rr-shot-stars {
@@ -322,7 +312,7 @@
 }
 .rr-panel-recipe {
   color: var(--pc-text-secondary);
-  font: var(--pc-font-xs) var(--pc-font-ui);
+  font: var(--pc-font-sm) var(--pc-font-ui);
 }
 /* Pannelli piccoli (3×3 in una finestra di 1280×720): intestazione su una riga, numero e nome
    prima di tutto; la ricetta resta nel suggerimento e nella barra dei preset. */
@@ -403,7 +393,7 @@
   border-radius: var(--pc-radius-sm);
   background: var(--pc-accent);
   color: var(--pc-on-accent);
-  font: var(--pc-weight-bold) var(--pc-font-xs) var(--pc-font-ui);
+  font: var(--pc-weight-bold) var(--pc-font-sm) var(--pc-font-ui);
   pointer-events: none;
 }
 .rr-recipe-tip {
@@ -667,7 +657,7 @@
 .dv-section > legend {
   margin: 0;
   padding: 0 var(--pc-space-1);
-  font: var(--pc-weight-medium) var(--pc-font-md, inherit) var(--pc-font-ui);
+  font: var(--pc-weight-medium) var(--pc-font-base) var(--pc-font-ui);
 }
 .dv-section > p {
   margin: 0;

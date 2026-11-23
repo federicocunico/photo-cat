@@ -13,9 +13,9 @@ import {
   IconButton,
   InlineAlert,
   Menu,
-  PageHeader,
   type MenuItem,
 } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import {
   commands,
   events,
@@ -25,6 +25,7 @@ import {
 } from "../../lib/ipc";
 import { fmtDayMonth, fmtHourMinute, fmtInt } from "../../lib/format";
 import { useLayout } from "../../store/layout";
+import { useMenuIntent } from "../../store/menuIntent";
 import { activeJobs, useLive } from "../../store/live";
 import { notify, notifyError } from "../../store/toasts";
 import { FORMAT_GROUPS, splitPatterns } from "./formats";
@@ -285,13 +286,13 @@ function ScanSummary() {
     <Card title={t("import.scanning")} aria-label={t("import.scanning")}>
       <dl className="import-scan">
         <dt className="muted">{t("import.found")}</dt>
-        <dd className="mono">{fmtInt(scan?.done ?? 0)}</dd>
+        <dd>{fmtInt(scan?.done ?? 0)}</dd>
         <dt className="muted">{t("import.processed")}</dt>
-        <dd className="mono">{fmtInt(write?.done ?? 0)}</dd>
-        <dt className="ui-text-danger">{t("jobs.col.errors")}</dt>
-        <dd className="mono ui-text-danger">{fmtInt(job.failed)}</dd>
+        <dd>{fmtInt(write?.done ?? 0)}</dd>
+        <dt className={job.failed > 0 ? "ui-text-danger" : "muted"}>{t("jobs.col.errors")}</dt>
+        <dd className={job.failed > 0 ? "ui-text-danger" : undefined}>{fmtInt(job.failed)}</dd>
         <dt className="muted">{t("jobs.phases.metadati")}</dt>
-        <dd className="mono">{meta?.percent != null ? `${Math.floor(meta.percent)}%` : "—"}</dd>
+        <dd>{meta?.percent != null ? `${Math.floor(meta.percent)}%` : "—"}</dd>
       </dl>
       <div>
         <Button variant="ghost" onClick={() => follow(job.id)}>
@@ -308,6 +309,17 @@ export function ImportPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [path, setPath] = useState("");
+  // File › "Importa una cartella…" (Ctrl+O): lo stesso selettore del pulsante della pagina.
+  const intent = useMenuIntent((s) => s.intent);
+  useEffect(() => {
+    if (!useMenuIntent.getState().take("import.pick")) return;
+    void pickFolder().then((p) => {
+      if (p) {
+        setPath(p);
+        setError(null);
+      }
+    });
+  }, [intent]);
   const [recursive, setRecursive] = useState(true);
   const [watch, setWatch] = useState(false);
   const [formats, setFormats] = useState(() =>
@@ -354,86 +366,83 @@ export function ImportPage() {
   };
 
   return (
-    <div className="import-page">
-      <PageHeader title={t("modules.import")} description={t("import.subtitle")} />
-      <div className="import-body">
-        <div className="import-columns">
-          <Card title={t("import.title")} className="import-form">
-            <FolderPicker
-              label={t("import.folder")}
-              value={path}
-              onChange={(p) => {
-                setPath(p);
-                setError(null);
-              }}
-              pick={() => pickFolder()}
-            />
-            {error && (
-              <InlineAlert tone="danger" title={error.message}>
-                {error.detail && (
-                  <Disclosure title={t("common.details")} defaultOpen={false} level={4}>
-                    <p className="mono import-path">{error.detail}</p>
-                  </Disclosure>
-                )}
-              </InlineAlert>
-            )}
-            <div className="import-options">
-              <label className="import-check">
-                <input
-                  type="checkbox"
-                  checked={recursive}
-                  onChange={(e) => setRecursive(e.target.checked)}
-                />
-                {t("import.recursive")}
-              </label>
-              <label className="import-check" title={t("import.watchHint")}>
-                <input
-                  type="checkbox"
-                  checked={watch}
-                  onChange={(e) => setWatch(e.target.checked)}
-                />
-                {t("import.watchNew")}
-              </label>
-            </div>
-            <fieldset className="import-formats">
-              <legend className="muted">{t("import.formats")}</legend>
-              <div>
-                {FORMAT_GROUPS.map((g) => (
-                  <label key={g.id} className="import-check">
-                    <input
-                      type="checkbox"
-                      checked={formats[g.id]}
-                      onChange={(e) => setFormats({ ...formats, [g.id]: e.target.checked })}
-                    />
-                    {g.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <Disclosure title={t("import.advanced")} defaultOpen={false}>
-              <FormField label={t("import.ignore")} hint={t("import.ignoreHint")}>
-                <input
-                  className="field mono"
-                  value={ignore}
-                  spellCheck={false}
-                  onChange={(e) => setIgnore(e.target.value)}
-                />
-              </FormField>
-            </Disclosure>
-            <div className="import-submit">
-              <Button variant="primary" disabledReason={disabledReason} onClick={start}>
-                {t("import.start")}
-              </Button>
-            </div>
-          </Card>
-          <div className="import-side">
-            <ScanSummary />
+    <ModulePage
+      title={t("modules.import")}
+      subtitle={t("import.subtitle")}
+      bodyClassName="import-body"
+    >
+      <div className="import-columns">
+        <Card title={t("import.title")} className="import-form">
+          <FolderPicker
+            label={t("import.folder")}
+            value={path}
+            onChange={(p) => {
+              setPath(p);
+              setError(null);
+            }}
+            pick={() => pickFolder()}
+          />
+          {error && (
+            <InlineAlert tone="danger" title={error.message}>
+              {error.detail && (
+                <Disclosure title={t("common.details")} defaultOpen={false} level={4}>
+                  <p className="mono import-path">{error.detail}</p>
+                </Disclosure>
+              )}
+            </InlineAlert>
+          )}
+          <div className="import-options">
+            <label className="import-check">
+              <input
+                type="checkbox"
+                checked={recursive}
+                onChange={(e) => setRecursive(e.target.checked)}
+              />
+              {t("import.recursive")}
+            </label>
+            <label className="import-check" title={t("import.watchHint")}>
+              <input type="checkbox" checked={watch} onChange={(e) => setWatch(e.target.checked)} />
+              {t("import.watchNew")}
+            </label>
           </div>
+          <fieldset className="import-formats">
+            <legend className="muted">{t("import.formats")}</legend>
+            <div>
+              {FORMAT_GROUPS.map((g) => (
+                <label key={g.id} className="import-check">
+                  <input
+                    type="checkbox"
+                    checked={formats[g.id]}
+                    onChange={(e) => setFormats({ ...formats, [g.id]: e.target.checked })}
+                  />
+                  {g.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <Disclosure title={t("import.advanced")} defaultOpen={false}>
+            <FormField label={t("import.ignore")} hint={t("import.ignoreHint")}>
+              <input
+                className="field mono"
+                value={ignore}
+                spellCheck={false}
+                onChange={(e) => setIgnore(e.target.value)}
+              />
+            </FormField>
+          </Disclosure>
+          <div className="import-submit">
+            <Button variant="primary" disabledReason={disabledReason} onClick={start}>
+              {t("import.start")}
+            </Button>
+          </div>
+        </Card>
+        <div className="import-side">
+          <ScanSummary />
         </div>
-        <QueryView query={sources} isEmpty={() => false}>
-          {() => <FoldersList sources={sources.data ?? []} />}
-        </QueryView>
       </div>
-    </div>
+      <QueryView query={sources} isEmpty={() => false}>
+        {() => <FoldersList sources={sources.data ?? []} />}
+      </QueryView>
+    </ModulePage>
   );
 }

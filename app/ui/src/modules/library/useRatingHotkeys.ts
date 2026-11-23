@@ -22,6 +22,9 @@ export function useRatingHotkeys(
       group: "selection" as const,
       shortcut: { key: String(n), alt: true },
       palette: false,
+      menu: { menu: "edit" as const, section: 2, order: 20 + n, submenu: t("menu.rating") },
+      disabledReason: () =>
+        ref.current.selection().count > 0 ? undefined : t("menu.why.selectPhotos"),
       when: () => ref.current.selection().count > 0,
       run: () => {
         const { target, count, resolve } = ref.current.selection();

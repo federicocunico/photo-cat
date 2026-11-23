@@ -165,6 +165,11 @@ pub enum UndoAction {
         #[serde(default)]
         states: Vec<crate::people::FaceState>,
     },
+    /// Nome dato a un gruppo (collegamento a un'identità) o tolto: si torna a nome e identità
+    /// di prima.
+    PersonLinked {
+        before: crate::people::PersonSnapshot,
+    },
     /// Persone unite in `to`: snapshot dei gruppi eliminati e assegnazioni previe.
     PersonsMerged {
         from: Vec<crate::people::PersonSnapshot>,
@@ -213,6 +218,7 @@ impl UndoAction {
                 | UndoAction::PersonsMerged { .. }
                 | UndoAction::FacesRestored { .. }
                 | UndoAction::MergeLogged { .. }
+                | UndoAction::PersonLinked { .. }
         )
     }
 
@@ -1732,6 +1738,7 @@ fn undo_action(
         UndoAction::FacesRecovered { ids } => {
             crate::people::unrecover_faces(c, &ids)?;
         }
+        UndoAction::PersonLinked { before } => crate::people::restore_link(c, &before)?,
         UndoAction::PersonCover { group, prev } => match prev {
             Some(face) => crate::people::set_cover(c, group, face)?,
             None => crate::people::clear_cover(c, group)?,

@@ -157,7 +157,8 @@ export const rawReview = {
           "Se la fotocamera smette di rispondere, spegnila e riaccendila, poi premi «Ripeti verifica».",
       },
       log: {
-        title: "Registro della fotocamera ({{count}})",
+        title_one: "Registro della fotocamera ({{count}})",
+        title_other: "Registro della fotocamera ({{count}})",
         label: "Registro recente della fotocamera",
         empty: "Nessun evento.",
         copy: "Copia il registro",
@@ -185,7 +186,8 @@ export const rawReview = {
       scope: {
         legend: "Scatti da sviluppare",
         all: "Tutti gli scatti della cartella",
-        selected: "Solo i selezionati ({{count}})",
+        selected_one: "Solo i selezionati ({{count}})",
+        selected_other: "Solo i selezionati ({{count}})",
         selectHint:
           "Per scegliere solo alcuni scatti, selezionali prima nell'elenco della sessione (Ctrl+clic o Maiusc+clic).",
       },
@@ -316,8 +318,10 @@ export const rawReview = {
       total_one: "Verrà esportata {{count}} foto",
       total_other: "Verranno esportate {{count}} foto",
       excluded: "Non verranno esportate",
-      noChoice: "{{count}} senza scelta",
-      notJpeg: "{{count}} non JPEG",
+      noChoice_one: "{{count}} senza scelta",
+      noChoice_other: "{{count}} senza scelta",
+      notJpeg_one: "{{count}} non JPEG",
+      notJpeg_other: "{{count}} non JPEG",
       missing_one: "{{count}} file mancante",
       missing_other: "{{count}} file mancanti",
       notJpegHelp:
@@ -614,7 +618,8 @@ export const rawReview = {
           "If the camera stops responding, turn it off and on again, then press “Check again”.",
       },
       log: {
-        title: "Camera log ({{count}})",
+        title_one: "Camera log ({{count}})",
+        title_other: "Camera log ({{count}})",
         label: "Recent camera log",
         empty: "No events.",
         copy: "Copy the log",
@@ -641,7 +646,8 @@ export const rawReview = {
       scope: {
         legend: "Shots to develop",
         all: "All the shots in the folder",
-        selected: "Only the selected ({{count}})",
+        selected_one: "Only the selected ({{count}})",
+        selected_other: "Only the selected ({{count}})",
         selectHint:
           "To develop only some shots, select them first in the session list (Ctrl+click or Shift+click).",
       },
@@ -769,8 +775,10 @@ export const rawReview = {
       total_one: "{{count}} photo will be exported",
       total_other: "{{count}} photos will be exported",
       excluded: "Not exported",
-      noChoice: "{{count}} with no pick",
-      notJpeg: "{{count}} not JPEG",
+      noChoice_one: "{{count}} with no pick",
+      noChoice_other: "{{count}} with no pick",
+      notJpeg_one: "{{count}} not JPEG",
+      notJpeg_other: "{{count}} not JPEG",
       missing_one: "{{count}} missing file",
       missing_other: "{{count}} missing files",
       notJpegHelp:

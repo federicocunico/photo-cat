@@ -1,14 +1,13 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useCommands } from "../../commands/registry";
 import { commands, isTauri } from "../../lib/ipc";
 import { emptyFilter, useLibrary } from "../../store/library";
-import { collectDuplicates, startQualityCheck, systemCatalogId } from "../catalogs/systemCatalogs";
+import { systemCatalogId } from "../catalogs/systemCatalogs";
 
-/** Comandi della palette per i cataloghi di sistema (Cestino, Duplicati, Qualità). */
+/** Comando della palette per aprire il Cestino (Duplicati e Qualità sono nel menu Strumenti). */
 export function useSystemCatalogCommands() {
   const { t } = useTranslation();
-  const qc = useQueryClient();
   const catalogs = useQuery({
     queryKey: ["catalogs"],
     queryFn: () => commands.listCatalogs(),
@@ -28,17 +27,6 @@ export function useSystemCatalogCommands() {
       group: "library",
       run: () => open("trash"),
     },
-    {
-      id: "system.collectDuplicates",
-      label: t("catalogs.system.collectDuplicates"),
-      group: "library",
-      run: () => collectDuplicates(qc, t),
-    },
-    {
-      id: "system.checkQuality",
-      label: t("catalogs.system.checkQuality"),
-      group: "library",
-      run: () => startQualityCheck(t),
-    },
+    // "Metti da parte i duplicati" e "Controlla la qualità" sono comandi globali (menu Strumenti).
   ]);
 }

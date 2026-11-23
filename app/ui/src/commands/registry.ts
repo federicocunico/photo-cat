@@ -5,7 +5,14 @@ import { create } from "zustand";
 import { isTyping, modalOpen } from "../lib/keys";
 
 export type CommandGroup =
-  "general" | "navigation" | "library" | "selection" | "viewer" | "sequence" | "people" | "rawReview";
+  | "general"
+  | "navigation"
+  | "library"
+  | "selection"
+  | "viewer"
+  | "sequence"
+  | "people"
+  | "rawReview";
 
 /** Combinazione di tasti; `mod` è Ctrl (⌘ su macOS). */
 export type Shortcut = {
@@ -14,6 +21,15 @@ export type Shortcut = {
   shift?: boolean;
   alt?: boolean;
 };
+
+/** Menu della barra dei menu (application-menu). */
+export type MenuId = "file" | "edit" | "view" | "go" | "tools" | "help";
+
+/**
+ * Posizione di un comando nella barra dei menu: menu, sezione (separatori tra sezioni) e ordine
+ * nella sezione; `submenu` raggruppa più comandi sotto una voce (es. "Tema").
+ */
+export type MenuPlacement = { menu: MenuId; section: number; order: number; submenu?: string };
 
 export type Command = {
   id: string;
@@ -35,6 +51,20 @@ export type Command = {
   palette?: boolean;
   /** Parole in più per la ricerca nella palette. */
   keywords?: string;
+  /** Voce della barra dei menu: i menu leggono il registro, non un elenco a parte (D6). */
+  menu?: MenuPlacement | MenuPlacement[];
+  /**
+   * Perché il comando ora non si può usare (es. "Seleziona prima delle foto"): la voce di menu
+   * resta visibile, disattivata, e mostra il motivo.
+   */
+  disabledReason?: () => string | undefined;
+  /** Stato di una voce che si attiva e disattiva (es. Navigazione compatta, Tema scuro). */
+  checked?: () => boolean;
+  /**
+   * Segnaposto della barra dei menu per un comando di modulo (id o prefisso di id): la voce resta
+   * visibile, disattivata con il motivo, finché il modulo non registra il comando vero.
+   */
+  fallbackFor?: string;
   run?: () => unknown;
 };
 
@@ -118,17 +148,60 @@ export function useCommands(commands: Command[], enabled = true) {
   const latest = useRef(commands);
   latest.current = commands;
   const signature = commands
-    .map((c) => `${c.id}|${c.label}|${c.keys ?? ""}|${JSON.stringify(c.shortcut ?? null)}`)
+    .map(
+      (c) =>
+        `${c.id}|${c.label}|${c.keys ?? ""}|${JSON.stringify(c.shortcut ?? null)}|${JSON.stringify(c.menu ?? null)}`,
+    )
     .join(";");
   useEffect(() => {
     if (!enabled) return;
     const stable = latest.current.map((c, i): Command => ({
       ...c,
       when: c.when && (() => latest.current[i]?.when?.() ?? false),
+      disabledReason: c.disabledReason && (() => latest.current[i]?.disabledReason?.()),
+      checked: c.checked && (() => latest.current[i]?.checked?.() ?? false),
       run: c.run && (() => latest.current[i]?.run?.()),
     }));
     return registerCommands(stable);
   }, [signature, enabled]);
+}
+
+/** Un comando con lo stesso id registrato dopo prende il posto del precedente. */
+export function latestCommands(list = useCommandStore.getState().commands): Command[] {
+  const seen = new Map<string, Command>();
+  for (const c of list) seen.set(c.id, c);
+  const all = [...seen.values()];
+  const real = all.filter((c) => !c.fallbackFor);
+  // Un segnaposto sparisce appena c'è il comando vero, in qualunque ordine siano registrati.
+  return all.filter(
+    (c) => !c.fallbackFor || !real.some((r) => r.id.startsWith(c.fallbackFor as string)),
+  );
+}
+
+/** Il comando ora si può eseguire: ha un'azione, la condizione vale e non ha un motivo di blocco. */
+export const commandEnabled = (c: Command) =>
+  Boolean(c.run) && (!c.when || c.when()) && !c.disabledReason?.();
+
+export type MenuEntry = { command: Command; placement: MenuPlacement };
+
+/** Voci di un menu, per sezione e ordine, dal registro. */
+export function menuEntries(menu: MenuId, list?: Command[]): MenuEntry[][] {
+  const entries: MenuEntry[] = [];
+  for (const command of latestCommands(list)) {
+    const placements = command.menu ? [command.menu].flat() : [];
+    for (const placement of placements)
+      if (placement.menu === menu) entries.push({ command, placement });
+  }
+  entries.sort(
+    (a, b) => a.placement.section - b.placement.section || a.placement.order - b.placement.order,
+  );
+  const sections: MenuEntry[][] = [];
+  for (const e of entries) {
+    const last = sections[sections.length - 1];
+    if (last && last[0]!.placement.section === e.placement.section) last.push(e);
+    else sections.push([e]);
+  }
+  return sections;
 }
 
 /** Comandi disponibili adesso, per la palette (l'ultimo con lo stesso id vince). */

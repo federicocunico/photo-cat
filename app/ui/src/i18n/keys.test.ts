@@ -63,7 +63,6 @@ const dynamic: Record<string, string[]> = {
     "people",
   ],
   "shell.ramState": ["pressure", "critical"],
-  "sequence.keys": ["assign", "remove", "session", "fullscreen"],
   "shell.models": ["ready", "missing", "update", "error"],
   "jobs.kinds": [
     "other",
@@ -217,6 +216,8 @@ const dynamic: Record<string, string[]> = {
   ],
   // GroupList: t(`people.sort.${s}`) con s ∈ GroupSort.
   "people.sort": ["photos_desc", "name_asc", "faces_desc"],
+  // people/similarity.ts: somiglianza in parole.
+  "people.similarity": ["high", "medium"],
   // ModuleNav: t(`modules.${id}`) — moduli attivi in registry.ts (niente identities).
   modules: [
     "library",
@@ -277,7 +278,8 @@ describe("risorse di traduzione", () => {
       expect(codes).toContain("CAMERA_DISCONNECTED");
       expect(codes).toContain("CAMERA_BUSY");
       const missing = codes.filter(
-        (code) => i18n.getResource(lng, "translation", `errors.${code.toLowerCase()}`) === undefined,
+        (code) =>
+          i18n.getResource(lng, "translation", `errors.${code.toLowerCase()}`) === undefined,
       );
       expect(missing).toEqual([]);
     });

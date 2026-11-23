@@ -1,4 +1,4 @@
-import { fmtInt } from "../../lib/format";
+import { fmtDec, fmtInt } from "../../lib/format";
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { EmptyState, useTip, useWidth } from "./shared";
 
@@ -30,7 +30,7 @@ const TOP = 10;
 const BOTTOM = 24;
 const LEFT = 36;
 
-const f2 = (n: number) => n.toFixed(2);
+const f2 = (n: number) => fmtDec(n, 2);
 
 /**
  * Selezione con puntatore (trascinamento) o tastiera: Frecce spostano il cursore,

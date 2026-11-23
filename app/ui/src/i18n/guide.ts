@@ -17,8 +17,8 @@ const it = {
     recursive: "Includi le sottocartelle",
     continueHint: "«Continua» si attiva dopo aver scelto una cartella.",
     aiTitle: "Funzioni AI",
-    aiHelp:
-      "Volti, soggetti e luoghi si riconoscono sul computer. I modelli si scaricano in background: intanto puoi usare l'app.",
+    aiHelp: "Volti, soggetti e luoghi si riconoscono sul computer.",
+    modelsDownload: "I modelli si scaricano in background: intanto puoi usare l'app.",
     summary:
       "Il computer ha {{gb}} GB di memoria e {{cores}} processori: useremo il profilo {{profile}}. Puoi cambiarlo in Impostazioni.",
     gpu: "La scheda video supporta l'accelerazione: l'analisi delle foto sarà più rapida.",
@@ -122,15 +122,15 @@ const en: typeof it = {
     recursive: "Include subfolders",
     continueHint: "“Continue” becomes available once you choose a folder.",
     aiTitle: "AI features",
-    aiHelp:
-      "Faces, subjects and places are recognised on your computer. Models download in the background: you can use the app meanwhile.",
+    aiHelp: "Faces, subjects and places are recognised on your computer.",
+    modelsDownload: "Models download in the background: you can use the app meanwhile.",
     summary:
       "Your computer has {{gb}} GB of memory and {{cores}} processors: we'll use the {{profile}} profile. You can change it in Settings.",
     gpu: "Your graphics card supports acceleration: photo analysis will be faster.",
     cpuOnly: "Analysis will use the processor: slower, but it works on any computer.",
     noRuntime: "ONNX Runtime unavailable: AI features will stay disabled.",
     checking: "Checking your system…",
-    modelsReady: "AI models are already ready.",
+    modelsReady: "The AI models are ready.",
     back: "Back",
     continue: "Continue",
     later: "Later",

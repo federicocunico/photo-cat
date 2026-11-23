@@ -1,5 +1,5 @@
 import { Coachmark } from "../guide/Coachmark";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { MODULES, NAV_GROUPS, type NavItem } from "../../modules/registry";
@@ -39,11 +39,16 @@ function useNavCommands() {
   const { t } = useTranslation();
   const openModule = useLayout((s) => s.openModule);
   useCommands([
-    ...MODULES.map((m): Command => ({
+    ...MODULES.map((m, i): Command => ({
       id: `nav.${m.id}`,
-      label: t("commands.goTo", { name: t(`modules.${m.id}`) }),
+      // Stesso nome nella palette e nel menu Vai (application-menu).
+      label: t(`modules.${m.id}`),
       group: "navigation",
-      keywords: t(`modules.${m.id}`),
+      keywords: t("commands.goTo", { name: t(`modules.${m.id}`) }),
+      menu: [
+        { menu: "go" as const, section: m.group === "bottom" ? 1 : 0, order: i },
+        ...(m.id === "settings" ? [{ menu: "file" as const, section: 2, order: 1 }] : []),
+      ],
       shortcut: m.shortcut
         ? { key: String(m.shortcut), mod: true }
         : m.id === "settings"
@@ -53,8 +58,9 @@ function useNavCommands() {
     })),
     {
       id: "nav.raw-review.open",
-      label: t("commands.rawReviewOpen"),
+      label: t("menu.openRawFolder"),
       group: "navigation",
+      menu: { menu: "file", section: 1, order: 0 },
       keywords: `${t("modules.raw-review")} RAW Fujifilm X-T5 FujiView`,
       // Apre il dialogo di scelta cartella e porta la cartella scelta nel modulo.
       run: async () => {
@@ -64,16 +70,29 @@ function useNavCommands() {
     },
     ...(["overview", "reprocess", "cleanup", "map"] as const).map((section): Command => ({
       id: `nav.ai.${section}`,
-      label: section === "map" ? t("aiMap.command") : t(`ai.commands.${section}`),
+      label:
+        section === "map"
+          ? t("menu.photoMap")
+          : section === "reprocess"
+            ? t("menu.reanalyze")
+            : t(`ai.commands.${section}`),
       group: "navigation",
       keywords: t("modules.ai"),
+      menu:
+        section === "map"
+          ? { menu: "view", section: 2, order: 0 }
+          : section === "reprocess"
+            ? { menu: "tools", section: 0, order: 0 }
+            : undefined,
       run: () => openModule({ module: "ai", section }),
     })),
     {
       id: "nav.toggle",
-      label: t("commands.toggleNav"),
+      label: t("menu.compactNav"),
       group: "navigation",
       shortcut: { key: "b", mod: true },
+      menu: { menu: "view", section: 0, order: 0 },
+      checked: () => useLayout.getState().navCompact,
       run: () => useLayout.getState().toggleNav(),
     },
   ]);
@@ -99,7 +118,6 @@ export function ModuleNav() {
   const narrow = useNarrowWindow();
   const compact = preferCompact || narrow;
   const badges = useBadges();
-  const settingsRef = useRef<HTMLButtonElement>(null);
   useNavCommands();
 
   const badgeText = (id: ModuleId, n: number) =>
@@ -114,7 +132,6 @@ export function ModuleNav() {
         key={id}
         type="button"
         className="nav-item"
-        ref={id === "settings" ? settingsRef : undefined}
         aria-current={active ? "page" : undefined}
         aria-label={name}
         aria-keyshortcuts={shortcut ? `Control+${shortcut}` : undefined}
@@ -155,7 +172,7 @@ export function ModuleNav() {
           return (
             <div key={g.id} className="nav-group nav-bottom">
               {items.map(item)}
-              <Coachmark tip="moved" anchor={settingsRef} side="right" learnMore="settings" />
+              <Coachmark tip="moved" learnMore="settings" />
               {!narrow && (
                 <Tooltip side="right" content={`${toggleLabel} · ${MOD}+B`}>
                   <button

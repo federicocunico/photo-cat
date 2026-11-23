@@ -1,24 +1,24 @@
-import * as RPopover from "@radix-ui/react-popover";
-import { useEffect, useId, type RefObject } from "react";
+import { useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import { useGuide, type GuideSection, type TipId } from "../../store/guide";
 import "./guide.css";
 
 /**
- * Suggerimento al primo uso: ancorato a un elemento, non modale (non prende il focus e
- * non blocca il resto della pagina), al massimo uno visibile alla volta. Si chiude con
- * "Ho capito" o Esc e non ricompare, salvo Aiuto › "Mostra di nuovo i suggerimenti".
+ * Suggerimento al primo uso (in-app-guidance; ui-usability-audit D12): una nota in linea, nel
+ * flusso della pagina, accanto al titolo o all'elenco a cui si riferisce. Non è un popover:
+ * non copre comandi né contenuto, non prende il focus e non blocca nulla. Al massimo uno visibile
+ * alla volta; si chiude con "Ho capito" e non ricompare, salvo Aiuto › "Mostra di nuovo i
+ * suggerimenti".
  */
 export function Coachmark({
   tip,
-  anchor,
-  side = "bottom",
+  placement = "inline-start",
   learnMore,
 }: {
   tip: TipId;
-  anchor: RefObject<HTMLElement | null>;
-  side?: "top" | "right" | "bottom" | "left";
+  /** Allineamento nella riga che lo ospita: all'inizio (sinistra) o alla fine (destra). */
+  placement?: "inline-start" | "inline-end";
   /** Sezione della guida aperta da "Scopri di più". */
   learnMore?: GuideSection;
 }) {
@@ -35,42 +35,37 @@ export function Coachmark({
   if (!visible) return null;
   const dismiss = () => useGuide.getState().dismiss(tip);
   return (
-    <RPopover.Root open modal={false} onOpenChange={(open) => !open && dismiss()}>
-      <RPopover.Anchor virtualRef={anchor as RefObject<HTMLElement>} />
-      <RPopover.Portal>
-        <RPopover.Content
-          className="ui-popover ui-coachmark"
-          side={side}
-          sideOffset={8}
-          collisionPadding={8}
-          aria-labelledby={id}
-          // Non modale: il focus resta dov'è e un clic altrove non lo chiude.
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onCloseAutoFocus={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          data-tip={tip}
-        >
-          <p id={id}>{t(`guide.tips.${tip}`)}</p>
-          <div className="ui-coachmark-actions">
-            {learnMore && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  dismiss();
-                  useGuide.getState().openGuide(learnMore);
-                }}
-              >
-                {t("guide.learnMore")}
-              </Button>
-            )}
-            <Button variant="primary" size="sm" onClick={dismiss}>
-              {t("guide.gotIt")}
-            </Button>
-          </div>
-          <RPopover.Arrow className="ui-coachmark-arrow" width={12} height={6} />
-        </RPopover.Content>
-      </RPopover.Portal>
-    </RPopover.Root>
+    <aside
+      role="note"
+      aria-labelledby={id}
+      className="ui-coachmark"
+      data-placement={placement}
+      data-tip={tip}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          dismiss();
+        }
+      }}
+    >
+      <p id={id}>{t(`guide.tips.${tip}`)}</p>
+      <div className="ui-coachmark-actions">
+        {learnMore && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              dismiss();
+              useGuide.getState().openGuide(learnMore);
+            }}
+          >
+            {t("guide.learnMore")}
+          </Button>
+        )}
+        <Button variant="primary" size="sm" onClick={dismiss}>
+          {t("guide.gotIt")}
+        </Button>
+      </div>
+    </aside>
   );
 }

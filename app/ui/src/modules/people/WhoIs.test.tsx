@@ -5,6 +5,7 @@ import "../../i18n";
 import type { GroupRow } from "../../lib/ipc";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
+import { useToast } from "../../store/toasts";
 import { PeopleModule } from "./PeopleModule";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
@@ -74,7 +75,7 @@ async function openUnnamed() {
       <PeopleModule />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByText(/Persona senza nome · 3 foto/i));
+  fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*3 foto/i }));
   return screen.findByRole("combobox", { name: "Chi è?" });
 }
 
@@ -82,19 +83,19 @@ it("suggests identities by name or alias, ordered by similarity", async () => {
   const input = await openUnnamed();
   fireEvent.change(input, { target: { value: "Giu" } });
   await screen.findByRole("option", { name: /Giulia Bianchi/ });
-  const options = within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole(
+  const options = within(screen.getByRole("listbox", { name: "Persone proposte" })).getAllByRole(
     "option",
   );
   expect(options.map((o) => o.textContent)).toEqual([
-    "Giulia Bianchi0.81",
+    "Giulia Bianchisomiglianza alta",
     "Giuseppe Verdi",
-    'Crea l\'identità "Giu"',
+    "Nuova persona «Giu»",
   ]);
   expect(commandsMock.suggestIdentities).toHaveBeenCalledWith(12, "Giu");
   fireEvent.change(input, { target: { value: "Nonna" } });
   await waitFor(() =>
     expect(
-      within(screen.getByRole("listbox", { name: /Identità proposte/i })).getAllByRole("option")[0],
+      within(screen.getByRole("listbox", { name: "Persone proposte" })).getAllByRole("option")[0],
     ).toHaveTextContent("Rita Rossi"),
   );
 });
@@ -110,7 +111,7 @@ it("creates the identity when none matches, then links it", async () => {
   commandsMock.saveIdentity.mockResolvedValueOnce("new");
   const input = await openUnnamed();
   fireEvent.change(input, { target: { value: "Marco Russo" } });
-  await screen.findByRole("option", { name: 'Crea l\'identità "Marco Russo"' });
+  await screen.findByRole("option", { name: "Nuova persona «Marco Russo»" });
   fireEvent.keyDown(input, { key: "Enter" });
   await waitFor(() =>
     expect(commandsMock.saveIdentity).toHaveBeenCalledWith(null, {
@@ -122,4 +123,11 @@ it("creates the identity when none matches, then links it", async () => {
     }),
   );
   await waitFor(() => expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(12, "new"));
+  // E6: l'avviso dice che cosa è cambiato e si annulla.
+  await waitFor(() =>
+    expect(useToast.getState().notices.slice(-1)[0]).toMatchObject({
+      message: "Gruppo chiamato Marco Russo",
+      action: { label: "Annulla operazione" },
+    }),
+  );
 });

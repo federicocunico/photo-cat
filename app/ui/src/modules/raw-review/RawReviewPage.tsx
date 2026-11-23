@@ -11,13 +11,14 @@ import {
   EmptyState,
   IconButton,
   InlineAlert,
-  PageHeader,
   chooseFolder,
 } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { commands, type OpenedReview, type ShotDecision } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
 import { useGuide } from "../../store/guide";
 import { useLayout } from "../../store/layout";
+import { useMenuIntent } from "../../store/menuIntent";
 import {
   candidatesOf,
   chooseWinner,
@@ -113,6 +114,13 @@ export function RawReviewPage() {
     if (file) await run(() => commands.rawReviewOpenFujiview(file), false);
   };
 
+  // File › "Apri un progetto FujiView…": lo stesso comando del pulsante della pagina.
+  const intent = useMenuIntent((s) => s.intent);
+  useEffect(() => {
+    if (useMenuIntent.getState().take("rawReview.project")) void pickProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo alla richiesta del menu
+  }, [intent]);
+
   const forget = async (root: string) => {
     try {
       await commands.rawReviewForget(root);
@@ -153,13 +161,14 @@ export function RawReviewPage() {
   );
 
   return (
-    <div className={`raw-review-page${opened ? " is-open" : ""}`}>
-      {/* Con una cartella aperta l'intestazione perde la descrizione: l'altezza va ai pannelli. */}
-      <PageHeader
-        title={t("modules.raw-review")}
-        description={opened ? undefined : t("rawReviewPage.subtitle")}
-        actions={actions}
-      />
+    // Con una cartella aperta il corpo non scorre: l'altezza va ai pannelli della revisione.
+    <ModulePage
+      title={t("modules.raw-review")}
+      subtitle={t("rawReviewPage.subtitle")}
+      actions={actions}
+      scroll={!opened}
+      bodyClassName={`raw-review-page${opened ? " is-open" : ""}`}
+    >
       {error && (
         <InlineAlert
           tone="danger"
@@ -217,7 +226,7 @@ export function RawReviewPage() {
           </Card>
         </div>
       )}
-    </div>
+    </ModulePage>
   );
 }
 

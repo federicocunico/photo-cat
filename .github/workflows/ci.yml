@@ -49,6 +49,9 @@ jobs:
           components: rustfmt, clippy
       # Il crate photo-cat incorpora il frontend compilato: serve prima di clippy e test.
       - run: npm --prefix app/ui run build
+      # Licenze di terze parti: il file nel repository corrisponde alle dipendenze (app-about).
+      - run: node --test scripts/licenses.test.mjs
+      - run: node scripts/licenses.mjs --check
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace

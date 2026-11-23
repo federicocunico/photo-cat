@@ -25,7 +25,14 @@ export type ModuleId =
  * Diagnostica non sono più voci della navigazione ma sezioni di Impostazioni.
  */
 export type SettingsSection =
-  "general" | "library" | "ai" | "models" | "apps" | "diagnostics" | "advanced";
+  | "general"
+  | "library"
+  | "ai"
+  | "models"
+  | "apps"
+  | "diagnostics"
+  | "advanced"
+  | "about";
 
 /** Sezioni del modulo AI (ai-workspace D8). "map" arriva con una modifica successiva. */
 export type AiSection = "overview" | "reprocess" | "results" | "cleanup" | "similar" | "map";

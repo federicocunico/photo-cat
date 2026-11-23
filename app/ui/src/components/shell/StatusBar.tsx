@@ -36,9 +36,7 @@ export function RamChip() {
       ) : (
         <Icon.Ram size={14} style={{ color }} aria-hidden="true" />
       )}
-      <span className="mono">
-        {t("shell.ram", { used: mbToGb(used), total: fmtDec(system.totalMb / 1024, 0) })}
-      </span>
+      <span>{t("shell.ram", { used: mbToGb(used), total: fmtDec(system.totalMb / 1024, 0) })}</span>
       {/* La pressione si legge anche come testo, non solo dal colore. */}
       {pressed && <span style={{ color }}>{t(`shell.ramState.${res.state}`)}</span>}
     </button>

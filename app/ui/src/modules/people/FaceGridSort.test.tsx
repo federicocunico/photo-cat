@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
@@ -65,15 +66,24 @@ const lastSort = () => {
   const c = commandsMock.groupFaces.mock.calls;
   return c[c.length - 1]?.[1];
 };
-const pick = (v: string) =>
-  fireEvent.change(screen.getByLabelText(/Ordina per/), { target: { value: v } });
+const SORT_LABEL: Record<string, string> = {
+  quality_desc: "Qualità",
+  captured_asc: "Data, dalla più vecchia",
+  captured_desc: "Data, dalla più recente",
+};
+/** L'ordinamento è un menu "Ordina: …" nell'intestazione della griglia (ui-usability-audit 6.6). */
+const pick = async (v: string) => {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: /^Ordina:/ }));
+  await user.click(await screen.findByRole("menuitemcheckbox", { name: SORT_LABEL[v] }));
+};
 
 describe("ordinamento dei volti per data", () => {
   it("il cambio di ordinamento invia il sort giusto", async () => {
     renderGrid();
     await screen.findByTestId("face-1");
     expect(commandsMock.groupFaces.mock.calls[0][1]).toBe("quality_desc");
-    pick("captured_asc");
+    await pick("captured_asc");
     await waitFor(() =>
       expect(commandsMock.groupFaces).toHaveBeenLastCalledWith(
         { kind: "group", group: 1 },
@@ -82,7 +92,7 @@ describe("ordinamento dei volti per data", () => {
         expect.any(Number),
       ),
     );
-    pick("captured_desc");
+    await pick("captured_desc");
     await waitFor(() => expect(lastSort()).toBe("captured_desc"));
   });
 
@@ -108,7 +118,7 @@ describe("ordinamento dei volti per data", () => {
   it("la scelta è ricordata nelle preferenze", async () => {
     renderGrid();
     await screen.findByTestId("face-1");
-    pick("captured_asc");
+    await pick("captured_asc");
     await waitFor(() =>
       expect(JSON.parse(localStorage.getItem("photo-cat.people") ?? "{}").state.faceSort).toBe(
         "captured_asc",
@@ -117,13 +127,18 @@ describe("ordinamento dei volti per data", () => {
     cleanup();
     renderGrid();
     await waitFor(() => expect(lastSort()).toBe("captured_asc"));
-    expect(await screen.findByLabelText(/Ordina per/)).toHaveValue("captured_asc");
+    expect(
+      await screen.findByRole("button", { name: "Ordina: Data, dalla più vecchia" }),
+    ).toBeInTheDocument();
   });
 
   it("la selezione resta al cambio di ordinamento", async () => {
     renderGrid();
     fireEvent.click(await screen.findByTestId("face-2"));
-    pick("captured_desc");
+    // Con dei volti selezionati l'intestazione mostra le azioni: l'ordinamento cambia da altrove
+    // (preferenze, menu Vista) e la selezione resta.
+    expect(screen.queryByRole("button", { name: /^Ordina:/ })).toBeNull();
+    act(() => usePeoplePrefs.getState().setFaceSort("captured_desc"));
     await waitFor(() => expect(lastSort()).toBe("captured_desc"));
     await screen.findByText("2021 · 2 volti");
     expect(screen.getByTestId("face-2")).toHaveAttribute("aria-selected", "true");

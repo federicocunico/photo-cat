@@ -16,7 +16,7 @@ import {
   type MediaFaceView,
   type Target,
 } from "../../lib/ipc";
-import { fmtBytes, fmtDateTime, fmtDec, fmtInt } from "../../lib/format";
+import { fmtBytes, fmtDateTime, fmtInt } from "../../lib/format";
 import { selCount, selTarget, useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { thumbUrl } from "./thumbUrl";
@@ -34,11 +34,20 @@ import { CapturedRow, ColorTraitRow, RatingRow } from "./InspectorQuality";
 /** Oltre questo numero di foto non si caricano i dettagli per i valori comuni. */
 const COMMON_LIMIT = 200;
 
+/** Nome del volto: la persona, oppure "Persona senza nome" / "Persona ignorata" (glossario). */
 function faceChipLabel(face: MediaFaceView, t: (k: string, o?: Record<string, unknown>) => string) {
   if (face.personName) return face.personName;
-  if (face.discarded) return t("library.inspector.discardedFace");
   if (face.ignored) return t("library.inspector.ignoredFace");
-  return t("library.inspector.unrecognizedFace");
+  return t("people.unnamedPlain");
+}
+
+/** Affidabilità di una catalogazione automatica in parole: niente punteggi 0–1 (D4). */
+function confidenceKey(score: number) {
+  return score >= 0.75
+    ? "library.inspector.confidence.high"
+    : score >= 0.45
+      ? "library.inspector.confidence.medium"
+      : "library.inspector.confidence.low";
 }
 
 function Grid2({ children }: { children: ReactNode }) {
@@ -248,13 +257,8 @@ function CategoryRow({
             </>
           )}
         </InlineEdit>
-        {score != null && <span className="mono muted">{fmtDec(score, 2)}</span>}
+        {score != null && <span className="muted">{t(confidenceKey(score))}</span>}
       </div>
-      {score != null && (
-        <div className="bar" aria-hidden="true">
-          <span style={{ width: `${Math.round(score * 100)}%` }} />
-        </div>
-      )}
     </div>
   );
 }
@@ -316,15 +320,27 @@ function SingleInspector({ d }: { d: MediaDetail }) {
             />
           )}
         </Grid2>
-        {d.faces.length > 0 && (
+        {d.faces.some((f) => !f.discarded) && (
           <div className="inspector-chips">
-            {d.faces.map((face) => (
-              <span key={face.id} className="chip" data-testid={`inspector-face-${face.id}`}>
-                {faceChipLabel(face, t)}
-                <OpenInPeople target={{ face: face.id }} className="btn btn-ghost facet-icon-btn" />
-              </span>
-            ))}
+            {d.faces
+              .filter((f) => !f.discarded)
+              .map((face) => (
+                <span key={face.id} className="chip" data-testid={`inspector-face-${face.id}`}>
+                  {faceChipLabel(face, t)}
+                  <OpenInPeople
+                    target={{ face: face.id }}
+                    className="btn btn-ghost facet-icon-btn"
+                  />
+                </span>
+              ))}
           </div>
+        )}
+        {d.faces.some((f) => f.discarded) && (
+          <span className="muted">
+            {t("library.inspector.discardedFaces", {
+              count: d.faces.filter((f) => f.discarded).length,
+            })}
+          </span>
         )}
         <TagsRow edit={edit} tags={d.tags} />
       </Section>
@@ -370,7 +386,7 @@ function SingleInspector({ d }: { d: MediaDetail }) {
       </Section>
 
       <Section id="ai" title={t("library.inspector.ai")}>
-        {d.labels.length === 0 && d.peopleCount == null && (
+        {d.labels.length === 0 && (d.peopleCount == null || d.faces.length > 0) && (
           <span className="muted">{t("library.inspector.noAi")}</span>
         )}
         {groups.map((g) => {
@@ -385,7 +401,8 @@ function SingleInspector({ d }: { d: MediaDetail }) {
             />
           );
         })}
-        {d.peopleCount != null && (
+        {/* Con i volti elencati sopra il conteggio stimato non si ripete (e non li contraddice). */}
+        {d.peopleCount != null && d.faces.length === 0 && (
           <span>{t("library.inspector.peopleCount", { n: d.peopleCount })}</span>
         )}
       </Section>

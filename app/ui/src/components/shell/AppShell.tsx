@@ -14,6 +14,10 @@ import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
 import { SelectionLiveRegion } from "../../lib/selection/SelectionLiveRegion";
+import { useAppMenuCommands } from "../../commands/appMenu";
+import { AboutDialog } from "../about/AboutDialog";
+import { useNativeMenu } from "./nativeMenu";
+import { isMacPlatform } from "./menuBarModel";
 import "./shell.css";
 
 const time = (iso: string) => fmtDateTime(iso);
@@ -85,6 +89,8 @@ export function UiRecoveredBanner({
 /** Struttura comune: barra superiore, navigazione moduli, contenuto del modulo. */
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   useUndoHotkey();
+  useAppMenuCommands();
+  useNativeMenu(isMacPlatform());
   usePaletteCommand();
   useShortcutCatalog();
   useGridShortcuts();
@@ -99,6 +105,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
         <CommandPalette />
         <ShortcutSheet />
         <GuideDialog />
+        <AboutDialog />
         <SelectionLiveRegion />
       </div>
     </div>

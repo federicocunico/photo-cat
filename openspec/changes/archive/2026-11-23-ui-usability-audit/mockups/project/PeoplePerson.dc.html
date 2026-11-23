@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Persone · scheda di una persona</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#6AAEF5}a:hover{color:#C9DCF2}
+.app{width:1440px;height:900px;display:flex;flex-direction:column;background:#1B1B1C;color:#E8E8EA;font-family:"Source Sans 3",system-ui,sans-serif;font-size:14px;line-height:1.4;overflow:hidden}
+.top{height:44px;flex:none;display:flex;align-items:center;gap:16px;padding:0 12px;background:#202022;border-bottom:1px solid #3A3A3E}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;width:176px}
+.menubar{display:flex;gap:2px}
+.menubar button{background:none;border:0;color:#C9C9CE;font:inherit;padding:6px 10px;border-radius:6px}
+.search{flex:1;max-width:460px;margin-left:auto;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #3A3A3E;border-radius:8px;color:#8E8E95;background:#1B1B1C}
+.kbd{font-size:12px;color:#A9A9AE;border:1px solid #3A3A3E;border-radius:4px;padding:0 5px}
+.pill{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:15px;background:#2C2C2F;color:#C9C9CE;font-size:13px}
+.body{flex:1;display:flex;min-height:0}
+.nav{width:200px;flex:none;background:#1F1F21;border-right:1px solid #3A3A3E;padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+.navlabel{font-size:12px;color:#A9A9AE;padding:10px 12px 4px;font-weight:600}
+.navitem{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:8px;color:#C9C9CE}
+.navitem.on{background:#2A3A50;color:#E8E8EA;font-weight:600}
+.badge{margin-left:auto;font-size:12px;background:#233449;color:#C9DCF2;border-radius:9px;padding:0 7px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.pagehead{height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #3A3A3E}
+.pagehead h1{margin:0;font-size:20px;font-weight:700}
+.seg{display:flex;border:1px solid #3A3A3E;border-radius:8px;overflow:hidden}
+.seg button{background:none;border:0;border-right:1px solid #3A3A3E;color:#C9C9CE;font:inherit;padding:5px 14px;display:flex;gap:6px;align-items:center}
+.seg button:last-child{border-right:0}
+.seg button.on{background:#233449;color:#E8E8EA;font-weight:600}
+.cnt{font-size:12px;color:#A9A9AE}
+.panes{flex:1;display:flex;min-height:0}
+.list{width:300px;flex:none;border-right:1px solid #3A3A3E;display:flex;flex-direction:column;background:#1F1F21}
+.listtools{display:flex;gap:6px;padding:12px 12px 6px}
+.field{flex:1;display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid #77777F;border-radius:8px;color:#8E8E95;background:#1B1B1C}
+.ibtn{width:32px;height:32px;display:grid;place-items:center;border:1px solid #3A3A3E;border-radius:8px;background:#2C2C2F;color:#A9A9AE}
+.chips{display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap}
+.chip{height:26px;padding:0 10px;border-radius:13px;border:1px solid #3A3A3E;background:none;color:#C9C9CE;font:inherit;font-size:13px}
+.chip.on{background:#233449;border-color:#2F4D73;color:#E8E8EA}
+.row{display:flex;align-items:center;gap:10px;margin:0 8px;padding:8px;border-radius:8px;border:1px solid transparent}
+.row.on{background:#1E3047;border-color:#2F4D73}
+.av{width:36px;height:36px;border-radius:50%;flex:none;background:#34393A}
+.rowtext{flex:1;min-width:0}
+.rowtitle{font-weight:600}
+.rowsub{font-size:12px;color:#A9A9AE}
+.center{flex:1;display:flex;flex-direction:column;min-width:0}
+.phead{display:flex;align-items:center;gap:16px;padding:16px;border-bottom:1px solid #3A3A3E}
+.big{width:64px;height:64px;border-radius:50%;background:#2F4D73;flex:none}
+.btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid #3A3A3E;background:#2C2C2F;color:#E8E8EA;font:inherit;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
+.btn.primary{background:#3B8EEA;border-color:#3B8EEA;color:#0B1726;font-weight:600}
+.btn.danger{color:#F2A38F;border-color:#6B3A30}
+.tabs{display:flex;gap:4px;padding:0 16px;border-bottom:1px solid #3A3A3E}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:#A9A9AE;font:inherit;padding:10px 8px}
+.tab.on{color:#E8E8EA;border-bottom-color:#3B8EEA;font-weight:600}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 16px}
+.mbtn{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid #3A3A3E;border-radius:8px;background:#2C2C2F;color:#E8E8EA;font:inherit}
+.grid{flex:1;padding:0 16px 16px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-content:start;overflow:hidden}
+.face{aspect-ratio:1;border-radius:8px;background:#34393A;display:grid;place-items:center;color:#5A5F61}
+.card{width:320px;flex:none;border-left:1px solid #3A3A3E;background:#232325;padding:20px;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.card h3{margin:0;font-size:14px;font-weight:700}
+.lbl{font-weight:600;font-size:13px;display:block;margin-bottom:4px}
+.small{font-size:12px;color:#A9A9AE}
+.saved{font-size:12px;color:#4FC3B0}
+.refs{display:flex;gap:8px}
+.ref{width:48px;height:48px;border-radius:8px;border:1px dashed #77777F;display:grid;place-items:center;color:#A9A9AE}
+.status{height:28px;flex:none;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:12px;color:#A9A9AE;background:#202022;border-top:1px solid #3A3A3E}
+</style>
+</helmet>
+<div class="app">
+  <header class="top">
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg>photo-cat</div>
+    <nav class="menubar" aria-label="Menu"><button type="button">File</button><button type="button">Modifica</button><button type="button">Vista</button><button type="button">Vai</button><button type="button">Strumenti</button><button type="button">Aiuto</button></nav>
+    <div class="search">Cerca foto, persone, comandi…<span style="margin-left:auto" class="kbd">Ctrl K</span></div>
+    <div class="pill">Nessuna attività</div>
+  </header>
+  <div class="body">
+    <nav class="nav" aria-label="Moduli">
+      <div class="navlabel">Sfoglia</div><div class="navitem">Libreria</div><div class="navitem">Sequenza</div>
+      <div class="navlabel">Organizza</div><div class="navitem">Cataloghi</div><div class="navitem on">Persone<span class="badge">6</span></div><div class="navitem">Tag</div><div class="navitem">Analisi AI</div>
+      <div class="navlabel">Importa ed esporta</div><div class="navitem">Importa</div><div class="navitem">Esporta</div><div class="navitem">Varianti RAW</div>
+      <div style="margin-top:auto"></div><div class="navitem">Attività</div><div class="navitem">Impostazioni</div>
+    </nav>
+    <main class="main">
+      <div class="pagehead"><h1>Persone</h1>
+        <div class="seg" role="tablist" aria-label="Sezioni"><button type="button" role="tab" aria-selected="false">Da rivedere <span class="cnt">6</span></button><button type="button" role="tab" class="on" aria-selected="true">Persone <span class="cnt">3</span></button><button type="button" role="tab" aria-selected="false">Ignorati <span class="cnt">0</span></button></div>
+      </div>
+      <div class="panes">
+        <aside class="list" aria-label="Persone">
+          <div class="listtools"><label class="field"><input aria-label="Cerca nome o alias" placeholder="Cerca nome o alias" style="all:unset;flex:1"></label><button type="button" class="ibtn" aria-label="Nuova persona"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button></div>
+          <div class="chips" role="group" aria-label="Cerchia"><button type="button" class="chip on" aria-pressed="true">Tutte 3</button><button type="button" class="chip" aria-pressed="false">Famiglia 2</button><button type="button" class="chip" aria-pressed="false">Amici 1</button></div>
+          <div class="row on"><div class="av" style="background:#2F4D73"></div><div class="rowtext"><div class="rowtitle">Gioia</div><div class="rowsub">Famiglia · 26 foto</div></div></div>
+          <div class="row"><div class="av"></div><div class="rowtext"><div class="rowtitle">Marco Russo</div><div class="rowsub">Amici · 24 foto</div></div></div>
+          <div class="row"><div class="av"></div><div class="rowtext"><div class="rowtitle">Rita Rossi</div><div class="rowsub">Famiglia · nessuna foto in questa libreria</div></div></div>
+        </aside>
+        <section class="center" aria-label="Gioia">
+          <div class="phead">
+            <div class="big" aria-hidden="true"></div>
+            <div style="flex:1"><div style="font-size:20px;font-weight:700">Gioia</div><div class="small">26 foto in questa libreria · Famiglia · conosciuta anche come «Gio»</div></div>
+            <button type="button" class="btn primary">Mostra in Libreria</button>
+            <button type="button" class="btn" aria-label="Altre azioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+          </div>
+          <div class="tabs" role="tablist"><button type="button" role="tab" class="tab on" aria-selected="true">Volti nella libreria · 26</button><button type="button" role="tab" class="tab" aria-selected="false">Volti di riferimento · 0</button></div>
+          <div class="bar"><span class="small">Fai clic su un volto per selezionarlo.</span><div style="margin-left:auto;display:flex;gap:8px"><button type="button" class="mbtn">Ordina: qualità</button><button type="button" class="mbtn">Vista</button></div></div>
+          <div class="grid" role="list" aria-label="Volti">
+            <sc-for list="{{faces}}" as="f" hint-placeholder-count="18">
+              <div class="face" role="listitem"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="9" r="4"></circle><path d="M5 21c1-4 3.5-6 7-6s6 2 7 6"></path></svg></div>
+            </sc-for>
+          </div>
+        </section>
+        <aside class="card" aria-label="Dettagli della persona">
+          <div style="display:flex;align-items:center"><h3>Dettagli</h3><span class="saved" style="margin-left:auto">Salvato</span></div>
+          <div><label class="lbl" for="n1">Nome</label><div class="field"><input id="n1" value="Gioia" style="all:unset;flex:1;color:#E8E8EA"></div></div>
+          <div><label class="lbl" for="n2">Nome nei file esportati</label><div class="field"><input id="n2" value="Gioia" style="all:unset;flex:1;color:#E8E8EA"></div></div>
+          <div><label class="lbl" for="n3">Cerchia</label><div class="field"><input id="n3" value="Famiglia" style="all:unset;flex:1;color:#E8E8EA"></div><div class="small" style="margin-top:4px">Raggruppa le persone, ad esempio Famiglia o Lavoro.</div></div>
+          <div><label class="lbl" for="n4">Altri nomi</label><div class="field"><input id="n4" value="Gio" style="all:unset;flex:1;color:#E8E8EA"></div></div>
+          <div><span class="lbl">Riconoscimento</span>
+            <input type="range" aria-label="Sensibilità del riconoscimento" value="55" style="width:100%">
+            <div class="small" style="display:flex"><span>Più risultati</span><span style="margin-left:auto">Più precisi</span></div>
+          </div>
+          <div><span class="lbl">Volti di riferimento</span><div class="small" style="margin-bottom:8px">Aiutano a riconoscere Gioia in altre librerie e in foto di anni diversi.</div>
+            <div class="refs"><button type="button" class="ref" aria-label="Aggiungi dalla libreria">+</button><button type="button" class="btn">Da un file…</button></div>
+          </div>
+          <div class="small" style="margin-top:auto;border-top:1px solid #3A3A3E;padding-top:10px">Vale in tutte le librerie. Unisci a…, Esporta ed Elimina persona sono nel menu <b>⋯</b>.</div>
+        </aside>
+      </div>
+      <footer class="status"><span>186 foto</span><span>3 persone</span><span style="margin-left:auto">Modelli AI pronti</span><span>Nessun errore</span></footer>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const faces = [];
+    for (let i = 0; i < 18; i++) faces.push({ i: i });
+    return { faces: faces };
+  }
+}
+</script>
+</body>
+</html>

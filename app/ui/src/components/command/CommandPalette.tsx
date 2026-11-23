@@ -229,7 +229,7 @@ export function CommandPalette() {
                   keywords={[q]}
                   onSelect={() => run(() => openLibrary({ text: q }, f.id))}
                 >
-                  <span className="palette-label mono">{f.name}</span>
+                  <span className="palette-label">{f.name}</span>
                 </Command.Item>
               ))}
             </Command.Group>

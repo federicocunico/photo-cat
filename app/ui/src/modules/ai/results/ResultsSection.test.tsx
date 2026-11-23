@@ -111,7 +111,7 @@ it("la soglia della voce è la linea dell'istogramma; i cataloghi di sistema non
   renderIt();
   await ready();
   expect(await screen.findByTestId("histogram-threshold")).toBeInTheDocument();
-  expect(screen.getByText("Soglia 0.25")).toBeInTheDocument();
+  expect(screen.getByText("Soglia 0,25")).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "Vacanze" })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: "Cestino" })).toBeNull();
 });

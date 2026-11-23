@@ -254,8 +254,27 @@ fn generic(seg: &str) -> bool {
         "misc",
         "varie",
         "export",
+        // Cartelle di formato: "JPGS", "RAW", "RAF"… non indicano un luogo.
         "raw",
+        "raws",
         "jpg",
+        "jpgs",
+        "jpeg",
+        "jpegs",
+        "heic",
+        "png",
+        "tif",
+        "tiff",
+        "raf",
+        "nef",
+        "cr2",
+        "cr3",
+        "arw",
+        "dng",
+        "orf",
+        "rw2",
+        "video",
+        "videos",
     ];
     words.contains(&s.as_str())
         || s.chars().all(|c| c.is_ascii_digit() || "-_ .".contains(c)) // anni, date
@@ -471,6 +490,15 @@ mod tests {
         );
         let p = Path::new(r"D:\Foto\2023\07\DCIM\IMG_1.JPG");
         assert_eq!(place_from_path(p, Some(&g), &none), None);
+        // Cartelle di formato: il luogo è quello sopra ("JPGS" non è un luogo).
+        for folder in ["JPGS", "jpeg", "RAF", "HEIC", "Raws"] {
+            let p = format!(r"D:\Foto\Gioia cambia lavoro\{folder}\IMG_1.JPG");
+            assert_eq!(
+                place_from_path(Path::new(&p), Some(&g), &none).as_deref(),
+                Some("Gioia cambia lavoro"),
+                "{folder}"
+            );
+        }
         let p = Path::new(r"E:\Archivio\Roma 2019\IMG_1.JPG");
         assert_eq!(
             place_from_path(p, Some(&g), &none).as_deref(),

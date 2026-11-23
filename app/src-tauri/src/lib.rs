@@ -1,6 +1,8 @@
 //! Shell Tauri di photo-cat: avvio dei servizi, comandi IPC, eventi verso la UI.
 
+mod about;
 mod ai;
+mod app_menu;
 mod boot;
 mod catalogs;
 mod commands;
@@ -308,6 +310,9 @@ pub fn bindings() -> Builder<tauri::Wry> {
             settings::complete_onboarding,
             diagnostics::export_diagnostics,
             diagnostics::open_logs,
+            diagnostics::open_data_dir,
+            about::third_party_licenses,
+            app_menu::set_app_menu,
             diagnostics::retry_failed,
         ])
         .typ::<pc_jobs::JobSnapshot>()
@@ -394,6 +399,8 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("face", people::face_protocol)
         .register_asynchronous_uri_scheme_protocol("review", raw_review::review_protocol)
         .invoke_handler(builder.invoke_handler())
+        // macOS: il menu nativo inoltra all'interfaccia l'id del comando scelto.
+        .on_menu_event(|app, event| app_menu::forward(app, event.id().as_ref()))
         .setup(move |app| {
             builder.mount_events(app);
             app.manage(boot::Boot::new(

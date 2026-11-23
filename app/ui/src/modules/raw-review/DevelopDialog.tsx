@@ -604,7 +604,7 @@ function Progress({
           <ul className="dv-failures" aria-label={t("rawDevelop.report.failuresTitle")}>
             {report.failures.map((f) => (
               <li key={f.raf + f.code + f.presets.join("|")}>
-                <span className="mono">{f.raf}</span>
+                <span>{f.raf}</span>
                 <span className="muted"> — {reasonOf(f.code, f.reason)}</span>
                 {f.presets.length > 0 && (
                   <small className="muted dv-block">

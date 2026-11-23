@@ -1,14 +1,6 @@
 /* Impostazioni a sezioni (desktop-shell, design D9). */
-.settings-page {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 .settings-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
+  flex-direction: row;
 }
 .settings-aside {
   flex: 0 0 240px;
@@ -126,7 +118,7 @@
 }
 .settings-field-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 .settings-save-state {
@@ -192,7 +184,7 @@
 }
 .settings-table {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .settings-table caption {
   text-align: left;

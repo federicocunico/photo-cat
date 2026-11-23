@@ -40,12 +40,17 @@ const click = (name: string | RegExp) => fireEvent.click(screen.getByRole("butto
 
 it("Fine dell'introduzione: tema, cartella D:\\Foto e modelli, poi si apre la Libreria", async () => {
   const onDone = renderIt();
-  expect(screen.getByRole("heading", { name: "Benvenuto" })).toBeInTheDocument();
+  // Un solo titolo per passo.
+  expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual([
+    "Benvenuto in photo-cat",
+  ]);
   fireEvent.click(screen.getByRole("radio", { name: "Scuro" }));
   click("Continua");
   expect(useLayout.getState().theme).toBe("dark");
 
-  expect(screen.getByRole("heading", { name: "Dove sono le tue foto?" })).toBeInTheDocument();
+  expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual([
+    "Dove sono le tue foto?",
+  ]);
   // Senza cartella "Continua" spiega perché non è disponibile.
   const next = screen.getByRole("button", { name: "Continua" });
   expect(next).toHaveAttribute("aria-disabled", "true");
@@ -69,6 +74,8 @@ it("Fine dell'introduzione: tema, cartella D:\\Foto e modelli, poi si apre la Li
     ),
   ).toBeInTheDocument();
   expect(screen.getByText(/La scheda video supporta l'accelerazione/)).toBeInTheDocument();
+  expect(screen.getByText(/I modelli si scaricano in background/)).toBeInTheDocument();
+  expect(screen.queryByText(/già pronti/)).toBeNull();
   click("Scarica i modelli e inizia");
   await waitFor(() => expect(onDone).toHaveBeenCalled());
   expect(commandsMock.verifyModels).toHaveBeenCalled();
@@ -108,4 +115,20 @@ it("Rivedere l'introduzione: nulla cambia finché un passo non è confermato", (
   click("Lo faccio dopo");
   click("Lo faccio dopo");
   expect(commandsMock.addSource).not.toHaveBeenCalled();
+});
+
+it("Modelli già pronti: il testo lo dice una volta sola e l'ultimo passo non ha «Lo faccio dopo»", async () => {
+  commandsMock.listModels.mockResolvedValue([
+    { entry: { id: "sface" }, state: { state: "verified" }, selfTest: null },
+  ] as never);
+  const onDone = renderIt();
+  click("Lo faccio dopo");
+  click("Lo faccio dopo");
+  expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual(["Funzioni AI"]);
+  expect(await screen.findByText(/I modelli AI sono già pronti/)).toBeInTheDocument();
+  expect(screen.queryByText(/si scaricano in background/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Lo faccio dopo" })).toBeNull();
+  click("Inizia");
+  await waitFor(() => expect(onDone).toHaveBeenCalled());
+  expect(commandsMock.verifyModels).not.toHaveBeenCalled();
 });

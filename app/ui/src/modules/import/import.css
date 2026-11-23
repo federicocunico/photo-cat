@@ -1,16 +1,7 @@
 /* Importa: modulo per aggiungere una cartella, avanzamento e cartelle della libreria. */
-.import-page {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-}
 .import-body {
-  display: flex;
-  flex-direction: column;
   gap: var(--pc-space-5);
-  padding: 0 var(--pc-space-5) var(--pc-space-5);
+  padding: var(--pc-space-4) var(--pc-space-5) var(--pc-space-5);
 }
 .import-columns {
   display: flex;
@@ -100,7 +91,7 @@
   gap: var(--pc-space-3);
 }
 .import-folder-head > .mono {
-  font-size: 13px;
+  font-size: 14px;
 }
 .import-folder-actions {
   margin-left: auto;
@@ -112,7 +103,7 @@
   gap: var(--pc-space-2);
   align-items: baseline;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: 14px;
 }
 .import-removal-list {
   margin: 0;
@@ -131,7 +122,7 @@
   flex-wrap: wrap;
   gap: 4px 12px;
   align-items: center;
-  font-size: 13px;
+  font-size: 14px;
 }
 .import-update-folder {
   word-break: break-all;

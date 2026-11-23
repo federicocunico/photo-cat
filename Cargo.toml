@@ -15,11 +15,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 rust-version = "1.90"
 license = "MIT OR Apache-2.0"
 authors = ["photo-cat contributors"]
+repository = "https://github.com/federicocunico/photo-cat"
 
 [workspace.dependencies]
 pc-core = { path = "crates/pc-core" }

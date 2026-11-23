@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
@@ -89,6 +90,16 @@ beforeEach(() => {
 });
 afterEach(checkedCleanup(A11Y_KNOWN.people));
 
+describe("FaceGrid intestazione (E4, P13)", () => {
+  it("conteggi come testo, senza chip; gli scartati solo se ci sono", async () => {
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, photos: 8 }) });
+    expect(
+      await screen.findByText("8 foto · 4 volti · 1 scartato per qualità"),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".people-grid-head .chip")).toBeNull();
+  });
+});
+
 describe("FaceGrid selezione e azioni", () => {
   it("Maiusc+clic ripetuti non spostano l'ancora", async () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });
@@ -101,7 +112,7 @@ describe("FaceGrid selezione e azioni", () => {
     expect([1, 2, 3].map(pressed)).toEqual([true, true, false]);
   });
 
-  it("seleziona con clic, Ctrl e Maiusc e invoca le azioni", async () => {
+  it("seleziona con clic, Ctrl e Maiusc; Sposta in…, Non è questa persona e le azioni in Altro", async () => {
     commandsMock.listGroups.mockResolvedValue({
       items: [group({ id: 2, name: "Marco", faces: 5, section: "people" })],
       next: null,
@@ -110,21 +121,7 @@ describe("FaceGrid selezione e azioni", () => {
 
     renderGrid({
       target: { kind: "group", id: 1 },
-      group: group({
-        id: 1,
-        faces: 214,
-        photos: 168,
-        goodFaces: 196,
-        discardedFaces: 18,
-        mergeHint: {
-          otherId: 9,
-          otherName: null,
-          otherFaces: 17,
-          otherPhotos: 15,
-          otherCover: null,
-          score: 0.58,
-        },
-      }),
+      group: group({ id: 1, faces: 214, photos: 168, goodFaces: 196, discardedFaces: 18 }),
     });
 
     await waitFor(() => expect(commandsMock.groupFaces).toHaveBeenCalled());
@@ -133,12 +130,15 @@ describe("FaceGrid selezione e azioni", () => {
     const f1 = await screen.findByTestId("face-1");
     fireEvent.click(f1);
     expect(f1).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/1 selezionat/i)).toBeInTheDocument();
+    // Con una selezione l'intestazione diventa la barra delle azioni sui volti.
+    const bar = () => screen.getByRole("toolbar", { name: "Azioni sui volti" });
+    expect(within(bar()).getByText("1 selezionato")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Ordina:/ })).toBeNull();
 
     fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
     expect(screen.getByTestId("face-1")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("face-3")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/2 selezionat/i)).toBeInTheDocument();
+    expect(within(bar()).getByText("2 selezionati")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-3"), { shiftKey: true });
@@ -146,13 +146,9 @@ describe("FaceGrid selezione e azioni", () => {
     expect(screen.getByTestId("face-2")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("face-3")).toHaveAttribute("aria-selected", "true");
 
-    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
-    await waitFor(() =>
-      expect([...move.options].some((o) => o.textContent?.includes("Marco"))).toBe(true),
-    );
-    fireEvent.change(move, { target: { value: "2" } });
-    expect(commandsMock.correctPerson).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
+    // "Sposta in…": scegliere la destinazione sposta subito (si annulla con Ctrl+Z).
+    fireEvent.click(within(bar()).getByRole("button", { name: "Sposta in…" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^Marco/ }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "move",
@@ -163,7 +159,7 @@ describe("FaceGrid selezione e azioni", () => {
 
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-2"), { ctrlKey: true });
-    fireEvent.click(screen.getByRole("button", { name: /Non è questa persona/i }));
+    fireEvent.click(within(bar()).getByRole("button", { name: "Non è questa persona" }));
     await waitFor(() => {
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "reject",
@@ -172,8 +168,13 @@ describe("FaceGrid selezione e azioni", () => {
       });
     });
 
+    // Le azioni meno frequenti sono nel menu "Altro" della barra.
+    const user = userEvent.setup();
     fireEvent.click(await screen.findByTestId("face-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Nuovo gruppo/i }));
+    await user.click(within(bar()).getByRole("button", { name: /^Altro/ }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Nuovo gruppo con questi volti" }),
+    );
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "separate",
@@ -182,9 +183,10 @@ describe("FaceGrid selezione e azioni", () => {
       }),
     );
 
-    // Rimuovi volto non si annulla: chiede conferma con il verbo esplicito.
+    // "Rimuovi volti…" non si annulla: chiede conferma con il verbo esplicito.
     fireEvent.click(await screen.findByTestId("face-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Rimuovi volto/i }));
+    await user.click(within(bar()).getByRole("button", { name: /^Altro/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rimuovi volti…" }));
     const dialog = await screen.findByRole("alertdialog", { name: /Rimuovere il volto/i });
     expect(commandsMock.correctPerson).not.toHaveBeenCalledWith({ action: "remove", faces: [1] });
     fireEvent.click(within(dialog).getByRole("button", { name: /^Rimuovi volto$/i }));
@@ -193,7 +195,7 @@ describe("FaceGrid selezione e azioni", () => {
     );
   });
 
-  it("«Riassegna a…»: cambiare la scelta da tastiera non sposta nulla finché non si conferma", async () => {
+  it("«Sposta in…»: le frecce scelgono senza spostare nulla, Invio sposta e si annulla", async () => {
     commandsMock.listGroups.mockResolvedValue({
       items: [
         group({ id: 2, name: "Marco", faces: 5, section: "people" }),
@@ -206,22 +208,16 @@ describe("FaceGrid selezione e azioni", () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1 }) });
 
     fireEvent.click(await screen.findByTestId("face-1"));
-    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
-    await waitFor(() => expect(move.options.length).toBe(3));
-    const apply = screen.getByRole("button", { name: /^Riassegna$/ });
-    // Senza destinazione il comando spiega perché non è disponibile.
-    expect(apply).toHaveAttribute("aria-disabled", "true");
-
-    // Le frecce su una select chiusa (Windows) cambiano il valore: nessuno spostamento.
-    move.focus();
-    fireEvent.keyDown(move, { key: "ArrowDown" });
-    fireEvent.change(move, { target: { value: "2" } });
-    fireEvent.keyDown(move, { key: "ArrowDown" });
-    fireEvent.change(move, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sposta in…" }));
+    const input = await screen.findByRole("combobox", { name: "Cerca una persona" });
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+    // Anna, Marco: le frecce spostano solo la scelta attiva.
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
     await new Promise((r) => setTimeout(r, 20));
     expect(commandsMock.correctPerson).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
+    fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "move",
@@ -232,14 +228,12 @@ describe("FaceGrid selezione e azioni", () => {
     expect(commandsMock.correctPerson).toHaveBeenCalledTimes(1);
 
     // Lo spostamento è annullabile dallo store `undo`.
-    await waitFor(() =>
-      expect(useUndo.getState().last?.label).toMatch(/Volto riassegnato a «Anna»/),
-    );
+    await waitFor(() => expect(useUndo.getState().last?.label).toMatch(/Volto spostato in «Anna»/));
     await runUndo();
     expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1);
   });
 
-  it("filtra i scartati e mostra il motivo in tooltip; banner unione", async () => {
+  it("la vista mostra i soli scartati con il motivo; nessun banner di unione nella griglia", async () => {
     renderGrid({
       target: { kind: "group", id: 1 },
       group: group({
@@ -255,18 +249,9 @@ describe("FaceGrid selezione e azioni", () => {
         },
       }),
     });
-
-    expect(await screen.findByText(/Somiglia a/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Sono la stessa persona/i }));
-    expect(await screen.findByRole("dialog", { name: /Unisci gruppi/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Unisci a/i }));
-    await waitFor(() =>
-      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
-        action: "merge",
-        from: 9,
-        to: 1,
-      }),
-    );
+    await screen.findByTestId("face-1");
+    // La domanda "È la stessa persona?" è nella scheda, non sopra i volti.
+    expect(screen.queryByText(/Somiglia a|stessa persona/i)).toBeNull();
 
     commandsMock.groupFaces.mockResolvedValue({
       items: [
@@ -282,7 +267,11 @@ describe("FaceGrid selezione e azioni", () => {
       discardedCount: 1,
     } as never);
 
-    fireEvent.click(screen.getByRole("button", { name: /Solo scartati per qualità/i }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Vista" }));
+    await user.click(
+      await screen.findByRole("menuitemcheckbox", { name: "Solo scartati per qualità" }),
+    );
     await waitFor(() =>
       expect(commandsMock.groupFaces).toHaveBeenCalledWith(
         { kind: "discarded", group: 1 },
@@ -341,20 +330,20 @@ describe("Libreria grande", () => {
   });
 });
 
-describe("FaceGrid «Riassegna a…»", () => {
-  it("elenca solo le persone con nome e le identità senza foto qui, in ordine alfabetico", async () => {
+describe("FaceGrid «Sposta in…»", () => {
+  it("persone in ordine alfabetico (anche senza foto qui), poi i gruppi senza nome", async () => {
     commandsMock.listGroups.mockImplementation((async (section: string) =>
       section === "people"
         ? {
             items: [
-              group({ id: 2, name: "Marco", faces: 5, section: "people" }),
+              group({ id: 2, name: "Marco", faces: 5, photos: 5, section: "people" }),
               group({ id: 1, name: "Io", faces: 4, section: "people" }),
             ],
             next: null,
             total: 2,
           }
         : {
-            items: [group({ id: 7, name: null, faces: 3, section: "review" })],
+            items: [group({ id: 7, name: null, faces: 3, photos: 3, section: "review" })],
             next: null,
             total: 1,
           }) as never);
@@ -370,16 +359,17 @@ describe("FaceGrid «Riassegna a…»", () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, name: "Io" }) });
 
     fireEvent.click(await screen.findByTestId("face-1"));
-    const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
-    await waitFor(() => expect(move.options.length).toBe(3));
-    expect([...move.options].map((o) => o.textContent)).toEqual([
-      "Riassegna a…",
-      "Carla (nessuna foto in questa libreria)",
-      "Marco",
+    fireEvent.click(screen.getByRole("button", { name: "Sposta in…" }));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
+    // Il gruppo aperto ("Io") non è tra le destinazioni.
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Carlanessuna foto in questa libreria",
+      "Marco5 foto",
+      "Persona senza nome3 foto",
     ]);
+    expect(screen.getByText("Gruppi senza nome")).toBeInTheDocument();
 
-    fireEvent.change(move, { target: { value: "i:u-c" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Riassegna$/ }));
+    fireEvent.click(screen.getByRole("option", { name: /^Carla/ }));
     await waitFor(() =>
       expect(commandsMock.correctPerson).toHaveBeenCalledWith({
         action: "assign_identity",
@@ -388,7 +378,7 @@ describe("FaceGrid «Riassegna a…»", () => {
       }),
     );
     await waitFor(() =>
-      expect(useUndo.getState().last?.label).toMatch(/Volto riassegnato a «Carla»/),
+      expect(useUndo.getState().last?.label).toMatch(/Volto spostato in «Carla»/),
     );
   });
 });
