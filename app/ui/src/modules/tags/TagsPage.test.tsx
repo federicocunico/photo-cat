@@ -147,7 +147,7 @@ it("proposes a merge next to the name when the new name exists, and merges only 
 it("merges into another tag without a dialog, with undo", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: /^Sunset/ }));
-  fireEvent.click(screen.getByText("Unisci in un altro tag…"));
+  fireEvent.click(screen.getByText("Unisci a un altro tag…"));
   fireEvent.change(screen.getByLabelText("Tag di destinazione"), {
     target: { value: "Tramonti" },
   });
@@ -264,4 +264,18 @@ it("ricerca per iniziale nell'elenco dei tag: «su» apre Sunset, senza distingu
   fireEvent.keyDown(document.activeElement!, { key: "u" });
   expect(pill("Sunset")).toHaveAttribute("aria-pressed", "true");
   expect(pill("Sunset")).toHaveFocus();
+});
+
+it("«Set attivo» è uno stato; sugli altri set c'è «Usa come set attivo»", async () => {
+  commandsMock.setActiveTagSet.mockResolvedValue(null as never);
+  renderPage();
+  await screen.findByRole("heading", { name: /Viaggio USA 2026/ });
+  // Il set attivo non ha un pulsante disattivato.
+  expect(screen.getByText("Set attivo")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Set attivo" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Usa come set attivo" })).toBeNull();
+  // Su un altro set: il comando per attivarlo.
+  fireEvent.click(screen.getByRole("button", { name: /^Base/, pressed: false }));
+  fireEvent.click(await screen.findByRole("button", { name: "Usa come set attivo" }));
+  await waitFor(() => expect(commandsMock.setActiveTagSet).toHaveBeenCalledWith(1));
 });

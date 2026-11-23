@@ -19,7 +19,8 @@ import { activeJobs, useLive } from "../../store/live";
 import { UpdateSummaryView } from "../import/manage";
 import { useImportUpdates } from "../import/sourceActions";
 import { FILE_WRITING_KINDS, jobObject, jobTitle, paramsOf } from "../../lib/jobs";
-import { Button, ConfirmDialog, EmptyState, InlineAlert, PageHeader } from "../../components/ui";
+import { Button, ConfirmDialog, EmptyState, InlineAlert } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { runUndo, useUndo } from "../../store/undo";
 import { notify } from "../../store/toasts";
 
@@ -49,7 +50,12 @@ function phaseCount(phase: PhaseSnapshot, isSource: boolean, t: TFunction) {
 
 export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: boolean }) {
   const { t } = useTranslation();
-  const pct = phase.percent;
+  // Con un conteggio "59 / 98" la barra è determinata, anche se il totale è ancora provvisorio
+  // (lo dice lo spinner accanto); resta indeterminata solo senza alcun totale.
+  const processed = phase.done + phase.failed;
+  const pct =
+    phase.percent ??
+    (!isSource && phase.total > 0 ? Math.min(100, (processed / phase.total) * 100) : null);
   const done = phase.state === "done";
   return (
     <tr className="jobs-phase-row" data-testid={`phase-${phase.name}`}>
@@ -73,10 +79,10 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           >
             <span style={{ width: `${pct ?? 0}%` }} />
           </div>
-          <span className="mono jobs-phase-pct">{pct == null ? "—" : `${Math.floor(pct)}%`}</span>
+          <span className="jobs-phase-pct">{pct == null ? "—" : `${Math.floor(pct)}%`}</span>
         </div>
       </td>
-      <td className="mono jobs-nowrap">
+      <td className="jobs-nowrap">
         {phaseCount(phase, isSource, t)}
         {!phase.totalKnown && !isSource && (
           <Icon.Spinner
@@ -89,7 +95,7 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           />
         )}
       </td>
-      <td className="mono jobs-soft">
+      <td className="jobs-soft">
         {phase.rate != null ? t("jobs.rate", { rate: fmtDec(phase.rate, 1) }) : "—"}
       </td>
       <td className="jobs-soft">
@@ -147,6 +153,10 @@ export function JobCard({
   const live = running || paused || job.state === "queued";
   // Finché la scansione non ha contato tutti i file la percentuale complessiva non è significativa.
   const counting = running && job.phases.some((p) => !p.totalKnown);
+  // Conclusa senza nulla da elaborare: non è un lavoro "0 / 0 · 100%".
+  const nothingToDo =
+    job.state === "completed" &&
+    job.phases.every((p) => p.total === 0 && p.done === 0 && p.failed === 0);
   return (
     <section className="jobs-card" data-testid={`job-${job.id}`}>
       <div className="jobs-head">
@@ -204,36 +214,44 @@ export function JobCard({
           </div>
         )}
       </div>
-      <div>
-        <div className="jobs-overall">
-          <span>{t("jobs.overall")}</span>
-          <span className="mono" data-testid={`overall-${job.id}`}>
-            {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
-          </span>
-        </div>
-        <div className={`bar jobs-overall-bar${counting ? " indeterminate" : ""}`}>
-          <span style={{ width: `${job.overallPercent ?? 0}%` }} />
-        </div>
-      </div>
-      <div className="jobs-table-wrap">
-        <table className="jobs-table">
-          <thead>
-            <tr className="jobs-table-head">
-              <th>{t("jobs.col.phase")}</th>
-              <th className="jobs-col-progress">{t("jobs.col.progress")}</th>
-              <th>{t("jobs.col.items")}</th>
-              <th>{t("jobs.col.rate")}</th>
-              <th>{t("jobs.col.eta")}</th>
-              <th>{t("jobs.col.errors")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {job.phases.map((p, i) => (
-              <PhaseRow key={p.name} phase={p} isSource={i === 0} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {nothingToDo ? (
+        <p className="muted jobs-nothing" data-testid={`nothing-${job.id}`}>
+          {t("jobs.nothingToDo")}
+        </p>
+      ) : (
+        <>
+          <div>
+            <div className="jobs-overall">
+              <span>{t("jobs.overall")}</span>
+              <span data-testid={`overall-${job.id}`}>
+                {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
+              </span>
+            </div>
+            <div className={`bar jobs-overall-bar${counting ? " indeterminate" : ""}`}>
+              <span style={{ width: `${job.overallPercent ?? 0}%` }} />
+            </div>
+          </div>
+          <div className="jobs-table-wrap">
+            <table className="jobs-table">
+              <thead>
+                <tr className="jobs-table-head">
+                  <th>{t("jobs.col.phase")}</th>
+                  <th className="jobs-col-progress">{t("jobs.col.progress")}</th>
+                  <th>{t("jobs.col.items")}</th>
+                  <th>{t("jobs.col.rate")}</th>
+                  <th>{t("jobs.col.eta")}</th>
+                  <th>{t("jobs.col.errors")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.phases.map((p, i) => (
+                  <PhaseRow key={p.name} phase={p} isSource={i === 0} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       {job.pauseReason && (
         <InlineAlert
           tone="warn"
@@ -372,7 +390,7 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
       {governor.residents.map(([name, mb]) => (
         <div key={name} className="jobs-split">
           <span>{name}</span>
-          <span className="mono">{fmtInt(mb)} MB</span>
+          <span>{fmtInt(mb)} MB</span>
         </div>
       ))}
       {governor.aiPaused && <span className="jobs-warn">{t("jobs.aiPaused")}</span>}
@@ -449,51 +467,53 @@ export function JobsPage() {
     useLayout.setState({ jobFocus: null });
   }, [jobFocus, shown.length]);
   return (
-    <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <div className="jobs-page">
-          <div className="jobs-main">
-            <PageHeader
-              title={t("jobs.title")}
-              actions={
-                import.meta.env.DEV &&
-                isTauri() && (
-                  <BusyButton
-                    type="button"
-                    className="btn"
-                    onClick={() => commands.startDemoJob(3000, 400)}
-                  >
-                    {t("jobs.demo")}
-                  </BusyButton>
-                )
-              }
-            />
-            {shown.length === 0 && (
-              <EmptyState
-                icon={<Icon.Jobs size={28} />}
-                title={t("jobs.empty")}
-                action={
-                  <Button variant="primary" onClick={() => openModule({ module: "import" })}>
-                    {t("jobs.emptyAction")}
-                  </Button>
-                }
+    <ModulePage
+      title={t("jobs.title")}
+      bodyClassName="jobs-page"
+      actions={
+        import.meta.env.DEV &&
+        isTauri() && (
+          <BusyButton
+            type="button"
+            className="btn"
+            onClick={() => commands.startDemoJob(3000, 400)}
+          >
+            {t("jobs.demo")}
+          </BusyButton>
+        )
+      }
+    >
+      <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
+        {() => (
+          <>
+            <div className="jobs-main">
+              {shown.length === 0 && (
+                <EmptyState
+                  icon={<Icon.Jobs size={28} />}
+                  title={t("jobs.empty")}
+                  action={
+                    <Button variant="primary" onClick={() => openModule({ module: "import" })}>
+                      {t("jobs.emptyAction")}
+                    </Button>
+                  }
+                />
+              )}
+              {shown.map((j) => (
+                <JobCard key={j.id} job={j} {...names(j.id, j.kind)} />
+              ))}
+              <UndoableOperation />
+              <History
+                rows={history.data ?? []}
+                liveIds={new Set(shown.map((j) => j.id))}
+                names={names}
               />
-            )}
-            {shown.map((j) => (
-              <JobCard key={j.id} job={j} {...names(j.id, j.kind)} />
-            ))}
-            <UndoableOperation />
-            <History
-              rows={history.data ?? []}
-              liveIds={new Set(shown.map((j) => j.id))}
-              names={names}
-            />
-          </div>
-          <aside className="jobs-aside">
-            <ResourcesPanel res={resources} />
-          </aside>
-        </div>
-      )}
-    </QueryView>
+            </div>
+            <aside className="jobs-aside">
+              <ResourcesPanel res={resources} />
+            </aside>
+          </>
+        )}
+      </QueryView>
+    </ModulePage>
   );
 }

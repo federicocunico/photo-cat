@@ -22,20 +22,28 @@ import {
   type PeopleSections,
 } from "../../lib/ipc";
 import { QueryView } from "../../components/feedback/QueryView";
-import { Button, ContextMenu, type MenuItem } from "../../components/ui";
+import {
+  ActionBar,
+  Button,
+  ContextMenu,
+  IconButton,
+  Menu,
+  type MenuItem,
+} from "../../components/ui";
+import { Icon } from "../../components/icons";
 import { useActivePane } from "../../commands/gridShortcuts";
 import { notify, notifyError } from "../../store/toasts";
 import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
 import { PersonPicker, type PickerChoice } from "./PersonPicker";
 import { withNewIdentity } from "./newIdentity";
-import { PhotoCountFilter } from "./PhotoCountFilter";
+import { Cover } from "./Cover";
+import { similarityLevel } from "./similarity";
 import "./people.css";
-import { fmtDate, fmtDec, fmtInt } from "../../lib/format";
+import { fmtDate, fmtInt } from "../../lib/format";
 import { useDebounced } from "../library/facets";
 import { idsSelection, selIds, selectForContextMenu } from "../../lib/selection/model";
 import { useSelection, type SelectionStore } from "../../lib/selection/useSelection";
 import { handleSelectionKey } from "../../lib/selection/useSelectionKeys";
-import { faceUrl, thumbUrl } from "../library/thumbUrl";
 
 const PAGE = 50;
 const ROW_H = 58;
@@ -96,36 +104,8 @@ function observeRect(el: HTMLElement | null, cb: (r: { width: number; height: nu
 /** Dialogo aperto, con la selezione fissata all'apertura (la conferma riguarda proprio quella). */
 type BulkDialog = { kind: "merge"; uids: string[] } | { kind: "assign"; ids: number[] } | null;
 
-function Cover({ group }: { group: GroupRow }) {
-  const [failed, setFailed] = useState(false);
-  const cover = group.cover;
-  const src = cover ? faceUrl(cover.id) : null;
-  const placeholder = cover?.thumb ? thumbUrl(cover.thumb) : null;
-  return (
-    <span
-      aria-hidden
-      className="people-cover people-cover--sm"
-      style={{
-        backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-      }}
-    >
-      {src && !failed && (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailed(true)}
-          className="people-cover-img"
-        />
-      )}
-    </span>
-  );
-}
-
 function groupTitle(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
-  if (g.name) return g.name;
-  return t("people.unnamed", { count: g.photos });
+  return g.name ?? t("people.unnamedPlain");
 }
 
 function groupSub(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
@@ -136,38 +116,51 @@ function groupSub(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => st
     return parts.join(" · ") || t("people.noSuggestion");
   }
   if (g.nameHint?.name) {
-    const score = g.nameHint.score != null ? ` · ${fmtDec(g.nameHint.score, 2)}` : "";
-    return t("people.maybeName", { name: g.nameHint.name }) + score;
+    const level =
+      g.nameHint.score != null
+        ? ` · ${t(`people.similarity.${similarityLevel(g.nameHint.score)}`)}`
+        : "";
+    return t("people.maybeName", { name: g.nameHint.name }) + level;
   }
   if (g.mergeHint) return t("people.mergeHintSub");
   return t("people.noSuggestion");
+}
+
+/**
+ * Casella della riga (modello di selezione comune): aggiunge o toglie la voce dalla selezione
+ * senza aprirla, come Ctrl+clic. Da tastiera: Ctrl+Spazio. Nascosta agli screen reader, che
+ * leggono lo stato dalla voce (`aria-selected`).
+ */
+function RowCheck({ checked, onToggle }: { checked: boolean; onToggle: (e: MouseEvent) => void }) {
+  return (
+    <span
+      aria-hidden
+      className="people-check"
+      data-checked={checked || undefined}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(e);
+      }}
+    >
+      {checked && <Icon.Check size={12} />}
+    </span>
+  );
 }
 
 export const GroupList = forwardRef<
   GroupListHandle,
   {
     section: PeopleSection;
-    onSectionChange: (s: PeopleSection) => void;
     target: GroupListTarget;
     selectedIds: number[];
     onSelect: (next: GroupListSelection) => void;
-    onCreateIdentity?: () => void;
     /** Cambia solo l'insieme dei gruppi selezionati (Seleziona tutto, Esc), senza aprirne uno. */
     onSelectedIdsChange?: (ids: number[]) => void;
     /** Elenco corrente dei gruppi (per tastiera e refresh senza perdere la selezione). */
     onCatalogChange?: (rows: GroupRow[]) => void;
   }
 >(function GroupList(
-  {
-    section,
-    onSectionChange,
-    target,
-    selectedIds,
-    onSelect,
-    onCreateIdentity,
-    onSelectedIdsChange,
-    onCatalogChange,
-  },
+  { section, target, selectedIds, onSelect, onSelectedIdsChange, onCatalogChange },
   ref,
 ) {
   const { t } = useTranslation();
@@ -179,9 +172,17 @@ export const GroupList = forwardRef<
   // Filtro "con al massimo N foto" (Da rivedere e Persone).
   const [maxPhotos, setMaxPhotos] = useState<number | null>(null);
   // Focus della tastiera nell'elenco (distinto dalla selezione e dall'elemento aperto).
-  const [groupCursor, setGroupCursor] = useState<number | null>(null);
+  // Il cursore dei gruppi vale finché non cambia il gruppo aperto: quando il modulo ne apre un
+  // altro (avanzamento dopo un nome, apertura da un altro modulo) il focus torna su quello aperto.
+  const openedGroupId = target?.kind === "group" ? target.id : null;
+  const [groupCursorState, setGroupCursorState] = useState<{
+    id: number;
+    opened: number | null;
+  } | null>(null);
+  const setGroupCursor = (id: number) => setGroupCursorState({ id, opened: openedGroupId });
+  const groupCursor =
+    groupCursorState && groupCursorState.opened === openedGroupId ? groupCursorState.id : null;
   const [idCursor, setIdCursor] = useState<string | null>(null);
-  const [selecting, setSelecting] = useState(false);
   const [dialog, setDialog] = useState<BulkDialog>(null);
   const asideRef = useRef<HTMLElement>(null);
   const debouncedQuery = useDebounced(query, 200);
@@ -238,8 +239,6 @@ export const GroupList = forwardRef<
     singles: 0,
     discarded: 0,
   };
-  const peopleCount =
-    section === "people" ? (identities.data?.identities.length ?? counts.people) : counts.people;
 
   const virtItems = useMemo((): VirtItem[] => {
     if (section === "people") return [];
@@ -267,19 +266,23 @@ export const GroupList = forwardRef<
     return out;
   }, [rows, section, counts.singles, counts.discarded, t]);
 
-  const order = useMemo(
+  // Gruppi nell'ordine mostrato (suggeriti, poi altri gruppi): lo seguono frecce e avanzamento.
+  const shownRows = useMemo(
     () =>
       virtItems
         .filter((i): i is Extract<VirtItem, { kind: "group" }> => i.kind === "group")
-        .map((i) => i.group.id),
+        .map((i) => i.group),
     [virtItems],
   );
+  const order = useMemo(() => shownRows.map((g) => g.id), [shownRows]);
 
-  const catalogKey = rows.map((r) => `${r.id}:${r.faces}:${r.photos}:${r.name ?? ""}`).join(",");
+  const catalogKey = shownRows
+    .map((r) => `${r.id}:${r.faces}:${r.photos}:${r.name ?? ""}`)
+    .join(",");
   useEffect(() => {
-    onCatalogChange?.(rows);
+    onCatalogChange?.(shownRows);
     // catalogKey evita di notificare a ogni render del padre con lo stesso elenco.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows segue catalogKey
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shownRows segue catalogKey
   }, [catalogKey, onCatalogChange]);
 
   const virt = useVirtualizer({
@@ -321,26 +324,6 @@ export const GroupList = forwardRef<
     if (last >= virtItems.length - 3 && groups.hasNextPage && !groups.isFetchingNextPage)
       void groups.fetchNextPage();
   }, [last, virtItems.length, groups]);
-
-  const tab = (id: PeopleSection, label: string, count: number) => (
-    <button
-      key={id}
-      type="button"
-      role="tab"
-      aria-selected={section === id}
-      className="btn people-tab"
-      onClick={() => onSectionChange(id)}
-      style={{
-        background: section === id ? "var(--pc-raised)" : "transparent",
-        borderColor: section === id ? "var(--pc-border)" : "transparent",
-      }}
-    >
-      <b className="people-tab-label">{label}</b>
-      <span className="mono muted people-muted-sm">
-        {id === "review" ? t("people.groupsCount", { count }) : fmtInt(count)}
-      </span>
-    </button>
-  );
 
   /** Apre un gruppo nei riquadri dei volti e della scheda, con la selezione corrente. */
   const openGroup = (id: number, group: GroupRow) => {
@@ -465,22 +448,8 @@ export const GroupList = forwardRef<
     if (!mods.ctrl && !mods.shift) selectIdentity(row);
   };
 
-  const selectAll = async () => {
-    setSelecting(true);
-    try {
-      await (section === "people" ? isel.selectAll() : gsel.selectAll());
-    } finally {
-      setSelecting(false);
-    }
-  };
-  const invertSelection = async () => {
-    setSelecting(true);
-    try {
-      await (section === "people" ? isel.invert() : gsel.invert());
-    } finally {
-      setSelecting(false);
-    }
-  };
+  const selectAll = () => (section === "people" ? isel.selectAll() : gsel.selectAll());
+  const invertSelection = () => (section === "people" ? isel.invert() : gsel.invert());
   const clearSelection = () => {
     if (section === "people") isel.clear();
     else gsel.clear();
@@ -679,23 +648,20 @@ export const GroupList = forwardRef<
     },
   });
 
-  /** "Assegna a…": tutti i volti dei gruppi selezionati in una persona, in un solo passaggio. */
+  const idGroups = identities.data?.groups ?? [];
+  const everyone = identities.data?.identities ?? [];
+
+  /** "Unisci a…": tutti i volti dei gruppi selezionati in una persona, in un solo passaggio. */
   const assignProps = (ids: number[]) => ({
-    mode: "assign" as const,
-    title: t("people.bulk.assignPickTitle"),
-    intro: t("people.bulk.assignPickIntro", { count: ids.length }),
+    mode: "destination" as const,
+    title: t("people.picker.mergeTitle"),
+    intro: t("people.picker.mergeIntro", { count: ids.length }),
     allowCreate: true,
-    describe: (c: PickerChoice) => {
-      // Lo stesso limite del backend: meglio dirlo qui che dopo la conferma.
+    exclude: ids,
+    run: async (c: PickerChoice) => {
+      // Lo stesso limite del backend: meglio dirlo qui che dopo la scelta.
       if (ids.length > MAX_BULK_GROUPS)
         throw new Error(t("people.bulk.tooMany", { max: fmtInt(MAX_BULK_GROUPS) }));
-      return {
-        title: t("people.bulk.assignTitle", { count: ids.length, name: c.name }),
-        body: t("people.bulk.assignBody", { name: c.name }),
-      };
-    },
-    confirmLabel: (c: PickerChoice) => t("people.bulk.assignConfirm", { name: nameOf(c) }),
-    run: async (c: PickerChoice) => {
       const assign = (to: GroupTarget) => commands.assignGroups(ids, to);
       const out =
         c.kind === "person"
@@ -703,11 +669,7 @@ export const GroupList = forwardRef<
           : c.kind === "identity"
             ? await assign({ kind: "identity", uid: c.uid })
             : await withNewIdentity(c.name, (uid) => assign({ kind: "identity", uid }));
-      let message = t("people.bulk.assignedDone", {
-        count: out.groups,
-        faces: t("people.bulk.facesCount", { count: out.faces }),
-        name: c.name,
-      });
+      let message = t("people.mergedDone", { count: out.groups, name: c.name });
       if (out.skippedFaces > 0)
         message += " " + t("people.bulk.skipped", { count: out.skippedFaces });
       notifyPeopleUndo(qc, message);
@@ -716,6 +678,61 @@ export const GroupList = forwardRef<
     },
   });
 
+  /** "Ignora" in blocco: una correzione per gruppo, annullate insieme dall'avviso. */
+  const ignoreSelected = async () => {
+    const ids = [...selectedIds];
+    try {
+      for (const group of ids) await commands.correctPerson({ action: "ignore", group });
+      notifyPeopleUndo(qc, t("people.bulk.ignoredDone", { count: ids.length }), ids.length);
+      onSelect({ target: null, selectedIds: [], anchor: null, group: null, identity: null });
+      await refreshPeopleFast(qc);
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  /** Ordinamento e filtri dell'elenco in un solo menu (ui-usability-audit D1). */
+  const countFilters: MenuItem[] = [
+    { kind: "label", label: t("people.bulk.filterLabel") },
+    ...([null, 1, 2, 5] as const).map((n) => ({
+      label:
+        n == null
+          ? t("people.bulk.filterAll")
+          : n === 1 && section !== "people"
+            ? t("people.bulk.filterOne")
+            : t("people.bulk.filterUpTo", { count: n }),
+      checked: maxPhotos === n,
+      onSelect: () => changeMaxPhotos(n),
+    })),
+  ];
+  const filterItems: MenuItem[] =
+    section === "people"
+      ? [
+          { kind: "label", label: t("identities.groupFilter") },
+          {
+            label: t("identities.allGroups", { count: everyone.length }),
+            checked: groupFilter === null,
+            onSelect: () => setGroupFilter(null),
+          },
+          ...idGroups.map((g) => ({
+            label: `${g} (${everyone.filter((r) => r.group === g).length})`,
+            checked: groupFilter === g,
+            onSelect: () => setGroupFilter(g),
+          })),
+          { kind: "separator" },
+          ...countFilters,
+        ]
+      : [
+          { kind: "label", label: t("people.sortLabel") },
+          ...SORTS.map((o) => ({
+            label: t(`people.sort.${o}`),
+            checked: sort === o,
+            onSelect: () => setSort(o),
+          })),
+          ...(section === "review" ? [{ kind: "separator" as const }, ...countFilters] : []),
+        ];
+  const filtered = maxPhotos != null || (section === "people" && groupFilter !== null);
+
   const emptyMsg =
     section === "review"
       ? t("people.emptyReview")
@@ -723,125 +740,36 @@ export const GroupList = forwardRef<
         ? t("people.emptyPeople")
         : t("people.emptyIgnored");
 
-  const idGroups = identities.data?.groups ?? [];
-  const everyone = identities.data?.identities ?? [];
-
   return (
     <aside ref={asideRef} aria-label={t("people.listLabel")} className="people-list">
       <div className="people-list-head">
-        <div role="tablist" className="people-tabs">
-          {tab("review", t("people.sectionReview"), counts.review)}
-          {tab("people", t("people.sectionPeople"), peopleCount)}
-          {tab("ignored", t("people.sectionIgnored"), counts.ignored)}
-        </div>
-        {section === "people" ? (
-          <>
-            <button className="btn btn-primary people-stretch" onClick={() => onCreateIdentity?.()}>
-              {t("identities.newButton")}
+        <input
+          type="search"
+          className="field people-list-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t(section === "people" ? "identities.search" : "people.filterPlaceholder")}
+          aria-label={t(section === "people" ? "identities.search" : "people.filterPlaceholder")}
+        />
+        <Menu
+          align="end"
+          trigger={
+            <button
+              type="button"
+              className="btn btn-ghost icon-btn people-filter-btn"
+              aria-label={t("people.sortFilter")}
+              title={t("people.sortFilter")}
+              data-active={filtered || undefined}
+            >
+              <Icon.Filter size={16} aria-hidden="true" />
             </button>
-            <div className="people-wrap people-wrap--gap-sm">
-              <button
-                type="button"
-                className="pill"
-                aria-pressed={groupFilter === null}
-                onClick={() => setGroupFilter(null)}
-                style={{ borderColor: groupFilter === null ? "var(--pc-accent)" : undefined }}
-              >
-                {t("identities.allGroups", { count: everyone.length })}
-              </button>
-              {idGroups.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  className="pill"
-                  aria-pressed={groupFilter === g}
-                  onClick={() => setGroupFilter(g)}
-                  style={{ borderColor: groupFilter === g ? "var(--pc-accent)" : undefined }}
-                >
-                  {g} ({everyone.filter((r) => r.group === g).length})
-                </button>
-              ))}
-            </div>
-            <input
-              type="search"
-              className="field people-full"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("identities.search")}
-              aria-label={t("identities.search")}
-            />
-          </>
-        ) : (
-          <>
-            <input
-              className="field people-full"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("people.filterPlaceholder")}
-              aria-label={t("people.filterPlaceholder")}
-            />
-            <div className="people-wrap people-wrap--gap-sm">
-              {SORTS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className="chip people-sort-chip"
-                  aria-pressed={sort === s}
-                  onClick={() => setSort(s)}
-                  style={{
-                    border: sort === s ? "1px solid var(--pc-accent)" : "1px solid transparent",
-                    background: sort === s ? "var(--pc-accent-soft-bg)" : "var(--pc-raised)",
-                    color: sort === s ? "var(--pc-accent-soft-text)" : "var(--pc-text-soft)",
-                  }}
-                >
-                  {t(`people.sort.${s}`)}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        {bulkSection && (
-          <div role="toolbar" aria-label={t("people.bulk.toolbar")} className="people-bulk-bar">
-            <PhotoCountFilter
-              key={section}
-              value={maxPhotos}
-              onChange={changeMaxPhotos}
-              atMost={section === "people"}
-            />
-            <div className="people-wrap people-wrap--gap-sm">
-              <Button size="sm" disabled={selecting} onClick={() => void selectAll()}>
-                {t("people.selectAll")}
-              </Button>
-              <Button size="sm" disabled={selectedCount === 0} onClick={clearSelection}>
-                {t("people.bulk.clear")}
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                disabledReason={
-                  selectedCount === 0
-                    ? t(section === "people" ? "people.bulk.noIdentities" : "people.bulk.noGroups")
-                    : undefined
-                }
-                onClick={() =>
-                  setDialog(
-                    section === "people"
-                      ? { kind: "merge", uids: selectedUids }
-                      : { kind: "assign", ids: selectedIds },
-                  )
-                }
-              >
-                {section === "people"
-                  ? t("people.bulk.mergeAction")
-                  : t("people.bulk.assignAction")}
-              </Button>
-            </div>
-            {/* Sempre presente: il cambio di conteggio (Ctrl+A, Esc) viene annunciato. */}
-            <span aria-live="polite" aria-atomic="true" className="muted people-muted-sm">
-              {selectedCount > 0 ? t("people.bulk.selectedCount", { count: selectedCount }) : null}
-            </span>
-          </div>
-        )}
+          }
+          items={filterItems}
+        />
+        {/* Il conteggio dei selezionati si annuncia anche con Ctrl+A ed Esc. */}
+        <span aria-live="polite" aria-atomic="true" className="visually-hidden">
+          {selectedCount > 0 ? t("people.bulk.selectedCount", { count: selectedCount }) : null}
+        </span>
       </div>
 
       <ContextMenu label={t("people.listLabel")} items={listMenuItems}>
@@ -868,6 +796,7 @@ export const GroupList = forwardRef<
                     role="listbox"
                     aria-multiselectable
                     aria-label={t("identities.title")}
+                    data-selecting={selectedCount > 1 || undefined}
                     tabIndex={0}
                     aria-activedescendant={
                       idCursorIndex >= 0
@@ -906,14 +835,14 @@ export const GroupList = forwardRef<
                               setIdCursor(r.uid);
                             }}
                             className="people-list-item people-list-item--id"
-                            style={{
-                              border:
-                                checked || current
-                                  ? "1px solid var(--pc-selection-border)"
-                                  : "1px solid transparent",
-                              background: checked ? "var(--pc-selection-bg)" : "transparent",
-                            }}
                           >
+                            <RowCheck
+                              checked={checked}
+                              onToggle={(e) => {
+                                isel.click(r.uid, { ctrl: true, shift: e.shiftKey });
+                                setIdCursor(r.uid);
+                              }}
+                            />
                             <span aria-hidden className="people-initials">
                               {r.name
                                 .split(/\s+/)
@@ -923,18 +852,19 @@ export const GroupList = forwardRef<
                                 .join("")}
                             </span>
                             <span className="people-list-text">
-                              <span className="people-list-name">{r.name}</span>
-                              <span className="muted people-muted-sm">
-                                {r.group ?? t("identities.notLinkedShort")}
-                                {r.faces
-                                  ? ` · ${t("identities.refCount", { count: r.faces })}`
-                                  : ` · ${t("identities.noRefs")}`}
+                              <span className="people-list-name" title={r.name}>
+                                {r.name}
                               </span>
-                            </span>
-                            <span className="mono muted people-muted-sm">
-                              {r.person != null && r.photos > 0
-                                ? t("people.photos", { count: r.photos })
-                                : t("people.noPhotosInLibrary")}
+                              <span className="muted people-muted-sm">
+                                {[
+                                  r.group,
+                                  r.person != null && r.photos > 0
+                                    ? t("people.photos", { count: r.photos })
+                                    : t("people.noPhotosInLibrary"),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
                             </span>
                           </div>
                         </div>
@@ -957,6 +887,7 @@ export const GroupList = forwardRef<
                     role="listbox"
                     aria-label={t("people.listLabel")}
                     aria-multiselectable
+                    data-selecting={selectedCount > 1 || undefined}
                     tabIndex={0}
                     aria-activedescendant={
                       groupCursorId != null && groupCursorIndex >= 0
@@ -1012,28 +943,26 @@ export const GroupList = forwardRef<
                                     ? "people-list-item people-list-item--ignored"
                                     : "people-list-item people-list-item--group"
                                 }
-                                style={{
-                                  border:
-                                    checked || current
-                                      ? "1px solid var(--pc-selection-border)"
-                                      : "1px solid transparent",
-                                  background: checked ? "var(--pc-selection-bg)" : "transparent",
-                                }}
                               >
-                                <Cover group={item.group} />
+                                <RowCheck
+                                  checked={checked}
+                                  onToggle={(e) => {
+                                    gsel.click(item.group.id, { ctrl: true, shift: e.shiftKey });
+                                    setGroupCursor(item.group.id);
+                                  }}
+                                />
+                                <Cover cover={item.group.cover} />
                                 <span className="people-list-text">
-                                  <span className="people-list-name">
+                                  <span
+                                    className="people-list-name"
+                                    title={groupTitle(item.group, t)}
+                                  >
                                     {groupTitle(item.group, t)}
                                   </span>
                                   <span className="muted people-muted-sm people-list-sub">
-                                    {groupSub(item.group, t)}
+                                    {`${t("people.photos", { count: item.group.photos })} · ${groupSub(item.group, t)}`}
                                   </span>
                                 </span>
-                                {section !== "ignored" && (
-                                  <span className="mono muted people-muted-sm">
-                                    {t("people.photos", { count: item.group.photos })}
-                                  </span>
-                                )}
                               </div>
                               {/* "Ripristina" accanto alla riga, non dentro: niente controlli annidati. */}
                               {section === "ignored" && (
@@ -1062,16 +991,6 @@ export const GroupList = forwardRef<
                               role="option"
                               aria-selected={target?.kind === "singles"}
                               className="people-list-item people-list-item--pair"
-                              style={{
-                                border:
-                                  target?.kind === "singles"
-                                    ? "1px solid var(--pc-selection-border)"
-                                    : "1px solid transparent",
-                                background:
-                                  target?.kind === "singles"
-                                    ? "var(--pc-selection-bg)"
-                                    : "transparent",
-                              }}
                             >
                               <span aria-hidden className="people-cover-ph" />
                               <span className="people-list-text">
@@ -1099,16 +1018,6 @@ export const GroupList = forwardRef<
                               role="option"
                               aria-selected={target?.kind === "discarded"}
                               className="people-list-item people-list-item--pair"
-                              style={{
-                                border:
-                                  target?.kind === "discarded"
-                                    ? "1px solid var(--pc-selection-border)"
-                                    : "1px solid transparent",
-                                background:
-                                  target?.kind === "discarded"
-                                    ? "var(--pc-selection-bg)"
-                                    : "transparent",
-                              }}
                             >
                               <span aria-hidden className="people-cover-ph" />
                               <span className="people-list-text">
@@ -1131,6 +1040,51 @@ export const GroupList = forwardRef<
           )}
         </div>
       </ContextMenu>
+
+      {bulkSection && selectedCount >= 2 && (
+        <ActionBar
+          label={t("people.bulk.toolbar")}
+          className="people-bulk-bar"
+          lead={t(
+            section === "people" ? "people.bulk.selectedPeople" : "people.bulk.selectedGroups",
+            {
+              count: selectedCount,
+            },
+          )}
+          actions={[
+            {
+              id: "merge",
+              label: t("people.mergeTo"),
+              variant: "primary",
+              priority: 1,
+              onSelect: () =>
+                setDialog(
+                  section === "people"
+                    ? { kind: "merge", uids: selectedUids }
+                    : { kind: "assign", ids: selectedIds },
+                ),
+            },
+            ...(section === "review"
+              ? [
+                  {
+                    id: "ignore",
+                    label: t("people.ignoreAction"),
+                    priority: 2,
+                    onSelect: () => void ignoreSelected(),
+                  },
+                ]
+              : []),
+          ]}
+          end={
+            <IconButton
+              label={t("people.bulk.clear")}
+              shortcut="Esc"
+              onClick={clearSelection}
+              icon={<Icon.Close size={16} />}
+            />
+          }
+        />
+      )}
 
       {dialog?.kind === "merge" && (
         <PersonPicker {...mergeProps(dialog.uids)} onClose={() => setDialog(null)} />

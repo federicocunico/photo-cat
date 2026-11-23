@@ -53,6 +53,17 @@ export function useTagHotkeys(
         shortcut: { key },
         // Il comando c'è solo se il tasto ha un tag e c'è una selezione.
         palette: false,
+        // Modifica › Tag del set attivo: solo i tasti con un tag (o "togli i tag").
+        menu: action
+          ? {
+              menu: "edit" as const,
+              section: 2,
+              order: key === "0" ? 10 : Number(key),
+              submenu: t("menu.activeSetTags"),
+            }
+          : undefined,
+        disabledReason: () =>
+          ref.current.selection().count > 0 ? undefined : t("menu.why.selectPhotos"),
         when: () => action != null && ref.current.selection().count > 0,
         run: () => {
           if (!action) return;

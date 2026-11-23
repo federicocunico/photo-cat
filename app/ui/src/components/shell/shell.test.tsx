@@ -1,6 +1,5 @@
 import { act, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../../i18n";
 import { emit, ipcMockModule, job, resources } from "../../test/ipcMock";
@@ -15,7 +14,6 @@ import { trackCommand, usePending } from "../../store/pending";
 import { commandsMock } from "../../test/ipcMock";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
-import { useGuide } from "../../store/guide";
 
 it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes", async () => {
   vi.useFakeTimers();
@@ -38,7 +36,7 @@ it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes
   act(() => {
     vi.advanceTimersByTime(1);
   });
-  expect(screen.getByTestId("pending-ipc")).toHaveAttribute("title", "1 richieste in corso");
+  expect(screen.getByTestId("pending-ipc")).toHaveAttribute("title", "1 richiesta in corso");
   await act(async () => {
     finish();
     await request;
@@ -83,6 +81,16 @@ describe("layout a pannelli", () => {
     fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
     expect(screen.getByTestId("left-panel")).toBeInTheDocument();
     expect(screen.getByTestId("right-panel")).toBeInTheDocument();
+  });
+
+  it("S7: un solo comando per pannello, con la stessa icona da aperto e da chiuso", () => {
+    render(<Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />);
+    expect(screen.getAllByRole("button", { name: "Comprimi ispettore" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Comprimi pannello sinistro" })).toHaveLength(1);
+    const close = screen.getByRole("button", { name: "Comprimi ispettore" });
+    const icon = close.innerHTML;
+    fireEvent.click(close);
+    expect(screen.getByRole("button", { name: "Espandi ispettore" }).innerHTML).toBe(icon);
   });
 
   it("Ctrl+I mostra e nasconde l'ispettore, ma non mentre si scrive", () => {
@@ -267,24 +275,40 @@ describe("navigazione dei moduli", () => {
     useLayout.setState({ navCompact: false });
   });
 
-  it("Gruppi della navigazione: Sfoglia, Organizza, AI, Importa ed esporta (con Varianti RAW), poi Attività e Impostazioni", () => {
+  it("Gruppi della navigazione: Sfoglia, Organizza (con Analisi AI), Importa ed esporta, poi Attività e Impostazioni", () => {
     renderNav();
     const group = (name: string) =>
       within(screen.getByRole("group", { name }))
         .getAllByRole("button")
         .map((b) => b.textContent);
     expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
-    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
-    expect(group("AI")).toEqual(["AI"]);
-    expect(group("Importa ed esporta")).toEqual([
-      "Importa",
-      "Esporta",
-      "Varianti RAW (Fujifilm X-T5)",
-    ]);
+    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag", "Analisi AI"]);
+    // Nessun gruppo di una sola voce (D9).
+    expect(screen.queryByRole("group", { name: "AI" })).toBeNull();
+    expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta", "Varianti RAW"]);
     const nav = screen.getByRole("navigation", { name: "Moduli" });
     const all = within(nav).getAllByRole("button");
     expect(all[all.length - 3]).toHaveTextContent("Attività");
     expect(all[all.length - 2]).toHaveTextContent("Impostazioni");
+  });
+
+  it("D9: Ctrl+1…9 aprono gli stessi moduli della versione 0.5", () => {
+    renderNav();
+    const expected = [
+      "library",
+      "sequence",
+      "catalogs",
+      "people",
+      "tags",
+      "ai",
+      "import",
+      "organize",
+      "raw-review",
+    ];
+    expected.forEach((module, i) => {
+      fireEvent.keyDown(window, { key: String(i + 1), ctrlKey: true });
+      expect(useLayout.getState().module).toBe(module);
+    });
   });
 
   it("Scorciatoia di modulo: Ctrl+3 apre Cataloghi, ma non mentre si scrive", () => {
@@ -317,7 +341,7 @@ describe("navigazione dei moduli", () => {
     expect(useLayout.getState().module).toBe("organize");
     fireEvent.keyDown(window, { key: "9", ctrlKey: true });
     expect(useLayout.getState().module).toBe("raw-review");
-    expect(screen.getByRole("button", { name: "Varianti RAW (Fujifilm X-T5)" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Varianti RAW" })).toHaveAttribute(
       "aria-keyshortcuts",
       "Control+9",
     );
@@ -368,7 +392,8 @@ describe("navigazione dei moduli", () => {
   });
 });
 
-describe("barra di stato e menu Aiuto", () => {
+// Il menu Aiuto è nella barra dei menu: vedi MenuBar.test.tsx.
+describe("barra di stato", () => {
   it("RAM sotto pressione: icona e testo, non solo colore", () => {
     render(
       <Live>
@@ -394,59 +419,5 @@ describe("barra di stato e menu Aiuto", () => {
     expect(chip).toHaveTextContent("Modelli AI da scaricare");
     fireEvent.click(chip);
     expect(useLayout.getState()).toMatchObject({ module: "settings", settingsSection: "models" });
-  });
-
-  it("menu Aiuto: Diagnostica e Informazioni", async () => {
-    render(<TopBar />);
-    const user = userEvent.setup();
-    screen.getByRole("button", { name: "Aiuto" }).focus();
-    await user.keyboard("{Enter}");
-    await user.click(await screen.findByRole("menuitem", { name: "Informazioni su photo-cat" }));
-    expect(await screen.findByRole("dialog", { name: "photo-cat" })).toBeInTheDocument();
-  });
-
-  const openHelp = async () => {
-    const user = userEvent.setup();
-    screen.getByRole("button", { name: "Aiuto" }).focus();
-    await user.keyboard("{Enter}");
-    await screen.findByRole("menu");
-    return user;
-  };
-
-  it("menu Aiuto: tutte le voci della guida", async () => {
-    render(<TopBar />);
-    await openHelp();
-    const names = screen.getAllByRole("menuitem").map((m) => m.textContent?.replace(/[?]$/, ""));
-    expect(names).toEqual([
-      "Scorciatoie da tastiera",
-      "Rivedi l'introduzione",
-      "Primi passi",
-      "Mostra di nuovo i suggerimenti",
-      "Guida",
-      "Segnala un problema",
-      "Diagnostica e registri",
-      "Informazioni su photo-cat",
-    ]);
-  });
-
-  it("Segnalare un problema: apre Diagnostica con l'esportazione in evidenza", async () => {
-    render(<TopBar />);
-    const user = await openHelp();
-    await user.click(screen.getByRole("menuitem", { name: "Segnala un problema" }));
-    expect(useLayout.getState()).toMatchObject({
-      module: "settings",
-      settingsSection: "diagnostics",
-    });
-    expect(useGuide.getState().report).toBe(true);
-  });
-
-  it("Rivedi l'introduzione e Mostra di nuovo i suggerimenti", async () => {
-    render(<TopBar />);
-    let user = await openHelp();
-    await user.click(screen.getByRole("menuitem", { name: "Rivedi l'introduzione" }));
-    expect(useGuide.getState().intro).toBe(true);
-    user = await openHelp();
-    await user.click(screen.getByRole("menuitem", { name: "Mostra di nuovo i suggerimenti" }));
-    expect(useGuide.getState().seen).toEqual([]);
   });
 });

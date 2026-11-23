@@ -11,6 +11,7 @@ export function usePaletteCommand() {
       label: t("commands.palette"),
       group: "general",
       shortcut: { key: "k", mod: true },
+      menu: { menu: "go", section: 2, order: 0 },
       inInputs: true,
       palette: false,
       run: () => usePalette.getState().openPalette(),

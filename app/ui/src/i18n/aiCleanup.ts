@@ -21,10 +21,13 @@ export const aiCleanup = {
       previewNone: "Nessuna foto ha l'etichetta «{{label}}» in questo ambito.",
       submit: "Togli l'etichetta…",
       confirmTitle: "Togliere «{{label}}»?",
-      confirmMessage:
+      confirmMessage_one:
+        "L'etichetta «{{label}}» verrà tolta da {{count}} foto e le analisi future non la riassegneranno a questa foto. Le etichette manuali restano. Puoi annullare subito dopo con «Annulla operazione».",
+      confirmMessage_other:
         "L'etichetta «{{label}}» verrà tolta da {{count}} foto e le analisi future non la riassegneranno a queste foto. Le etichette manuali restano. Puoi annullare subito dopo con «Annulla operazione».",
       confirmLabel: "Togli l'etichetta",
-      done: "Etichetta «{{label}}» tolta da {{count}} foto",
+      done_one: "Etichetta «{{label}}» tolta da {{count}} foto",
+      done_other: "Etichetta «{{label}}» tolta da {{count}} foto",
       failed: "Pulizia non riuscita.",
       nothingToRemove: "Nessuna etichetta da togliere",
     },
@@ -45,15 +48,18 @@ export const aiCleanup = {
       maxScoreHint: "From 0 to 1: photos at or above this confidence are kept.",
       previewing: "Counting affected photos…",
       previewError: "Could not compute the preview.",
-      preview_one: "{{count}} photo will lose the label \"{{label}}\"",
-      preview_other: "{{count}} photos will lose the label \"{{label}}\"",
-      previewNone: "No photo has the label \"{{label}}\" in this scope.",
+      preview_one: '{{count}} photo will lose the label "{{label}}"',
+      preview_other: '{{count}} photos will lose the label "{{label}}"',
+      previewNone: 'No photo has the label "{{label}}" in this scope.',
       submit: "Remove label…",
-      confirmTitle: "Remove \"{{label}}\"?",
-      confirmMessage:
-        "The label \"{{label}}\" will be removed from {{count}} photos and future analyses will not reassign it to them. Manual labels stay. You can undo right away with \"Undo operation\".",
+      confirmTitle: 'Remove "{{label}}"?',
+      confirmMessage_one:
+        'The label "{{label}}" will be removed from {{count}} photo and future analyses will not reassign it to that photo. Manual labels stay. You can undo right away with "Undo operation".',
+      confirmMessage_other:
+        'The label "{{label}}" will be removed from {{count}} photos and future analyses will not reassign it to them. Manual labels stay. You can undo right away with "Undo operation".',
       confirmLabel: "Remove label",
-      done: "Label \"{{label}}\" removed from {{count}} photos",
+      done_one: 'Label "{{label}}" removed from {{count}} photo',
+      done_other: 'Label "{{label}}" removed from {{count}} photos',
       failed: "Cleanup failed.",
       nothingToRemove: "No labels to remove",
     },

@@ -2,10 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "./i18n";
-import { commandsMock, emit, ipcMockModule } from "./test/ipcMock";
+import { appInfoFixture, commandsMock, emit, ipcMockModule } from "./test/ipcMock";
 import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
+
+// Il primo render carica i moduli dell'app: sotto il carico della suite completa supera i 5 s
+// predefiniti (le attese qui arrivano a 10 s).
+vi.setConfig({ testTimeout: 20000 });
 
 it("Primo avvio: does not render Library before startup and onboarding decisions", async () => {
   commandsMock.bootStatus.mockResolvedValue({
@@ -75,12 +79,13 @@ function renderApp() {
   );
 }
 
-const info = (previousCrash: unknown) => ({
-  version: "0.1.0",
-  dataDir: "D:\\data",
-  logsDir: "D:\\data\\logs",
-  previousCrash,
-});
+const info = (previousCrash: unknown) =>
+  appInfoFixture({
+    version: "0.1.0",
+    dataDir: "D:\\data",
+    logsDir: "D:\\data\\logs",
+    previousCrash,
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -127,11 +132,11 @@ describe("moduli di navigazione", () => {
       catalogs: "Cataloghi",
       tags: "Tag",
       people: "Persone",
-      ai: "AI",
+      ai: "Analisi AI",
       import: "Importa",
       jobs: "Attività",
       organize: "Esporta",
-      "raw-review": "Varianti RAW (Fujifilm X-T5)",
+      "raw-review": "Varianti RAW",
       settings: "Impostazioni",
     };
     // Le voci dei moduli più il comando che riduce la navigazione.

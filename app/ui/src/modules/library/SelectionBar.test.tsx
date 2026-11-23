@@ -302,7 +302,7 @@ it("assegnare una persona chiede conferma perché non si annulla da qui", async 
   await user.click(screen.getByRole("button", { name: "Persona" }));
   await user.click(await screen.findByRole("option", { name: /Giulia/ }));
   const dialog = await screen.findByRole("alertdialog");
-  await user.click(within(dialog).getByRole("button", { name: "Assegna a Giulia" }));
+  await user.click(within(dialog).getByRole("button", { name: "Assegna le foto a Giulia" }));
   await waitFor(() =>
     expect(commandsMock.startBulk).toHaveBeenCalledWith(
       { kind: "ids", ids: [1, 2] },

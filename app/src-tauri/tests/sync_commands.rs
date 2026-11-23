@@ -20,6 +20,10 @@ const ALLOWED_SYNC: &[&str] = &[
     "log_tail",
     "set_log_level",
     "open_logs",
+    // File › Apri la cartella dei dati: apre il gestore di file, come open_logs.
+    "open_data_dir",
+    // Menu nativo di macOS (ui-usability-audit): costruisce il menu, non legge il catalogo.
+    "set_app_menu",
     "system_info",
     "set_execution_provider",
     "set_resource_profile",

@@ -15,6 +15,7 @@ import { entries, useShortcutCatalog } from "./catalog";
 import { usePaletteCommand } from "./paletteCommand";
 import { shortcutText, useCommandStore } from "./registry";
 import { useSheetCommand } from "./sheetCommand";
+import { useAppMenuCommands } from "./appMenu";
 
 vi.mock("../lib/ipc", () => ipcMockModule(true));
 afterEach(checkedCleanup());
@@ -26,6 +27,7 @@ beforeEach(() => {
 /** Tutti i gestori di scorciatoie dell'app, montati insieme. */
 function App() {
   useShortcutCatalog();
+  useAppMenuCommands();
   usePaletteCommand();
   useSheetCommand();
   useUndoHotkey();
@@ -92,5 +94,29 @@ describe("modello di selezione nel foglio (unified-selection)", () => {
       keys: "Maiusc+↑ ↓",
       label: "Estendi la selezione dei gruppi",
     });
+  });
+});
+
+describe("README", () => {
+  it("4.7: ogni tasto della tabella delle scorciatoie del README è nel foglio", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const readme = fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../README.md"),
+      "utf8",
+    );
+    const start = readme.indexOf("**Scorciatoie principali**");
+    const table = readme.slice(start).split(/\r?\n\r?\n/)[1] ?? "";
+    const rows = table
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith("| ") && !l.startsWith("| Tasto"))
+      .map((l) => l.split("|")[1]!.trim());
+    expect(rows.length).toBeGreaterThan(5);
+    const keys = entries(i18n.getFixedT("it")).map((e) => e.keys);
+    const missing = rows
+      .flatMap((r) => r.split(", "))
+      .filter((k) => !keys.some((s) => s === k || s.split(/, | /).includes(k)));
+    expect(missing).toEqual([]);
   });
 });

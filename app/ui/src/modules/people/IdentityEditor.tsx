@@ -1,73 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  commands,
-  isTauri,
-  type FaceChoice,
-  type IdentityInput,
-  type IdentityRow,
-} from "../../lib/ipc";
-import { fmtDate } from "../../lib/format";
-import { FaceCrop } from "./FaceCrop";
-import { OpenInPeople } from "./OpenInPeople";
+import { commands, type GroupRow, type IdentityInput, type IdentityRow } from "../../lib/ipc";
 import { Icon } from "../../components/icons";
-import { Button, ConfirmDialog, InlineAlert } from "../../components/ui";
+import { Button, ConfirmDialog, InlineAlert, Menu } from "../../components/ui";
+import { notify, notifyError } from "../../store/toasts";
+import { Cover } from "./Cover";
+import { PersonPicker, type PickerChoice } from "./PersonPicker";
+import { openPersonPhotos } from "./openPersonPhotos";
 import "./people.css";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
 const KEY = ["identities"] as const;
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-
-function Avatar({ name, size = 36 }: { name: string; size?: number }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="people-avatar"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size / 3,
-      }}
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
-function RefFace({ id, onRemove }: { id: number; onRemove: () => void }) {
-  const { t } = useTranslation();
-  const img = useQuery({
-    queryKey: ["identity-face", id],
-    queryFn: () => commands.identityFaceImage(id),
-    enabled: isTauri(),
-    staleTime: Infinity,
-  });
-  return (
-    <span className="people-ref">
-      {img.data ? (
-        <img src={img.data} alt="" width={64} height={64} className="people-ref-img" />
-      ) : (
-        <span className="people-ref-ph" />
-      )}
-      <button
-        type="button"
-        className="btn icon-btn people-ref-remove"
-        aria-label={t("identities.removeFace")}
-        onClick={onRemove}
-      >
-        <Icon.Close size={14} />
-      </button>
-    </span>
-  );
-}
 
 type Draft = { name: string; shortName: string; group: string; aliases: string; threshold: number };
 
@@ -90,57 +34,72 @@ const toInput = (d: Draft, def: number): IdentityInput => ({
     .filter(Boolean),
 });
 
-/** Editor di un'identità: nome, alias, gruppo, soglia, riferimenti, unione ed eliminazione. */
+/** "26 foto in questa libreria · Famiglia · conosciuta anche come «Gio»". */
+function summary(row: IdentityRow, t: (k: string, o?: Record<string, unknown>) => string) {
+  return [
+    row.person != null && row.photos > 0
+      ? t("people.photosInLibrary", { count: row.photos })
+      : t("people.noPhotosInLibrary"),
+    row.group,
+    row.aliases.length
+      ? t("identities.alsoKnownAs", { names: row.aliases.map((a) => `«${a}»`).join(", ") })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Scheda di una persona (identity-registry, "Gestione delle identità"): intestazione con la
+ * copertina, "Mostra in Libreria" e il menu ⋯ (Unisci a…, Esporta, Elimina persona…); dettagli
+ * salvati appena modificati, con "Salvato" accanto. Per una persona nuova: il modulo con "Crea".
+ */
 export function IdentityEditor({
   row,
   creating,
-  all,
   groups,
   defaultThreshold,
+  cover = null,
   onSaved,
   onDeleted,
-  compact = false,
 }: {
   row: IdentityRow | null;
   creating: boolean;
-  all: IdentityRow[];
+  /** Tutte le persone (non più usato: l'unione passa dal selettore). */
+  all?: IdentityRow[];
   groups: string[];
   defaultThreshold: number;
+  /** Copertina del gruppo della persona nella libreria aperta. */
+  cover?: GroupRow["cover"];
   onSaved: (uid: string) => void;
   onDeleted: () => void;
-  /** Layout più stretto per la colonna scheda del modulo Persone. */
+  /** Mantenuto per compatibilità: la scheda ha sempre il layout della colonna. */
   compact?: boolean;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>(toDraft(row, defaultThreshold));
   const [error, setError] = useState("");
-  const [choices, setChoices] = useState<{ path: string; faces: FaceChoice[] } | null>(null);
-  const [fromLibrary, setFromLibrary] = useState(false);
-  const [mergeInto, setMergeInto] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmMerge, setConfirmMerge] = useState(false);
-  const [notice, setNotice] = useState("");
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ultimi dettagli salvati: uscire da un campo non modificato non salva di nuovo.
+  const lastSaved = useRef("");
   useEffect(() => {
     setDraft(toDraft(row, defaultThreshold));
+    lastSaved.current = JSON.stringify(toInput(toDraft(row, defaultThreshold), defaultThreshold));
     setError("");
-    setChoices(null);
-    setFromLibrary(false);
-    setMergeInto(null);
+    setSaved(false);
+    setMergeOpen(false);
     setConfirmDelete(false);
-    setConfirmMerge(false);
-    setNotice("");
   }, [row?.uid, creating, defaultThreshold]); // eslint-disable-line react-hooks/exhaustive-deps
-  const faces = useQuery({
-    queryKey: ["identity-faces", row?.uid],
-    queryFn: () => commands.identityFaces(row!.uid),
-    enabled: isTauri() && !!row,
-  });
-  const libraryFaces = useQuery({
-    queryKey: ["faces", row?.person],
-    queryFn: () => commands.personFaces(row!.person, 500),
-    enabled: isTauri() && fromLibrary && row?.person != null,
-  });
+  useEffect(
+    () => () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    },
+    [],
+  );
   const refresh = () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: KEY }),
@@ -167,264 +126,236 @@ export function IdentityEditor({
       setBusy(false);
     }
   };
-  const save = () =>
+
+  /** Salvataggio immediato dei dettagli (persona esistente): "Salvato" per un momento. */
+  const autosave = (next: Draft) => {
+    if (!row || creating) return;
+    const input = toInput(next, defaultThreshold);
+    const key = JSON.stringify(input);
+    if (!input.name || key === lastSaved.current) return;
+    void run(async () => {
+      await commands.saveIdentity(row.uid, input);
+      lastSaved.current = key;
+      setSaved(true);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(false), 2500);
+    });
+  };
+
+  const create = () =>
     run(async () => {
-      const uid = await commands.saveIdentity(
-        creating ? null : row!.uid,
-        toInput(draft, defaultThreshold),
-      );
+      const uid = await commands.saveIdentity(null, toInput(draft, defaultThreshold));
       onSaved(uid);
     });
-  const addFile = async (path: string, choice: number | null) => {
+
+  const exportPerson = async () => {
     if (!row) return;
-    await run(async () => {
-      const out = await commands.addIdentityReferenceFile(row.uid, path, choice);
-      if (out.outcome === "choose") setChoices({ path, faces: out.faces });
-      else {
-        setChoices(null);
-        if (out.outcome === "noFace") setNotice(t("identities.noFace"));
-      }
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: `${row.shortName || row.name}.photocat-people.json`,
+      filters: [{ name: "photo-cat", extensions: ["json"] }],
     });
+    if (typeof path !== "string") return;
+    try {
+      await commands.exportIdentities(path, true, [row.uid]);
+      notify({ tone: "ok", message: t("identities.exportedOne", { name: row.name }) });
+    } catch (e) {
+      notifyError(e);
+    }
   };
-  const pickFile = async () => {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const path = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "Immagini",
-          extensions: ["jpg", "jpeg", "png", "heic", "heif", "tif", "tiff", "webp"],
-        },
-      ],
-    });
-    if (typeof path === "string") await addFile(path, null);
-  };
-  const field = (key: keyof Draft, label: string, extra: Record<string, unknown> = {}) => (
+
+  const field = (
+    key: Exclude<keyof Draft, "threshold">,
+    label: string,
+    extra: Record<string, unknown> = {},
+    hint?: string,
+  ) => (
     <label className="people-field-col">
       <span className="people-field-label">{label}</span>
       <input
         className="field people-field-input"
-        value={String(draft[key])}
+        value={draft[key]}
         onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+        onBlur={() => autosave(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !creating) autosave(draft);
+        }}
         {...extra}
       />
+      {hint && <span className="muted people-muted-sm">{hint}</span>}
     </label>
   );
-  const mergeName = all.find((x) => x.uid === mergeInto)?.name ?? "";
+
   if (!row && !creating) return <p className="muted">{t("identities.none")}</p>;
-  const title = creating ? t("identities.new") : row!.name;
-  return (
-    <div className="people-stack" style={{ gap: compact ? 12 : 14 }}>
-      <div className="people-inline people-inline--gap-lg">
-        <Avatar name={draft.name || "?"} size={compact ? 40 : 48} />
-        <div>
-          <div className="muted people-muted-sm">
-            {row ? t("identities.createdAt", { date: fmtDate(new Date(row.createdAt)) }) : ""}
-          </div>
-          <strong style={{ fontSize: compact ? 16 : 20 }}>{title}</strong>
-        </div>
-      </div>
+
+  const details = (
+    <>
+      {field("name", t("identities.name"), { required: true })}
+      {field("shortName", t("identities.shortName"), {
+        placeholder: draft.name.trim().split(/\s+/)[0] ?? "",
+      })}
+      {field(
+        "group",
+        t("identities.group"),
+        { list: "pc-identity-groups" },
+        t("identities.groupHint"),
+      )}
+      <datalist id="pc-identity-groups">
+        {groups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+      {field("aliases", t("identities.aliases"), { placeholder: t("identities.aliasesHint") })}
+      {/* Riconoscimento come sensibilità, senza valori numerici (ui-foundations). */}
+      <label className="people-field-col">
+        <span className="people-field-label">{t("identities.threshold")}</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(draft.threshold * 100)}
+          aria-label={t("identities.threshold")}
+          aria-valuetext={t(
+            draft.threshold < defaultThreshold - 0.02
+              ? "identities.sensitivity.more"
+              : draft.threshold > defaultThreshold + 0.02
+                ? "identities.sensitivity.precise"
+                : "identities.sensitivity.default",
+          )}
+          onChange={(e) => setDraft({ ...draft, threshold: Number(e.target.value) / 100 })}
+          onPointerUp={() => autosave(draft)}
+          onKeyUp={() => autosave(draft)}
+          onBlur={() => autosave(draft)}
+        />
+        <span className="people-scale muted people-muted-sm" aria-hidden="true">
+          <span>{t("identities.sensitivity.more")}</span>
+          <span>{t("identities.sensitivity.precise")}</span>
+        </span>
+      </label>
+    </>
+  );
+
+  if (creating || !row) {
+    return (
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void save();
+          void create();
         }}
         className="people-stack people-stack--gap-md"
       >
-        {field("name", t("identities.name"), { required: true })}
-        {field("shortName", t("identities.shortName"), {
-          placeholder: draft.name.trim().split(/\s+/)[0] ?? "",
-        })}
-        {field("group", t("identities.group"), { list: "pc-identity-groups" })}
-        <datalist id="pc-identity-groups">
-          {groups.map((g) => (
-            <option key={g} value={g} />
-          ))}
-        </datalist>
-        {field("aliases", t("identities.aliases"), { placeholder: t("identities.aliasesHint") })}
-        <label className="people-field-col">
-          <span className="people-field-head">
-            <span className="people-field-label">{t("identities.threshold")}</span>
-            <span className="mono">{draft.threshold.toFixed(2)}</span>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(draft.threshold * 100)}
-            aria-label={t("identities.threshold")}
-            onChange={(e) => setDraft({ ...draft, threshold: Number(e.target.value) / 100 })}
-          />
-        </label>
+        <h2 className="people-card-title">{t("identities.new")}</h2>
+        {details}
         <button
           className="btn btn-primary"
           type="submit"
           disabled={!draft.name.trim()}
           aria-busy={busy || undefined}
         >
-          {creating ? t("identities.create") : t("identities.save")}
+          {t("identities.create")}
         </button>
+        {error && (
+          <InlineAlert tone="danger" title={t("people.failed")}>
+            {error}
+          </InlineAlert>
+        )}
       </form>
+    );
+  }
+
+  const mergeName = (c: PickerChoice) => c.name;
+  return (
+    <div className="people-stack people-stack--gap-lg">
+      <div className="people-person-head">
+        <Cover cover={cover} size="md" />
+        <div className="people-person-title">
+          <h2 className="people-card-title">{row.name}</h2>
+          <span className="muted people-muted-sm">{summary(row, t)}</span>
+        </div>
+        <Menu
+          align="end"
+          trigger={
+            <button
+              type="button"
+              className="btn btn-ghost icon-btn"
+              aria-label={t("identities.moreActions", { name: row.name })}
+            >
+              <Icon.More size={16} aria-hidden="true" />
+            </button>
+          }
+          items={[
+            { label: t("people.mergeTo"), onSelect: () => setMergeOpen(true) },
+            { label: t("identities.export"), onSelect: () => void exportPerson() },
+            { kind: "separator" },
+            {
+              label: t("identities.deletePerson"),
+              danger: true,
+              onSelect: () => setConfirmDelete(true),
+            },
+          ]}
+        />
+      </div>
+      {row.person != null && row.photos > 0 && (
+        <Button
+          icon={<Icon.Library size={14} />}
+          onClick={() => openPersonPhotos(row.person!).catch((e) => notifyError(e))}
+        >
+          {t("identities.showInLibrary")}
+        </Button>
+      )}
+      <section className="people-stack people-stack--gap-md" aria-labelledby={`details-${row.uid}`}>
+        <div className="people-inline">
+          <h3 id={`details-${row.uid}`} className="section-title">
+            {t("identities.details")}
+          </h3>
+          <span role="status" className="muted people-muted-sm people-saved">
+            {saved ? t("settings.savedField") : null}
+          </span>
+        </div>
+        {details}
+      </section>
       {error && (
         <InlineAlert tone="danger" title={t("people.failed")}>
           {error}
         </InlineAlert>
       )}
-      {notice && <p role="status">{notice}</p>}
-      {row && (
-        <>
-          <div className="people-inline people-inline--wrap">
-            <h2 className="people-section-title">
-              {t("identities.references", { count: faces.data?.length ?? row.faces })}
-            </h2>
-            <button className="btn people-ml-auto" onClick={() => void pickFile()}>
-              {t("identities.addFromFile")}
-            </button>
-            {row.person != null && (
-              <button className="btn" onClick={() => setFromLibrary((v) => !v)}>
-                {t("identities.addFromLibrary")}
-              </button>
-            )}
-          </div>
-          <div className="people-wrap">
-            {faces.data?.map((f) => (
-              <RefFace
-                key={f.id}
-                id={f.id}
-                onRemove={() => void run(() => commands.removeIdentityFace(f.id))}
-              />
-            ))}
-          </div>
-          <span className="muted people-muted-sm">{t("identities.referencesHint")}</span>
-          {choices && (
-            <div role="group" aria-label={t("identities.chooseFace")} className="feature-card">
-              <span>{t("identities.chooseFace")}</span>
-              <div className="people-wrap">
-                {choices.faces.map((f) => (
-                  <button
-                    key={f.index}
-                    type="button"
-                    className="btn people-face-pick"
-                    aria-label={t("identities.faceN", { n: f.index + 1 })}
-                    onClick={() => void addFile(choices.path, f.index)}
-                  >
-                    <img src={f.crop} alt="" width={72} height={72} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {fromLibrary && (
-            <div className="feature-card people-card-stretch">
-              <span>{t("identities.chooseLibraryFace")}</span>
-              <div className="people-wrap">
-                {libraryFaces.data?.slice(0, 24).map((f, i) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className="btn people-face-pick"
-                    aria-label={t("identities.libraryFaceN", { n: i + 1 })}
-                    onClick={() =>
-                      void run(async () => {
-                        await commands.addIdentityReferenceFace(row.uid, f.id);
-                        setFromLibrary(false);
-                      })
-                    }
-                  >
-                    <FaceCrop face={f} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="people-soft">
-            {row.person != null && row.photos > 0 ? (
-              <>
-                {t("identities.linked", { count: row.photos })}{" "}
-                <OpenInPeople
-                  target={{ person: row.person }}
-                  className="btn btn-ghost people-open-inline"
-                />
-              </>
-            ) : (
-              t("people.noPhotosInLibrary")
-            )}
-          </div>
-          <div className="people-stack people-stack--gap">
-            {mergeInto === null ? (
-              <button className="btn" onClick={() => setMergeInto("")}>
-                {t("identities.mergeWith")}
-              </button>
-            ) : (
-              <div className="feature-card people-card-stretch">
-                <select
-                  className="field"
-                  aria-label={t("identities.mergeTarget")}
-                  value={mergeInto}
-                  onChange={(e) => setMergeInto(e.target.value)}
-                >
-                  <option value="">{t("identities.mergeTarget")}</option>
-                  {all
-                    .filter((x) => x.uid !== row.uid)
-                    .map((x) => (
-                      <option key={x.uid} value={x.uid}>
-                        {x.name}
-                      </option>
-                    ))}
-                </select>
-                {mergeInto && (
-                  <p className="people-muted-reset">
-                    {t("identities.mergeConfirm", {
-                      from: row.name,
-                      into: all.find((x) => x.uid === mergeInto)?.name ?? "",
-                    })}
-                  </p>
-                )}
-                <div className="feature-actions people-actions-flush">
-                  <Button
-                    variant="primary"
-                    disabled={!mergeInto}
-                    onClick={() => setConfirmMerge(true)}
-                  >
-                    {t("identities.merge")}
-                  </Button>
-                  <Button onClick={() => setMergeInto(null)}>{t("identities.cancel")}</Button>
-                </div>
-              </div>
-            )}
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              {t("identities.delete")}
-            </Button>
-            <ConfirmDialog
-              open={confirmMerge && !!mergeInto}
-              onOpenChange={setConfirmMerge}
-              title={t("identities.mergeTitle", { from: row.name, into: mergeName })}
-              message={t("identities.mergeConfirm", { from: row.name, into: mergeName })}
-              confirmLabel={t("identities.mergeButton", { into: mergeName })}
-              danger={false}
-              onConfirm={() =>
-                run(async () => {
-                  await commands.mergeIdentities(row.uid, mergeInto!);
-                  onSaved(mergeInto!);
-                })
-              }
-            />
-            <ConfirmDialog
-              open={confirmDelete}
-              onOpenChange={setConfirmDelete}
-              title={t("identities.deleteTitle", { name: row.name })}
-              message={t("identities.deleteConfirm", { name: row.name })}
-              confirmLabel={t("identities.deleteButton")}
-              onConfirm={() =>
-                run(async () => {
-                  await commands.deleteIdentity(row.uid);
-                  onDeleted();
-                })
-              }
-            />
-          </div>
-        </>
+      {mergeOpen && (
+        <PersonPicker
+          mode="identities"
+          title={t("people.picker.mergeTitle")}
+          intro={t("identities.mergeIntro", { name: row.name })}
+          danger
+          describe={(c: PickerChoice) => {
+            if (c.kind !== "identity" || c.uid === row.uid)
+              throw new Error(t("identities.mergeSame"));
+            return {
+              title: t("identities.mergeTitle", { from: row.name, into: c.name }),
+              body: t("identities.mergeConfirm", { from: row.name, into: c.name }),
+            };
+          }}
+          confirmLabel={(c: PickerChoice) => t("identities.mergeButton", { into: mergeName(c) })}
+          run={async (c: PickerChoice) => {
+            if (c.kind !== "identity") return;
+            await commands.mergeIdentities(row.uid, c.uid);
+            await refresh();
+            onSaved(c.uid);
+          }}
+          onClose={() => setMergeOpen(false)}
+        />
       )}
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t("identities.deleteTitle", { name: row.name })}
+        message={t("identities.deleteConfirm", { name: row.name })}
+        confirmLabel={t("identities.deleteButton")}
+        onConfirm={() =>
+          run(async () => {
+            await commands.deleteIdentity(row.uid);
+            onDeleted();
+          })
+        }
+      />
     </div>
   );
 }

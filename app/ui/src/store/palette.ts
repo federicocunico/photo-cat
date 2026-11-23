@@ -36,7 +36,12 @@ export const usePalette = create<PaletteState>()(
   ),
 );
 
-/** Selettore della barra delle azioni da aprire (es. "Aggiungi tag…" dalla palette). */
-export const useSelectionPicker = create<{ open: "tag" | null; set: (p: "tag" | null) => void }>(
-  (set) => ({ open: null, set: (open) => set({ open }) }),
-);
+/**
+ * Selettore della barra delle azioni da aprire (es. "Aggiungi tag…" dalla palette, "Aggiungi a un
+ * catalogo…" dal menu Modifica), oppure "trash": spostare la selezione nel Cestino.
+ */
+export type SelectionPicker = "tag" | "catalog" | "trash";
+export const useSelectionPicker = create<{
+  open: SelectionPicker | null;
+  set: (p: SelectionPicker | null) => void;
+}>((set) => ({ open: null, set: (open) => set({ open }) }));

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
 description = "photo-cat: catalogazione locale di fotografie"
 
 [features]
@@ -32,6 +33,8 @@ pc-governor = { workspace = true, features = ["specta"] }
 pc-jobs = { workspace = true, features = ["specta"] }
 pc-ingest = { workspace = true, features = ["specta"] }
 pc-models = { workspace = true, features = ["specta"] }
+# Nome e versione del sistema operativo per la finestra Informazioni (stessa versione di pc-governor).
+sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 pc-ai = { workspace = true, features = ["specta"] }
 pc-organize = { workspace = true, features = ["specta"] }
 pc-raw-review = { workspace = true, features = ["specta"] }

@@ -141,7 +141,16 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   return (
     <div className="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
       <section className="onboarding-card">
-        <h1 id="onboarding-title">{t("onboarding.title")}</h1>
+        {/* Un solo titolo: quello del passo (il primo è il benvenuto all'app). */}
+        <h1 id="onboarding-title">
+          {t(
+            step === 0
+              ? "onboarding.title"
+              : step === 1
+                ? "onboarding.photosTitle"
+                : "onboarding.aiTitle",
+          )}
+        </h1>
         <p className="visually-hidden" aria-live="polite">
           {t("onboarding.progress", { n: step + 1 })}
         </p>
@@ -162,7 +171,6 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === 0 && (
           <div className="onboarding-body">
-            <h2>{t("onboarding.steps.0")}</h2>
             <p>{t("onboarding.welcome")}</p>
             <div className="onboarding-field">
               <span className="ui-field-label">{t("onboarding.language")}</span>
@@ -187,7 +195,6 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === 1 && (
           <div className="onboarding-body">
-            <h2>{t("onboarding.photosTitle")}</h2>
             <p>{t("onboarding.photosHelp")}</p>
             <FolderPicker
               label={t("onboarding.folder")}
@@ -208,10 +215,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === 2 && (
           <div className="onboarding-body">
-            <h2>{t("onboarding.aiTitle")}</h2>
-            <p>{t("onboarding.aiHelp")}</p>
+            <p>
+              {t("onboarding.aiHelp")}{" "}
+              {t(modelsReady ? "onboarding.modelsReady" : "onboarding.modelsDownload")}
+            </p>
             <SystemSummary info={system.data} />
-            {modelsReady && <p>{t("onboarding.modelsReady")}</p>}
           </div>
         )}
 
@@ -222,9 +230,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             </Button>
           )}
           <span className="onboarding-spacer" />
-          <Button onClick={step < 2 ? () => setStep((s) => s + 1) : skipAi}>
-            {t("onboarding.later")}
-          </Button>
+          {/* Con i modelli già pronti l'ultimo passo non rimanda nulla: basta "Inizia". */}
+          {(step < 2 || !modelsReady) && (
+            <Button onClick={step < 2 ? () => setStep((s) => s + 1) : skipAi}>
+              {t("onboarding.later")}
+            </Button>
+          )}
           {step === 0 && (
             <Button variant="primary" onClick={confirmWelcome}>
               {t("onboarding.continue")}

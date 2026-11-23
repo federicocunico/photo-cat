@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Barra dei menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#6AAEF5}a:hover{color:#C9DCF2}
+.app{width:1440px;height:900px;display:flex;flex-direction:column;background:#1B1B1C;color:#E8E8EA;font-family:"Source Sans 3",system-ui,sans-serif;font-size:14px;line-height:1.4;overflow:hidden;position:relative}
+.top{height:44px;flex:none;display:flex;align-items:center;gap:16px;padding:0 12px;background:#202022;border-bottom:1px solid #3A3A3E}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;width:176px}
+.menubar{display:flex;gap:2px}
+.menubar button{background:none;border:0;color:#C9C9CE;font:inherit;padding:6px 10px;border-radius:6px;white-space:nowrap}
+.menubar button.on{background:#2C2C2F;color:#E8E8EA}
+.search{flex:1;max-width:460px;margin-left:auto;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #3A3A3E;border-radius:8px;color:#8E8E95;background:#1B1B1C}
+.kbd{font-size:12px;color:#A9A9AE;border:1px solid #3A3A3E;border-radius:4px;padding:0 5px;white-space:nowrap}
+.pill{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:15px;background:#2C2C2F;color:#C9C9CE;font-size:13px;white-space:nowrap}
+.content{flex:1;display:flex;min-height:0}
+.ghost{width:540px;flex:none;background:#1F1F21;border-right:1px solid #3A3A3E;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:140px 24px 24px 220px;align-content:start;opacity:.35}
+.ph{aspect-ratio:1;border-radius:8px;background:#34393A}
+.drop{position:absolute;top:40px;left:200px;width:320px;background:#2C2C2F;border:1px solid #3A3A3E;border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.5);padding:6px;z-index:3}
+.mi{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;white-space:nowrap}
+.mi.on{background:#233449}
+.sc{margin-left:auto;font-size:12px;color:#A9A9AE}
+.sep{border-top:1px solid #3A3A3E;margin:4px 6px}
+.sub{margin-left:auto;color:#A9A9AE}
+.map{flex:1;padding:24px 28px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.map h2{margin:0;font-size:18px;font-weight:700}
+.intro{color:#A9A9AE;max-width:760px}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.mcard{background:#232325;border:1px solid #3A3A3E;border-radius:10px;padding:10px 6px}
+.mcard h3{margin:0 10px 6px;font-size:14px;font-weight:700}
+.new{font-size:11px;color:#C9DCF2;background:#233449;border-radius:8px;padding:0 6px;margin-left:6px}
+.status{height:28px;flex:none;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:12px;color:#A9A9AE;background:#202022;border-top:1px solid #3A3A3E}
+</style>
+</helmet>
+<div class="app">
+  <header class="top">
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg>photo-cat</div>
+    <nav class="menubar" aria-label="Menu"><button type="button" class="on" aria-expanded="true">File</button><button type="button">Modifica</button><button type="button">Vista</button><button type="button">Vai</button><button type="button">Strumenti</button><button type="button">Aiuto</button></nav>
+    <div class="search">Cerca foto, persone, comandi…<span style="margin-left:auto" class="kbd">Ctrl K</span></div>
+    <div class="pill">Nessuna attività</div>
+  </header>
+  <div class="drop" role="menu" aria-label="File">
+    <div class="mi on" role="menuitem">Importa una cartella…<span class="sc">Ctrl+O</span></div>
+    <div class="mi" role="menuitem">Esporta…<span class="sc">Ctrl+E</span></div>
+    <div class="sep"></div>
+    <div class="mi" role="menuitem">Apri una cartella di RAW…</div>
+    <div class="mi" role="menuitem">Apri un progetto FujiView…</div>
+    <div class="mi" role="menuitem">Sessioni RAW recenti<span class="sub">›</span></div>
+    <div class="sep"></div>
+    <div class="mi" role="menuitem">Mostra la cartella dei dati</div>
+    <div class="mi" role="menuitem">Impostazioni<span class="sc">Ctrl+,</span></div>
+    <div class="sep"></div>
+    <div class="mi" role="menuitem">Esci<span class="sc">Alt+F4</span></div>
+  </div>
+  <div class="content">
+    <div class="ghost" aria-hidden="true"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+    <section class="map" aria-label="Contenuto degli altri menu">
+      <h2>Gli altri menu</h2>
+      <p class="intro" style="margin:0">Ogni voce è un comando del registro già usato dalla palette (Ctrl+K) e dal foglio delle scorciatoie: stesso nome, stessa scorciatoia, disattivata con il motivo quando non si può usare. Alt o F10 portano il focus sulla barra; su macOS gli stessi menu vanno nella barra di sistema.</p>
+      <div class="cols">
+        <div class="mcard"><h3>Modifica</h3>
+          <div class="mi">Annulla operazione<span class="sc">Ctrl+Z</span></div>
+          <div class="sep"></div>
+          <div class="mi">Seleziona tutto<span class="sc">Ctrl+A</span></div>
+          <div class="mi">Inverti selezione<span class="sc">Ctrl+Maiusc+I</span></div>
+          <div class="mi">Deseleziona<span class="sc">Esc</span></div>
+          <div class="sep"></div>
+          <div class="mi">Tag del set attivo<span class="sub">›</span></div>
+          <div class="mi">Valutazione<span class="sub">›</span></div>
+          <div class="mi">Aggiungi a un catalogo…</div>
+          <div class="mi">Sposta nel Cestino<span class="sc">Canc</span></div>
+        </div>
+        <div class="mcard"><h3>Vista</h3>
+          <div class="mi">Navigazione compatta<span class="sc">Ctrl+B</span></div>
+          <div class="mi">Pannelli laterali<span class="sc">Ctrl+Maiusc+B</span></div>
+          <div class="mi">Inspector<span class="sc">Ctrl+I</span></div>
+          <div class="sep"></div>
+          <div class="mi">Dimensione miniature<span class="sub">›</span></div>
+          <div class="mi">Raggruppa foto simili</div>
+          <div class="mi">Mappa delle foto</div>
+          <div class="sep"></div>
+          <div class="mi">Tema<span class="sub">›</span></div>
+          <div class="mi">Schermo intero<span class="sc">F11</span></div>
+        </div>
+        <div class="mcard"><h3>Vai</h3>
+          <div class="mi">Libreria<span class="sc">Ctrl+1</span></div>
+          <div class="mi">Sequenza<span class="sc">Ctrl+2</span></div>
+          <div class="mi">Cataloghi<span class="sc">Ctrl+3</span></div>
+          <div class="mi">Persone<span class="sc">Ctrl+4</span></div>
+          <div class="mi">Tag<span class="sc">Ctrl+5</span></div>
+          <div class="mi">Analisi AI<span class="sc">Ctrl+6</span></div>
+          <div class="mi">Importa · Esporta · Varianti RAW<span class="sc">Ctrl+7…9</span></div>
+          <div class="sep"></div>
+          <div class="mi">Attività</div>
+          <div class="mi">Palette dei comandi<span class="sc">Ctrl+K</span></div>
+        </div>
+        <div class="mcard"><h3>Strumenti</h3>
+          <div class="mi">Rianalizza le foto…</div>
+          <div class="mi">Metti da parte i duplicati</div>
+          <div class="mi">Controlla la qualità</div>
+          <div class="sep"></div>
+          <div class="mi">Modelli AI</div>
+          <div class="mi">Diagnostica e registri</div>
+        </div>
+        <div class="mcard"><h3>Aiuto</h3>
+          <div class="mi">Guida</div>
+          <div class="mi">Scorciatoie da tastiera<span class="sc">?</span></div>
+          <div class="mi">Primi passi</div>
+          <div class="mi">Rivedi l'introduzione</div>
+          <div class="mi">Mostra di nuovo i suggerimenti</div>
+          <div class="sep"></div>
+          <div class="mi">Segnala un problema</div>
+          <div class="mi">Copia le informazioni di sistema<span class="new">nuovo</span></div>
+          <div class="sep"></div>
+          <div class="mi">Informazioni su photo-cat</div>
+        </div>
+        <div class="mcard" style="border-style:dashed;background:none"><h3>Cosa sparisce</h3>
+          <div class="mi" style="white-space:normal;color:#A9A9AE">Il pulsante «?» della barra superiore: il suo contenuto è il menu Aiuto. Nessun comando esiste solo nella barra dei menu: tutto resta raggiungibile anche dai pulsanti dei moduli e dalla palette.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <footer class="status"><span>186 foto</span><span style="margin-left:auto">Modelli AI pronti</span><span>Nessun errore</span></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -25,9 +25,9 @@ import {
   FolderPicker,
   FormField,
   InlineAlert,
-  PageHeader,
   type Tone,
 } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { Icon } from "../../components/icons";
 import "./organize.css";
 
@@ -234,324 +234,325 @@ export function OrganizePage() {
   };
 
   return (
-    <div className="export-page">
-      <PageHeader title={t("modules.organize")} description={t("organize.subtitle")} />
-      <div className="export-body">
-        <Card title={t("organize.scopeTitle")}>
-          <div className="export-row">
-            <FormField
-              label={t("organize.scope")}
-              hint={scopeName === "filter" ? t("organize.scopeFilterHint") : undefined}
+    <ModulePage
+      title={t("modules.organize")}
+      subtitle={t("organize.subtitle")}
+      bodyClassName="export-body"
+    >
+      <Card title={t("organize.scopeTitle")}>
+        <div className="export-row">
+          <FormField
+            label={t("organize.scope")}
+            hint={scopeName === "filter" ? t("organize.scopeFilterHint") : undefined}
+          >
+            <select
+              className="field"
+              value={scopeName}
+              onChange={(e) => setScope(e.target.value as ScopeName)}
             >
+              <option value="selection">
+                {t("organize.scopeSelection", { count: selectedCount })}
+              </option>
+              <option value="filter">{t("organize.scopes.filter")}</option>
+              <option value="library">{t("organize.scopes.library")}</option>
+              <option value="catalog">{t("organize.scopes.catalog")}</option>
+            </select>
+          </FormField>
+          {scopeName === "catalog" && (
+            <FormField label={t("organize.scopes.catalog")}>
               <select
                 className="field"
-                value={scopeName}
-                onChange={(e) => setScope(e.target.value as ScopeName)}
+                value={catalog}
+                onChange={(e) => setCatalog(e.target.value)}
               >
-                <option value="selection">
-                  {t("organize.scopeSelection", { count: selectedCount })}
-                </option>
-                <option value="filter">{t("organize.scopes.filter")}</option>
-                <option value="library">{t("organize.scopes.library")}</option>
-                <option value="catalog">{t("organize.scopes.catalog")}</option>
+                <option value="">{t("organize.catalogNone")}</option>
+                {catalogs.data?.map(({ catalog: c }) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
             </FormField>
-            {scopeName === "catalog" && (
-              <FormField label={t("organize.scopes.catalog")}>
+          )}
+        </div>
+        {scopeName === "selection" && selectedCount === 0 && (
+          <InlineAlert tone="warn">{t("organize.noSelection")}</InlineAlert>
+        )}
+      </Card>
+
+      <Card title={t("organize.export")}>
+        <p className="muted export-hint">{t("organize.exportHint")}</p>
+        <div className="export-row">
+          <FormField label={t("organize.format")}>
+            <select
+              className="field"
+              value={format}
+              onChange={(e) => setFormat(e.target.value as "csv" | "json")}
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </FormField>
+          <div className="export-file">
+            <FormField label={t("organize.exportPath")}>
+              <input
+                className="field mono"
+                value={exportPath}
+                spellCheck={false}
+                onChange={(e) => setExportPath(e.target.value)}
+              />
+            </FormField>
+            <Button onClick={pickFile}>{t("organize.browse")}</Button>
+          </div>
+        </div>
+        <fieldset className="export-fields">
+          <legend>{t("organize.fields")}</legend>
+          <div>
+            {allFields.data?.map((f) => (
+              <label key={f} className="export-check">
+                <input
+                  type="checkbox"
+                  checked={fields.includes(f)}
+                  onChange={(e) =>
+                    setFields((v) => (e.target.checked ? [...v, f] : v.filter((x) => x !== f)))
+                  }
+                />
+                {t(`organize.fieldNames.${f}`, { defaultValue: f })}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        {format === "csv" && (
+          <Disclosure title={t("organize.advanced")} defaultOpen={false}>
+            <div className="export-row">
+              <FormField label={t("organize.separator")}>
+                <input
+                  className="field export-separator"
+                  value={separator}
+                  maxLength={1}
+                  onChange={(e) => setSeparator(e.target.value)}
+                />
+              </FormField>
+              <label className="export-check">
+                <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
+                {t("organize.bom")}
+              </label>
+            </div>
+          </Disclosure>
+        )}
+        {exportError && <InlineAlert tone="danger">{exportError}</InlineAlert>}
+        <div className="export-actions">
+          <Button
+            variant="primary"
+            icon={<Icon.Export size={16} />}
+            disabledReason={exportReason}
+            onClick={startExport}
+          >
+            {t("organize.exportStart")}
+          </Button>
+        </div>
+      </Card>
+
+      <Card title={t("organize.folders")}>
+        <p className="muted export-hint">{t("organize.foldersHint")}</p>
+        <FolderPicker
+          label={t("organize.destination")}
+          value={destination}
+          onChange={setDestination}
+          pick={pickFolder}
+        />
+        <FormField label={t("organize.method")} hint={t(`organize.methodHints.${method}`)}>
+          <select
+            className="field"
+            value={method}
+            onChange={(e) => setMethod(e.target.value as Method)}
+          >
+            {METHODS.map((m) => (
+              <option value={m} key={m}>
+                {t(`organize.methods.${m}`)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <fieldset className="export-levels">
+          <legend>{t("organize.levelsTitle")}</legend>
+          <ol>
+            {levels.map((level, i) => (
+              <li key={i}>
                 <select
                   className="field"
-                  value={catalog}
-                  onChange={(e) => setCatalog(e.target.value)}
+                  aria-label={`${t("organize.level")} ${i + 1}`}
+                  value={level}
+                  onChange={(e) =>
+                    setLevels((s) => s.map((l, j) => (i === j ? e.target.value : l)))
+                  }
                 >
-                  <option value="">{t("organize.catalogNone")}</option>
-                  {catalogs.data?.map(({ catalog: c }) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+                  {LEVELS.map((l) => (
+                    <option key={l} value={l}>
+                      {t(`organize.levels.${l}`)}
                     </option>
                   ))}
                 </select>
-              </FormField>
-            )}
-          </div>
-          {scopeName === "selection" && selectedCount === 0 && (
-            <InlineAlert tone="warn">{t("organize.noSelection")}</InlineAlert>
-          )}
-        </Card>
-
-        <Card title={t("organize.export")}>
-          <p className="muted export-hint">{t("organize.exportHint")}</p>
-          <div className="export-row">
-            <FormField label={t("organize.format")}>
-              <select
-                className="field"
-                value={format}
-                onChange={(e) => setFormat(e.target.value as "csv" | "json")}
-              >
-                <option value="csv">CSV</option>
-                <option value="json">JSON</option>
-              </select>
-            </FormField>
-            <div className="export-file">
-              <FormField label={t("organize.exportPath")}>
-                <input
-                  className="field mono"
-                  value={exportPath}
-                  spellCheck={false}
-                  onChange={(e) => setExportPath(e.target.value)}
-                />
-              </FormField>
-              <Button onClick={pickFile}>{t("organize.browse")}</Button>
-            </div>
-          </div>
-          <fieldset className="export-fields">
-            <legend>{t("organize.fields")}</legend>
-            <div>
-              {allFields.data?.map((f) => (
-                <label key={f} className="export-check">
-                  <input
-                    type="checkbox"
-                    checked={fields.includes(f)}
-                    onChange={(e) =>
-                      setFields((v) => (e.target.checked ? [...v, f] : v.filter((x) => x !== f)))
-                    }
-                  />
-                  {t(`organize.fieldNames.${f}`, { defaultValue: f })}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {format === "csv" && (
-            <Disclosure title={t("organize.advanced")} defaultOpen={false}>
-              <div className="export-row">
-                <FormField label={t("organize.separator")}>
-                  <input
-                    className="field export-separator"
-                    value={separator}
-                    maxLength={1}
-                    onChange={(e) => setSeparator(e.target.value)}
-                  />
-                </FormField>
-                <label className="export-check">
-                  <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
-                  {t("organize.bom")}
-                </label>
-              </div>
-            </Disclosure>
-          )}
-          {exportError && <InlineAlert tone="danger">{exportError}</InlineAlert>}
-          <div className="export-actions">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Icon.ArrowUp size={14} />}
+                  aria-label={t("organize.levelUpOf", { n: i + 1 })}
+                  disabled={i === 0}
+                  onClick={() =>
+                    setLevels((s) => {
+                      const v = [...s];
+                      [v[i - 1], v[i]] = [v[i], v[i - 1]];
+                      return v;
+                    })
+                  }
+                >
+                  {t("organize.levelUp")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Icon.Close size={14} />}
+                  aria-label={t("organize.levelRemoveOf", { n: i + 1 })}
+                  disabled={levels.length === 1}
+                  onClick={() => setLevels((s) => s.filter((_, j) => j !== i))}
+                >
+                  {t("organize.levelRemove")}
+                </Button>
+              </li>
+            ))}
+          </ol>
+          <div>
             <Button
-              variant="primary"
-              icon={<Icon.Export size={16} />}
-              disabledReason={exportReason}
-              onClick={startExport}
+              size="sm"
+              icon={<Icon.Plus size={14} />}
+              disabled={levels.length >= 6}
+              onClick={() => setLevels((s) => [...s, "year"])}
             >
-              {t("organize.exportStart")}
+              {t("organize.addLevel")}
             </Button>
           </div>
-        </Card>
+        </fieldset>
 
-        <Card title={t("organize.folders")}>
-          <p className="muted export-hint">{t("organize.foldersHint")}</p>
-          <FolderPicker
-            label={t("organize.destination")}
-            value={destination}
-            onChange={setDestination}
-            pick={pickFolder}
-          />
-          <FormField label={t("organize.method")} hint={t(`organize.methodHints.${method}`)}>
-            <select
-              className="field"
-              value={method}
-              onChange={(e) => setMethod(e.target.value as Method)}
-            >
-              {METHODS.map((m) => (
-                <option value={m} key={m}>
-                  {t(`organize.methods.${m}`)}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <fieldset className="export-levels">
-            <legend>{t("organize.levelsTitle")}</legend>
-            <ol>
-              {levels.map((level, i) => (
-                <li key={i}>
-                  <select
-                    className="field"
-                    aria-label={`${t("organize.level")} ${i + 1}`}
-                    value={level}
-                    onChange={(e) =>
-                      setLevels((s) => s.map((l, j) => (i === j ? e.target.value : l)))
-                    }
-                  >
-                    {LEVELS.map((l) => (
-                      <option key={l} value={l}>
-                        {t(`organize.levels.${l}`)}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Icon.ArrowUp size={14} />}
-                    aria-label={t("organize.levelUpOf", { n: i + 1 })}
-                    disabled={i === 0}
-                    onClick={() =>
-                      setLevels((s) => {
-                        const v = [...s];
-                        [v[i - 1], v[i]] = [v[i], v[i - 1]];
-                        return v;
-                      })
-                    }
-                  >
-                    {t("organize.levelUp")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Icon.Close size={14} />}
-                    aria-label={t("organize.levelRemoveOf", { n: i + 1 })}
-                    disabled={levels.length === 1}
-                    onClick={() => setLevels((s) => s.filter((_, j) => j !== i))}
-                  >
-                    {t("organize.levelRemove")}
-                  </Button>
-                </li>
-              ))}
-            </ol>
+        <ol className="export-steps" aria-label={t("organize.steps")}>
+          <Step title={t("organize.stepPreview")} {...s1}>
             <div>
               <Button
-                size="sm"
-                icon={<Icon.Plus size={14} />}
-                disabled={levels.length >= 6}
-                onClick={() => setLevels((s) => [...s, "year"])}
+                disabledReason={optionsReason}
+                onClick={() =>
+                  step(async () =>
+                    setPreview({ key, data: await commands.organizePreview(options) }),
+                  )
+                }
               >
-                {t("organize.addLevel")}
+                {t("organize.preview")}
               </Button>
             </div>
-          </fieldset>
-
-          <ol className="export-steps" aria-label={t("organize.steps")}>
-            <Step title={t("organize.stepPreview")} {...s1}>
-              <div>
-                <Button
-                  disabledReason={optionsReason}
-                  onClick={() =>
-                    step(async () =>
-                      setPreview({ key, data: await commands.organizePreview(options) }),
-                    )
-                  }
-                >
-                  {t("organize.preview")}
-                </Button>
-              </div>
-              {previewOk && (
-                <>
-                  <p>
-                    {t("organize.summary", {
-                      count: preview.data.files,
-                      conflicts: preview.data.conflicts,
-                      space: fmtBytes(method === "copy" ? preview.data.bytes : 0),
-                    })}
-                  </p>
-                  <ul className="mono export-preview">
-                    {Object.entries(preview.data.folders).map(([p, n]) => (
-                      <li key={p}>{t("organize.folderCount", { path: p, n: fmtInt(n) })}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </Step>
-            <Step title={t("organize.stepVerify")} {...s2}>
-              <div>
-                <Button
-                  disabledReason={optionsReason}
-                  onClick={() =>
-                    step(async () =>
-                      setCheck({ key, data: await commands.organizePreflight(options) }),
-                    )
-                  }
-                >
-                  {t("organize.verify")}
-                </Button>
-              </div>
-              {checkOk && (
-                <p role="status">
-                  {check.data.available ? t("organize.available") : t("organize.unavailable")}{" "}
-                  {check.data.reason && t(`organize.reasons.${check.data.reason}`)}{" "}
-                  {!check.data.available && t("organize.alternative")}{" "}
-                  {!check.data.available && (
-                    <Button size="sm" onClick={() => setMethod(check.data.alternative)}>
-                      {t(`organize.methods.${check.data.alternative}`)}
-                    </Button>
-                  )}
+            {previewOk && (
+              <>
+                <p>
+                  {t("organize.summary", {
+                    count: preview.data.files,
+                    conflicts: preview.data.conflicts,
+                    space: fmtBytes(method === "copy" ? preview.data.bytes : 0),
+                  })}
                 </p>
-              )}
-            </Step>
-            <Step title={t("organize.stepCreate")} {...s3}>
-              <div>
-                <Button
-                  variant="primary"
-                  icon={<Icon.Organize size={16} />}
-                  disabledReason={createReason}
-                  onClick={() => setConfirmCreate(true)}
-                >
-                  {t("organize.start")}
-                </Button>
-              </div>
-            </Step>
-          </ol>
-          {organizeError && <InlineAlert tone="danger">{organizeError}</InlineAlert>}
-          <ConfirmDialog
-            open={confirmCreate}
-            onOpenChange={setConfirmCreate}
-            title={t("organize.createTitle", {
-              count: preview?.data.files ?? 0,
-              path: destination,
-            })}
-            message={t(`organize.createBody.${method}`)}
-            confirmLabel={t("organize.createConfirm", { count: preview?.data.files ?? 0 })}
-            count={preview?.data.files ?? 0}
-            files="affected"
-            danger={false}
-            onConfirm={async () => {
-              const job = await commands.startOrganize(options);
-              queued(t("organize.queuedOrganize"), job);
-              await qc.invalidateQueries({ queryKey: ["organizations"] });
-            }}
-          />
-        </Card>
+                <ul className="export-preview">
+                  {Object.entries(preview.data.folders).map(([p, n]) => (
+                    <li key={p}>{t("organize.folderCount", { path: p, n: fmtInt(n) })}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </Step>
+          <Step title={t("organize.stepVerify")} {...s2}>
+            <div>
+              <Button
+                disabledReason={optionsReason}
+                onClick={() =>
+                  step(async () =>
+                    setCheck({ key, data: await commands.organizePreflight(options) }),
+                  )
+                }
+              >
+                {t("organize.verify")}
+              </Button>
+            </div>
+            {checkOk && (
+              <p role="status">
+                {check.data.available ? t("organize.available") : t("organize.unavailable")}{" "}
+                {check.data.reason && t(`organize.reasons.${check.data.reason}`)}{" "}
+                {!check.data.available && t("organize.alternative")}{" "}
+                {!check.data.available && (
+                  <Button size="sm" onClick={() => setMethod(check.data.alternative)}>
+                    {t(`organize.methods.${check.data.alternative}`)}
+                  </Button>
+                )}
+              </p>
+            )}
+          </Step>
+          <Step title={t("organize.stepCreate")} {...s3}>
+            <div>
+              <Button
+                variant="primary"
+                icon={<Icon.Organize size={16} />}
+                disabledReason={createReason}
+                onClick={() => setConfirmCreate(true)}
+              >
+                {t("organize.start")}
+              </Button>
+            </div>
+          </Step>
+        </ol>
+        {organizeError && <InlineAlert tone="danger">{organizeError}</InlineAlert>}
+        <ConfirmDialog
+          open={confirmCreate}
+          onOpenChange={setConfirmCreate}
+          title={t("organize.createTitle", {
+            count: preview?.data.files ?? 0,
+            path: destination,
+          })}
+          message={t(`organize.createBody.${method}`)}
+          confirmLabel={t("organize.createConfirm", { count: preview?.data.files ?? 0 })}
+          count={preview?.data.files ?? 0}
+          files="affected"
+          danger={false}
+          onConfirm={async () => {
+            const job = await commands.startOrganize(options);
+            queued(t("organize.queuedOrganize"), job);
+            await qc.invalidateQueries({ queryKey: ["organizations"] });
+          }}
+        />
+      </Card>
 
-        <Card title={t("organize.sequence")}>
-          <p className="muted export-hint">{t("organize.sequenceHint")}</p>
-          <div>
-            <Button icon={<Icon.Sequence size={16} />} onClick={openSequenceExport}>
-              {t("organize.sequenceOpen")}
-            </Button>
-          </div>
-        </Card>
+      <Card title={t("organize.sequence")}>
+        <p className="muted export-hint">{t("organize.sequenceHint")}</p>
+        <div>
+          <Button icon={<Icon.Sequence size={16} />} onClick={openSequenceExport}>
+            {t("organize.sequenceOpen")}
+          </Button>
+        </div>
+      </Card>
 
-        <Card title={t("organize.history")}>
-          <History items={history.data ?? []} onUndo={setUndoing} />
-          <ConfirmDialog
-            open={undoing !== null}
-            onOpenChange={(o) => !o && setUndoing(null)}
-            title={t("organize.undoTitle", { path: undoing?.dest ?? "" })}
-            message={t("organize.undoConfirm")}
-            confirmLabel={t("organize.undoConfirmLabel", { count: undoing?.entries ?? 0 })}
-            count={undoing?.entries}
-            files="affected"
-            onConfirm={async () => {
-              if (!undoing) return;
-              const [removed, kept] = await commands.undoOrganization(undoing.id, true);
-              notify({ tone: "ok", message: t("organize.undone", { removed, kept }) });
-              await qc.invalidateQueries({ queryKey: ["organizations"] });
-            }}
-          />
-        </Card>
-      </div>
-    </div>
+      <Card title={t("organize.history")}>
+        <History items={history.data ?? []} onUndo={setUndoing} />
+        <ConfirmDialog
+          open={undoing !== null}
+          onOpenChange={(o) => !o && setUndoing(null)}
+          title={t("organize.undoTitle", { path: undoing?.dest ?? "" })}
+          message={t("organize.undoConfirm")}
+          confirmLabel={t("organize.undoConfirmLabel", { count: undoing?.entries ?? 0 })}
+          count={undoing?.entries}
+          files="affected"
+          onConfirm={async () => {
+            if (!undoing) return;
+            const [removed, kept] = await commands.undoOrganization(undoing.id, true);
+            notify({ tone: "ok", message: t("organize.undone", { removed, kept }) });
+            await qc.invalidateQueries({ queryKey: ["organizations"] });
+          }}
+        />
+      </Card>
+    </ModulePage>
   );
 }
 

@@ -2,7 +2,8 @@
 export const aiResults = {
   it: {
     aiResults: {
-      intro: "Come l'analisi ha catalogato le foto: distribuzione per gruppo, confidenza di una voce e copertura nel tempo.",
+      intro:
+        "Come l'analisi ha catalogato le foto: distribuzione per gruppo, confidenza di una voce e copertura nel tempo.",
       scope: "Ambito",
       scopeAll: "Libreria intera",
       group: "Gruppo",
@@ -17,10 +18,12 @@ export const aiResults = {
       distributionLabel: "Foto per voce del gruppo {{group}}",
       histogram: "Confidenza di «{{value}}»",
       histogramLabel: "Distribuzione della confidenza della voce {{value}}",
-      histogramHint: "Trascina per scegliere un intervallo, oppure usa le frecce (Maiusc per estendere, Esc per togliere).",
+      histogramHint:
+        "Trascina per scegliere un intervallo, oppure usa le frecce (Maiusc per estendere, Esc per togliere).",
       histogramEmpty: "Nessuna etichetta automatica per questa voce.",
       threshold: "Soglia {{value}}",
-      bin: "{{from}}–{{to}}: {{count}} foto",
+      bin_one: "{{from}}–{{to}}: {{count}} foto",
+      bin_other: "{{from}}–{{to}}: {{count}} foto",
       range: "Intervallo {{min}}–{{max}}",
       pickValue: "Scegli una voce per vedere la confidenza.",
       showInLibrary: "Mostra in Libreria",
@@ -36,7 +39,8 @@ export const aiResults = {
   },
   en: {
     aiResults: {
-      intro: "How the analysis catalogued your photos: distribution by group, confidence of a value and coverage over time.",
+      intro:
+        "How the analysis catalogued your photos: distribution by group, confidence of a value and coverage over time.",
       scope: "Scope",
       scopeAll: "Whole library",
       group: "Group",
@@ -54,7 +58,8 @@ export const aiResults = {
       histogramHint: "Drag to pick a range, or use the arrow keys (Shift to extend, Esc to clear).",
       histogramEmpty: "No automatic label for this value.",
       threshold: "Threshold {{value}}",
-      bin: "{{from}}–{{to}}: {{count}} photos",
+      bin_one: "{{from}}–{{to}}: {{count}} photo",
+      bin_other: "{{from}}–{{to}}: {{count}} photos",
       range: "Range {{min}}–{{max}}",
       pickValue: "Pick a value to see its confidence.",
       showInLibrary: "Show in Library",

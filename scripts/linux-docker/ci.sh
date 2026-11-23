@@ -5,6 +5,7 @@ cd /src
 step() { echo "=== $*"; }
 step npm ci;   npm ci --prefix app/ui
 step ui build; npm --prefix app/ui run build
+step licenses; node --test scripts/licenses.test.mjs && node scripts/licenses.mjs --check
 step fmt;      cargo fmt --all -- --check
 step clippy;   cargo clippy --workspace --all-targets -- -D warnings
 step test

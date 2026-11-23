@@ -33,9 +33,9 @@ function Shell() {
 describe("comandi AI nella palette", () => {
   it.each([
     ["AI: Panoramica", "overview"],
-    ["AI: Rianalisi", "reprocess"],
+    ["Rianalizza le foto", "reprocess"],
     ["AI: Pulisci etichette", "cleanup"],
-    ["AI: Mappa", "map"],
+    ["Mappa delle foto", "map"],
   ] as const)("«%s» apre la sezione %s", async (label, section) => {
     render(
       <QueryClientProvider client={new QueryClient()}>

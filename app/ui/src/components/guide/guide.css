@@ -1,13 +1,23 @@
 /* Guida nell'app: suggerimenti, "Primi passi", primo avvio, guida (in-app-guidance). */
 
+/* Suggerimento al primo uso: nota in linea, nel flusso della pagina (mai sopra i comandi). */
 .ui-coachmark {
-  max-width: 320px;
+  flex: none;
+  max-width: 480px;
   display: flex;
-  flex-direction: column;
-  gap: var(--pc-space-2);
-  border-color: var(--pc-accent);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pc-space-2) var(--pc-space-3);
+  padding: var(--pc-space-2) var(--pc-space-3);
+  border: 1px solid var(--pc-accent);
+  border-radius: var(--pc-radius-md);
+  background: var(--pc-panel);
+}
+.ui-coachmark[data-placement="inline-end"] {
+  margin-left: auto;
 }
 .ui-coachmark p {
+  flex: 1 1 240px;
   margin: 0;
   line-height: 1.45;
 }
@@ -15,9 +25,6 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--pc-space-2);
-}
-.ui-coachmark-arrow {
-  fill: var(--pc-accent);
 }
 
 /* Elemento indicato da "Segnala un problema". */
@@ -43,8 +50,10 @@
 }
 
 .first-steps {
+  position: relative;
   margin: var(--pc-space-3) var(--pc-space-4) 0;
-  padding: var(--pc-space-2) var(--pc-space-3);
+  /* Spazio a destra per il comando di chiusura, sempre in alto a destra. */
+  padding: var(--pc-space-2) calc(var(--pc-space-3) + 32px) var(--pc-space-2) var(--pc-space-3);
   border: 1px solid var(--pc-border);
   border-radius: var(--pc-radius-md);
   background: var(--pc-panel);
@@ -80,7 +89,9 @@
   color: var(--pc-ok);
 }
 .first-steps-hide {
-  margin-left: auto;
+  position: absolute;
+  top: var(--pc-space-1);
+  right: var(--pc-space-1);
 }
 
 .onboarding {
@@ -184,7 +195,7 @@
 }
 .guide-sections h3 {
   margin: 0 0 var(--pc-space-1);
-  font-size: 15px;
+  font-size: 14px;
 }
 .guide-sections p {
   margin: 0;
@@ -192,4 +203,9 @@
 }
 .guide-sections section[data-current] h3 {
   color: var(--pc-accent-text);
+}
+
+/* Lingua e tema: controlli larghi quanto le opzioni, non quanto la finestra. */
+.onboarding-field > .ui-segmented {
+  align-self: flex-start;
 }

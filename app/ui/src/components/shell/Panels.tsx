@@ -17,17 +17,21 @@ function usePanelCommands(hasRight: boolean) {
   useCommands([
     {
       id: "panels.inspector",
-      label: t("commands.toggleInspector"),
+      label: t("menu.inspector"),
       group: "library",
       shortcut: { key: "i", mod: true },
+      menu: { menu: "view", section: 0, order: 2 },
+      checked: () => useLayout.getState().rightOpen,
       when: () => hasRight,
       run: () => useLayout.getState().toggleRight(),
     },
     {
       id: "panels.sides",
-      label: t("commands.toggleSidePanels"),
+      label: t("menu.sidePanels"),
       group: "library",
       shortcut: { key: "b", mod: true, shift: true },
+      menu: { menu: "view", section: 0, order: 1 },
+      checked: () => useLayout.getState().leftOpen || useLayout.getState().rightOpen,
       run: () => useLayout.getState().toggleSidePanels(),
     },
   ]);
@@ -76,7 +80,8 @@ function CollapsedRail({
   return (
     <div className="panel-rail" data-side={side}>
       <button type="button" className="btn btn-ghost icon-btn" aria-label={label} onClick={onClick}>
-        {side === "left" ? <Icon.ChevronRight size={16} /> : <Icon.ChevronLeft size={16} />}
+        {/* Stessa icona del comando che chiude il pannello: un solo comando per pannello. */}
+        {side === "left" ? <Icon.PanelLeft size={16} /> : <Icon.PanelRight size={16} />}
       </button>
     </div>
   );
@@ -110,7 +115,7 @@ export function Panels({
                 aria-label={t("shell.collapseLeft")}
                 onClick={s.toggleLeft}
               >
-                <Icon.ChevronLeft size={16} />
+                <Icon.PanelLeft size={16} />
               </button>
               {left}
             </aside>
@@ -142,7 +147,7 @@ export function Panels({
                 aria-keyshortcuts="Control+I"
                 onClick={s.toggleRight}
               >
-                <Icon.ChevronRight size={16} />
+                <Icon.PanelRight size={16} />
               </button>
               {right}
             </aside>

@@ -4,27 +4,30 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
 
-/** Intestazione di pagina: il titolo è uguale alla voce di navigazione del modulo. */
+/**
+ * Intestazione di pagina: il titolo è uguale alla voce di navigazione del modulo. Una sola riga
+ * di altezza fissa: titolo e descrizione a sinistra, schede accanto, comandi a destra.
+ */
 export function PageHeader({
   title,
   description,
+  tabs,
   actions,
-  breadcrumb,
 }: {
   title: ReactNode;
   description?: ReactNode;
+  /** Schede del modulo, accanto al titolo. */
+  tabs?: ReactNode;
   /** Comandi principali della pagina, allineati a destra. */
   actions?: ReactNode;
-  /** Percorso sopra il titolo (es. Tutte le foto › Catalogo). */
-  breadcrumb?: ReactNode;
 }) {
   return (
     <header className="ui-page-header">
       <div className="ui-page-header-text">
-        {breadcrumb && <nav className="ui-breadcrumb muted">{breadcrumb}</nav>}
         <h1>{title}</h1>
         {description && <p className="muted">{description}</p>}
       </div>
+      {tabs && <div className="ui-page-header-tabs">{tabs}</div>}
       {actions && <div className="ui-page-header-actions">{actions}</div>}
     </header>
   );

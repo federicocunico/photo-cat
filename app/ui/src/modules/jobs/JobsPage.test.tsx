@@ -275,3 +275,51 @@ describe("schermata Job", () => {
     expect(useUndo.getState().last).toBeNull();
   });
 });
+
+describe("Attività: avanzamento in parole (ui-usability-audit 7.2)", () => {
+  it("con un conteggio provvisorio la barra della fase è determinata", () => {
+    render(<Harness />);
+    act(() =>
+      emit(
+        "job",
+        job({
+          id: 21,
+          phases: [
+            phase("scansione", { state: "running", done: 98, totalKnown: false, percent: null }),
+            phase("metadati", { done: 59, total: 98, totalKnown: false, percent: null }),
+          ],
+        }),
+      ),
+    );
+    const meta = screen.getByTestId("phase-metadati");
+    const bar = within(meta).getByRole("progressbar");
+    expect(bar).not.toHaveClass("indeterminate");
+    expect(bar).toHaveAttribute("aria-valuenow", String((59 / 98) * 100));
+    expect(within(meta).getByText("60%")).toBeInTheDocument();
+    // La sorgente, senza totale, resta indeterminata.
+    expect(within(screen.getByTestId("phase-scansione")).getByRole("progressbar")).toHaveClass(
+      "indeterminate",
+    );
+  });
+
+  it("un'attività conclusa senza nulla da fare non mostra «0 / 0 · 100%»", () => {
+    render(<Harness />);
+    act(() =>
+      emit(
+        "job",
+        job({
+          id: 22,
+          kind: "analysis",
+          state: "completed",
+          overallPercent: 100,
+          phases: [phase("faces", { state: "done", total: 0, percent: 100 })],
+        }),
+      ),
+    );
+    const card = screen.getByTestId("job-22");
+    expect(within(card).getByText("Nulla da elaborare: era già tutto aggiornato.")).toBeVisible();
+    expect(within(card).queryByText("0 / 0")).toBeNull();
+    expect(within(card).queryByRole("progressbar")).toBeNull();
+    expect(within(card).queryByText("100%")).toBeNull();
+  });
+});

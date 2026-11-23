@@ -8,7 +8,6 @@ import { commands, isTauri, type Settings } from "../../lib/ipc";
 import { useLayout } from "../../store/layout";
 import { notify, notifyError } from "../../store/toasts";
 import type { ThemePref } from "../../theme/tokens";
-import { RawReviewCacheSetting } from "./RawReviewCacheSetting";
 import { Setting } from "./settingsState";
 import { useSettings } from "./settingsContext";
 
@@ -92,7 +91,6 @@ export function GeneralSection() {
           onChange={(e) => setDraft({ ...draft, data_dir: e.target.value || null })}
         />
       </Setting>
-      <RawReviewCacheSetting />
     </>
   );
 }

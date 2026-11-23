@@ -45,8 +45,9 @@ function Row({
   icon?: React.ReactNode;
   title?: string;
   label: string;
-  count: number;
-  active: boolean;
+  /** Assente per le righe d'azione (es. "Nuovo catalogo"): niente conteggio né stato premuto. */
+  count?: number;
+  active?: boolean;
   onClick: () => void;
   mono?: boolean;
   indent?: number;
@@ -65,7 +66,7 @@ function Row({
         {icon}
         {label}
       </span>
-      <span className="sidebar-row-count">{fmtInt(count)}</span>
+      {count !== undefined && <span className="sidebar-row-count">{fmtInt(count)}</span>}
     </BusyButton>
   );
 }
@@ -161,8 +162,6 @@ function NewCatalogRow() {
         <Row
           label={t("selection.newCatalogRow")}
           icon={<Icon.Plus size={12} />}
-          count={0}
-          active={false}
           onClick={() => open(null)}
           dropProps={dropProps}
         />

@@ -8,12 +8,18 @@ import type { SequenceItem, SequenceOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { parseShift, shiftText, useSequence } from "../../store/sequence";
 import { idsSelection, selCount, selHas, selIds, useLibrary } from "../../store/library";
-import { SequencePage } from "./SequencePage";
+import { SequencePage, SequenceStatus } from "./SequencePage";
 import { sequenceTarget } from "./sequenceTarget";
 import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 import { runSelectionContract } from "../../test/selectionContract";
+
+it("F6: la barra di stato di Sequenza non ospita scorciatoie né il set attivo", () => {
+  const { container } = render(<SequenceStatus />);
+  expect(container.querySelector("kbd")).toBeNull();
+  expect(container).not.toHaveTextContent(/Scorciatoie|togli tag|Set attivo/);
+});
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,
@@ -150,7 +156,19 @@ it("shows sessions with device strip and active-set tag", async () => {
   expect(screen.getByText("Moab · 2 foto")).toBeInTheDocument();
   expect(within(screen.getByTestId("seq-1")).getByLabelText("Tag Paesaggi")).toBeInTheDocument();
   expect(screen.getByTestId("seq-1")).toHaveTextContent("10:41:50");
-  expect(screen.getByTestId("seq-1")).toHaveTextContent("Fujifilm X-T5");
+  // Il nome della fotocamera non si ripete in ogni miniatura: è nel nome accessibile e al passaggio
+  // del mouse; nella miniatura restano iniziale e colore.
+  expect(screen.getByTestId("seq-1")).not.toHaveTextContent("Fujifilm X-T5");
+  expect(screen.getByTestId("seq-1")).toHaveAccessibleName(/Fujifilm X-T5/);
+  expect(screen.getByTestId("seq-1").querySelector('[title="Fujifilm X-T5"]')).not.toBeNull();
+});
+
+it("«Esporta sequenza…» è nell'intestazione della pagina", async () => {
+  renderPage();
+  await screen.findByTestId("seq-1");
+  const header = screen.getByRole("heading", { level: 1, name: "Sequenza" }).closest("header")!;
+  expect(within(header).getByRole("button", { name: "Esporta sequenza…" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Esporta sequenza…" })).toHaveLength(1);
 });
 
 it("distingue i dispositivi anche con l'iniziale, non solo con il colore", async () => {
@@ -382,4 +400,14 @@ it("freccia giù passa alla stessa colonna della sessione successiva", async () 
   // La freccia giù ha reso la 6 ancora: Maiusc+su estende dalla 6 alla 2.
   expect(grid).toHaveAttribute("aria-activedescendant", "seq-opt-2");
   expect(selIds(useSequence.getState().selection)?.sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 6]);
+});
+
+it("le miniature si allargano fino a riempire la riga", async () => {
+  renderPage();
+  await screen.findByTestId("seq-1");
+  // Le colonne restano almeno da 168 px, ma si allargano per occupare tutta la riga.
+  const virt = document.querySelector<HTMLElement>(".seq-virt")!;
+  const cell = parseFloat(virt.style.getPropertyValue("--seq-cell"));
+  expect(cell).toBeGreaterThan(168);
+  expect(document.querySelector<HTMLElement>(".seq-card")).not.toBeNull();
 });

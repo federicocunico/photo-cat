@@ -9,9 +9,11 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 
 **Primo avvio.** Tre passi, ognuno saltabile con "Lo faccio dopo": lingua e tema, la prima cartella di foto (scelta o trascinata; i file non vengono spostati né modificati), le funzioni AI con un riepilogo del computer in parole e il download dei modelli in background. Alla fine si apre la Libreria, dove le foto compaiono man mano che l'importazione procede, insieme alla lista **Primi passi** (importare una cartella, scaricare i modelli, dare un nome a una persona, creare un catalogo, usare un set di tag), che si spunta da sola anche se l'azione si fa da un'altra parte. Aiuto › "Rivedi l'introduzione" la ripropone senza cambiare nulla finché non si conferma un passo.
 
-**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag), **AI** e **Importa ed esporta** (Importa, Esporta, Varianti RAW), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. La barra superiore ha la ricerca dei comandi, l'indicatore delle attività in corso e il menu **Aiuto** (scorciatoie, introduzione, primi passi, suggerimenti, guida, segnala un problema, informazioni). La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento non bloccante.
+**Navigazione.** A sinistra i gruppi **Sfoglia** (Libreria, Sequenza), **Organizza** (Cataloghi, Persone, Tag, Analisi AI) e **Importa ed esporta** (Importa, Esporta, Varianti RAW), e in fondo **Attività** e **Impostazioni**. Modelli AI e Diagnostica sono sezioni di Impostazioni. Ogni modulo ha in alto la stessa intestazione (titolo, schede e comandi della pagina) e scorre solo il suo contenuto. La prima volta che si apre Persone, Cataloghi, Tag o Sequenza compare un breve suggerimento in linea, che non copre i comandi.
 
-**Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera):
+**Barra dei menu.** Accanto al nome dell'app ci sono i menu **File** (importare, esportare, aprire una cartella di RAW o un progetto FujiView, la cartella dei dati, Impostazioni, Esci), **Modifica** (annulla, selezione, tag del set attivo, valutazione, cataloghi, Cestino), **Vista** (navigazione compatta, pannelli, Inspector, miniature, foto simili, mappa, tema, schermo intero), **Vai** (i moduli e la ricerca dei comandi), **Strumenti** (rianalisi, duplicati, qualità, modelli AI, diagnostica) e **Aiuto** (guida, scorciatoie, primi passi, introduzione, suggerimenti, segnala un problema, copia le informazioni di sistema, Informazioni su photo-cat). Le voci hanno lo stesso nome e la stessa scorciatoia della ricerca dei comandi; una voce che ora non si può usare resta visibile, disattivata, e dice perché. Alt (premuto e rilasciato da solo) o F10 portano il focus sul primo menu: frecce per spostarsi, Invio per scegliere, Esc per tornare dove si era, la lettera sottolineata per aprire un menu. Su macOS gli stessi menu sono nella barra del sistema. **Informazioni su photo-cat** mostra versione, build (commit, data, configurazione), sistema, motore della finestra, acceleratore AI, autori, licenza e le licenze di tutti i componenti di terze parti, con una ricerca; "Copia informazioni" mette negli appunti i dati per una segnalazione, senza il percorso dei dati. Le stesse informazioni sono in Impostazioni › Informazioni.
+
+**Scorciatoie principali** (l'elenco completo con `?` o Aiuto › Scorciatoie da tastiera, e accanto alle voci dei menu):
 
 | Tasto | Azione |
 |---|---|
@@ -19,6 +21,9 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 | Ctrl+1…9 | apre i moduli nell'ordine della navigazione (Ctrl+9: Varianti RAW); Ctrl+, apre Impostazioni |
 | Ctrl+B | riduce o espande la navigazione |
 | Ctrl+Z | annulla l'ultima operazione annullabile |
+| Ctrl+O, Ctrl+E | importa una cartella, esporta |
+| Alt, F10 | porta il focus sulla barra dei menu |
+| F11 | schermo intero |
 | ? | foglio delle scorciatoie |
 | 1–9, 0 | in Libreria e Sequenza, aggiunge il tag del set attivo alle foto selezionate (0 toglie i tag del set) |
 | Maiusc+1…9, Invio, 1–5, 0, Spazio | in Varianti RAW, sceglie la variante migliore e dà le stelle (vedi la sezione dedicata) |
@@ -193,7 +198,12 @@ cargo run -p pc-ai --example benchmark_detector -- rtdetr target/model-bench/rtd
 ## Tag, Persone e sequenza
 
 - **Tag**: elenco dei tag della libreria con conteggi, rinomina, unione, eliminazione (annullabili) e colore; **set di tag** con tasti rapidi 1–9, eventualmente esclusivi. Il set attivo assegna i tag da tastiera in Libreria e Sequenza (0 rimuove i tag del set).
-- **Persone**: un solo modulo (Identità non è più una voce separata nella navigazione), a tre colonne (elenco, volti, scheda), con le sezioni **Da rivedere** (gruppi automatici, con suggerimenti di unione), **Persone** (identità decise dall'utente: nome, nome breve per i file, alias, gruppo, soglia di somiglianza, volti di riferimento) e **Ignorati**. Un gruppo diventa persona solo quando gli si dà un nome con "Chi è?"; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova. Esportazione e importazione delle identità in un file JSON, con o senza volti.
+- **Persone**: un solo modulo a tre colonne (elenco, volti, scheda). Le schede **Da rivedere** (gruppi automatici, cioè "persone senza nome"), **Persone** (con nome) e **Ignorati** stanno nell'intestazione della pagina, insieme a "Nuova persona". Un gruppo diventa persona solo quando gli si dà un nome con "Chi è?"; i volti di riferimento fanno riconoscere le stesse persone anche in una libreria nuova.
+  - **Elenco**: ricerca e menu "Ordina e filtra" (ordine, poche foto, cerchia). Un clic apre la voce, Ctrl/Maiusc+clic o la casella della riga la aggiungono alla selezione; con due o più voci selezionate, in fondo all'elenco compaiono "Unisci a…" e "Ignora".
+  - **Volti**: sopra la griglia ci sono solo "Ordina" e "Vista". Con dei volti selezionati compaiono "Sposta in…", "Non è questa persona" e "Altro" (nuovo gruppo, copertina, rimozione). "Sposta in…" e "Unisci a…" elencano le persone (in ordine alfabetico) e poi i gruppi senza nome, con la copertina. Spostamenti e unioni tra gruppi avvengono subito e si annullano dall'avviso (Ctrl+Z); l'unione di persone con nome mostra prima un'anteprima.
+  - **Scheda del gruppo**: se il gruppo somiglia a una persona o a un altro gruppo, in cima compare la domanda "È Giulia?" o "È la stessa persona?", con le due copertine, la somiglianza in parole e Sì/No.
+  - **Scheda della persona**: copertina, "Mostra in Libreria" e il menu ⋯ (Unisci a…, Esporta, Elimina persona…). I dettagli (nome, nome nei file esportati, cerchia, altri nomi, riconoscimento come scala "Più risultati ↔ Più precisi") si salvano appena modificati. I volti nella libreria e i volti di riferimento sono due schede della colonna dei volti.
+  - **Esportazione e importazione** delle persone in un file JSON, con o senza volti di riferimento (tutte da Persone, una sola dal suo menu ⋯).
   - **Ignorare**: non toglie foto dalla libreria né file dal disco. La persona sparisce da Da rivedere, dai filtri, dall'Inspector e dai suggerimenti; i nuovi volti simili vi confluiscono. Si ripristina dalla sezione Ignorati.
   - **Qualità dei volti**: ogni volto ha nitidezza del ritaglio, frontalità e dimensione (oltre alla confidenza del rilevatore). I volti sotto soglia sono scartati dal raggruppamento e dai suggerimenti, ma restano consultabili e recuperabili ("Volti scartati per qualità"). La nitidezza minima si regola con `ai.thresholds.face_min_sharpness` in Impostazioni › Riconoscimento AI (scala) o › Avanzate (valore).
   - **Apri in Persone**: dall'Inspector (persona, volto non riconosciuto o scartato), dai filtri e dalla Sequenza apre direttamente il gruppo o la persona di quel volto, con il volto evidenziato e un avviso per tornare alla foto.
@@ -335,7 +345,7 @@ args = ["--library", ":memory:", "{file}"]
 
 ## Varianti RAW (Fujifilm X-T5)
 
-Il modulo **Varianti RAW (Fujifilm X-T5)** sta nel gruppo "Importa ed esporta" (Ctrl+9; anche dalla ricerca dei comandi, Ctrl+K). Dopo uno shooting con la X-T5:
+Il modulo **Varianti RAW** (per la Fujifilm X-T5, come dice il sottotitolo della pagina) sta nel gruppo "Importa ed esporta" (Ctrl+9; anche dalla ricerca dei comandi, Ctrl+K). Dopo uno shooting con la X-T5:
 
 1. apre la cartella dei RAF **senza importarla** in libreria;
 2. mette a confronto le varianti di simulazione pellicola (le ricette C1–C7 della fotocamera e "Come scattato") di ogni scatto;
@@ -396,7 +406,7 @@ Scegliere una variante non fa avanzare da solo. Le scorciatoie sono ignorate men
 
 Scelte, stelle, preset nascosti e ordine dei pannelli e ultimo scatto visto si salvano **da soli**, senza un pulsante Salva, in una sessione per cartella nei dati dell'app (cartella `raw-review/`): **mai nella cartella delle foto**. Ogni scrittura è atomica e tiene una copia `.bak` usata se il file si rovina. Riaprendo la cartella si riparte da dove si era; nuovi preset (per esempio dopo uno sviluppo) non toccano le scelte già fatte. Le cartelle usate di recente compaiono in **Sessioni recenti**, dove si possono anche togliere dall'elenco (la sessione salvata non viene cancellata). **Apri progetto FujiView (.fujiview)…** apre i progetti dell'app FujiView; le sessioni di FujiView non vengono migrate da sole.
 
-Le anteprime si tengono in una cache su disco, con indice SQLite, per aprirsi subito, e le prossime foto vengono caricate in anticipo. Il limite (20 GB se vuoto) si imposta in Impostazioni › Generale › **Cache delle anteprime di Varianti RAW (GB)**, minimo 1 GB; superato il limite si eliminano le anteprime usate meno di recente, e "Svuota la cache" le elimina tutte. Le foto non vengono mai toccate.
+Le anteprime si tengono in una cache su disco, con indice SQLite, per aprirsi subito, e le prossime foto vengono caricate in anticipo. Il limite (20 GB se vuoto) si imposta in Impostazioni › Avanzate › **Cache delle anteprime di Varianti RAW (GB)**, minimo 1 GB; superato il limite si eliminano le anteprime usate meno di recente, e "Svuota la cache" le elimina tutte. Le foto non vengono mai toccate.
 
 ### Esportare in un nuovo catalogo
 
@@ -430,7 +440,7 @@ L'analisi dei gruppi è incrementale e parte da sola dopo ogni import: vengono c
 
 ## Modulo AI
 
-Il modulo **AI** (Ctrl+6) controlla lo stato delle analisi; soglie e modelli restano in Impostazioni.
+Il modulo **Analisi AI** (Ctrl+6) controlla lo stato delle analisi; soglie e modelli restano in Impostazioni.
 
 - **Panoramica**: per ogni fase (classificazione, persone, volti, gruppi di simili, impronte) quante foto sono analizzate, da aggiornare, in coda o mai analizzate. Si aggiorna durante le attività e ogni conteggio apre la Libreria filtrata.
 - **Rianalisi**: tutta la libreria, uno o più cataloghi, la selezione o i risultati filtrati della Libreria. Si scelgono le fasi e la modalità (solo mancanti, oppure "forza"), con un'anteprima delle foto da elaborare. Le correzioni manuali restano sempre valide.

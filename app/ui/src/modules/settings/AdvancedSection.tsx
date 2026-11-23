@@ -10,6 +10,7 @@ import { notify, notifyError } from "../../store/toasts";
 import { Setting } from "./settingsState";
 import { useSettings } from "./settingsContext";
 import { ThresholdInput } from "./ThresholdControls";
+import { RawReviewCacheSetting } from "./RawReviewCacheSetting";
 import { DEFAULTS, thresholdsOf, type FullThresholds } from "./tuning";
 
 export function AdvancedSection() {
@@ -202,6 +203,8 @@ export function AdvancedSection() {
           }}
         />
       </Setting>
+      {/* Cache delle anteprime di Varianti RAW: manutenzione, non una preferenza generale. */}
+      <RawReviewCacheSetting />
     </>
   );
 }

@@ -74,7 +74,13 @@ export function MergeDialog({
           ? { action: "merge", from: absorbed[0]!.id, to: survivor.id }
           : { action: "merge_many", from: absorbed.map((g) => g.id), to: survivor.id };
       await commands.correctPerson(correction);
-      notifyPeopleUndo(qc, t("people.mergedDone"));
+      notifyPeopleUndo(
+        qc,
+        t("people.mergedDone", {
+          count: absorbed.length,
+          name: survivor.name ?? t("people.unnamedPlain"),
+        }),
+      );
       onMerged(survivor.id);
       onClose();
     } catch (e) {

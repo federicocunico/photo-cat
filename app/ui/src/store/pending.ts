@@ -21,18 +21,9 @@ export async function trackCommand<T>(name: string, run: () => Promise<T>): Prom
   if (tracked) usePending.setState((s) => ({ count: s.count + 1 }));
   const started = Date.now();
   try {
-    const value = await run();
-    if (mutation.test(name) && Date.now() - started >= 1000)
-      notify({
-        message: i18n.t(
-          name.startsWith("save")
-            ? "feedback.saved"
-            : name.startsWith("merge")
-              ? "feedback.merged"
-              : "feedback.done",
-        ),
-      });
-    return value;
+    // L'esito positivo lo annuncia chi chiama il comando, con un testo che dice che cosa è stato
+    // fatto e su che cosa (ui-foundations, "Avvisi non modali"): qui nessun avviso generico.
+    return await run();
   } catch (error) {
     if (mutation.test(name) && Date.now() - started >= 1000)
       notify({ message: i18n.t("feedback.failed"), tone: "error" });

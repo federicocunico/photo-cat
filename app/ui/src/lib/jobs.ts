@@ -91,3 +91,54 @@ export function jobTitle(
 /** Parametri di un'attività dallo storico (le attività in corso vi compaiono già). */
 export const paramsOf = (rows: JobRow[] | undefined, id: number): Params =>
   rows?.find((r) => r.id === id)?.params as Params;
+
+/** Ultimo elemento di un percorso ("D:\Foto\Halloween" → "Halloween"). */
+export const lastSegment = (path: string) =>
+  path
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .pop() || path;
+
+/** Attività che lavorano su foto: l'avviso di fine riporta quante. */
+const COUNTED_KINDS: ReadonlySet<string> = new Set([
+  "import",
+  "export",
+  "organize",
+  "bulk",
+  "analysis",
+]);
+
+/** Concordanza del participio in italiano ("Ricalcolo … completato", "Impronte … completate"). */
+const DONE_KEY: Record<string, "jobs.doneMasculine" | "jobs.doneFemininePlural"> = {
+  relink: "jobs.doneMasculine",
+  retune: "jobs.doneMasculine",
+  raw_review_develop: "jobs.doneMasculine",
+  photo_quality: "jobs.doneMasculine",
+  phash_backfill: "jobs.doneFemininePlural",
+};
+
+/**
+ * Avviso di fine attività con oggetto e numero di foto (ui-foundations, "Avvisi non modali"):
+ * "Importazione di Halloween completata: 54 foto", mai "Operazione completata".
+ */
+export function jobDoneMessage(
+  t: TFunction,
+  job: Pick<JobSnapshot, "kind" | "phases">,
+  params: Params,
+  sourcePath: (id: number) => string | undefined = () => undefined,
+): string {
+  const object = jobObject(job.kind, params, sourcePath);
+  const title = jobTitle(t, job.kind, params, (id) => {
+    const path = sourcePath(id);
+    return path === undefined ? undefined : lastSegment(path);
+  });
+  // Le destinazioni sono percorsi lunghi: nell'avviso basta l'ultima cartella.
+  const shortTitle =
+    object && object !== String(Number(object))
+      ? title.replace(object, lastSegment(object))
+      : title;
+  const count = Math.max(0, ...job.phases.map((p) => p.done));
+  if (COUNTED_KINDS.has(job.kind) && count > 0)
+    return t("jobs.doneCount", { title: shortTitle, count });
+  return t(DONE_KEY[job.kind] ?? "jobs.done", { title: shortTitle });
+}

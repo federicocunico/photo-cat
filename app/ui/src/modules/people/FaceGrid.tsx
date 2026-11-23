@@ -25,8 +25,7 @@ import {
 } from "../../lib/ipc";
 import { FACE_SORTS, usePeoplePrefs } from "../../store/peoplePrefs";
 import { buildFaceRows, orderYears, rectangleSelectRows } from "./faceLayout";
-import { listAllGroups } from "./allGroups";
-import { fmtDec, fmtInt } from "../../lib/format";
+import { fmtInt } from "../../lib/format";
 import { idsSelection, rectangleSelect, selSet, type Selection } from "../../store/library";
 import { useSelection } from "../../lib/selection/useSelection";
 import { useActivePane } from "../../commands/gridShortcuts";
@@ -35,16 +34,19 @@ import { selectForContextMenu } from "../../lib/selection/model";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import {
-  Button,
+  ActionBar,
   ConfirmDialog,
   ContextMenu,
+  IconButton,
   InlineAlert,
+  Menu,
+  type BarAction,
   type MenuItem,
 } from "../../components/ui";
-import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
+import { Icon } from "../../components/icons";
+import { notifyPeopleUndo, refreshPeopleFast } from "./peopleUndo";
 import "./people.css";
 import { FaceCrop } from "./FaceCrop";
-import { MergeDialog } from "./MergeDialog";
 import { PersonPicker, type PickerChoice } from "./PersonPicker";
 import { withNewIdentity } from "./newIdentity";
 import { discardReasonLabel } from "./discardReason";
@@ -73,13 +75,22 @@ export type FaceHighlight = {
 
 export type FaceGridHandle = {
   toggleFocusedSelection: () => void;
-  focusMoveSelect: () => void;
+  /** "Sposta in…" sui volti selezionati (tasto M). */
+  openMoveTo: () => void;
   runNotSame: () => boolean;
   scrollTop: () => number;
 };
 
 /** Etichetta con il numero di volti su cui agisce, quando sono più di uno (issue #30). */
 const withCount = (label: string, n: number) => (n > 1 ? `${label} (${n})` : label);
+
+/** Etichetta di un ordinamento dei volti. */
+const sortLabel = (o: FaceSort) =>
+  o === "quality_desc"
+    ? "people.faceSortQuality"
+    : o === "captured_asc"
+      ? "people.faceSortDateAsc"
+      : "people.faceSortDateDesc";
 
 export const FaceGrid = forwardRef<
   FaceGridHandle,
@@ -95,23 +106,19 @@ export const FaceGrid = forwardRef<
   { target, group, singlesCount = 0, highlight = null, onSelectedFacesChange },
   ref,
 ) {
-  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [discardedOnly, setDiscardedOnly] = useState(false);
   const [focusedFace, setFocusedFace] = useState<number | null>(null);
-  const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
   // Avanzamento delle correzioni su più volti (issue #28): "3 di 40".
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState("");
-  const [mergeHintOpen, setMergeHintOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [width, setWidth] = useState(640);
   const [box, setBox] = useState<Box | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const moveSelectRef = useRef<HTMLSelectElement>(null);
   const drag = useRef<{ x: number; y: number; initial: Selection<FaceScope> | null } | null>(null);
   /** Il trascinamento ha disegnato un rettangolo: il clic che lo chiude non svuota. */
   const dragged = useRef(false);
@@ -123,7 +130,7 @@ export const FaceGrid = forwardRef<
 
   useEffect(() => {
     setFocusedFace(null);
-    setMoveTo("");
+    setMoveOpen(false);
     setDiscardedOnly(highlight?.discarded ?? false);
     setError("");
     scrolledFor.current = null;
@@ -168,18 +175,6 @@ export const FaceGrid = forwardRef<
     queryKey: ["config"],
     queryFn: commands.getConfig,
     enabled: isTauri(),
-  });
-
-  const moveTargets = useQuery({
-    queryKey: ["people-move-targets"],
-    queryFn: async () => {
-      const [people, ids] = await Promise.all([
-        listAllGroups("people", "name_asc"),
-        commands.listIdentities(null, null),
-      ]);
-      return { people, identities: ids.identities.filter((i) => i.person == null) };
-    },
-    enabled: isTauri() && target != null,
   });
 
   const items = useMemo(() => faces.data?.pages.flatMap((p) => p.items) ?? [], [faces.data]);
@@ -306,8 +301,6 @@ export const FaceGrid = forwardRef<
     sel.click(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   };
 
-  const refresh = () => refreshPeople(qc);
-
   /**
    * Applica le correzioni in ordine. Con `done` l'esito compare come avviso con
    * "Annulla operazione" (e Ctrl+Z): ogni correzione è una voce del registro del backend.
@@ -331,7 +324,6 @@ export const FaceGrid = forwardRef<
         if (corrections.length > 1) setProgress({ done: i + 1, total: corrections.length });
       }
       sel.clear();
-      setMoveTo("");
       if (done)
         notifyPeopleUndo(
           qc,
@@ -362,8 +354,8 @@ export const FaceGrid = forwardRef<
       setFocusedFace(id);
       sel.click(id, { ctrl: true, shift: false });
     },
-    focusMoveSelect() {
-      moveSelectRef.current?.focus();
+    openMoveTo() {
+      if (selectedCount > 0) setMoveOpen(true);
     },
     runNotSame() {
       const hint = group?.mergeHint;
@@ -488,6 +480,74 @@ export const FaceGrid = forwardRef<
     );
     return out;
   };
+  const faceActions: BarAction[] = [
+    {
+      id: "move",
+      label: t("people.moveTo"),
+      variant: "primary",
+      priority: 1,
+      onSelect: () => setMoveOpen(true),
+    },
+    ...(groupId != null
+      ? [
+          {
+            id: "notSame",
+            label: t("people.reject"),
+            priority: 2,
+            onSelect: () => void reject(groupId),
+          },
+        ]
+      : []),
+    ...(discardedOnly
+      ? [
+          {
+            id: "recover",
+            label: t("people.recover"),
+            priority: 3,
+            onSelect: () =>
+              void correct(
+                (ids) => [{ action: "recover", faces: ids }],
+                (n) => t("people.recoveredDone", { count: n }),
+              ),
+          },
+        ]
+      : []),
+    ...(groupId != null
+      ? [
+          {
+            id: "newGroup",
+            label: t("people.newGroup"),
+            menuOnly: true,
+            onSelect: () =>
+              void correct(
+                (ids) => [{ action: "separate", person: groupId, faces: ids }],
+                (n) => t("people.separatedDone", { count: n }),
+              ),
+          },
+        ]
+      : []),
+    ...(groupId != null && selectedCount === 1 && selected[0] != null
+      ? [
+          {
+            id: "cover",
+            label: t("people.useAsCover"),
+            menuOnly: true,
+            onSelect: () =>
+              void correct(
+                [{ action: "set_cover", group: groupId, face: selected[0]! }],
+                t("people.coverDone"),
+              ),
+          },
+        ]
+      : []),
+    {
+      id: "remove",
+      label: t("people.removeFaces"),
+      variant: "danger",
+      menuOnly: true,
+      onSelect: () => setRemoveOpen(true),
+    },
+  ];
   const openViewerAt = (id: number) => {
     const index = items.findIndex((i) => i.id === id);
     if (index >= 0) setViewer({ faces: items, index });
@@ -572,44 +632,10 @@ export const FaceGrid = forwardRef<
         : group?.name
           ? group.name
           : group
-            ? t("people.unnamed", { count: group.photos })
+            ? t("people.unnamedPlain")
             : t("people.facesLabel");
 
-  const labelOf = (g: GroupRow) => g.name ?? t("people.unnamed", { count: g.photos });
-
   // Valore: id del gruppo, oppure "i:<uid>" per un'identità senza volti qui.
-  type MoveOption = {
-    value: string;
-    label: string;
-    name: string;
-    correction: (faces: number[]) => Correction;
-  };
-  const moveOptions = useMemo(() => {
-    const seen = new Set<number>();
-    const out: MoveOption[] = [];
-    for (const g of moveTargets.data?.people ?? []) {
-      if (g.id === groupId || seen.has(g.id)) continue;
-      seen.add(g.id);
-      out.push({
-        value: String(g.id),
-        label: labelOf(g),
-        name: labelOf(g),
-        correction: (faces) => ({ action: "move", faces, to: g.id }),
-      });
-    }
-    for (const i of moveTargets.data?.identities ?? []) {
-      out.push({
-        value: `i:${i.uid}`,
-        label: t("people.reassignNoPhotos", { name: i.name }),
-        name: i.name,
-        correction: (faces) => ({ action: "assign_identity", identity: i.uid, faces }),
-      });
-    }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [moveTargets.data, groupId, t]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const moveTarget = moveOptions.find((o) => o.value === moveTo) ?? null;
-
   if (!target) {
     return (
       <div className="people-pad">
@@ -618,227 +644,93 @@ export const FaceGrid = forwardRef<
     );
   }
 
-  const hint = group?.mergeHint;
-
   return (
     <div className="people-grid">
-      <div className="people-grid-head">
-        <h2 ref={tipAnchor} className="people-title">
-          {title}
-        </h2>
-        <Coachmark tip="people" anchor={tipAnchor} learnMore="people" />
-        {target.kind === "group" && (
-          <>
-            <span className="chip mono">{t("people.photos", { count: photos })}</span>
-            <span className="chip people-chip-ok">
-              {t("people.goodQuality", { count: goodCount })}
-            </span>
-            <span className="chip people-chip-warn">
-              {t("people.discardedQuality", { count: discardedCount })}
-            </span>
-          </>
-        )}
-      </div>
-
-      <div role="toolbar" aria-label={t("people.facesToolbar")} className="people-toolbar">
-        {busy ? (
-          <span role="status" className="people-progress">
-            <Spinner size={14} />
-            {progress
-              ? t("people.progress", { done: progress.done, total: progress.total })
-              : t("people.working")}
-          </span>
-        ) : (
-          // Sempre presente: il cambio di conteggio (Ctrl+A, Inverti, Esc) viene annunciato.
-          <span aria-live="polite" aria-atomic="true" className="muted">
-            {selectedCount > 0 ? t("people.selected", { count: selectedCount }) : null}
-          </span>
-        )}
-        {/* "Riassegna a…": la scelta da sola non sposta nulla (su Windows le frecce cambiano
-            una select chiusa); i volti si spostano solo con il pulsante "Riassegna". */}
-        <select
-          ref={moveSelectRef}
-          className="field people-move-select"
-          aria-label={t("people.move")}
-          value={moveTo}
-          disabled={busy || selectedCount === 0}
-          onChange={(e) => setMoveTo(e.target.value)}
-        >
-          <option value="">{t("people.move")}</option>
-          {moveOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          disabled={busy}
-          disabledReason={
-            selectedCount === 0
-              ? t("people.noSelection")
-              : !moveTarget
-                ? t("people.moveDisabled")
-                : undefined
+      {selectedCount > 0 && !busy ? (
+        <ActionBar
+          label={t("people.facesToolbar")}
+          className="people-face-actions"
+          lead={t("people.selected", { count: selectedCount })}
+          actions={faceActions}
+          end={
+            <IconButton
+              label={t("people.bulk.clear")}
+              shortcut="Esc"
+              onClick={() => sel.clear()}
+              icon={<Icon.Close size={16} />}
+            />
           }
-          onClick={() =>
-            moveTarget &&
-            correct(
-              (ids) => [moveTarget.correction(ids)],
-              (n) => t("people.movedDone", { count: n, name: moveTarget.name }),
-            )
-          }
-        >
-          {t("people.moveApply")}
-        </Button>
-        {target?.kind === "singles" && (
-          <Button
-            variant="primary"
-            disabled={busy}
-            disabledReason={selectedCount === 0 ? t("people.noSelection") : undefined}
-            onClick={() => setAssignOpen(true)}
-          >
-            {t("people.bulk.assignAction")}
-          </Button>
-        )}
-        {groupId != null && (
-          <>
-            <Button disabled={busy || selectedCount === 0} onClick={() => reject(groupId)}>
-              {withCount(t("people.reject"), selectedCount)}
-            </Button>
-            <Button
-              disabled={busy || selectedCount === 0}
-              onClick={() =>
-                correct(
-                  (ids) => [{ action: "separate", person: groupId, faces: ids }],
-                  (n) => t("people.separatedDone", { count: n }),
-                )
+        />
+      ) : (
+        <div className="people-grid-head">
+          <h2 className="people-title">{title}</h2>
+          {target.kind === "group" && (
+            // Conteggi come testo: i chip colorati sono solo per gli stati, mai per uno zero.
+            <span className="muted people-grid-counts">
+              {[
+                t("people.photos", { count: photos }),
+                t("people.facesCount", { count: goodCount + discardedCount }),
+                discardedCount > 0 ? t("people.discardedQuality", { count: discardedCount }) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
+          {/* Comandi di vista, a destra: ordinamento e volti scartati. */}
+          <div className="people-view-controls">
+            {busy && (
+              <span role="status" className="people-progress">
+                <Spinner size={14} />
+                {progress
+                  ? t("people.progress", { done: progress.done, total: progress.total })
+                  : t("people.working")}
+              </span>
+            )}
+            <Menu
+              align="end"
+              trigger={
+                <button type="button" className="btn btn-ghost btn-sm">
+                  {t("people.faceSortShort", { sort: t(sortLabel(sort)) })}
+                  <Icon.ChevronDown size={14} aria-hidden="true" />
+                </button>
               }
-            >
-              {t("people.newGroup")}
-            </Button>
-          </>
-        )}
-        <Button
-          variant="danger"
-          disabled={busy || selectedCount === 0}
-          onClick={() => setRemoveOpen(true)}
-        >
-          {withCount(t("people.remove"), selectedCount)}
-        </Button>
-        {discardedOnly && (
-          <Button
-            disabled={busy || selectedCount === 0}
-            onClick={() =>
-              correct(
-                (ids) => [{ action: "recover", faces: ids }],
-                (n) => t("people.recoveredDone", { count: n }),
-              )
-            }
-          >
-            {t("people.recover")}
-          </Button>
-        )}
-        <Button disabled={busy || scope == null} onClick={() => void sel.selectAll()}>
-          {t("people.selectAll")}
-        </Button>
-        <Button disabled={busy || scope == null} onClick={() => void sel.invert()}>
-          {t("people.invert")}
-        </Button>
-        <span aria-hidden className="people-toolbar-sep" />
-        <label className="muted" htmlFor="people-face-sort">
-          {t("people.faceSortLabel")}
-        </label>
-        <select
-          id="people-face-sort"
-          className="field"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as FaceSort)}
-        >
-          {FACE_SORTS.map((o) => (
-            <option key={o} value={o}>
-              {t(
-                o === "quality_desc"
-                  ? "people.faceSortQuality"
-                  : o === "captured_asc"
-                    ? "people.faceSortDateAsc"
-                    : "people.faceSortDateDesc",
-              )}
-            </option>
-          ))}
-        </select>
-        <span aria-hidden className="people-toolbar-sep" />
-        <span className="muted">{t("people.showLabel")}</span>
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={!discardedOnly}
-          onClick={() => setDiscardedOnly(false)}
-          style={{
-            background: !discardedOnly ? "var(--pc-raised)" : "transparent",
-            borderColor: !discardedOnly ? "var(--pc-border)" : "transparent",
-          }}
-        >
-          {t("people.showAll")}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={discardedOnly}
-          onClick={() => setDiscardedOnly(true)}
-          disabled={target.kind !== "group"}
-          style={{
-            background: discardedOnly ? "var(--pc-raised)" : "transparent",
-            borderColor: discardedOnly ? "var(--pc-border)" : "transparent",
-          }}
-        >
-          {t("people.showDiscarded")}
-        </button>
-      </div>
-
-      {hint && groupId != null && !discardedOnly && (
-        <div role="note" className="people-merge-hint">
-          <div className="people-merge-hint-body">
-            <b>
-              {t("people.mergeSuggestTitle", {
-                name: hint.otherName ?? t("people.unnamedPlain"),
-              })}
-            </b>
-            <br />
-            <span className="muted">
-              {hint.score != null
-                ? t("people.mergeSuggestBody", { score: fmtDec(hint.score, 2) })
-                : t("people.mergeSuggestBodyNoScore")}
-            </span>
+              items={FACE_SORTS.map((o) => ({
+                label: t(sortLabel(o)),
+                checked: sort === o,
+                onSelect: () => setSort(o),
+              }))}
+            />
+            <Menu
+              align="end"
+              trigger={
+                <button type="button" className="btn btn-ghost btn-sm">
+                  {t("people.view")}
+                  <Icon.ChevronDown size={14} aria-hidden="true" />
+                </button>
+              }
+              items={[
+                {
+                  label: t("people.showAll"),
+                  checked: !discardedOnly,
+                  onSelect: () => setDiscardedOnly(false),
+                },
+                {
+                  label: t("people.showDiscarded"),
+                  checked: discardedOnly,
+                  disabled: target.kind !== "group",
+                  onSelect: () => setDiscardedOnly(true),
+                },
+              ]}
+            />
           </div>
-          <Button variant="primary" disabled={busy} onClick={() => setMergeHintOpen(true)}>
-            {t("people.samePerson")}
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => {
-              void (async () => {
-                setBusy(true);
-                setError("");
-                try {
-                  await commands.correctPerson({
-                    action: "not_same",
-                    a: groupId,
-                    b: hint.otherId,
-                  });
-                  await refresh();
-                  notifyPeopleUndo(qc, t("people.notSameDone"));
-                } catch (err) {
-                  setError((err as { detail?: string }).detail ?? String(err));
-                } finally {
-                  setBusy(false);
-                }
-              })();
-            }}
-          >
-            {t("people.notSame")}
-          </Button>
         </div>
       )}
+      {/* Il conteggio dei selezionati si annuncia anche con Ctrl+A, Inverti ed Esc. */}
+      <span aria-live="polite" aria-atomic="true" className="visually-hidden">
+        {selectedCount > 0 ? t("people.selected", { count: selectedCount }) : null}
+      </span>
+      {/* Sotto l'intestazione e sopra i volti: non copre comandi. */}
+      <Coachmark tip="people" learnMore="people" />
 
       {error && (
         <div className="people-alert">
@@ -888,51 +780,30 @@ export const FaceGrid = forwardRef<
         onConfirm={() => correct((ids) => [{ action: "remove", faces: ids }])}
       />
 
-      {assignOpen && (
+      {moveOpen && (
         <PersonPicker
-          mode="assign"
-          title={t("people.bulk.assignFacesPickTitle")}
-          intro={t("people.bulk.assignFacesPickIntro", { count: selectedCount })}
+          mode="destination"
+          title={t("people.picker.moveTitle")}
+          intro={t("people.picker.moveIntro", { count: selectedCount })}
           allowCreate
-          describe={(c: PickerChoice) => ({
-            title: t("people.bulk.assignFacesTitle", { count: selectedCount, name: c.name }),
-            body: t("people.bulk.assignFacesBody", { name: c.name }),
-          })}
-          confirmLabel={(c: PickerChoice) => t("people.bulk.assignConfirm", { name: c.name })}
+          exclude={groupId != null ? [groupId] : []}
           run={async (c: PickerChoice) => {
             const faces = await resolveFaceIds();
             const toIdentity = (identity: string) =>
               commands.correctPerson({ action: "assign_identity", identity, faces });
             if (c.kind === "person")
-              await commands.correctPerson({ action: "assign", person: c.person, faces });
+              await commands.correctPerson(
+                groupId != null
+                  ? { action: "move", faces, to: c.person }
+                  : { action: "assign", person: c.person, faces },
+              );
             else if (c.kind === "identity") await toIdentity(c.uid);
             else await withNewIdentity(c.name, toIdentity);
             sel.clear();
-            notifyPeopleUndo(
-              qc,
-              t("people.bulk.facesAssignedDone", { count: faces.length, name: c.name }),
-            );
+            notifyPeopleUndo(qc, t("people.movedDone", { count: faces.length, name: c.name }));
             await refreshPeopleFast(qc);
           }}
-          onClose={() => setAssignOpen(false)}
-        />
-      )}
-
-      {mergeHintOpen && group && hint && (
-        <MergeDialog
-          sources={[
-            {
-              ...group,
-              id: hint.otherId,
-              name: hint.otherName,
-              faces: hint.otherFaces,
-              photos: hint.otherPhotos,
-              cover: hint.otherCover,
-            },
-          ]}
-          target={group}
-          onClose={() => setMergeHintOpen(false)}
-          onMerged={() => void refresh()}
+          onClose={() => setMoveOpen(false)}
         />
       )}
 
@@ -1095,31 +966,21 @@ export const FaceGrid = forwardRef<
                               data-highlighted={lit || undefined}
                               data-cursor={face.id === focusedFace || undefined}
                               aria-selected={isSel}
-                              title={tip}
+                              title={[face.year != null ? String(face.year) : null, tip]
+                                .filter(Boolean)
+                                .join(" · ")}
                               onClick={onFaceClick(face.id)}
                               className="people-face-tile"
-                              style={{
-                                width: cell,
-                                border: `2px solid ${
-                                  lit
-                                    ? "var(--pc-warn)"
-                                    : isSel
-                                      ? "var(--pc-accent)"
-                                      : "var(--pc-raised)"
-                                }`,
-                                opacity: face.discardReason ? 0.72 : 1,
-                              }}
+                              data-discarded={face.discardReason ? true : undefined}
+                              style={{ width: cell }}
                             >
                               <FaceCrop face={face} size={cell - 4} />
-                              {tip && <span className="visually-hidden">{tip}</span>}
-                              <span className="people-face-meta">
-                                <span className="mono">
-                                  {face.year != null ? String(face.year) : ""}
+                              {tip && (
+                                <span className="people-face-flag">
+                                  <Icon.Alert size={12} aria-hidden="true" />
+                                  <span className="visually-hidden">{tip}</span>
                                 </span>
-                                {face.qualityScore != null && (
-                                  <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
-                                )}
-                              </span>
+                              )}
                             </div>
                           );
                         })}
@@ -1141,7 +1002,7 @@ export const FaceGrid = forwardRef<
               t(sort === "captured_asc" ? "people.faceSortDateAsc" : "people.faceSortDateDesc")
             : t("people.facesSortHint")}
         </span>
-        <span className="mono">
+        <span>
           {fmtInt(items.length)}
           {meta?.total ? ` / ${fmtInt(meta.total)}` : ""}
         </span>

@@ -143,17 +143,21 @@ export function useGridShortcuts() {
   useCommands([
     {
       id: "selection.all",
-      label: t("selection.selectAll"),
+      label: t("menu.selectAll"),
       group: "selection",
       shortcut: { key: "a", mod: true },
+      menu: { menu: "edit", section: 1, order: 0 },
+      disabledReason: () => (activePane() == null ? t("menu.why.noPane") : undefined),
       when: () => activePane() != null && !overlayOpen(),
       run: () => activePane()?.selectAll(),
     },
     {
       id: "selection.invert",
-      label: t("selection.invert"),
+      label: t("menu.invertSelection"),
       group: "selection",
       shortcut: { key: "i", mod: true, shift: true },
+      menu: { menu: "edit", section: 1, order: 1 },
+      disabledReason: () => (activePane() == null ? t("menu.why.noPane") : undefined),
       when: () => activePane() != null && !overlayOpen(),
       run: () => activePane()?.invert(),
     },
@@ -162,6 +166,9 @@ export function useGridShortcuts() {
       label: t("commands.clearSelection"),
       group: "selection",
       shortcut: { key: "Escape" },
+      menu: { menu: "edit", section: 1, order: 2 },
+      disabledReason: () =>
+        (activePane()?.count() ?? 0) > 0 ? undefined : t("menu.why.noSelection"),
       // Un menu, un selettore o il visore aperto si chiude prima con il suo Esc.
       when: () => (activePane()?.count() ?? 0) > 0 && !overlayOpen(),
       run: () => activePane()?.clear(),

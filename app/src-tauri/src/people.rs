@@ -442,7 +442,11 @@ pub async fn assign_groups(
 
 /// Unisce `from` in `to` registrando uno snapshot completo per l'annullamento: gruppi
 /// eliminati, gruppo di destinazione, stato dei volti toccati e vincoli "persone diverse".
-fn merge_with_undo(c: &rusqlite::Connection, from: Vec<i64>, to: i64) -> pc_store::StoreResult<()> {
+pub(crate) fn merge_with_undo(
+    c: &rusqlite::Connection,
+    from: Vec<i64>,
+    to: i64,
+) -> pc_store::StoreResult<()> {
     let mut snaps = Vec::with_capacity(from.len());
     for id in &from {
         snaps.push(people::person_snapshot(c, *id)?);

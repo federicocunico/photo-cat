@@ -41,7 +41,6 @@ function Host() {
   return (
     <GroupList
       section="review"
-      onSectionChange={() => {}}
       target={target}
       selectedIds={ids}
       onSelect={(next) => {
@@ -138,7 +137,7 @@ describe("elenco di Persone da tastiera", () => {
   });
 });
 
-// Stesso contratto sull'elenco delle persone (identità: id testuali).
+// Stesso contratto sull'elenco delle persone (id testuali).
 const UIDS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const identity = (uid: string): IdentityRow => ({
   uid,
@@ -159,7 +158,6 @@ function PeopleHost() {
   return (
     <GroupList
       section="people"
-      onSectionChange={() => {}}
       target={target}
       selectedIds={ids}
       onSelect={(next) => {
@@ -170,7 +168,7 @@ function PeopleHost() {
     />
   );
 }
-const identities = () => screen.getByRole("listbox", { name: "Identità" });
+const identities = () => screen.getByRole("listbox", { name: "Persone" });
 
 runSelectionContract({
   name: "elenco delle persone",
@@ -202,9 +200,7 @@ describe("menu contestuale dell'elenco", () => {
     fireEvent.click(rows()[0]!);
     fireEvent.click(rows()[2]!, { shiftKey: true });
     fireEvent.contextMenu(rows()[1]!);
-    expect(
-      await screen.findByRole("menuitem", { name: "Assegna 3 gruppi a…" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Unisci 3 gruppi a…" })).toBeInTheDocument();
   });
 
   it("su un gruppo non selezionato seleziona solo quello", async () => {
@@ -213,7 +209,7 @@ describe("menu contestuale dell'elenco", () => {
     fireEvent.click(rows()[2]!, { shiftKey: true });
     fireEvent.contextMenu(rows()[5]!);
     expect(
-      await screen.findByRole("menuitem", { name: "Assegna il gruppo a…" }),
+      await screen.findByRole("menuitem", { name: "Unisci il gruppo a…" }),
     ).toBeInTheDocument();
     expect(
       rows()
@@ -234,4 +230,40 @@ it("in Persone la ricerca per iniziale non è attiva: le lettere restano alle sc
       .map((r) => r.dataset.groupId),
   ).toEqual(["1"]);
   expect(list()).toHaveAttribute("aria-activedescendant", "group-opt-1");
+});
+
+it("sopra il primo gruppo ci sono solo la ricerca e «Ordina e filtra» (P3)", async () => {
+  await mount();
+  const aside = screen.getByRole("complementary", { name: "Elenco persone e gruppi" });
+  const first = rows()[0]!;
+  const controls = [
+    ...aside.querySelectorAll<HTMLElement>(
+      "button, input, select, [role='tab'], [role='combobox']",
+    ),
+  ].filter((el) => el.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING);
+  expect(controls.map((el) => el.getAttribute("aria-label"))).toEqual([
+    "Filtra per nome…",
+    "Ordina e filtra",
+  ]);
+});
+
+it("la casella della riga aggiunge o toglie la voce senza aprirla", async () => {
+  await mount();
+  fireEvent.click(rows()[0]!);
+  expect(opened.current).toEqual({ kind: "group", id: 1 });
+  const check = (i: number) => rows()[i]!.querySelector<HTMLElement>(".people-check")!;
+  fireEvent.click(check(2));
+  expect(
+    rows()
+      .filter((r) => r.getAttribute("aria-selected") === "true")
+      .map((r) => r.dataset.groupId),
+  ).toEqual(["1", "3"]);
+  // Il gruppo aperto non cambia.
+  expect(opened.current).toEqual({ kind: "group", id: 1 });
+  fireEvent.click(check(0));
+  expect(
+    rows()
+      .filter((r) => r.getAttribute("aria-selected") === "true")
+      .map((r) => r.dataset.groupId),
+  ).toEqual(["3"]);
 });

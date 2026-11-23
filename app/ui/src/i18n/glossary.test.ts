@@ -20,6 +20,12 @@ const BANNED: Record<"it" | "en", Record<string, RegExp>> = {
     job: /\bjobs?\b/i,
     sorgente: /\bsorgent[ei]\b/i,
     annullaUltimaAzione: /annulla ultima azione/i,
+    // Glossario di Persone (ui-usability-audit D11): persona, persona senza nome, cerchia,
+    // "Sposta in…" e "Unisci a…".
+    identita: /identità/i,
+    riassegna: /\briassegna/i,
+    assegnaA: /\bassegna (a|il gruppo a)\b/i,
+    unisciIn: /\bunisci in\b/i,
     gergo: JARGON,
   },
   en: {

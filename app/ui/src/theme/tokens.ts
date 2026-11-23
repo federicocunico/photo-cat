@@ -160,15 +160,12 @@ export const nonTextPairs: Array<[keyof ThemeTokens, keyof ThemeTokens]> = [
 export const scales = {
   space: { 1: "4px", 2: "8px", 3: "12px", 4: "16px", 5: "24px", 6: "32px", 7: "48px" },
   radius: { sm: "4px", md: "6px", lg: "10px", pill: "999px" },
-  /** Dimensione / interlinea. */
+  /** Dimensione / interlinea: quattro corpi in tutta l'app (desktop-shell, "Stile visivo"). */
   font: {
-    xs: "11px/16px",
     sm: "12px/16px",
-    md: "13px/18px",
     base: "14px/20px",
     lg: "16px/22px",
     xl: "20px/26px",
-    xxl: "26px/32px",
   },
   weight: { regular: "400", medium: "600", bold: "700" },
   motion: { fast: "120ms", normal: "200ms" },

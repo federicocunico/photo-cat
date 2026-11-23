@@ -13,6 +13,8 @@ export type MenuItem =
       shortcut?: string;
       danger?: boolean;
       disabled?: boolean;
+      /** Voce spuntabile (scelta dell'ordinamento, di un filtro, di una vista). */
+      checked?: boolean;
       onSelect: () => unknown;
     }
   | { kind: "separator" }
@@ -21,6 +23,8 @@ export type MenuItem =
 
 type Parts = {
   Item: typeof RDropdown.Item;
+  CheckboxItem: typeof RDropdown.CheckboxItem;
+  ItemIndicator: typeof RDropdown.ItemIndicator;
   Separator: typeof RDropdown.Separator;
   Label: typeof RDropdown.Label;
   Sub: typeof RDropdown.Sub;
@@ -52,6 +56,21 @@ function renderItems(items: MenuItem[], P: Parts): ReactNode {
             </P.SubContent>
           </P.Portal>
         </P.Sub>
+      );
+    if (it.checked !== undefined)
+      return (
+        <P.CheckboxItem
+          key={i}
+          className="ui-menu-item ui-menu-check"
+          checked={it.checked}
+          disabled={it.disabled}
+          onSelect={() => void it.onSelect()}
+        >
+          <span className="ui-menu-indicator" aria-hidden="true">
+            <P.ItemIndicator>✓</P.ItemIndicator>
+          </span>
+          <span className="ui-menu-text">{it.label}</span>
+        </P.CheckboxItem>
       );
     return (
       <P.Item

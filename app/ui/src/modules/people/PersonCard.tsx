@@ -12,52 +12,76 @@ import {
 import { QueryView } from "../../components/feedback/QueryView";
 import { Button, InlineAlert } from "../../components/ui";
 import { notifyPeopleUndo, refreshPeople, refreshPeopleFast } from "./peopleUndo";
-import { faceUrl, thumbUrl } from "../library/thumbUrl";
 import { IdentityEditor } from "./IdentityEditor";
 import { MergeDialog } from "./MergeDialog";
+import { PersonPicker, type PickerChoice } from "./PersonPicker";
 import { Transfer } from "./Transfer";
 import { WhoIs } from "./WhoIs";
 import type { GroupListTarget } from "./GroupList";
 import { openPersonPhotos } from "./openPersonPhotos";
 import { notifyError } from "../../store/toasts";
 import { Icon } from "../../components/icons";
+import { Cover } from "./Cover";
+import { similarityLevel } from "./similarity";
+import { withNewIdentity } from "./newIdentity";
 import "./people.css";
 
 export type PersonCardHandle = {
   focusWhoIs: () => void;
-  focusMergeSelect: () => void;
-  openMergeIfReady: () => boolean;
+  /** "Unisci a…" (tasto U). */
+  openMerge: () => boolean;
   ignoreGroup: () => boolean;
 };
 
-function CoverPreview({ group }: { group: GroupRow }) {
+/**
+ * Domanda in cima alla scheda quando il gruppo somiglia a una persona o a un altro gruppo
+ * (face-recognition, "Suggerimento di identità nella scheda"): le due copertine, la somiglianza
+ * in parole e "Sì" / "No".
+ */
+function MergeQuestion({
+  group,
+  busy,
+  onYes,
+  onNo,
+}: {
+  group: GroupRow;
+  busy: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
   const { t } = useTranslation();
-  const cover = group.cover;
-  const src = cover ? faceUrl(cover.id) : null;
-  const placeholder = cover?.thumb ? thumbUrl(cover.thumb) : null;
-  const [failed, setFailed] = useState(false);
+  const hint = group.mergeHint!;
+  const name = hint.otherName;
   return (
-    <div className="people-stack people-stack--gap-xs">
-      <span className="label people-label">{t("people.cover")}</span>
-      <div className="people-inline">
-        <span
-          aria-hidden
-          className="people-cover people-cover--md"
-          style={{
-            backgroundImage: placeholder && !src ? `url("${placeholder}")` : undefined,
-          }}
-        >
-          {src && !failed && (
-            <img src={src} alt="" onError={() => setFailed(true)} className="people-cover-img" />
-          )}
-        </span>
-        <span className="muted people-muted-sm">{t("people.coverHint")}</span>
+    <section className="people-question" aria-labelledby={`question-${group.id}`}>
+      <div className="people-question-covers" aria-hidden>
+        <Cover cover={group.cover} size="md" />
+        <Cover cover={hint.otherCover} size="md" />
       </div>
-    </div>
+      <h3 id={`question-${group.id}`} className="people-question-title">
+        {name ? t("people.question.isName", { name }) : t("people.question.same")}
+      </h3>
+      <p className="muted people-muted-sm">
+        {hint.score != null
+          ? t(`people.question.similarity.${similarityLevel(hint.score)}`, {
+              count: hint.otherFaces,
+              name: name ?? t("people.unnamedPlain"),
+            })
+          : t("people.question.noScore")}
+      </p>
+      <div className="people-question-actions">
+        <Button variant="primary" disabled={busy} onClick={onYes}>
+          {name ? t("people.question.yesName", { name }) : t("people.question.yes")}
+        </Button>
+        <Button disabled={busy} onClick={onNo}>
+          {t("people.question.no")}
+        </Button>
+      </div>
+    </section>
   );
 }
 
-/** Scheda destra: Chi è? / copertina / unione / ignora, oppure IdentityEditor per le persone. */
+/** Scheda destra: domanda, "Chi è?" e azioni del gruppo, oppure l'editor della persona. */
 export const PersonCard = forwardRef<
   PersonCardHandle,
   {
@@ -66,8 +90,6 @@ export const PersonCard = forwardRef<
     group: GroupRow | null;
     identity: IdentityRow | null;
     creating: boolean;
-    selectedFaceIds: number[];
-    mergeCandidates: GroupRow[];
     onLinked: (person: number) => void;
     onIdentitySaved: (uid: string) => void;
     onIdentityDeleted: () => void;
@@ -80,8 +102,6 @@ export const PersonCard = forwardRef<
     group,
     identity,
     creating,
-    selectedFaceIds,
-    mergeCandidates,
     onLinked,
     onIdentitySaved,
     onIdentityDeleted,
@@ -91,12 +111,11 @@ export const PersonCard = forwardRef<
 ) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [mergeTo, setMergeTo] = useState("");
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [namedMerge, setNamedMerge] = useState<GroupRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const whoIsRef = useRef<HTMLInputElement>(null);
-  const mergeSelectRef = useRef<HTMLSelectElement>(null);
 
   const identities = useQuery({
     queryKey: ["identities", ""],
@@ -114,13 +133,14 @@ export const PersonCard = forwardRef<
   const refresh = () => refreshPeople(qc);
 
   /** Correzione del gruppo; `done` è l'avviso con "Annulla operazione". */
-  const correct = async (c: Correction, done: string) => {
+  const correct = async (c: Correction, done: string, after?: () => void) => {
     setBusy(true);
     setError("");
     try {
       await commands.correctPerson(c);
       await refreshPeopleFast(qc);
       notifyPeopleUndo(qc, done);
+      after?.();
     } catch (e) {
       setError((e as { detail?: string }).detail ?? String(e));
     } finally {
@@ -128,18 +148,27 @@ export const PersonCard = forwardRef<
     }
   };
 
+  /** Unione del gruppo aperto in `to`: annullabile, quindi senza conferma (ui-foundations). */
+  const mergeInto = (to: number, name: string | null) => {
+    if (!group) return;
+    // Due nomi diversi: si sceglie quale tenere nel dialogo dell'unione.
+    if (group.name && name && group.name !== name) {
+      setNamedMerge({ ...group, id: to, name });
+      return;
+    }
+    void correct(
+      { action: "merge", from: group.id, to },
+      t("people.mergedDone", { count: 1, name: name ?? t("people.unnamedPlain") }),
+      () => onLinked(to),
+    );
+  };
+
   useImperativeHandle(ref, () => ({
     focusWhoIs() {
       whoIsRef.current?.focus();
     },
-    focusMergeSelect() {
-      mergeSelectRef.current?.focus();
-    },
-    openMergeIfReady() {
-      if (!mergeTo || !group) {
-        mergeSelectRef.current?.focus();
-        return false;
-      }
+    openMerge() {
+      if (!group || section === "people") return false;
       setMergeOpen(true);
       return true;
     },
@@ -150,15 +179,16 @@ export const PersonCard = forwardRef<
     },
   }));
 
-  // Sezione Persone (e creazione): editor identità + Transfer.
+  // Sezione Persone (e creazione): editor della persona + Transfer.
   if (section === "people" || creating) {
     return (
       <div className="people-stack people-stack--gap-xl people-stack--scroll">
+        {/* "Scegli un gruppo o una persona" è già nella colonna dei volti: non si ripete qui. */}
         <QueryView
           query={identities}
           isEmpty={() => !creating && !row}
           error={t("people.failed")}
-          empty={<p className="muted people-muted-reset">{t("people.pickGroup")}</p>}
+          empty={<></>}
         >
           {() => null}
         </QueryView>
@@ -169,7 +199,7 @@ export const PersonCard = forwardRef<
             all={everyone}
             groups={idGroups}
             defaultThreshold={def}
-            compact
+            cover={group?.cover ?? null}
             onSaved={(uid) => {
               onCreatingChange(false);
               onIdentitySaved(uid);
@@ -193,16 +223,40 @@ export const PersonCard = forwardRef<
     );
   }
 
-  if (target?.kind === "singles") {
+  // Volti singoli e scartati: la scheda dice che cosa sono e come si sistemano.
+  if (target?.kind === "singles")
     return <p className="muted people-muted-reset">{t("people.singlesCard")}</p>;
-  }
+  if (target?.kind === "discarded")
+    return <p className="muted people-muted-reset">{t("people.discardedCard")}</p>;
 
-  if (!group || target?.kind !== "group") {
-    return <p className="muted people-muted-reset">{t("people.pickGroup")}</p>;
-  }
+  // Nessun gruppo aperto: l'invito a scegliere è nella colonna dei volti, non si ripete qui.
+  if (!group || target?.kind !== "group") return null;
+
+  const hint = section !== "ignored" ? group.mergeHint : null;
 
   return (
     <div className="people-stack people-stack--gap-xl people-stack--scroll">
+      <div className="people-stack people-stack--gap-xs">
+        <h2 className="people-card-title">{group.name ?? t("people.unnamedPlain")}</h2>
+        <span className="muted people-muted-sm">
+          {t("people.photosInLibrary", { count: group.photos })}
+        </span>
+      </div>
+
+      {hint && (
+        <MergeQuestion
+          group={group}
+          busy={busy}
+          onYes={() => mergeInto(hint.otherId, hint.otherName)}
+          onNo={() =>
+            void correct(
+              { action: "not_same", a: group.id, b: hint.otherId },
+              t("people.notSameDone"),
+            )
+          }
+        />
+      )}
+
       {section === "review" && (
         <div className="people-stack people-stack--gap-xs">
           <span className="label people-label">{t("identities.whoIs")}</span>
@@ -216,48 +270,18 @@ export const PersonCard = forwardRef<
         </div>
       )}
 
-      <CoverPreview group={group} />
-      <Button
-        icon={<Icon.Library size={14} />}
-        onClick={() => openPersonPhotos(group.id).catch((e) => notifyError(e))}
-      >
-        {t("people.showPhotos", { count: group.photos })}
-      </Button>
-      {selectedFaceIds.length === 1 && (
-        <Button
-          disabled={busy}
-          onClick={() =>
-            correct(
-              { action: "set_cover", group: group.id, face: selectedFaceIds[0]! },
-              t("people.coverDone"),
-            )
-          }
-        >
-          {t("people.useAsCover")}
-        </Button>
-      )}
-
       <div className="people-stack people-stack--gap">
-        <span className="label people-label">{t("people.groupActions")}</span>
-        <select
-          ref={mergeSelectRef}
-          className="field"
-          aria-label={t("people.mergeTarget")}
-          value={mergeTo}
-          onChange={(e) => setMergeTo(e.target.value)}
+        <Button
+          icon={<Icon.Library size={14} />}
+          onClick={() => openPersonPhotos(group.id).catch((e) => notifyError(e))}
         >
-          <option value="">{t("people.mergeWith")}</option>
-          {mergeCandidates
-            .filter((g) => g.id !== group.id)
-            .map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name ?? t("people.unnamed", { count: g.photos })}
-              </option>
-            ))}
-        </select>
-        <Button disabled={busy || !mergeTo} onClick={() => setMergeOpen(true)}>
-          {t("people.merge")}
+          {t("people.showPhotos", { count: group.photos })}
         </Button>
+        {section !== "ignored" && (
+          <Button disabled={busy} onClick={() => setMergeOpen(true)}>
+            {t("people.mergeGroup")}
+          </Button>
+        )}
         {section !== "ignored" && (
           <>
             <Button
@@ -266,7 +290,7 @@ export const PersonCard = forwardRef<
                 correct({ action: "ignore", group: group.id }, t("people.ignoredDone"))
               }
             >
-              {t("people.ignore")}
+              {t("people.ignoreGroup")}
             </Button>
             <span className="muted people-muted-sm">{t("people.ignoreHint")}</span>
           </>
@@ -287,18 +311,36 @@ export const PersonCard = forwardRef<
           {error}
         </InlineAlert>
       )}
-      {mergeOpen && mergeTo && (
+      {mergeOpen && (
+        <PersonPicker
+          mode="destination"
+          title={t("people.picker.mergeTitle")}
+          intro={t("people.picker.mergeIntro", { count: 1 })}
+          allowCreate
+          exclude={[group.id]}
+          run={async (c: PickerChoice) => {
+            if (c.kind === "person") {
+              mergeInto(c.person, c.name === t("people.unnamedPlain") ? null : c.name);
+              return;
+            }
+            // Una persona senza volti in questa libreria (o nuova): il gruppo prende il suo nome.
+            const link = (uid: string) => commands.linkPersonIdentity(group.id, uid);
+            const person =
+              c.kind === "identity" ? await link(c.uid) : await withNewIdentity(c.name, link);
+            notifyPeopleUndo(qc, t("people.namedDone", { name: c.name }));
+            await refreshPeopleFast(qc);
+            onLinked(person);
+          }}
+          onClose={() => setMergeOpen(false)}
+        />
+      )}
+      {namedMerge && (
         <MergeDialog
           sources={[group]}
-          target={
-            mergeCandidates.find((g) => g.id === Number(mergeTo)) ?? {
-              ...group,
-              id: Number(mergeTo),
-            }
-          }
-          onClose={() => setMergeOpen(false)}
+          target={namedMerge}
+          onClose={() => setNamedMerge(null)}
           onMerged={(to) => {
-            setMergeTo("");
+            setNamedMerge(null);
             void refresh().then(() => onLinked(to));
           }}
         />

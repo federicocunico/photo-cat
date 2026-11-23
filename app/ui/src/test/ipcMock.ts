@@ -84,6 +84,7 @@ export const emitters = {
   uiRecovered: [] as Cb<void>[],
   trimCaches: [] as Cb<void>[],
   facesChanged: [] as Cb<void>[],
+  menuCommand: [] as Cb<string>[],
   sourceWatchChanged: [] as Cb<void>[],
   rawReviewCameraStatus: [] as Cb<CameraStatus>[],
   rawReviewCameraLog: [] as Cb<CameraLogLine>[],
@@ -98,6 +99,27 @@ export function emit<K extends keyof typeof emitters>(
   for (const cb of emitters[kind] as Cb<typeof payload>[]) cb(payload);
 }
 
+/** Informazioni sull'app di prova (app-about); i test cambiano solo i campi che servono. */
+export function appInfoFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    version: "0.5.1",
+    commit: "a1b2c3d" as string | null,
+    buildDate: "2026-11-23",
+    profile: "release",
+    os: "Windows 11 Pro",
+    arch: "x86_64",
+    webview: "131.0.2903.70" as string | null,
+    accelerator: "DirectML",
+    authors: "photo-cat contributors",
+    repository: "https://github.com/federicocunico/photo-cat" as string | null,
+    license: "MIT OR Apache-2.0",
+    dataDir: "D:/photo-cat",
+    logsDir: "D:/photo-cat/logs",
+    previousCrash: null as unknown,
+    ...overrides,
+  };
+}
+
 export const commandsMock = {
   bootStatus: vi.fn(async () => ({
     phase: "ready",
@@ -107,7 +129,7 @@ export const commandsMock = {
   })),
   bootRetry: vi.fn(async () => {}),
   bootChooseFolder: vi.fn(async () => null),
-  appInfo: vi.fn(),
+  appInfo: vi.fn(async () => appInfoFixture()),
   dismissCrashNotice: vi.fn(),
   takeUiRecovery: vi.fn(async () => null),
   reportLongTasks: vi.fn(async () => null),
@@ -190,11 +212,7 @@ export const commandsMock = {
     ) => Promise<GroupPage>
   >(async () => ({ items: [], next: null, total: 0 })),
   groupSelectionIds: vi.fn<
-    (
-      section: PeopleSection,
-      query: string | null,
-      maxPhotos: number | null,
-    ) => Promise<number[]>
+    (section: PeopleSection, query: string | null, maxPhotos: number | null) => Promise<number[]>
   >(async () => []),
   assignGroups: vi.fn<(groups: number[], target: GroupTarget) => Promise<AssignOutcome>>(
     async (groups) => ({
@@ -373,12 +391,15 @@ export const commandsMock = {
     limitBytes: 20 * 1024 ** 3,
   })),
   rawReviewClearCache: vi.fn(async () => 0),
-  rawReviewExportPreflight: vi.fn<(request: RawReviewExportRequest) => Promise<RawReviewExportPreflight>>(),
-  rawReviewPreviewNames: vi.fn<(request: RawReviewExportRequest, limit: number) => Promise<NamePreviewResult>>(
-    async () => ({ names: [], errors: [] }),
-  ),
+  rawReviewExportPreflight:
+    vi.fn<(request: RawReviewExportRequest) => Promise<RawReviewExportPreflight>>(),
+  rawReviewPreviewNames: vi.fn<
+    (request: RawReviewExportRequest, limit: number) => Promise<NamePreviewResult>
+  >(async () => ({ names: [], errors: [] })),
   startRawReviewExport: vi.fn<(request: RawReviewExportRequest) => Promise<number>>(async () => 88),
-  rawReviewExportReport: vi.fn<(jobId: number) => Promise<RawExportReport | null>>(async () => null),
+  rawReviewExportReport: vi.fn<(jobId: number) => Promise<RawExportReport | null>>(
+    async () => null,
+  ),
   // Sviluppo dalla fotocamera: di norma "non disponibile" (Linux/macOS); i test lo cambiano.
   rawReviewCameraStatus: vi.fn<() => Promise<CameraStatus>>(async () => ({
     available: false,
@@ -398,9 +419,7 @@ export const commandsMock = {
   startRawReviewDevelop: vi.fn<(request: RawReviewDevelopRequest) => Promise<number>>(
     async () => 90,
   ),
-  rawReviewDevelopReport: vi.fn<(jobId: number) => Promise<DevelopReport | null>>(
-    async () => null,
-  ),
+  rawReviewDevelopReport: vi.fn<(jobId: number) => Promise<DevelopReport | null>>(async () => null),
   rawReviewOpen: vi.fn<(root: string) => Promise<OpenedReview>>(),
   rawReviewOpenFujiview: vi.fn<(path: string) => Promise<OpenedReview>>(),
   rawReviewRecent: vi.fn(async () => [] as RecentSession[]),
@@ -412,8 +431,7 @@ export const commandsMock = {
   rawReviewSetReviewed:
     vi.fn<(id: string, shot: string, reviewed: boolean) => Promise<ShotDecision>>(),
   rawReviewSetLastShot: vi.fn(async () => null),
-  rawReviewSetRating:
-    vi.fn<(id: string, shot: string, rating: number) => Promise<ShotDecision>>(),
+  rawReviewSetRating: vi.fn<(id: string, shot: string, rating: number) => Promise<ShotDecision>>(),
   rawReviewThumbnails: vi.fn<(id: string, shots: string[]) => Promise<ThumbnailKey[]>>(
     async () => [],
   ),
@@ -441,6 +459,49 @@ export const commandsMock = {
   completeOnboarding: vi.fn(async () => null),
   exportDiagnostics: vi.fn(async () => null),
   openLogs: vi.fn(async () => null),
+  openDataDir: vi.fn(async () => null),
+  setAppMenu: vi.fn(async () => null),
+  thirdPartyLicenses: vi.fn(async () => ({
+    components: [
+      {
+        name: "libheif",
+        version: "1.23.7",
+        license: "LGPL-3.0-or-later",
+        kind: "native",
+        text: "lgpl",
+        sources: "native-sources/libheif-1.23.7.tar.gz" as string | null,
+      },
+      {
+        name: "libde265",
+        version: "1.1.3",
+        license: "LGPL-3.0-or-later",
+        kind: "native",
+        text: "lgpl",
+        sources: "native-sources/libde265-1.1.3.tar.gz" as string | null,
+      },
+      {
+        name: "serde",
+        version: "1.0.229",
+        license: "MIT OR Apache-2.0",
+        kind: "rust",
+        text: "mit",
+        sources: null as string | null,
+      },
+      {
+        name: "react",
+        version: "18.3.1",
+        license: "MIT",
+        kind: "ui",
+        text: "mit",
+        sources: null as string | null,
+      },
+    ],
+    texts: { lgpl: "GNU LESSER GENERAL PUBLIC LICENSE", mit: "MIT License" } as Record<
+      string,
+      string
+    >,
+    root: "C:\\Program Files\\photo-cat",
+  })),
   retryFailed: vi.fn(async () => []),
   listFolders: vi.fn<(sourceId: number, parent: string | null) => Promise<FolderNode[]>>(
     async () => [],
@@ -488,6 +549,7 @@ export function ipcMockModule(tauri = false) {
       onUiRecovered: reg(emitters.uiRecovered),
       onTrimCaches: reg(emitters.trimCaches),
       onFacesChanged: reg(emitters.facesChanged),
+      onMenuCommand: reg(emitters.menuCommand),
       onSourceWatchChanged: reg(emitters.sourceWatchChanged),
       onRawReviewCameraStatus: reg(emitters.rawReviewCameraStatus),
       onRawReviewCameraLog: reg(emitters.rawReviewCameraLog),
