@@ -31,7 +31,7 @@ jobs:
       - name: Compila setup NSIS
         run: npm --prefix app/ui run tauri -- build --ci --bundles nsis
       # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: photo-cat-setup
           path: target/release/bundle/nsis/*-setup.exe
@@ -58,7 +58,7 @@ jobs:
       - name: Pacchetti .deb e .tar.gz
         run: scripts/package-linux.sh
       # Nome stabile: la release riusa questo artefatto (actions/reuse-ci-artifact).
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: photo-cat-linux
           path: target/release/dist/*
