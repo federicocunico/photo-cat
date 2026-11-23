@@ -265,3 +265,17 @@ it("ricerca per iniziale nell'elenco dei tag: «su» apre Sunset, senza distingu
   expect(pill("Sunset")).toHaveAttribute("aria-pressed", "true");
   expect(pill("Sunset")).toHaveFocus();
 });
+
+it("«Set attivo» è uno stato; sugli altri set c'è «Usa come set attivo»", async () => {
+  commandsMock.setActiveTagSet.mockResolvedValue(null as never);
+  renderPage();
+  await screen.findByRole("heading", { name: /Viaggio USA 2026/ });
+  // Il set attivo non ha un pulsante disattivato.
+  expect(screen.getByText("Set attivo")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Set attivo" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Usa come set attivo" })).toBeNull();
+  // Su un altro set: il comando per attivarlo.
+  fireEvent.click(screen.getByRole("button", { name: /^Base/, pressed: false }));
+  fireEvent.click(await screen.findByRole("button", { name: "Usa come set attivo" }));
+  await waitFor(() => expect(commandsMock.setActiveTagSet).toHaveBeenCalledWith(1));
+});

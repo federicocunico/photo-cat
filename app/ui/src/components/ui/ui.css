@@ -454,7 +454,12 @@
   flex: 1;
   min-width: 0;
   font-family: var(--pc-font-mono);
-  font-size: 12px;
+  font-size: var(--pc-font-sm);
+}
+/* Il percorso è in monospazio; il suggerimento, finché il campo è vuoto, no. */
+.ui-folder-input:placeholder-shown {
+  font-family: var(--pc-font-ui);
+  font-size: var(--pc-font-base);
 }
 
 /* Tabella */

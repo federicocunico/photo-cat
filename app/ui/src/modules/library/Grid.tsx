@@ -76,6 +76,17 @@ const GAP = 12;
 const PAD = 16;
 const CAPTION = 26;
 
+/** Descrizione del badge di stato: che cosa significa "AI", "In coda", "Mancante". */
+function statusHint(item: { status: string; analysis: string }) {
+  return item.status === "missing"
+    ? "library.missingHint"
+    : item.analysis === "processed"
+      ? "library.aiHint"
+      : item.analysis === "queued"
+        ? "library.queuedHint"
+        : "library.unprocessedHint";
+}
+
 function Thumb({
   item,
   size,
@@ -146,10 +157,23 @@ function Thumb({
             <span>{item.name.split(".").pop()?.toUpperCase()}</span>
           )}
           <span className="thumb-face">
-            {item.faces > 0 && <span className="thumb-badge thumb-badge-face">{item.faces}</span>}
+            {item.faces > 0 && (
+              <span
+                className="thumb-badge thumb-badge-face"
+                role="img"
+                aria-label={t("library.facesBadge", { count: item.faces })}
+                title={t("library.facesBadge", { count: item.faces })}
+              >
+                <Icon.People size={12} aria-hidden="true" />
+                {item.faces}
+              </span>
+            )}
           </span>
           <span
             className="thumb-badge thumb-badge-status"
+            role="img"
+            aria-label={t(statusHint(item))}
+            title={t(statusHint(item))}
             style={{
               color:
                 item.status === "missing"

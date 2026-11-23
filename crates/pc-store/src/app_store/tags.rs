@@ -40,10 +40,25 @@ impl TagSet {
     }
 }
 
-/// Colore predefinito di un tag senza colore scelto: deterministico dal nome.
+/// Colori predefiniti dei tag del set "Base": uno diverso per ciascuno, perché il colore li
+/// distingua anche a colpo d'occhio (con l'hash del nome quattro su sei avevano lo stesso).
+const BASE_COLORS: &[(&str, &str)] = &[
+    ("preferite", "yellow"),
+    ("da stampare", "blue"),
+    ("da scartare", "coral"),
+    ("famiglia", "teal"),
+    ("viaggi", "purple"),
+    ("lavoro", "gray"),
+];
+
+/// Colore predefinito di un tag senza colore scelto: fisso per i tag del set Base, altrimenti
+/// deterministico dal nome.
 pub fn default_color(name: &str) -> &'static str {
-    let h = name
-        .to_lowercase()
+    let lower = name.to_lowercase();
+    if let Some((_, c)) = BASE_COLORS.iter().find(|(n, _)| *n == lower) {
+        return c;
+    }
+    let h = lower
         .bytes()
         .fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
     PALETTE[(h as usize) % (PALETTE.len() - 1)]
@@ -659,6 +674,23 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn base_tags_have_distinct_default_colors() {
+        let base = [
+            "Preferite",
+            "Da stampare",
+            "Da scartare",
+            "Famiglia",
+            "Viaggi",
+            "Lavoro",
+        ];
+        let colors: std::collections::HashSet<_> =
+            base.iter().map(|n| default_color(n)).collect();
+        assert_eq!(colors.len(), base.len());
+        assert!(colors.iter().all(|c| PALETTE.contains(c)));
+        assert_eq!(default_color("PREFERITE"), "yellow");
     }
 
     #[test]

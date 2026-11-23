@@ -199,6 +199,7 @@ export const it = {
     phaseState: { pending: "In attesa", running: "In corso", done: "Completata" },
     indeterminate: "{{n}} trovati",
     provisionalTotal: "totale ancora in conteggio",
+    nothingToDo: "Nulla da elaborare: era già tutto aggiornato.",
     col: {
       phase: "Fase",
       progress: "Progresso",
@@ -273,6 +274,12 @@ export const it = {
     queuedBadge: "In coda",
     unprocessedBadge: "Non analizzata",
     aiBadge: "AI",
+    aiHint: "Analizzata: volti, soggetti e luogo sono stati riconosciuti",
+    queuedHint: "In coda per l'analisi di volti, soggetti e luogo",
+    unprocessedHint: "Non ancora analizzata: volti, soggetti e luogo non sono riconosciuti",
+    missingHint: "File non trovato nella posizione registrata",
+    facesBadge_one: "{{count}} volto",
+    facesBadge_other: "{{count}} volti",
     facets: {
       people: "Persone",
       places: "Luogo",
@@ -316,9 +323,14 @@ export const it = {
       noAi: "Non ancora analizzata",
       peopleTags: "Persone e tag",
       peopleCount: "Persone presenti: {{n}}",
-      unrecognizedFace: "volto non riconosciuto",
-      discardedFace: "volto scartato",
-      ignoredFace: "volto ignorato",
+      ignoredFace: "Persona ignorata",
+      discardedFaces_one: "{{count}} volto scartato per qualità",
+      discardedFaces_other: "{{count}} volti scartati per qualità",
+      confidence: {
+        high: "molto probabile",
+        medium: "probabile",
+        low: "incerta",
+      },
       duplicates_one: "{{count}} duplicato",
       duplicates_other: "{{count}} duplicati",
       dateSources: {

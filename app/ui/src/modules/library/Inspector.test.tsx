@@ -290,6 +290,15 @@ it("chip volti: Apri in Persone imposta peopleTarget", async () => {
         ignored: true,
         discarded: false,
       },
+      {
+        id: 45,
+        bbox: [0.8, 0.5, 0.1, 0.1],
+        personId: null,
+        personName: null,
+        identityUid: null,
+        ignored: false,
+        discarded: true,
+      },
     ],
   } as never);
   useLayout.setState({ module: "library", peopleTarget: null });
@@ -299,8 +308,11 @@ it("chip volti: Apri in Persone imposta peopleTarget", async () => {
     </QueryClientProvider>,
   );
   expect(await screen.findByTestId("inspector-face-42")).toHaveTextContent("Giulia");
-  expect(screen.getByTestId("inspector-face-43")).toHaveTextContent(/volto non riconosciuto/i);
-  expect(screen.getByTestId("inspector-face-44")).toHaveTextContent(/volto ignorato/i);
+  // Glossario di Persone: "Persona senza nome" e "Persona ignorata"; gli scartati in una riga.
+  expect(screen.getByTestId("inspector-face-43")).toHaveTextContent("Persona senza nome");
+  expect(screen.getByTestId("inspector-face-44")).toHaveTextContent("Persona ignorata");
+  expect(screen.queryByTestId("inspector-face-45")).toBeNull();
+  expect(screen.getByText("1 volto scartato per qualità")).toBeInTheDocument();
   const openButtons = screen.getAllByRole("button", { name: /Apri in Persone/i });
   fireEvent.click(openButtons[0]);
   expect(useLayout.getState().module).toBe("people");

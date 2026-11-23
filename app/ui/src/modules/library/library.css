@@ -382,6 +382,9 @@
   font-size: 12px;
 }
 .thumb-badge-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: #e8e8ea;
 }
 .thumb-badge-status {
@@ -441,7 +444,8 @@
 .thumb-caption {
   height: 26px;
   padding: 6px 8px;
-  font-size: 12px;
+  font-family: var(--pc-font-ui);
+  font-size: var(--pc-font-sm);
   color: var(--pc-text-soft);
   overflow: hidden;
   text-overflow: ellipsis;

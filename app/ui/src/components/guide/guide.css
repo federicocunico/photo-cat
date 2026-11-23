@@ -204,3 +204,8 @@
 .guide-sections section[data-current] h3 {
   color: var(--pc-accent-text);
 }
+
+/* Lingua e tema: controlli larghi quanto le opzioni, non quanto la finestra. */
+.onboarding-field > .ui-segmented {
+  align-self: flex-start;
+}

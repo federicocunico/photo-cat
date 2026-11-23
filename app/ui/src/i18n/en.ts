@@ -198,6 +198,7 @@ export const en: Messages = {
     phaseState: { pending: "Pending", running: "Running", done: "Done" },
     indeterminate: "{{n}} found",
     provisionalTotal: "total still being counted",
+    nothingToDo: "Nothing to process: everything was already up to date.",
     col: {
       phase: "Phase",
       progress: "Progress",
@@ -271,6 +272,12 @@ export const en: Messages = {
     queuedBadge: "Queued",
     unprocessedBadge: "Not analyzed",
     aiBadge: "AI",
+    aiHint: "Analyzed: faces, subjects and place have been recognized",
+    queuedHint: "Queued for face, subject and place analysis",
+    unprocessedHint: "Not analyzed yet: faces, subjects and place are not recognized",
+    missingHint: "File not found at its recorded location",
+    facesBadge_one: "{{count}} face",
+    facesBadge_other: "{{count}} faces",
     facets: {
       people: "People",
       places: "Place",
@@ -314,9 +321,14 @@ export const en: Messages = {
       noAi: "Not analyzed yet",
       peopleTags: "People and tags",
       peopleCount: "People present: {{n}}",
-      unrecognizedFace: "unrecognized face",
-      discardedFace: "discarded face",
-      ignoredFace: "ignored face",
+      ignoredFace: "Ignored person",
+      discardedFaces_one: "{{count}} face discarded for quality",
+      discardedFaces_other: "{{count}} faces discarded for quality",
+      confidence: {
+        high: "very likely",
+        medium: "likely",
+        low: "uncertain",
+      },
       duplicates_one: "{{count}} duplicate",
       duplicates_other: "{{count}} duplicates",
       dateSources: {

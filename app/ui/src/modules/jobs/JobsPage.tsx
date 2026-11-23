@@ -50,7 +50,12 @@ function phaseCount(phase: PhaseSnapshot, isSource: boolean, t: TFunction) {
 
 export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: boolean }) {
   const { t } = useTranslation();
-  const pct = phase.percent;
+  // Con un conteggio "59 / 98" la barra è determinata, anche se il totale è ancora provvisorio
+  // (lo dice lo spinner accanto); resta indeterminata solo senza alcun totale.
+  const processed = phase.done + phase.failed;
+  const pct =
+    phase.percent ??
+    (!isSource && phase.total > 0 ? Math.min(100, (processed / phase.total) * 100) : null);
   const done = phase.state === "done";
   return (
     <tr className="jobs-phase-row" data-testid={`phase-${phase.name}`}>
@@ -148,6 +153,10 @@ export function JobCard({
   const live = running || paused || job.state === "queued";
   // Finché la scansione non ha contato tutti i file la percentuale complessiva non è significativa.
   const counting = running && job.phases.some((p) => !p.totalKnown);
+  // Conclusa senza nulla da elaborare: non è un lavoro "0 / 0 · 100%".
+  const nothingToDo =
+    job.state === "completed" &&
+    job.phases.every((p) => p.total === 0 && p.done === 0 && p.failed === 0);
   return (
     <section className="jobs-card" data-testid={`job-${job.id}`}>
       <div className="jobs-head">
@@ -205,36 +214,44 @@ export function JobCard({
           </div>
         )}
       </div>
-      <div>
-        <div className="jobs-overall">
-          <span>{t("jobs.overall")}</span>
-          <span data-testid={`overall-${job.id}`}>
-            {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
-          </span>
-        </div>
-        <div className={`bar jobs-overall-bar${counting ? " indeterminate" : ""}`}>
-          <span style={{ width: `${job.overallPercent ?? 0}%` }} />
-        </div>
-      </div>
-      <div className="jobs-table-wrap">
-        <table className="jobs-table">
-          <thead>
-            <tr className="jobs-table-head">
-              <th>{t("jobs.col.phase")}</th>
-              <th className="jobs-col-progress">{t("jobs.col.progress")}</th>
-              <th>{t("jobs.col.items")}</th>
-              <th>{t("jobs.col.rate")}</th>
-              <th>{t("jobs.col.eta")}</th>
-              <th>{t("jobs.col.errors")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {job.phases.map((p, i) => (
-              <PhaseRow key={p.name} phase={p} isSource={i === 0} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {nothingToDo ? (
+        <p className="muted jobs-nothing" data-testid={`nothing-${job.id}`}>
+          {t("jobs.nothingToDo")}
+        </p>
+      ) : (
+        <>
+          <div>
+            <div className="jobs-overall">
+              <span>{t("jobs.overall")}</span>
+              <span data-testid={`overall-${job.id}`}>
+                {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
+              </span>
+            </div>
+            <div className={`bar jobs-overall-bar${counting ? " indeterminate" : ""}`}>
+              <span style={{ width: `${job.overallPercent ?? 0}%` }} />
+            </div>
+          </div>
+          <div className="jobs-table-wrap">
+            <table className="jobs-table">
+              <thead>
+                <tr className="jobs-table-head">
+                  <th>{t("jobs.col.phase")}</th>
+                  <th className="jobs-col-progress">{t("jobs.col.progress")}</th>
+                  <th>{t("jobs.col.items")}</th>
+                  <th>{t("jobs.col.rate")}</th>
+                  <th>{t("jobs.col.eta")}</th>
+                  <th>{t("jobs.col.errors")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.phases.map((p, i) => (
+                  <PhaseRow key={p.name} phase={p} isSource={i === 0} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       {job.pauseReason && (
         <InlineAlert
           tone="warn"

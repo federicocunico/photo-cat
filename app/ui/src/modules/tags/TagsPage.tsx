@@ -292,13 +292,20 @@ function SetDetail({
               {t("tags.deleteSet")}
             </Button>
           )}
-          <BusyButton
-            className="btn btn-primary"
-            disabled={isActive}
-            onClick={async () => await run(() => commands.setActiveTagSet(set.id))}
-          >
-            {isActive ? t("tags.isActive") : t("tags.useActive")}
-          </BusyButton>
+          {/* Il set attivo è uno stato, non un pulsante disattivato. */}
+          {isActive ? (
+            <span className="tags-active-state">
+              <Icon.Check size={14} aria-hidden="true" />
+              {t("tags.isActive")}
+            </span>
+          ) : (
+            <BusyButton
+              className="btn btn-primary"
+              onClick={async () => await run(() => commands.setActiveTagSet(set.id))}
+            >
+              {t("tags.useActive")}
+            </BusyButton>
+          )}
         </div>
       </div>
       <div className="tags-options">

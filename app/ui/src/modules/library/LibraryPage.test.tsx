@@ -297,6 +297,15 @@ describe("Libreria", () => {
     expect(first.querySelector("img")).toHaveAttribute("src", "http://thumb.localhost/abcdef10000");
     expect(screen.getByTestId("thumb-3")).toHaveTextContent("Mancante");
     expect(screen.getByTestId("thumb-2")).toHaveTextContent("3");
+    // Badge con etichetta accessibile e descrizione al passaggio del mouse (L3).
+    const faces = within(screen.getByTestId("thumb-2")).getByRole("img", { name: "3 volti" });
+    expect(faces).toHaveAttribute("title", "3 volti");
+    const queued = within(screen.getByTestId("thumb-2")).getByRole("img", { name: /^In coda/ });
+    expect(queued).toHaveTextContent("In coda");
+    expect(queued).toHaveAttribute("title", expect.stringMatching(/volti, soggetti e luogo/));
+    expect(
+      within(screen.getByTestId("thumb-3")).getByRole("img", { name: /File non trovato/ }),
+    ).toHaveTextContent("Mancante");
     // Chip colorato del tag sulla miniatura.
     expect(screen.getByLabelText("Tag Tramonti")).toHaveAttribute("data-tag-color", "yellow");
 
@@ -313,7 +322,9 @@ describe("Libreria", () => {
     expect(
       within(insp).getByRole("button", { name: "Tipo soggetto: Paesaggio. Modifica" }),
     ).toBeInTheDocument();
-    expect(insp).toHaveTextContent("0,82");
+    // Affidabilità in parole, senza punteggi 0–1.
+    expect(insp).toHaveTextContent("molto probabile");
+    expect(insp).not.toHaveTextContent("0,82");
     expect(insp).toHaveTextContent("Giulia");
     expect(insp).toHaveTextContent("tramonto");
     expect(commandsMock.mediaDetail).toHaveBeenCalledWith(1);

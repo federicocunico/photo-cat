@@ -44,7 +44,7 @@ import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { hotkeyAction, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
-import { InlineAlert } from "../../components/ui";
+import { Button, InlineAlert } from "../../components/ui";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import "./sequence.css";
@@ -71,17 +71,15 @@ function FocusedFaces() {
   if (!faces.length) return null;
   return (
     <div role="group" aria-label={t("library.inspector.peopleTags")} className="seq-faces">
-      {faces.map((face) => (
-        <span key={face.id} className="chip seq-face-chip">
-          {face.personName ??
-            (face.discarded
-              ? t("library.inspector.discardedFace")
-              : face.ignored
-                ? t("library.inspector.ignoredFace")
-                : t("library.inspector.unrecognizedFace"))}
-          <OpenInPeople target={{ face: face.id }} className="btn btn-ghost seq-open-people" />
-        </span>
-      ))}
+      {faces
+        .filter((face) => !face.discarded)
+        .map((face) => (
+          <span key={face.id} className="chip seq-face-chip">
+            {face.personName ??
+              (face.ignored ? t("library.inspector.ignoredFace") : t("people.unnamedPlain"))}
+            <OpenInPeople target={{ face: face.id }} className="btn btn-ghost seq-open-people" />
+          </span>
+        ))}
     </div>
   );
 }
@@ -328,7 +326,7 @@ function Card({
         data-testid={`seq-${item.id}`}
         aria-selected={selected}
         data-cursor={cursor || undefined}
-        aria-label={`${item.name} ${timeOf(item.local)}`}
+        aria-label={`${item.name} ${timeOf(item.local)} · ${item.device ?? t("sequence.otherSources")}`}
         onClick={onClick}
         onContextMenu={onContextMenu}
         onDragOver={(e) => {
@@ -359,11 +357,13 @@ function Card({
             {timeOf(item.local)}
             {item.presumed ? "*" : ""}
           </span>
-          <span className="muted seq-thumb-device">
+          <span
+            className="muted seq-thumb-device"
+            title={item.device ?? t("sequence.otherSources")}
+          >
             <span aria-hidden="true" className="seq-device-mark" style={{ borderColor: color }}>
               {mark}
             </span>
-            <span className="seq-ellipsis">{item.device ?? t("sequence.otherSources")}</span>
           </span>
         </div>
       </div>
@@ -420,6 +420,8 @@ function SessionsGrid({
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP) / (CELL + GAP)));
+  // Le colonne si allargano fino a riempire la riga: niente spazio vuoto a destra.
+  const cell = Math.max(CELL, (width - PAD * 2 - GAP * (cols - 1)) / cols);
   // "Raggruppa foto simili" (stessa preferenza della Libreria): un elemento per gruppo.
   const groupSimilar = useLibrary((s) => s.groupSimilar);
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
@@ -460,7 +462,7 @@ function SessionsGrid({
       ),
     );
   const marks = useMemo(() => deviceMarks(groups, t), [groups, t]);
-  const rowHeight = Math.round((CELL * 2) / 3) + 4 + 24 + GAP;
+  const rowHeight = Math.round((cell * 2) / 3) + 4 + 24 + GAP;
   const virt = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -551,7 +553,10 @@ function SessionsGrid({
           if (grid.count > 0) grid.clear();
         }}
       >
-        <div className="seq-virt" style={{ height: virt.getTotalSize() + PAD }}>
+        <div
+          className="seq-virt"
+          style={{ height: virt.getTotalSize() + PAD, ["--seq-cell" as string]: `${cell}px` }}
+        >
           {vitems.map((v) => {
             const row = rows[v.index];
             return (
@@ -707,7 +712,6 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const selected = useSequence((s) => s.selected);
-  const setView = useSequence((s) => s.setView);
   const [staged, setStaged] = useState<Record<number, Staged>>({});
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
@@ -878,9 +882,6 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
           {t("sequence.apply", { count: dirty.length })}
         </BusyButton>
       </div>
-      <BusyButton className="btn" onClick={() => setView("export")}>
-        {t("sequence.export")}
-      </BusyButton>
     </aside>
   );
 }
@@ -890,6 +891,7 @@ export function SequencePage() {
   const qc = useQueryClient();
   const scope = useSequence((s) => s.scope);
   const view = useSequence((s) => s.view);
+  const setView = useSequence((s) => s.setView);
   const setStats = useSequence((s) => s.setStats);
   const [error, setError] = useState("");
   // Visualizzatore condiviso: posizione nella sequenza, null se chiuso.
@@ -1000,7 +1002,11 @@ export function SequencePage() {
   };
   if (view === "export") return <SequenceExport />;
   return (
-    <ModulePage title={t("modules.sequence")} scroll={false}>
+    <ModulePage
+      title={t("modules.sequence")}
+      scroll={false}
+      actions={<Button onClick={() => setView("export")}>{t("sequence.export")}</Button>}
+    >
       <div className="seq-layout">
         <section className="seq-main">
           <Toolbar gap={o?.gapMin ?? 120} grid={grid} />

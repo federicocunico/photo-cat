@@ -2,7 +2,7 @@
 
 .seq-card {
   position: relative;
-  width: 168px;
+  width: var(--seq-cell, 168px);
   flex: 0 0 auto;
 }
 

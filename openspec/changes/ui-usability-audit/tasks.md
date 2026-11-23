@@ -65,11 +65,11 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 
 ## 7. Altri moduli
 
-- [ ] 7.1 Primo avvio: un solo titolo per passo, "Lo faccio dopo" solo dove rimanda qualcosa, testo coerente sui modelli già pronti, controlli segmentati larghi quanto il contenuto; verificare con i test di `Onboarding`
-- [ ] 7.2 Attività: barre determinate quando il conteggio è noto, nessuna attività "Completata 0 / 0" mostrata come lavoro, intestazioni senza maiuscolo; verificare con i test di `JobsPage`
-- [ ] 7.3 Sequenza: griglia che riempie la larghezza, nome della fotocamera non ripetuto in ogni miniatura (iniziale e colore restano), etichetta "JPGS" in parole, "Esporta sequenza…" nell'intestazione della pagina; verificare con i test di Sequenza
-- [ ] 7.4 Tag: colori predefiniti distinti per i tag del set Base, "Set attivo" come stato e non come pulsante disattivato, intestazioni senza maiuscolo; verificare con i test di `TagsPage`
-- [ ] 7.5 Libreria: badge delle miniature con etichetta accessibile e descrizione al passaggio del mouse; Inspector con le catalogazioni AI in parole e i volti con nome o "persona senza nome"; verificare con i test di `Grid` e `Inspector` (L3, L4)
+- [x] 7.1 Primo avvio: un solo titolo per passo, "Lo faccio dopo" solo dove rimanda qualcosa, testo coerente sui modelli già pronti, controlli segmentati larghi quanto il contenuto; verificare con i test di `Onboarding`
+- [x] 7.2 Attività: barre determinate quando il conteggio è noto, nessuna attività "Completata 0 / 0" mostrata come lavoro, intestazioni senza maiuscolo; verificare con i test di `JobsPage`
+- [x] 7.3 Sequenza: griglia che riempie la larghezza, nome della fotocamera non ripetuto in ogni miniatura (iniziale e colore restano), etichetta "JPGS" in parole, "Esporta sequenza…" nell'intestazione della pagina; verificare con i test di Sequenza
+- [x] 7.4 Tag: colori predefiniti distinti per i tag del set Base, "Set attivo" come stato e non come pulsante disattivato, intestazioni senza maiuscolo; verificare con i test di `TagsPage`
+- [x] 7.5 Libreria: badge delle miniature con etichetta accessibile e descrizione al passaggio del mouse; Inspector con le catalogazioni AI in parole e i volti con nome o "persona senza nome"; verificare con i test di `Grid` e `Inspector` (L3, L4)
 - [x] 7.6 Impostazioni: cache delle anteprime di Varianti RAW in Avanzate; verificare con il test della ricerca "cache"
 
 ## 8. Verifica d'insieme

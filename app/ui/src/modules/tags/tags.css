@@ -292,3 +292,14 @@
   border-right: 0;
   border-bottom: 0;
 }
+
+/* "Set attivo": stato accanto ai comandi del set, non un pulsante disattivato. */
+.tags-active-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pc-space-1);
+  min-height: 32px;
+  padding: 0 var(--pc-space-2);
+  color: var(--pc-text-secondary);
+  font-weight: var(--pc-weight-medium);
+}

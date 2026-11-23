@@ -123,7 +123,7 @@
 .jobs-table-head {
   color: var(--pc-text-secondary);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--pc-font-sm);
 }
 .jobs-table-head > th {
   padding: var(--pc-space-2);
@@ -226,4 +226,7 @@
 .jobs-current {
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+.jobs-nothing {
+  margin: 0;
 }
