@@ -26,6 +26,7 @@ import { ToastHost } from "../../components/feedback/ToastHost";
 import { LibraryStatus } from "./LibraryStatus";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
+import { runSelectionContract } from "../../test/selectionContract";
 
 it("Primo caricamento della griglia: placeholders and calculating count, never an empty library", () => {
   commandsMock.libraryPage.mockImplementationOnce(() => new Promise(() => {}));
@@ -990,7 +991,7 @@ describe("contesto della vista", () => {
 describe("navigazione da tastiera nella griglia", () => {
   const active = () => screen.getByTestId("grid-scroll").getAttribute("aria-activedescendant");
 
-  it("frecce, Home e Fine spostano il focus senza cambiare la selezione", async () => {
+  it("frecce, Home e Fine spostano il focus e selezionano solo la foto raggiunta", async () => {
     useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
     renderPage();
     await screen.findByTestId("thumb-1");
@@ -1000,10 +1001,35 @@ describe("navigazione da tastiera nella griglia", () => {
     fireEvent.keyDown(grid, { key: "ArrowRight" });
     expect(active()).toBe("thumb-opt-2");
     expect(screen.getByTestId("thumb-2")).toHaveAttribute("data-cursor", "true");
+    expect(selIds(useLibrary.getState().selection)).toEqual([2]);
     fireEvent.keyDown(grid, { key: "End" });
     expect(active()).toBe("thumb-opt-12");
+    expect(selIds(useLibrary.getState().selection)).toEqual([12]);
     fireEvent.keyDown(grid, { key: "Home" });
     expect(active()).toBe("thumb-opt-1");
+    expect(selIds(useLibrary.getState().selection)).toEqual([1]);
+  });
+
+  it("Ctrl+frecce spostano solo il focus e la selezione resta", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection() });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    const grid = screen.getByTestId("grid-scroll");
+    fireEvent.keyDown(grid, { key: "ArrowRight" });
+    fireEvent.keyDown(grid, { key: "ArrowRight", shiftKey: true });
+    expect(selIds(useLibrary.getState().selection)).toEqual([2, 3]);
+    fireEvent.keyDown(grid, { key: "ArrowRight", ctrlKey: true });
+    expect(active()).toBe("thumb-opt-4");
+    expect(selIds(useLibrary.getState().selection)).toEqual([2, 3]);
+    // Il focus mostra la foto nell'ispettore anche senza selezionarla.
+    expect(useLibrary.getState().focused).toBe(4);
+  });
+
+  it("clic su uno spazio vuoto della griglia svuota la selezione", async () => {
+    useLibrary.setState({ filter: emptyFilter(), selection: idsSelection([1, 2]) });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+    fireEvent.click(screen.getByTestId("grid-scroll"));
     expect(selCount(useLibrary.getState().selection)).toBe(0);
   });
 
@@ -1518,4 +1544,17 @@ describe("scorrimento alla foto in focus", () => {
     );
     expect(commandsMock.libraryPosition).toHaveBeenCalledTimes(1);
   });
+});
+
+// Contratto di selezione comune (unified-selection) sulla griglia della Libreria.
+runSelectionContract({
+  name: "griglia della Libreria",
+  layout: "grid",
+  mount: async () => {
+    commandsMock.librarySelection.mockResolvedValue({ count: 12, maxId: 12 });
+    renderPage();
+    await screen.findByTestId("thumb-1");
+  },
+  container: () => screen.getByTestId("grid-scroll"),
+  items: () => within(screen.getByTestId("grid-scroll")).getAllByRole("option"),
 });

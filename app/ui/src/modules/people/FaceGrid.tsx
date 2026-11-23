@@ -28,8 +28,10 @@ import { buildFaceRows, orderYears, rectangleSelectRows } from "./faceLayout";
 import { listAllGroups } from "./allGroups";
 import { fmtDec, fmtInt } from "../../lib/format";
 import { idsSelection, rectangleSelect, selSet, type Selection } from "../../store/library";
-import { useGridSelection } from "../../lib/useGridSelection";
-import { useActiveGrid } from "../../commands/gridShortcuts";
+import { useSelection } from "../../lib/selection/useSelection";
+import { useActivePane } from "../../commands/gridShortcuts";
+import { handleSelectionKey } from "../../lib/selection/useSelectionKeys";
+import { selectForContextMenu } from "../../lib/selection/model";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import {
@@ -57,6 +59,9 @@ const PAD = 12;
 const META = 22;
 const CELL_MIN = 96;
 const HEAD = 32;
+
+/** Id DOM della tessera: bersaglio di `aria-activedescendant` della griglia dei volti. */
+const faceOptionId = (id: number) => `face-opt-${id}`;
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -108,6 +113,8 @@ export const FaceGrid = forwardRef<
   const scrollRef = useRef<HTMLDivElement>(null);
   const moveSelectRef = useRef<HTMLSelectElement>(null);
   const drag = useRef<{ x: number; y: number; initial: Selection<FaceScope> | null } | null>(null);
+  /** Il trascinamento ha disegnato un rettangolo: il clic che lo chiude non svuota. */
+  const dragged = useRef(false);
   const scrolledFor = useRef<number | null>(null);
   const photoActions = useFacePhotoActions();
   // Volto su cui si è aperto il menu contestuale e visore aperto (volti e posizione).
@@ -177,7 +184,7 @@ export const FaceGrid = forwardRef<
 
   const items = useMemo(() => faces.data?.pages.flatMap((p) => p.items) ?? [], [faces.data]);
   const order = useMemo(() => items.map((i) => i.id), [items]);
-  const sel = useGridSelection<FaceScope>({
+  const sel = useSelection<FaceScope>({
     // Il filtro è lo scope: cambiando gruppo o vista la selezione ricomincia (vedi sotto).
     filter: scope ?? { kind: "singles" },
     order,
@@ -203,13 +210,15 @@ export const FaceGrid = forwardRef<
   useEffect(() => {
     onSelectedFacesChange?.(selected);
   }, [selection]); // eslint-disable-line react-hooks/exhaustive-deps
-  useActiveGrid(
+  useActivePane(
     {
+      label: t("people.facesGrid"),
       selectAll: sel.selectAll,
       invert: sel.invert,
       clear: sel.clear,
       count: () => selectedCount,
     },
+    scrollRef,
     target != null && scope != null,
   );
   const meta = faces.data?.pages[0];
@@ -483,10 +492,77 @@ export const FaceGrid = forwardRef<
     const index = items.findIndex((i) => i.id === id);
     if (index >= 0) setViewer({ faces: items, index });
   };
-  const onTileKey = (id: number) => (e: KeyboardEvent) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-    e.preventDefault();
-    openViewerAt(id);
+  // Tastiera (modello di selezione comune): il focus resta sul contenitore, la tessera con il
+  // focus è indicata da `aria-activedescendant`. Con l'ordinamento per data le righe ripartono a
+  // ogni anno: su e giù vanno alla stessa colonna della riga di volti precedente o successiva.
+  const cursorIndex = focusedFace == null ? -1 : items.findIndex((i) => i.id === focusedFace);
+  const faceLines = useMemo(() => {
+    const out: { row: number; from: number; to: number }[] = [];
+    if (faceRows) {
+      faceRows.forEach((r, row) => {
+        if (r.kind === "faces") out.push({ row, from: r.from, to: Math.min(r.to, items.length) });
+      });
+    } else {
+      for (let row = 0; row * cols < items.length; row++)
+        out.push({ row, from: row * cols, to: Math.min(items.length, row * cols + cols) });
+    }
+    return out.filter((l) => l.to > l.from);
+  }, [faceRows, items.length, cols]);
+  const lineOf = (index: number) => faceLines.findIndex((l) => index >= l.from && index < l.to);
+  const moveCursor = (index: number) => {
+    const face = items[index];
+    if (!face) return;
+    setFocusedFace(face.id);
+    const line = faceLines[lineOf(index)];
+    if (line) virt.scrollToIndex(line.row, { align: "auto" });
+  };
+  const targetOf = (key: string, at: number): number | null | undefined => {
+    if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "PageUp" && key !== "PageDown")
+      return undefined;
+    const li = lineOf(at);
+    if (li < 0) return undefined;
+    const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? 600) / rowHeight));
+    const step = key === "ArrowUp" ? -1 : key === "ArrowDown" ? 1 : key === "PageUp" ? -page : page;
+    const target = faceLines[Math.max(0, Math.min(faceLines.length - 1, li + step))]!;
+    return target.from + Math.min(at - faceLines[li]!.from, target.to - target.from - 1);
+  };
+  const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === "Enter" && !mod && !e.altKey && !e.shiftKey && focusedFace != null) {
+      e.preventDefault();
+      openViewerAt(focusedFace);
+      return;
+    }
+    if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && focusedFace != null) {
+      // Il menu contestuale della tessera con il focus, come con il clic destro.
+      e.preventDefault();
+      const tile = document.getElementById(faceOptionId(focusedFace));
+      const r = tile?.getBoundingClientRect();
+      tile?.dispatchEvent(
+        new window.MouseEvent("contextmenu", {
+          bubbles: true,
+          clientX: (r?.left ?? 0) + 16,
+          clientY: (r?.top ?? 0) + 16,
+        }),
+      );
+      return;
+    }
+    handleSelectionKey(e, {
+      layout: "grid",
+      columns: cols,
+      pageSize: cols,
+      count: items.length,
+      cursor: cursorIndex,
+      idAt: (i) => items[i]?.id,
+      moveTo: moveCursor,
+      select: sel.click,
+      ensureAnchor: sel.ensureAnchor,
+      selectAll: () => void sel.selectAll(),
+      invert: () => void sel.invert(),
+      clear: selectedCount > 0 ? sel.clear : undefined,
+      targetOf,
+    });
   };
   const title =
     target?.kind === "singles"
@@ -871,9 +947,30 @@ export const FaceGrid = forwardRef<
               e.preventDefault();
               return;
             }
-            setMenuFace(Number(tile.dataset.faceId));
+            const id = Number(tile.dataset.faceId);
+            // Clic destro (modello comune): su un volto non selezionato, selezione solo di quello.
+            if (selectForContextMenu(selection, id) !== selection) sel.setIds([id], id);
+            setFocusedFace(id);
+            setMenuFace(id);
           }}
-          role="group"
+          onClick={(e) => {
+            // Il clic che chiude un rettangolo non svuota ciò che il rettangolo ha appena scelto.
+            if (dragged.current) {
+              dragged.current = false;
+              return;
+            }
+            // Clic su uno spazio vuoto (non su un volto o un pulsante): svuota la selezione.
+            if ((e.target as HTMLElement).closest('button, [role="option"]')) return;
+            if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+            if (selectedCount > 0) sel.clear();
+          }}
+          onKeyDown={onGridKey}
+          role="listbox"
+          aria-multiselectable="true"
+          tabIndex={0}
+          aria-activedescendant={
+            cursorIndex >= 0 && focusedFace != null ? faceOptionId(focusedFace) : undefined
+          }
           aria-label={t("people.facesGrid")}
           className="people-grid-scroll"
           onPointerDown={(e) => {
@@ -904,6 +1001,7 @@ export const FaceGrid = forwardRef<
               h: Math.abs(y - d.y),
             };
             setBox(b);
+            dragged.current = true;
             const hit = faceRows
               ? rectangleSelectRows(order, b, faceRows, {
                   cell,
@@ -986,16 +1084,17 @@ export const FaceGrid = forwardRef<
                           const lit = highlight?.faceId === face.id;
                           const tip = discardReasonLabel(face.discardReason, face.sizePx, t);
                           return (
-                            <button
+                            <div
                               key={face.id}
-                              type="button"
+                              role="option"
+                              id={faceOptionId(face.id)}
                               data-testid={`face-${face.id}`}
                               data-face-tile
                               data-face-id={face.id}
                               onDoubleClick={() => openViewerAt(face.id)}
-                              onKeyDown={onTileKey(face.id)}
                               data-highlighted={lit || undefined}
-                              aria-pressed={isSel}
+                              data-cursor={face.id === focusedFace || undefined}
+                              aria-selected={isSel}
                               title={tip}
                               onClick={onFaceClick(face.id)}
                               className="people-face-tile"
@@ -1021,7 +1120,7 @@ export const FaceGrid = forwardRef<
                                   <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
                                 )}
                               </span>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>

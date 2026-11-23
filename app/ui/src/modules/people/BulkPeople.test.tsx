@@ -240,8 +240,8 @@ describe("Persone: unione di più identità", () => {
     fireEvent.click(screen.getByText("Sconosciuto 4"), { shiftKey: true });
     await screen.findByText("4 selezionati");
 
-    const row = screen.getByText("Sconosciuto 2").closest("button")!;
-    row.focus();
+    screen.getByRole("listbox", { name: "Identità" }).focus();
+
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
     await screen.findByText("340 selezionati");
     expect(commandsMock.identitySelectionUids).toHaveBeenCalledWith(null, null);
@@ -310,11 +310,11 @@ describe("Persone: unione di più identità", () => {
     commandsMock.listIdentities.mockResolvedValue(view(MANY));
     commandsMock.identitySelectionUids.mockResolvedValue(MANY.map((i) => i.uid));
     renderModule();
-    const first = await screen.findByText("Persona 0");
-    const list = screen.getByRole("list", { name: "Identità" });
-    expect(within(list).getAllByRole("listitem").length).toBeLessThan(100);
+    await screen.findByText("Persona 0");
+    const list = screen.getByRole("listbox", { name: "Identità" });
+    expect(within(list).getAllByRole("option").length).toBeLessThan(100);
     expect(screen.queryByText("Persona 2999")).not.toBeInTheDocument();
-    first.closest("button")!.focus();
+    list.focus();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
     expect(await screen.findByText("3000 selezionati")).toBeInTheDocument();
   });
@@ -497,8 +497,8 @@ describe("Da rivedere: assegnazione in blocco", () => {
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
     await waitFor(() => expect(commandsMock.faceSelection).toHaveBeenCalled());
     expect(commandsMock.groupSelectionIds).not.toHaveBeenCalled();
-    // Di nuovo sull'elenco: Ctrl+A seleziona i gruppi.
-    (await groupRows())[1]!.focus();
+    // Di nuovo sull'elenco (riquadro attivo con il clic): Ctrl+A seleziona i gruppi.
+    fireEvent.mouseDown((await groupRows())[1]!);
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
     await waitFor(() => expect(commandsMock.groupSelectionIds).toHaveBeenCalled());
   });

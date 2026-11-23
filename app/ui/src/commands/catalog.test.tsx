@@ -74,3 +74,23 @@ describe("foglio delle scorciatoie", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("modello di selezione nel foglio (unified-selection)", () => {
+  it("elenca frecce che selezionano, Ctrl+frecce, gesti del mouse e clic destro", () => {
+    const t = i18n.getFixedT("it");
+    const byId = new Map(entries(t).map((e) => [e.id, e]));
+    expect(byId.get("doc.library.move")?.label).toBe(
+      "Sposta il focus e seleziona la foto raggiunta",
+    );
+    expect(byId.get("doc.library.focusOnly")).toMatchObject({
+      keys: "Ctrl+frecce",
+      label: "Sposta solo il focus, senza cambiare la selezione",
+    });
+    expect(byId.get("doc.library.clicks")?.keys).toBe("Ctrl+clic, Maiusc+clic");
+    expect(byId.get("doc.library.contextMenu")?.label).toMatch(/seleziona solo quella/);
+    expect(byId.get("doc.people.extendGroups")).toMatchObject({
+      keys: "Maiusc+↑ ↓",
+      label: "Estendi la selezione dei gruppi",
+    });
+  });
+});

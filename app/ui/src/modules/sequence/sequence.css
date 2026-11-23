@@ -513,3 +513,16 @@
 .seq-export-start {
   min-height: 44px;
 }
+
+/* Griglia come listbox (unified-selection): il focus della tastiera resta sul contenitore e la
+   scheda con il focus ha un anello distinto dalla selezione. */
+.seq-scroll:focus-visible {
+  outline: none;
+}
+.seq-scroll:focus-visible [data-cursor] {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}
+.seq-thumb-btn {
+  cursor: pointer;
+}

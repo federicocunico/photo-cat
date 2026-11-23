@@ -1,5 +1,13 @@
 import { Coachmark } from "../../components/guide/Coachmark";
-import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import { BusyButton } from "../../components/feedback/BusyButton";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -18,9 +26,11 @@ import {
 } from "../../lib/ipc";
 import { fmtDate, fmtDateTime, fmtInt } from "../../lib/format";
 import { selCount, selIds, selTarget, useLibrary, type Selection } from "../../store/library";
-import { useGridSelection, type GridSelection } from "../../lib/useGridSelection";
+import { useSelection, type SelectionHandle } from "../../lib/selection/useSelection";
 import { sequenceTarget } from "./sequenceTarget";
-import { useActiveGrid } from "../../commands/gridShortcuts";
+import { useActivePane } from "../../commands/gridShortcuts";
+import { handleSelectionKey } from "../../lib/selection/useSelectionKeys";
+import { selectForContextMenu } from "../../lib/selection/model";
 import { notifyError } from "../../store/toasts";
 import { ContextMenu, Menu, type MenuItem } from "../../components/ui";
 import { collapseLoaded } from "../library/similarView";
@@ -77,7 +87,7 @@ function FocusedFaces() {
 }
 
 /** Voci "Seleziona tutto" e "Inverti selezione" della barra e del menu contestuale. */
-function useSelectionItems(grid: GridSelection<SequenceScope>): MenuItem[] {
+function useSelectionItems(grid: SelectionHandle<SequenceScope>): MenuItem[] {
   const { t } = useTranslation();
   return [
     { label: t("selection.selectAll"), shortcut: "Ctrl+A", onSelect: () => void grid.selectAll() },
@@ -139,7 +149,7 @@ function deviceMarks(groups: SourceGroupView[], t: (k: string) => string): Map<n
 }
 
 /** Barra con ambito, soglia delle sessioni e tasti del set attivo. */
-function Toolbar({ gap, grid }: { gap: number; grid: GridSelection<SequenceScope> }) {
+function Toolbar({ gap, grid }: { gap: number; grid: SelectionHandle<SequenceScope> }) {
   const { t } = useTranslation();
   const selectItems = useSelectionItems(grid);
   const qc = useQueryClient();
@@ -277,18 +287,26 @@ function Toolbar({ gap, grid }: { gap: number; grid: GridSelection<SequenceScope
   );
 }
 
+/** Id DOM della scheda: bersaglio di `aria-activedescendant` della griglia. */
+const seqOptionId = (id: number) => `seq-opt-${id}`;
+
 function Card({
   item,
   selected,
+  cursor,
   color,
   mark,
   tagColor,
   onClick,
+  onContextMenu,
   onDropUndated,
   group,
 }: {
   item: SequenceItem;
   selected: boolean;
+  /** La scheda ha il focus della tastiera (distinto dalla selezione). */
+  cursor: boolean;
+  onContextMenu: () => void;
   /** Gruppo di foto simili rappresentato (numero di foto, aperto o chiuso). */
   group?: { count: number; open: boolean; onToggle: () => void };
   color: string;
@@ -303,12 +321,16 @@ function Card({
   const [over, setOver] = useState(false);
   return (
     <div className="seq-card">
-      <BusyButton
-        type="button"
+      {/* Voce della griglia (modello di selezione comune): il focus resta sul contenitore. */}
+      <div
+        role="option"
+        id={seqOptionId(item.id)}
         data-testid={`seq-${item.id}`}
-        aria-pressed={selected}
+        aria-selected={selected}
+        data-cursor={cursor || undefined}
         aria-label={`${item.name} ${timeOf(item.local)}`}
         onClick={onClick}
+        onContextMenu={onContextMenu}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("application/x-photocat-undated")) {
             e.preventDefault();
@@ -344,7 +366,7 @@ function Card({
             <span className="seq-ellipsis">{item.device ?? t("sequence.otherSources")}</span>
           </span>
         </div>
-      </BusyButton>
+      </div>
       {/* Apertura del gruppo: pulsante a parte, sopra la miniatura (non annidato). */}
       {group && (
         <button
@@ -376,7 +398,7 @@ function SessionsGrid({
   onPlace,
   grid,
 }: {
-  grid: GridSelection<SequenceScope>;
+  grid: SelectionHandle<SequenceScope>;
   sessions: SessionView[];
   items: SequenceItem[];
   groups: SourceGroupView[];
@@ -455,9 +477,80 @@ function SessionsGrid({
     const ids = await commands.sequenceSessionIds(scope, index);
     grid.setIds(ids, ids[0] ?? null);
   };
+
+  // Tastiera (modello di selezione comune). Le righe ripartono a ogni sessione: su e giù vanno
+  // alla stessa colonna della riga di schede precedente o successiva.
+  const flat = useMemo(() => shown.map((s) => s.item), [shown]);
+  const focusedId = useSequence((s) => s.focused);
+  const cursor = focusedId == null ? -1 : flat.findIndex((x) => x.id === focusedId);
+  const cardRows = useMemo(() => {
+    const out: { row: number; start: number; length: number }[] = [];
+    let start = 0;
+    rows.forEach((r, i) => {
+      if (r.kind !== "cards") return;
+      out.push({ row: i, start, length: r.items.length });
+      start += r.items.length;
+    });
+    return out;
+  }, [rows]);
+  const rowOf = (index: number) =>
+    cardRows.findIndex((r) => index >= r.start && index < r.start + r.length);
+  const moveTo = (index: number) => {
+    const it = flat[index];
+    if (!it) return;
+    useSequence.setState({ focused: it.id });
+    const r = cardRows[rowOf(index)];
+    if (r) virt.scrollToIndex(r.row, { align: "auto" });
+  };
+  const targetOf = (key: string, at: number): number | null | undefined => {
+    if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "PageUp" && key !== "PageDown")
+      return undefined;
+    const ri = rowOf(at);
+    if (ri < 0) return undefined;
+    const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? 800) / rowHeight));
+    const step = key === "ArrowUp" ? -1 : key === "ArrowDown" ? 1 : key === "PageUp" ? -page : page;
+    const ti = Math.max(0, Math.min(cardRows.length - 1, ri + step));
+    const col = at - cardRows[ri]!.start;
+    const target = cardRows[ti]!;
+    return target.start + Math.min(col, target.length - 1);
+  };
+  const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    handleSelectionKey(e, {
+      layout: "grid",
+      columns: cols,
+      pageSize: cols,
+      count: flat.length,
+      cursor,
+      idAt: (i) => flat[i]?.id,
+      moveTo,
+      select: grid.click,
+      ensureAnchor: grid.ensureAnchor,
+      selectAll: () => void grid.selectAll(),
+      invert: () => void grid.invert(),
+      clear: grid.count > 0 ? grid.clear : undefined,
+      targetOf,
+    });
+  };
   return (
     <ContextMenu items={selectItems} label={t("selection.select")}>
-      <div ref={scrollRef} data-testid="sequence-scroll" className="seq-scroll">
+      <div
+        ref={scrollRef}
+        data-testid="sequence-scroll"
+        className="seq-scroll"
+        role="listbox"
+        aria-multiselectable="true"
+        aria-label={t("modules.sequence")}
+        tabIndex={0}
+        aria-activedescendant={cursor >= 0 ? seqOptionId(flat[cursor]!.id) : undefined}
+        onKeyDown={onGridKey}
+        onClick={(e) => {
+          // Clic su uno spazio vuoto (non su una scheda o un pulsante): svuota la selezione.
+          if ((e.target as HTMLElement).closest('button, [role="option"]')) return;
+          if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+          if (grid.count > 0) grid.clear();
+        }}
+      >
         <div className="seq-virt" style={{ height: virt.getTotalSize() + PAD }}>
           {vitems.map((v) => {
             const row = rows[v.index];
@@ -488,6 +581,12 @@ function SessionsGrid({
                       key={it.id}
                       item={it}
                       selected={grid.has(it.id)}
+                      cursor={it.id === focusedId}
+                      onContextMenu={() => {
+                        // Clic destro: su una scheda non selezionata, selezione solo di quella.
+                        const next = selectForContextMenu(grid.selection, it.id);
+                        if (next !== grid.selection) grid.setIds([it.id], it.id);
+                      }}
                       color={color(it.groupId)}
                       mark={(it.groupId != null && marks.get(it.groupId)) || "?"}
                       tagColor={(n) => colorOf(tags, n)}
@@ -820,7 +919,7 @@ export function SequencePage() {
   // Selezione della Sequenza (D1): id espliciti o "tutta la Sequenza" meno le eccezioni.
   const order = useMemo(() => items.map((i) => i.id), [items]);
   const selection = useSequence((s) => s.selection);
-  const grid = useGridSelection<SequenceScope>({
+  const grid = useSelection<SequenceScope>({
     filter: scope,
     order,
     fetchBase: () => commands.sequenceSelection(scope),
@@ -833,13 +932,14 @@ export function SequencePage() {
     },
     onError: notifyError,
   });
-  useActiveGrid(
+  useActivePane(
     {
       selectAll: grid.selectAll,
       invert: grid.invert,
       clear: grid.clear,
       count: () => selCount(useSequence.getState().selection),
     },
+    undefined,
     view === "sequence",
   );
   /** Selezione corrente per i tasti dei tag e delle stelle; il bersaglio si risolve al volo. */

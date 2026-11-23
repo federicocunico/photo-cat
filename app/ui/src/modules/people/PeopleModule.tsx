@@ -210,22 +210,9 @@ export function PeopleModule() {
     };
   }, [qc]);
 
+  // Le frecce non sono più scorciatoie del modulo: agiscono sul riquadro attivo (elenco o volti)
+  // con il modello di selezione comune, nell'ordine in cui l'elenco è mostrato.
   usePeopleHotkeys({
-    navigateGroup(delta) {
-      const order = catalogRef.current;
-      if (!order.length) return;
-      const cur =
-        targetRef.current?.kind === "group" ? targetRef.current.id : selectedIdsRef.current[0];
-      const idx = cur != null ? order.findIndex((g) => g.id === cur) : -1;
-      const nextIdx =
-        idx < 0
-          ? delta > 0
-            ? 0
-            : order.length - 1
-          : Math.max(0, Math.min(order.length - 1, idx + delta));
-      const next = order[nextIdx];
-      if (next) selectGroupRow(next);
-    },
     toggleFocusedFace() {
       faceGridRef.current?.toggleFocusedSelection();
     },

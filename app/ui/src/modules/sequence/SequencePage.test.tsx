@@ -7,12 +7,13 @@ import "../../test/layoutMock";
 import type { SequenceItem, SequenceOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { parseShift, shiftText, useSequence } from "../../store/sequence";
-import { idsSelection, selCount, selHas, useLibrary } from "../../store/library";
+import { idsSelection, selCount, selHas, selIds, useLibrary } from "../../store/library";
 import { SequencePage } from "./SequencePage";
 import { sequenceTarget } from "./sequenceTarget";
 import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
+import { runSelectionContract } from "../../test/selectionContract";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,
@@ -308,7 +309,7 @@ it("Ctrl+A seleziona tutte le 310 foto della Sequenza, anche quelle non caricate
   fireEvent.keyDown(window, { key: "a", ctrlKey: true });
   await waitFor(() => expect(selCount(useSequence.getState().selection)).toBe(310));
   expect(commandsMock.sequenceSelection).toHaveBeenCalledWith({ scope: "library" });
-  expect(screen.getByTestId("seq-1")).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByTestId("seq-1")).toHaveAttribute("aria-selected", "true");
   // Ctrl+clic toglie una foto: diventa un'eccezione, il conteggio scende.
   fireEvent.click(screen.getByTestId("seq-2"), { ctrlKey: true });
   expect(selCount(useSequence.getState().selection)).toBe(309);
@@ -346,4 +347,39 @@ it("le azioni bulk risolvono gli id dal backend: ambito meno eccezioni", async (
   );
   expect(commandsMock.sequenceSelectionIds).toHaveBeenCalledWith({ scope: "library" }, 400, [2]);
   expect(target).toEqual({ kind: "ids", ids: [1, 3, 4] });
+});
+
+// Contratto di selezione comune (unified-selection) sulla griglia di Sequenza: 8 foto in due
+// sessioni, così le frecce attraversano anche il cambio di sessione.
+runSelectionContract({
+  name: "griglia di Sequenza",
+  layout: "grid",
+  mount: async () => {
+    const eight = Array.from({ length: 8 }, (_, i) =>
+      item(i + 1, `1${i}:00:00`, i % 2 ? IPHONE : XT5, i < 4 ? 0 : 1),
+    );
+    commandsMock.sequencePage.mockResolvedValue({ items: eight, next: null });
+    commandsMock.sequenceSelection.mockResolvedValue({ count: 8, maxId: 8 });
+    renderPage();
+    await screen.findByTestId("seq-8");
+  },
+  container: () => screen.getByTestId("sequence-scroll"),
+  items: () => within(screen.getByTestId("sequence-scroll")).getAllByRole("option"),
+});
+
+it("freccia giù passa alla stessa colonna della sessione successiva", async () => {
+  const eight = Array.from({ length: 8 }, (_, i) =>
+    item(i + 1, `1${i}:00:00`, i % 2 ? IPHONE : XT5, i < 4 ? 0 : 1),
+  );
+  commandsMock.sequencePage.mockResolvedValue({ items: eight, next: null });
+  renderPage();
+  fireEvent.click(await screen.findByTestId("seq-2"));
+  const grid = screen.getByTestId("sequence-scroll");
+  fireEvent.keyDown(grid, { key: "ArrowDown" });
+  expect(grid).toHaveAttribute("aria-activedescendant", "seq-opt-6");
+  expect(screen.getByTestId("seq-6")).toHaveAttribute("aria-selected", "true");
+  fireEvent.keyDown(grid, { key: "ArrowUp", shiftKey: true });
+  // La freccia giù ha reso la 6 ancora: Maiusc+su estende dalla 6 alla 2.
+  expect(grid).toHaveAttribute("aria-activedescendant", "seq-opt-2");
+  expect(selIds(useSequence.getState().selection)?.sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 6]);
 });

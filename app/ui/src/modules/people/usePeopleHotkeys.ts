@@ -2,10 +2,9 @@ import { useEffect, useRef } from "react";
 import { isTyping } from "../tags/useTagHotkeys";
 // Una finestra modale aperta (unione, conferme) sospende le scorciatoie della pagina.
 import { modalOpen } from "../../lib/keys";
+import { focusActivePane } from "../../commands/gridShortcuts";
 
 export type PeopleHotkeyActions = {
-  /** ↑/↓: gruppo precedente / successivo nell'elenco. */
-  navigateGroup: (delta: -1 | 1) => void;
   /** Spazio: seleziona/deseleziona il volto con il focus. */
   toggleFocusedFace: () => void;
   /** N: focus su «Chi è?». */
@@ -62,18 +61,26 @@ export function usePeopleHotkeys(actions: PeopleHotkeyActions, enabled = true) {
         a.undo();
         return;
       }
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !ownsArrows(e.target)) {
+        // Nessuna freccia "globale": le frecce agiscono sul riquadro attivo (elenco o volti),
+        // che riceve il focus e il tasto, con gli stessi modificatori (unified-selection).
+        const pane = focusActivePane();
+        if (!pane) return;
+        e.preventDefault();
+        pane.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: e.key,
+            shiftKey: e.shiftKey,
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        return;
+      }
       if (mod || e.altKey) return;
       switch (e.key) {
-        case "ArrowUp":
-          if (ownsArrows(e.target)) return;
-          e.preventDefault();
-          a.navigateGroup(-1);
-          break;
-        case "ArrowDown":
-          if (ownsArrows(e.target)) return;
-          e.preventDefault();
-          a.navigateGroup(1);
-          break;
         case " ":
         case "Spacebar":
           if (ownsActivation(e.target)) return;

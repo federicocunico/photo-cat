@@ -586,6 +586,32 @@ pub mod catalog {
         Ok(())
     }
 
+    /// Esito di [`delete_many`]: cataloghi eliminati e cataloghi di sistema saltati.
+    #[derive(Debug, Clone, Default, PartialEq, Eq)]
+    pub struct DeleteMany {
+        pub deleted: Vec<i64>,
+        pub skipped: Vec<i64>,
+    }
+
+    /// Elimina più cataloghi in un'unica operazione (unified-selection): i file restano in
+    /// libreria; i cataloghi di sistema vengono saltati, non eliminati. Un id inesistente fa
+    /// fallire tutta l'operazione (nessun catalogo eliminato).
+    pub fn delete_many(c: &Connection, ids: &[i64]) -> StoreResult<DeleteMany> {
+        let mut out = DeleteMany::default();
+        for &id in ids {
+            if out.deleted.contains(&id) || out.skipped.contains(&id) {
+                continue;
+            }
+            if get(c, id)?.system.is_some() {
+                out.skipped.push(id);
+                continue;
+            }
+            c.execute("DELETE FROM catalog WHERE id=?1", [id])?;
+            out.deleted.push(id);
+        }
+        Ok(out)
+    }
+
     /// I cataloghi di sistema non si eliminano né si rinominano.
     fn protect_system(c: &Connection, id: i64) -> StoreResult<()> {
         if get(c, id)?.system.is_some() {

@@ -13,6 +13,7 @@ import { useShortcutCatalog } from "../../commands/catalog";
 import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { useSheetCommand } from "../../commands/sheetCommand";
 import type { CrashInfo, UiRecovery } from "../../lib/ipc";
+import { SelectionLiveRegion } from "../../lib/selection/SelectionLiveRegion";
 import "./shell.css";
 
 const time = (iso: string) => fmtDateTime(iso);
@@ -98,6 +99,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
         <CommandPalette />
         <ShortcutSheet />
         <GuideDialog />
+        <SelectionLiveRegion />
       </div>
     </div>
   );

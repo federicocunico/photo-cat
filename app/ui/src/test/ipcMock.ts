@@ -245,6 +245,7 @@ export const commandsMock = {
   purgeFaces: vi.fn(async () => null),
   saveCatalog: vi.fn(async () => 1),
   deleteCatalog: vi.fn(async () => null),
+  deleteCatalogs: vi.fn(async () => ({ deleted: 0, skipped: [] as number[] })),
   startBulk: vi.fn(async () => 1),
   undoBulk: vi.fn(async () => null),
   undoPeople: vi.fn(async () => null),

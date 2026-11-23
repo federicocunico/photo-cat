@@ -162,6 +162,7 @@ pub fn bindings() -> Builder<tauri::Wry> {
             people::purge_faces,
             catalogs::save_catalog,
             catalogs::delete_catalog,
+            catalogs::delete_catalogs,
             catalogs::collect_duplicates,
             catalogs::start_photo_quality,
             catalogs::start_bulk,

@@ -249,3 +249,19 @@ it("mantiene il suggerimento al primo uso accanto ai set", async () => {
   renderPage();
   expect(await screen.findByText(/Un set assegna i tasti 1–9/)).toBeInTheDocument();
 });
+
+it("ricerca per iniziale nell'elenco dei tag: «su» apre Sunset, senza distinguere le maiuscole", async () => {
+  renderPage();
+  await screen.findAllByRole("button", { name: /^Tramonti/ });
+  const pill = (name: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>(".tags-pills [data-tag-name]")).find(
+      (el) => el.dataset.tagName === name,
+    )!;
+  pill("Tramonti").focus();
+  fireEvent.keyDown(pill("Tramonti"), { key: "S" });
+  expect(pill("Scartate")).toHaveAttribute("aria-pressed", "true");
+  expect(pill("Scartate")).toHaveFocus();
+  fireEvent.keyDown(document.activeElement!, { key: "u" });
+  expect(pill("Sunset")).toHaveAttribute("aria-pressed", "true");
+  expect(pill("Sunset")).toHaveFocus();
+});

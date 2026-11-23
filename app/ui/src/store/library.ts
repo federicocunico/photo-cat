@@ -5,6 +5,18 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { mirroredStorage } from "../lib/uiPrefs";
 import type { LibraryFilter, SelectionBase, SortKey, Target } from "../lib/ipc";
+// Le funzioni pure della selezione stanno nel modello comune (`lib/selection/model.ts`); qui
+// restano i nomi di sempre con il filtro della Libreria come tipo predefinito.
+import * as model from "../lib/selection/model";
+
+export {
+  selCount,
+  selHas,
+  selIds,
+  selSet,
+  clickSelect,
+  rectangleSelect,
+} from "../lib/selection/model";
 
 export const emptyFilter = (): LibraryFilter => ({
   sourceIds: [],
@@ -29,72 +41,25 @@ export const emptyFilter = (): LibraryFilter => ({
   groupSimilar: false,
 });
 
-/**
- * Selezione come insieme: elementi scelti uno per uno, oppure "tutti i risultati del filtro"
- * (Seleziona tutto) meno le eccezioni. Con 100.000 risultati non si carica mai l'elenco degli id:
- * `maxId` limita la selezione agli elementi presenti in quell'istante, `total` è il loro numero.
- */
-export type Selection<F = LibraryFilter> =
-  | { mode: "ids"; ids: ReadonlySet<number> }
-  | {
-      mode: "filter";
-      filter: F;
-      maxId: number;
-      total: number;
-      except: ReadonlySet<number>;
-    };
+/** Selezione di foto: id espliciti o "tutti i risultati del filtro" meno le eccezioni. */
+export type Selection<F = LibraryFilter> = model.Selection<F, number>;
 
-export const idsSelection = <F = LibraryFilter>(ids: Iterable<number> = []): Selection<F> => ({
-  mode: "ids",
-  ids: new Set(ids),
-});
+export const idsSelection = <F = LibraryFilter>(ids: Iterable<number> = []): Selection<F> =>
+  model.idsSelection<F, number>(ids);
 
 /** "Seleziona tutto": l'insieme definito dal backend (`base`), senza eccezioni. */
-export function selectAllOf<F>(filter: F, base: SelectionBase): Selection<F> {
-  return { mode: "filter", filter, maxId: base.maxId, total: base.count, except: new Set() };
-}
+export const selectAllOf = <F>(filter: F, base: SelectionBase): Selection<F> =>
+  model.selectAllOf<F, number>(filter, base);
 
 /** Inversione: gli id scelti diventano le eccezioni dell'insieme completo e viceversa. */
-export function invertOf<F>(s: Selection<F>, filter: F, base: SelectionBase): Selection<F> {
-  return s.mode === "ids"
-    ? { mode: "filter", filter, maxId: base.maxId, total: base.count, except: s.ids }
-    : idsSelection<F>(s.except);
-}
-
-/** Numero di elementi selezionati. */
-export const selCount = <F>(s: Selection<F>) =>
-  s.mode === "ids" ? s.ids.size : Math.max(0, s.total - s.except.size);
-
-/** L'elemento è selezionato (O(1)). */
-export const selHas = <F>(s: Selection<F>, id: number) =>
-  s.mode === "ids" ? s.ids.has(id) : id <= s.maxId && !s.except.has(id);
-
-/** Id espliciti, o `null` per una selezione per filtro (va passata come `Target`). */
-export const selIds = <F>(s: Selection<F>): number[] | null => (s.mode === "ids" ? [...s.ids] : null);
+export const invertOf = <F>(s: Selection<F>, filter: F, base: SelectionBase): Selection<F> =>
+  model.invertOf<F, number>(s, filter, base);
 
 /** Bersaglio dei comandi bulk: il backend risolve gli id a blocchi. */
 export const selTarget = (s: Selection): Target =>
   s.mode === "ids"
     ? { kind: "ids", ids: [...s.ids] }
     : { kind: "filter", filter: s.filter, maxId: s.maxId, except: [...s.except] };
-
-/** Aggiunge (`on`) o toglie elementi dalla selezione, in entrambe le modalità. */
-export function selSet<F>(s: Selection<F>, ids: Iterable<number>, on: boolean): Selection<F> {
-  if (s.mode === "ids") {
-    const next = new Set(s.ids);
-    for (const id of ids) {
-      if (on) next.add(id);
-      else next.delete(id);
-    }
-    return { mode: "ids", ids: next };
-  }
-  const except = new Set(s.except);
-  for (const id of ids) {
-    if (on) except.delete(id);
-    else except.add(id);
-  }
-  return { ...s, except };
-}
 
 interface LibraryState {
   filter: LibraryFilter;
@@ -189,8 +154,7 @@ export const useLibrary = create<LibraryState>()(
       replaceSelection: (selection, focused) =>
         set((s) => ({ selection, focused: focused === undefined ? s.focused : focused })),
       selectAll: (base) => set((s) => ({ selection: selectAllOf(s.filter, base) })),
-      invertSelection: (base) =>
-        set((s) => ({ selection: invertOf(s.selection, s.filter, base) })),
+      invertSelection: (base) => set((s) => ({ selection: invertOf(s.selection, s.filter, base) })),
       setScrollTop: (scrollTop) => set({ scrollTop }),
     }),
     {
@@ -206,42 +170,3 @@ export const useLibrary = create<LibraryState>()(
     },
   ),
 );
-
-/** Clic su un elemento: singolo, Ctrl/Cmd (aggiungi/togli), Shift (intervallo dall'ancora). */
-export function clickSelect(
-  order: number[],
-  current: number[],
-  anchor: number | null,
-  id: number,
-  mods: { ctrl: boolean; shift: boolean },
-): number[] {
-  if (mods.shift && anchor !== null) {
-    const a = order.indexOf(anchor);
-    const b = order.indexOf(id);
-    if (a >= 0 && b >= 0) {
-      const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
-      return mods.ctrl ? Array.from(new Set([...current, ...range])) : range;
-    }
-  }
-  if (mods.ctrl) return current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-  return [id];
-}
-
-/** Rettangolo nello spazio del contenuto, indipendente dai nodi virtualizzati. */
-export function rectangleSelect(
-  order: number[],
-  box: { x: number; y: number; w: number; h: number },
-  layout: { cols: number; cell: number; rowHeight: number; gap: number; pad: number },
-  /** Posizione globale del primo elemento di `order` (griglia a finestra). */
-  offset = 0,
-): number[] {
-  const { cols, cell, rowHeight, gap, pad } = layout;
-  return order.filter((_, k) => {
-    const i = k + offset;
-    const x = pad + (i % cols) * (cell + gap),
-      y = pad + Math.floor(i / cols) * rowHeight;
-    return (
-      x < box.x + box.w && x + cell > box.x && y < box.y + box.h && y + rowHeight - gap > box.y
-    );
-  });
-}

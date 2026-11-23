@@ -1,15 +1,15 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useGridSelection } from "./useGridSelection";
+import { useSelection } from "./useSelection";
 
 type Scope = { group: string };
 const order = [10, 11, 12, 13, 14];
-const setup = (fetchBase = vi.fn().mockResolvedValue({ count: 400, maxId: 999 }), onError?: () => void) =>
-  renderHook(() =>
-    useGridSelection<Scope>({ filter: { group: "g" }, order, fetchBase, onError }),
-  );
+const setup = (
+  fetchBase = vi.fn().mockResolvedValue({ count: 400, maxId: 999 }),
+  onError?: () => void,
+) => renderHook(() => useSelection<Scope>({ filter: { group: "g" }, order, fetchBase, onError }));
 
-describe("useGridSelection", () => {
+describe("useSelection", () => {
   it("clic, Ctrl+clic e Maiusc+clic con ancora", () => {
     const { result } = setup();
     act(() => result.current.click(11, { ctrl: false, shift: false }));
@@ -45,6 +45,19 @@ describe("useGridSelection", () => {
     expect(result.current.count).toBe(400);
   });
 
+  it("Ctrl+Maiusc+clic su una selezione per filtro aggiunge l'intervallo", async () => {
+    const { result } = setup();
+    await act(() => result.current.selectAll());
+    act(() => result.current.click(11, { ctrl: true, shift: false }));
+    act(() => result.current.click(13, { ctrl: true, shift: false }));
+    expect(result.current.count).toBe(398);
+    act(() => result.current.click(11, { ctrl: true, shift: true }));
+    expect(result.current.has(11)).toBe(true);
+    expect(result.current.has(12)).toBe(true);
+    expect(result.current.has(13)).toBe(true);
+    expect(result.current.selection.mode).toBe("filter");
+  });
+
   it("Inverti scambia scelti ed eccezioni, in entrambi i versi", async () => {
     const { result } = setup();
     act(() => result.current.setIds([10, 11], 10));
@@ -72,8 +85,49 @@ describe("useGridSelection", () => {
     act(() => result.current.clear());
     expect(result.current.count).toBe(0);
     expect(result.current.ids).toEqual([]);
+    expect(result.current.anchor()).toBeNull();
     // senza ancora, Maiusc+clic è un clic semplice
     act(() => result.current.click(13, { ctrl: false, shift: true }));
     expect(result.current.ids).toEqual([13]);
+  });
+
+  it("Ctrl+clic che toglie l'ultimo elemento lo lascia come ancora", () => {
+    const { result } = setup();
+    act(() => result.current.click(12, { ctrl: false, shift: false }));
+    act(() => result.current.click(12, { ctrl: true, shift: false }));
+    expect(result.current.count).toBe(0);
+    expect(result.current.anchor()).toBe(12);
+  });
+});
+
+describe("useSelection con id testuali", () => {
+  const uids = ["a", "b", "c", "d"];
+
+  it("clic, Maiusc+clic e Ctrl+Maiusc+clic sugli uid", () => {
+    const { result } = renderHook(() => useSelection<null, string>({ filter: null, order: uids }));
+    act(() => result.current.click("a", { ctrl: false, shift: false }));
+    act(() => result.current.click("c", { ctrl: true, shift: false }));
+    act(() => result.current.click("d", { ctrl: true, shift: true }));
+    expect(result.current.ids).toEqual(["a", "c", "d"]);
+    expect(result.current.has("b")).toBe(false);
+  });
+
+  it("Seleziona tutto e Inverti con fetchAll, anche oltre gli elementi mostrati", async () => {
+    const fetchAll = vi.fn().mockResolvedValue(["a", "b", "c", "d", "e"]);
+    const { result } = renderHook(() =>
+      useSelection<null, string>({ filter: null, order: uids, fetchAll }),
+    );
+    await act(() => result.current.selectAll());
+    expect(result.current.count).toBe(5);
+    expect(result.current.selection.mode).toBe("ids");
+    act(() => result.current.setIds(["a", "e"]));
+    await act(() => result.current.invert());
+    expect(result.current.ids).toEqual(["b", "c", "d"]);
+  });
+
+  it("senza fetchBase né fetchAll, Seleziona tutto usa l'ordine visibile", async () => {
+    const { result } = renderHook(() => useSelection<null, string>({ filter: null, order: uids }));
+    await act(() => result.current.selectAll());
+    expect(result.current.ids).toEqual(uids);
   });
 });
