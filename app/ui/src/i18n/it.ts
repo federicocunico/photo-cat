@@ -455,6 +455,32 @@ export const it = {
   diag: {
     title: "Diagnostica",
     description: "Errori registrati, log dell'app e pacchetto da allegare a una segnalazione.",
+    faces: {
+      title: "Raggruppamento dei volti",
+      perNamed: "{{value}} gruppi per persona con nome",
+      singles: "{{value}}% di gruppi con un volto",
+      merges_one: "{{count}} unione automatica",
+      merges_other: "{{count}} unioni automatiche",
+      undone_one: "{{count}} annullata",
+      undone_other: "{{count}} annullate",
+      people: "Persone",
+      peopleValue: "{{named}} con nome · {{unnamed}} gruppi senza nome",
+      queue: "Da confermare",
+      questions_one: "{{count}} domanda aperta",
+      questions_other: "{{count}} domande aperte",
+      lastRun_one: "ultima analisi: {{count}} unione automatica",
+      lastRun_other: "ultima analisi: {{count}} unioni automatiche",
+      thresholds: "Soglie in uso",
+      thresholdsValue:
+        "chiedi {{ask}} · unisci da solo {{auto}} · margine {{margin}} · sensibilità {{sensitivity}}",
+      origin: "Origine",
+      calibrated: "tarate sulla libreria ({{pairs}} coppie di volti della stessa foto)",
+      defaultsFew:
+        "predefinite: {{pairs}} coppie di volti della stessa foto, ne servono almeno {{min}} per tararle",
+      defaultsKept: "predefinite: le {{pairs}} coppie di volti della stessa foto non le spostano",
+      tooStrict:
+        "Più del 20% delle coppie di volti confermati della stessa persona supera appena la soglia «chiedi»: le soglie sono probabilmente troppo severe.",
+    },
     report: {
       title: "Segnala un problema",
       text: "Esporta il pacchetto diagnostica (log e configurazione, senza foto) e allegalo alla segnalazione.",

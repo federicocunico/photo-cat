@@ -65,6 +65,14 @@ export function ApplyBar() {
     await qc.invalidateQueries({ queryKey: ["jobs"] });
   };
   const belowFloor = shown ? Math.max(shown.reanalysisFaces, shown.reanalysisPersons) : 0;
+  // Le soglie dei volti cambiano il raggruppamento: l'anteprima conta le unioni automatiche.
+  const facesKeys = [
+    "face_detection",
+    "face_min_sharpness",
+    "face_similarity",
+    "face_merge_sensitivity",
+  ] as const;
+  const facesChanged = facesKeys.some((k) => thresholdsOf(draft)[k] !== thresholdsOf(saved)[k]);
 
   return (
     <div className="settings-apply" role="region" aria-label={t("settings.apply.title")}>
@@ -136,6 +144,14 @@ export function ApplyBar() {
           <li data-testid="similar-preview">
             {t("similar.preview", { n: shown.similarGroups, current: shown.similarGroupsCurrent })}
           </li>
+          {facesChanged && (
+            <li data-testid="merges-preview">
+              {t("thresholds.autoMerges", {
+                count: shown.autoMerges ?? 0,
+                current: shown.autoMergesCurrent ?? 0,
+              })}
+            </li>
+          )}
         </ul>
       )}
       {belowFloor > 0 && (

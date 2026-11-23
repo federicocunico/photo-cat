@@ -21,6 +21,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema_v12.sql"),
     include_str!("schema_v13.sql"),
     include_str!("schema_v14.sql"),
+    include_str!("schema_v15.sql"),
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -123,6 +124,81 @@ pub(crate) fn migrate_to(conn: &mut Connection, version: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Catalogo della versione 0.5 (schema v14) con persone, volti confermati e vincoli:
+    /// la v15 aggiunge storico delle unioni e coda senza toccare i dati esistenti.
+    #[test]
+    fn migrate_v15_adds_merge_log_and_review_queue_keeping_people() {
+        let mut c = Connection::open_in_memory().unwrap();
+        migrate_to(&mut c, 14);
+        c.execute_batch(
+            "INSERT INTO media_item(id,path,name,ext,size,mtime,added_at,updated_at)
+             VALUES (1,'a.jpg','a.jpg','jpg',7,1,1,1);
+             INSERT INTO person(id,name,created_at) VALUES (1,'Gioia',1),(2,NULL,1);
+             INSERT INTO face(id,media_id,bbox,quality,person_id,assigned_by,rejected)
+             VALUES (1,1,'[0,0,0.1,0.1]',0.9,1,'manual','[]'),
+                    (2,1,'[0.5,0,0.1,0.1]',0.9,2,'auto','[1]');
+             INSERT INTO person_not_same(a,b,created_at) VALUES (1,2,5);",
+        )
+        .unwrap();
+        migrate(&mut c, None).unwrap();
+        assert_eq!(current_version(&c).unwrap(), SCHEMA_VERSION);
+        let faces: Vec<(i64, Option<i64>, Option<String>, String)> = c
+            .prepare("SELECT id, person_id, assigned_by, rejected FROM face ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            faces,
+            vec![
+                (1, Some(1), Some("manual".into()), "[]".into()),
+                (2, Some(2), Some("auto".into()), "[1]".into()),
+            ]
+        );
+        let ns: i64 = c
+            .query_row("SELECT count(*) FROM person_not_same", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ns, 1);
+        for table in ["merge_log", "review_question"] {
+            let n: i64 = c
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 0, "{table} vuota");
+        }
+        c.execute(
+            "INSERT INTO merge_log(at,origin,target_person,faces,snapshot) VALUES (1,'auto',1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        assert!(c
+            .execute(
+                "INSERT INTO merge_log(at,origin,target_person,faces,snapshot) VALUES (1,'altro',1,1,'{}')",
+                []
+            )
+            .is_err());
+        c.execute(
+            "INSERT INTO review_question(kind,a,b,score,probability,faces,rank,created_at)
+             VALUES ('group_person',2,1,0.5,0.7,1,0,1)",
+            [],
+        )
+        .unwrap();
+        // La domanda sparisce con il gruppo che la riguarda.
+        c.execute("DELETE FROM person WHERE id=2", []).unwrap();
+        let n: i64 = c
+            .query_row("SELECT count(*) FROM review_question", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0);
+        let idx: i64 = c
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name IN ('face_media','merge_log_at','review_question_rank')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(idx, 3, "indice dei volti per foto e indici nuovi");
+    }
 
     #[test]
     fn migrate_v14_adds_rating_color_manual_date_and_archive() {

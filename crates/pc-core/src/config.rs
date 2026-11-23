@@ -123,6 +123,10 @@ pub struct AiThresholds {
     pub face_similarity: f32,
     /// Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili.
     pub similar_photos: f32,
+    /// Sensibilità dell'unione automatica dei gruppi di volti: 0 = "Più domande",
+    /// 1 = "Più unioni automatiche". Sposta il tasso obiettivo di unioni sbagliate tra
+    /// 10⁻⁴ e 10⁻², senza mai scendere sotto la soglia predefinita del modello.
+    pub face_merge_sensitivity: f32,
 }
 
 impl AiThresholds {
@@ -131,6 +135,14 @@ impl AiThresholds {
     pub const DEFAULT_FACE_MIN_SHARPNESS: f32 = 0.35;
     pub const DEFAULT_FACE_SIMILARITY: f32 = 0.363;
     pub const DEFAULT_SIMILAR_PHOTOS: f32 = 0.80;
+    pub const DEFAULT_FACE_MERGE_SENSITIVITY: f32 = 0.5;
+    /// Soglia "unisci da solo" di SFace (coseno): la distanza euclidea d'accettazione 0,95 di
+    /// PhotoPrism su embedding normalizzati (1 − 0,95²/2 ≈ 0,55), tarata su circa 88.000 volti
+    /// di una libreria reale con lo stesso modello e confermata con `cluster_bench` (design D4).
+    pub const DEFAULT_FACE_AUTO_MERGE: f32 = 0.55;
+    /// Margine verso la seconda persona candidata di un'unione automatica (design D3):
+    /// PhotoPrism usa 0,01, qui si parte più prudenti.
+    pub const DEFAULT_FACE_MERGE_MARGIN: f32 = 0.05;
 }
 
 impl Default for AiThresholds {
@@ -141,6 +153,7 @@ impl Default for AiThresholds {
             face_min_sharpness: Self::DEFAULT_FACE_MIN_SHARPNESS,
             face_similarity: Self::DEFAULT_FACE_SIMILARITY,
             similar_photos: Self::DEFAULT_SIMILAR_PHOTOS,
+            face_merge_sensitivity: Self::DEFAULT_FACE_MERGE_SENSITIVITY,
         }
     }
 }
@@ -304,6 +317,7 @@ impl Config {
             ("face_min_sharpness", t.face_min_sharpness),
             ("face_similarity", t.face_similarity),
             ("similar_photos", t.similar_photos),
+            ("face_merge_sensitivity", t.face_merge_sensitivity),
         ] {
             if !(0.0..=1.0).contains(&v) {
                 return bad(format!(
@@ -401,6 +415,7 @@ mod tests {
             "[ai.thresholds]\nface_min_sharpness = -0.1\n",
             "[ai.thresholds]\nface_similarity = -0.1\n",
             "[ai.thresholds]\nsimilar_photos = 1.2\n",
+            "[ai.thresholds]\nface_merge_sensitivity = 1.5\n",
             "[ui]\ndouble_click = \"lightroom\"\n",
             "[[external_apps]]\nid = \"a\"\nname = \"A\"\npath = \"/a\"\n[[external_apps]]\nid = \"a\"\nname = \"B\"\npath = \"/b\"\n",
         ] {
@@ -432,6 +447,7 @@ mod tests {
             cfg.ai.thresholds.similar_photos, 0.80,
             "campo assente: predefinito"
         );
+        assert_eq!(cfg.ai.thresholds.face_merge_sensitivity, 0.5);
         assert!(cfg.ai.ignored_folder_names.is_empty());
         assert!(cfg.external_apps.is_empty());
         assert_eq!(cfg.ui.double_click, "system");

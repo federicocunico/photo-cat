@@ -18,7 +18,9 @@ const sources = import.meta.glob(["../../**/*.tsx", "!../../**/*.test.tsx"], {
 const source = (file: string) => Object.entries(sources).find(([k]) => k.endsWith(file))?.[1] ?? "";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const css = (file: string) => fs.readFileSync(path.join(SRC, file), "utf8");
+// Fine riga normalizzati: in un checkout Windows (core.autocrlf) i CSS hanno CRLF.
+const css = (file: string) =>
+  fs.readFileSync(path.join(SRC, file), "utf8").replace(/\r\n/g, "\n");
 const rule = (text: string, selector: string) =>
   new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(
     text,

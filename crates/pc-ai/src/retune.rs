@@ -47,6 +47,7 @@ impl RetuneSpec {
             clip: false,
             persons: prev.person_detection != next.person_detection,
             faces: prev.face_detection != next.face_detection
+                || prev.face_merge_sensitivity != next.face_merge_sensitivity
                 || prev.face_similarity != next.face_similarity
                 || faces_quality,
             similar: prev.similar_photos != next.similar_photos,
@@ -94,6 +95,12 @@ pub struct ThresholdImpact {
     pub similar_groups_current: i64,
     #[serde(default)]
     pub similar_groups: i64,
+    /// Unioni automatiche dei gruppi di volti con le soglie attuali e con quelle nuove
+    /// (ricalcolo completo simulato; 0 se le soglie dei volti non cambiano).
+    #[serde(default)]
+    pub auto_merges_current: i64,
+    #[serde(default)]
+    pub auto_merges: i64,
 }
 
 /// Concetti testuali e modello immagine per rivalutare le catalogazioni.
@@ -224,6 +231,26 @@ pub fn preview(
         reanalysis_faces: rest.5,
         similar_groups_current: store.read(pc_store::similar::group_count)?,
         similar_groups: crate::similar::preview_count(store, next.similar_photos)? as i64,
+        ..faces_preview(store, &current, &next, control)?
+    })
+}
+
+/// Unioni automatiche dei volti con le soglie attuali e con quelle nuove, solo se cambia una
+/// soglia che le riguarda (somiglianza, sensibilità, qualità dei volti).
+fn faces_preview(
+    store: &Store,
+    current: &AiThresholds,
+    next: &AiThresholds,
+    control: &JobControl,
+) -> AppResult<ThresholdImpact> {
+    let spec = RetuneSpec::between(current, next);
+    if !spec.faces {
+        return Ok(ThresholdImpact::default());
+    }
+    Ok(ThresholdImpact {
+        auto_merges_current: crate::cluster::preview(store, current, control)?.auto_merges,
+        auto_merges: crate::cluster::preview(store, next, control)?.auto_merges,
+        ..Default::default()
     })
 }
 

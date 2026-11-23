@@ -7,6 +7,7 @@ export const DEFAULTS = {
   face_detection: 0.8,
   face_min_sharpness: 0.35,
   face_similarity: 0.363,
+  face_merge_sensitivity: 0.5,
   similar_photos: 0.8,
   face_min_size_px: 40,
   group: 0.25,
@@ -31,6 +32,8 @@ export const SCALE: Record<
   face_detection: { direction: "min", lo: 0.3, hi: 0.99 },
   face_min_sharpness: { direction: "min", lo: 0, hi: 0.95 },
   face_similarity: { direction: "min", lo: 0.15, hi: 0.7 },
+  // Verso destra "Più unioni automatiche": 0 = più domande, 1 = più unioni (design D4).
+  face_merge_sensitivity: { direction: "min", lo: 0, hi: 1 },
   similar_photos: { direction: "min", lo: 0.5, hi: 0.99 },
   group: { direction: "min", lo: 0.05, hi: 0.8 },
 };
@@ -55,6 +58,7 @@ export function thresholdsOf(cfg: Settings): FullThresholds {
     face_detection: t.face_detection ?? DEFAULTS.face_detection,
     face_min_sharpness: t.face_min_sharpness ?? DEFAULTS.face_min_sharpness,
     face_similarity: t.face_similarity ?? DEFAULTS.face_similarity,
+    face_merge_sensitivity: t.face_merge_sensitivity ?? DEFAULTS.face_merge_sensitivity,
     similar_photos: t.similar_photos ?? DEFAULTS.similar_photos,
   };
 }

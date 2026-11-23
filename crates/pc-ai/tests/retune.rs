@@ -348,3 +348,25 @@ fn changing_min_sharpness_reclusters_saved_faces_without_models() {
     let impact = retune::preview(&db, None, &lower, &higher, &JobControl::new()).unwrap();
     assert_eq!(impact.faces_discarded_sharpness, 1);
 }
+
+#[test]
+fn sensibilita_dell_unione_automatica_ricalcola_i_volti_con_anteprima() {
+    // Impostazioni › Riconoscimento AI: la sensibilità è una soglia che ricalcola i volti.
+    let before = AiThresholds::default();
+    let after = AiThresholds {
+        face_merge_sensitivity: 0.1,
+        ..before
+    };
+    let spec = RetuneSpec::between(&before, &after);
+    assert!(spec.faces && !spec.clip && !spec.persons && !spec.similar);
+    let (_tmp, db, _) = library();
+    let impact = retune::preview(&db, None, &before, &after, &JobControl::new()).unwrap();
+    assert_eq!((impact.auto_merges_current, impact.auto_merges), (0, 0));
+    // Senza soglie dei volti cambiate l'anteprima non ricalcola il raggruppamento.
+    let other = AiThresholds {
+        person_detection: 0.5,
+        ..before
+    };
+    let impact = retune::preview(&db, None, &before, &other, &JobControl::new()).unwrap();
+    assert_eq!(impact.auto_merges, 0);
+}

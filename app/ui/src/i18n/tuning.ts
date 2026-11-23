@@ -93,6 +93,16 @@ export const tuning = {
       reanalyzeStarted: "Rianalisi avviata: segui l'avanzamento in Attività.",
       applied: "Soglie salvate: la rivalutazione è in corso in Attività.",
       defaults: "Ripristina predefiniti",
+      autoMerge: "Unione automatica",
+      autoMergeHint:
+        "Quanto deve essere sicura l'app per unire da sola due persone senza nome, o una persona senza nome a una persona. Verso «Più domande» unisce meno e chiede conferma in Persone › Da rivedere.",
+      autoMergeScale: "Persone senza nome unite automaticamente",
+      moreQuestions: "Più domande",
+      moreMerges: "Più unioni automatiche",
+      mergeValue: "{{percent}}% verso Più unioni automatiche",
+      mergeSensitivity: "Sensibilità dell'unione automatica",
+      autoMerges_one: "{{count}} unione automatica di persone senza nome (ora {{current}})",
+      autoMerges_other: "{{count}} unioni automatiche di persone senza nome (ora {{current}})",
     },
   },
   en: {
@@ -188,6 +198,16 @@ export const tuning = {
       reanalyzeStarted: "Re-analysis started: follow it in Activity.",
       applied: "Thresholds saved: re-evaluation is running in Activity.",
       defaults: "Restore defaults",
+      autoMerge: "Automatic merging",
+      autoMergeHint:
+        "How sure the app must be to merge two unnamed people, or an unnamed person with a person, on its own. Towards “More questions” it merges less and asks for confirmation in People › To review.",
+      autoMergeScale: "Unnamed people merged automatically",
+      moreQuestions: "More questions",
+      moreMerges: "More automatic merges",
+      mergeValue: "{{percent}}% towards More automatic merges",
+      mergeSensitivity: "Automatic merging sensitivity",
+      autoMerges_one: "{{count}} automatic merge of unnamed people (now {{current}})",
+      autoMerges_other: "{{count}} automatic merges of unnamed people (now {{current}})",
     },
   },
 };

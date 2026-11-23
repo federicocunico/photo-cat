@@ -62,6 +62,7 @@ export function IdentityEditor({
   cover = null,
   onSaved,
   onDeleted,
+  onShowMerges,
 }: {
   row: IdentityRow | null;
   creating: boolean;
@@ -73,6 +74,8 @@ export function IdentityEditor({
   cover?: GroupRow["cover"];
   onSaved: (uid: string) => void;
   onDeleted: () => void;
+  /** "Unioni recenti" che riguardano la persona (nella libreria aperta). */
+  onShowMerges?: (person: number) => void;
   /** Mantenuto per compatibilità: la scheda ha sempre il layout della colonna. */
   compact?: boolean;
 }) {
@@ -286,6 +289,14 @@ export function IdentityEditor({
           items={[
             { label: t("people.mergeTo"), onSelect: () => setMergeOpen(true) },
             { label: t("identities.export"), onSelect: () => void exportPerson() },
+            ...(onShowMerges && row.person != null
+              ? [
+                  {
+                    label: t("people.merges.title"),
+                    onSelect: () => onShowMerges(row.person!),
+                  },
+                ]
+              : []),
             { kind: "separator" },
             {
               label: t("identities.deletePerson"),

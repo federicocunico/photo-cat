@@ -250,3 +250,74 @@ describe("schermata Diagnostica", () => {
     useGuide.setState({ report: false });
   });
 });
+
+describe("Raggruppamento dei volti", () => {
+  const metrics = {
+    at: 1,
+    namedPeople: 5,
+    groupsPerNamed: 1.4,
+    unnamedGroups: 50,
+    singleFaceShare: 0.18,
+    autoMerges: 52,
+    autoMergesUndone: 1,
+    lastAutoMerges: 3,
+    questions: 9,
+    thresholds: {
+      ask: 0.363,
+      auto: 0.55,
+      margin: 0.05,
+      calibrated: false,
+      samePhotoPairs: 12,
+      confirmedPairs: 0,
+      tooStrict: false,
+      sensitivity: 0.5,
+    },
+  };
+
+  it("frammentazione visibile dopo un'analisi", async () => {
+    // Scenario "Frammentazione visibile".
+    commandsMock.faceClusterMetrics.mockResolvedValue(metrics);
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Raggruppamento dei volti" });
+    expect(within(panel).getByTestId("faces-summary")).toHaveTextContent(
+      "1,4 gruppi per persona con nome · 18% di gruppi con un volto · 52 unioni automatiche, 1 annullata",
+    );
+    expect(within(panel).getByTestId("faces-thresholds")).toHaveTextContent(
+      "chiedi 0,363 · unisci da solo 0,550 · margine 0,05",
+    );
+    // Libreria con pochi dati: soglie predefinite, e Diagnostica lo indica.
+    expect(
+      within(panel).getByText(
+        "predefinite: 12 coppie di volti della stessa foto, ne servono almeno 200 per tararle",
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("9 domande aperte", { exact: false })).toBeInTheDocument();
+  });
+
+  it("soglie tarate e probabilmente troppo severe", async () => {
+    commandsMock.faceClusterMetrics.mockResolvedValue({
+      ...metrics,
+      autoMergesUndone: 2,
+      thresholds: {
+        ...metrics.thresholds,
+        calibrated: true,
+        samePhotoPairs: 12400,
+        tooStrict: true,
+      },
+    });
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Raggruppamento dei volti" });
+    expect(within(panel).getByTestId("faces-summary")).toHaveTextContent("2 annullate");
+    expect(
+      within(panel).getByText("tarate sulla libreria (12.400 coppie di volti della stessa foto)"),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText(/probabilmente troppo severe/)).toBeInTheDocument();
+  });
+
+  it("senza misure il riquadro non compare", async () => {
+    commandsMock.faceClusterMetrics.mockResolvedValue(null);
+    renderPage();
+    await screen.findByRole("table", { name: "Errori registrati" });
+    expect(screen.queryByRole("region", { name: "Raggruppamento dei volti" })).toBeNull();
+  });
+});

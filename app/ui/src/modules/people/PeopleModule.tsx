@@ -16,6 +16,9 @@ import { FaceGrid, type FaceGridHandle, type FaceHighlight } from "./FaceGrid";
 import { GroupList, type GroupListHandle, type GroupListTarget } from "./GroupList";
 import { MergeDialog } from "./MergeDialog";
 import { PersonCard, type PersonCardHandle } from "./PersonCard";
+import { RecentMerges } from "./RecentMerges";
+import { ReviewQueuePanel } from "./ReviewQueue";
+import { useAggregationSummary } from "./aggregationSummary";
 import { PeopleTabs } from "./PeopleTabs";
 import { peopleTabId } from "./peopleTabId";
 import { ReferenceFaces } from "./ReferenceFaces";
@@ -87,6 +90,9 @@ export function PeopleModule() {
   const groupListRef = useRef<GroupListHandle>(null);
   const faceGridRef = useRef<FaceGridHandle>(null);
   const personCardRef = useRef<PersonCardHandle>(null);
+  // "Unioni recenti", eventualmente filtrate per persona.
+  const [mergesFor, setMergesFor] = useState<{ person: number | null } | null>(null);
+  useAggregationSummary(() => setMergesFor({ person: null }));
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
   const targetRef = useRef(target);
@@ -367,11 +373,16 @@ export function PeopleModule() {
         />
       }
       actions={
-        section === "people" && (
-          <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={createPerson}>
-            {t("identities.newButton")}
+        <>
+          <Button onClick={() => setMergesFor({ person: null })}>
+            {t("people.merges.title")}
           </Button>
-        )
+          {section === "people" && (
+            <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={createPerson}>
+              {t("identities.newButton")}
+            </Button>
+          )}
+        </>
       }
     >
       <section
@@ -415,7 +426,9 @@ export function PeopleModule() {
         />
 
         <section aria-label={t("people.facesLabel")} className="people-faces-pane">
-          {section === "people" && personUid ? (
+          {target?.kind === "queue" ? (
+            <ReviewQueuePanel />
+          ) : section === "people" && personUid ? (
             // Una persona: i suoi volti nella libreria e i volti di riferimento (identity-registry).
             <Tabs
               label={t("people.facesLabel")}
@@ -500,10 +513,18 @@ export function PeopleModule() {
               });
             }}
             onIdentityDeleted={clearSelection}
+            onShowMerges={(person) => setMergesFor({ person })}
             onCreatingChange={setCreating}
           />
         </aside>
 
+        {mergesFor && (
+          <RecentMerges
+            open
+            person={mergesFor.person}
+            onClose={() => setMergesFor(null)}
+          />
+        )}
         {multiMerge && multiMerge.length >= 2 && (
           <MergeDialog
             sources={multiMerge.slice(1)}

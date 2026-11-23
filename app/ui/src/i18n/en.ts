@@ -453,6 +453,32 @@ export const en: Messages = {
   diag: {
     title: "Diagnostics",
     description: "Recorded errors, app logs and a bundle to attach to a report.",
+    faces: {
+      title: "Face grouping",
+      perNamed: "{{value}} groups per named person",
+      singles: "{{value}}% of groups with one face",
+      merges_one: "{{count}} automatic merge",
+      merges_other: "{{count}} automatic merges",
+      undone_one: "{{count}} undone",
+      undone_other: "{{count}} undone",
+      people: "People",
+      peopleValue: "{{named}} named · {{unnamed}} unnamed groups",
+      queue: "To confirm",
+      questions_one: "{{count}} open question",
+      questions_other: "{{count}} open questions",
+      lastRun_one: "last analysis: {{count}} automatic merge",
+      lastRun_other: "last analysis: {{count}} automatic merges",
+      thresholds: "Thresholds in use",
+      thresholdsValue:
+        "ask {{ask}} · merge on its own {{auto}} · margin {{margin}} · sensitivity {{sensitivity}}",
+      origin: "Source",
+      calibrated: "calibrated on the library ({{pairs}} pairs of faces in the same photo)",
+      defaultsFew:
+        "defaults: {{pairs}} pairs of faces in the same photo, at least {{min}} are needed to calibrate",
+      defaultsKept: "defaults: the {{pairs}} pairs of faces in the same photo do not move them",
+      tooStrict:
+        "More than 20% of the pairs of confirmed faces of the same person barely exceed the “ask” threshold: the thresholds are probably too strict.",
+    },
     report: {
       title: "Report a problem",
       text: "Export the diagnostic bundle (logs and configuration, no photos) and attach it to your report.",

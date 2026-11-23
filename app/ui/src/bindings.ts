@@ -155,6 +155,42 @@ export const commands = {
 	undoPeople: () => __TAURI_INVOKE<string | null>("undo_people"),
 	/**  Disabilita prima di svuotare il writer; i risultati in volo vengono invalidati. */
 	purgeFaces: () => __TAURI_INVOKE<null>("purge_faces"),
+	/**
+	 *  Unioni recenti (ultimi 90 giorni), dalla più recente; con `person` solo quelle che la
+	 *  riguardano come destinazione o come gruppo d'origine.
+	 */
+	listMerges: (person: number | null, limit: number | null) => __TAURI_INVOKE<MergeEntry[]>("list_merges", { person, limit }),
+	/**
+	 *  "Annulla" di una voce di "Unioni recenti": i volti tornano nei gruppi di prima (ricreati
+	 *  con lo stesso id); un'unione automatica annullata non si ripete. Restituisce i volti
+	 *  riportati.
+	 */
+	undoMerge: (id: number) => __TAURI_INVOKE<number>("undo_merge", { id }),
+	/**
+	 *  Coda "Da confermare": al massimo `limit` elementi (predefiniti 50), con le domande verso la
+	 *  stessa persona riunite in un blocco.
+	 */
+	reviewQueue: (limit: number | null) => __TAURI_INVOKE<ReviewQueue>("review_queue", { limit }),
+	/**
+	 *  Risponde a una domanda della coda e propaga la risposta (una sola operazione annullabile).
+	 *  Un "Sì" in conflitto con un vincolo precedente restituisce il conflitto senza unire nulla;
+	 *  con `override_conflict` toglie il vincolo e unisce.
+	 */
+	answerQuestion: (question: number, answer: Answer, overrideConflict: boolean) => __TAURI_INVOKE<AnswerOutcome>("answer_question", { question, answer, overrideConflict }),
+	/**
+	 *  "Conferma tutti" su un blocco verso `person`: le domande `confirm` passano alla persona con
+	 *  un'unica unione annullabile, i gruppi delle domande `reject` ricevono "Non è questa persona".
+	 */
+	answerQuestions: (person: number, confirm: number[], reject: number[], overrideConflict: boolean) => __TAURI_INVOKE<AnswerOutcome>("answer_questions", { person, confirm, reject, overrideConflict }),
+	/**  Riepilogo della prima riaggregazione dopo l'aggiornamento, se non ancora mostrato. */
+	aggregationSummary: () => __TAURI_INVOKE<AggregationSummary | null>("aggregation_summary"),
+	/**  Segna il riepilogo della prima riaggregazione come mostrato. */
+	dismissAggregationSummary: () => __TAURI_INVOKE<null>("dismiss_aggregation_summary"),
+	/**
+	 *  Misure del raggruppamento dei volti (Diagnostica): gruppi per persona con nome, gruppi da
+	 *  un volto, unioni automatiche e annullate, soglie in uso e loro origine.
+	 */
+	faceClusterMetrics: () => __TAURI_INVOKE<ClusterMetrics>("face_cluster_metrics"),
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
 	deleteCatalog: (id: number, confirmed: boolean) => __TAURI_INVOKE<null>("delete_catalog", { id, confirmed }),
 	/**
@@ -485,6 +521,16 @@ export type AddReferenceOutcome = { outcome: "added"; id: number } |
 /**  Più volti nell'immagine: va indicato quale usare. */
 { outcome: "choose"; faces: FaceChoice[] } | { outcome: "noFace" };
 
+/**
+ *  Riepilogo della prima riaggregazione dopo l'aggiornamento ("52 gruppi uniti
+ *  automaticamente"), da mostrare una sola volta.
+ */
+export type AggregationSummary = {
+	autoMerges: number,
+	at: number,
+	shown?: boolean,
+};
+
 export type AiConfig = {
 	execution_provider?: ExecutionProvider,
 	/**  Soglia di confidenza predefinita per le catalogazioni (0..1). */
@@ -515,6 +561,12 @@ export type AiThresholds = {
 	face_similarity?: number | null,
 	/**  Somiglianza strutturale (SSIM) minima tra due foto dello stesso gruppo di foto simili. */
 	similar_photos?: number | null,
+	/**
+	 *  Sensibilità dell'unione automatica dei gruppi di volti: 0 = "Più domande",
+	 *  1 = "Più unioni automatiche". Sposta il tasso obiettivo di unioni sbagliate tra
+	 *  10⁻⁴ e 10⁻², senza mai scendere sotto la soglia predefinita del modello.
+	 */
+	face_merge_sensitivity?: number | null,
 };
 
 /**
@@ -544,6 +596,38 @@ export type AnalysisState =
 "queued" | 
 /**  Analizzata (anche se non è risultata alcuna etichetta). */
 "processed";
+
+/**  Risposta a una domanda. */
+export type Answer = 
+/**  Sì: stessa persona (per "È A o B?" si usa `Choose`). */
+{ kind: "yes" } | 
+/**  No: diventa un vincolo. */
+{ kind: "no" } | 
+/**  "È A o B?": è questa persona. */
+{ kind: "choose"; person: number } | 
+/**  "È A o B?": nessuna delle due. */
+{ kind: "neither" };
+
+/**  Una risposta in conflitto con un vincolo dato prima dall'utente. */
+export type AnswerConflict = {
+	question: number,
+	/**  Gruppo da unire. */
+	group: number,
+	/**  Persona o gruppo con cui c'è il vincolo ("Non è questa persona", "Persone diverse"). */
+	person: number,
+};
+
+/**  Esito di una risposta. */
+export type AnswerOutcome = {
+	/**  Gruppi uniti. */
+	mergedGroups: number,
+	/**  Volti spostati. */
+	faces: number,
+	/**  Gruppi che hanno ricevuto un vincolo. */
+	constrainedGroups: number,
+	/**  Conflitto: nessuna modifica finché l'utente non sceglie di togliere il vincolo. */
+	conflict: AnswerConflict | null,
+};
 
 export type AppError = {
 	code: ErrorCode,
@@ -820,6 +904,31 @@ export type ClockPreview = {
 	mediaId: number,
 	before: string | null,
 	after: string | null,
+};
+
+/**  Misure del raggruppamento mostrate in Diagnostica. */
+export type ClusterMetrics = {
+	/**  Istante del calcolo (ms). */
+	at: number,
+	/**  Persone con nome (o collegate a un'identità), non ignorate. */
+	namedPeople: number,
+	/**
+	 *  Gruppi per persona con nome: 1 più i gruppi senza nome con una domanda aperta verso
+	 *  quella persona, in media.
+	 */
+	groupsPerNamed: number | null,
+	/**  Gruppi senza nome (non ignorati) con almeno un volto. */
+	unnamedGroups: number,
+	/**  Quota (0..1) dei gruppi senza nome con un solo volto. */
+	singleFaceShare: number | null,
+	/**  Unioni automatiche degli ultimi 90 giorni e quante annullate. */
+	autoMerges: number,
+	autoMergesUndone: number,
+	/**  Unioni automatiche dell'ultima analisi. */
+	lastAutoMerges: number,
+	/**  Domande aperte nella coda. */
+	questions: number,
+	thresholds: ThresholdsInUse | null,
 };
 
 /**  Caratteristica di colore di una foto (bianco e nero, a colori, sbiadita, seppia). */
@@ -1709,6 +1818,21 @@ export type MenuLabels = {
 	menus: ([string, string])[],
 };
 
+/**  Voce di "Unioni recenti". */
+export type MergeEntry = {
+	id: number,
+	at: number,
+	origin: MergeOrigin,
+	target: number,
+	targetName: string | null,
+	targetCover: number | null,
+	sources: MergeSourceView[],
+	faces: number,
+	undoneAt: number | null,
+	/**  `false` se già annullata o se nessun volto è più nella destinazione. */
+	undoable: boolean,
+};
+
 export type MergeHint = {
 	otherId: number,
 	otherName: string | null,
@@ -1717,6 +1841,9 @@ export type MergeHint = {
 	otherCover: FaceView | null,
 	score: number | null,
 };
+
+/**  Origine di un'unione. */
+export type MergeOrigin = "manual" | "auto" | "queue";
 
 /**  Quanto verrebbe unito da `merge_identities_many`, per la conferma (l'unione non si annulla). */
 export type MergePreview = {
@@ -1736,6 +1863,15 @@ export type MergePreview = {
 	 *  la conferma mostri chi sparisce e non solo quante.
 	 */
 	names: string[],
+};
+
+/**  Gruppo d'origine come lo mostra "Unioni recenti". */
+export type MergeSourceView = {
+	person: number,
+	name: string | null,
+	faces: number,
+	/**  Volto di copertina (`face://<id>`). */
+	cover: number | null,
 };
 
 export type MetaRow = {
@@ -2010,6 +2146,25 @@ export type Preview = {
 
 export type Provider = "cpu" | "direct_ml" | "cuda" | "core_ml";
 
+/**  Gruppo come lo mostra una domanda. */
+export type QuestionGroup = {
+	id: number,
+	name: string | null,
+	faces: number,
+	photos: number,
+	/**  Volto di copertina (`face://<id>`). */
+	cover: number | null,
+};
+
+/**  Tipo di domanda. */
+export type QuestionKind = 
+/**  "È {persona}?": gruppo senza nome verso una persona con nome. */
+"group_person" | 
+/**  "Stessa persona?": due gruppi senza nome. */
+"group_group" | 
+/**  "È {A} o {B}?": due persone con nome quasi ugualmente simili. */
+"group_choice";
+
 export type RatingFilter = {
 	op: RatingOp,
 	value: number,
@@ -2265,6 +2420,12 @@ export type ReviewImageKey = {
 	key: string,
 };
 
+/**
+ *  Elemento della coda: una domanda singola o le domande verso la stessa persona, da
+ *  confermare in blocco ("12 gruppi probabilmente di Gioia").
+ */
+export type ReviewItem = { kind: "single"; question: ReviewQuestion } | { kind: "batch"; person: QuestionGroup; questions: ReviewQuestion[] };
+
 /**  Forma della cartella aperta, senza i percorsi del [`Layout`]. */
 export type ReviewLayoutKind = 
 /**  Solo RAF al primo livello. */
@@ -2273,6 +2434,32 @@ export type ReviewLayoutKind =
 "rafWithVariants" | 
 /**  Una sottocartella per preset. */
 "presets";
+
+/**  Una domanda della coda. */
+export type ReviewQuestion = {
+	id: number,
+	kind: QuestionKind,
+	/**  Il gruppo senza nome della domanda. */
+	group: QuestionGroup,
+	/**  La persona (o il gruppo) proposta. */
+	other: QuestionGroup,
+	/**  La seconda persona di "È A o B?". */
+	second: QuestionGroup | null,
+	/**
+	 *  Probabilità stimata (0..1) che la risposta sia "Sì": serve solo all'ordine e alle
+	 *  etichette ("molto probabile"); non è una somiglianza.
+	 */
+	probability: number | null,
+};
+
+/**  La coda "Da confermare". */
+export type ReviewQueue = {
+	items: ReviewItem[],
+	/**  Domande aperte in tutto. */
+	open: number,
+	/**  Gruppi senza nome in "Da rivedere" (per la coda vuota). */
+	unnamedGroups: number,
+};
 
 /**  Scatto della lista di revisione. */
 export type ReviewShotView = {
@@ -2649,6 +2836,35 @@ export type ThresholdImpact = {
 	/**  Gruppi di foto simili con la soglia attuale e con quella nuova. */
 	similarGroupsCurrent?: number,
 	similarGroups?: number,
+	/**
+	 *  Unioni automatiche dei gruppi di volti con le soglie attuali e con quelle nuove
+	 *  (ricalcolo completo simulato; 0 se le soglie dei volti non cambiano).
+	 */
+	autoMergesCurrent?: number,
+	autoMerges?: number,
+};
+
+/**  Soglie del raggruppamento in uso e loro origine. */
+export type ThresholdsInUse = {
+	/**  Soglia "chiedi" (anche soglia del grafo). */
+	ask: number | null,
+	/**  Soglia "unisci da solo". */
+	auto: number | null,
+	/**  Margine verso la seconda candidata. */
+	margin: number | null,
+	/**  `true` se tarate sulla libreria, `false` se predefinite. */
+	calibrated: boolean,
+	/**  Coppie di volti della stessa foto usate per la taratura. */
+	samePhotoPairs: number,
+	/**  Coppie di volti confermati della stessa persona usate per il controllo. */
+	confirmedPairs: number,
+	/**
+	 *  Più del 20% delle coppie confermate supera appena "chiedi": soglie probabilmente
+	 *  troppo severe (le soglie non si abbassano da sole).
+	 */
+	tooStrict: boolean,
+	/**  Sensibilità impostata (0 = più domande, 1 = più unioni automatiche). */
+	sensitivity: number | null,
 };
 
 /**  Miniatura di uno scatto della lista. */
