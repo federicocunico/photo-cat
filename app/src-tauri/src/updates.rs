@@ -646,6 +646,26 @@ mod tests {
         assert_eq!(parse_sha256(""), None);
     }
 
+    /// Contro la release vera su GitHub (rete): `cargo test -p photo-cat --lib live_ -- --ignored`.
+    #[test]
+    #[ignore = "richiede la rete"]
+    fn live_latest_release_has_a_verifiable_installer() {
+        let repo = repo().unwrap();
+        let release = fetch_latest(&repo).unwrap();
+        let (info, sha_url) = info_from_release(&release, "0.0.1", &repo, true)
+            .unwrap()
+            .expect("una release più recente della 0.0.1");
+        let inst = info.installer.expect("installer di Windows nella release");
+        assert!(inst.size > 100 * 1024 * 1024, "{}", inst.size);
+        let sha = fetch_sha256(&sha_url.expect("file .sha256 dell'installer")).unwrap();
+        assert_eq!(sha.len(), 64);
+        if !inst.sha256.is_empty() {
+            assert_eq!(inst.sha256, sha, "digest dell'API e file .sha256");
+        }
+        assert!(allowed_release_url(&info.page_url, &repo));
+        println!("{} {} {} {sha}", info.version, inst.name, inst.size);
+    }
+
     #[test]
     fn cleanup_keeps_only_newer_installers() {
         let dir = tempfile::tempdir().unwrap();
