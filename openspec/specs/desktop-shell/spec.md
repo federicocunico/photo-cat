@@ -29,17 +29,16 @@ L'interfaccia SHALL presentare una barra superiore, una navigazione dei moduli, 
 - **THEN** il pannello sinistro mostra dall'alto la sezione dei cataloghi, poi i filtri e infine le cartelle
 
 ### Requirement: Moduli di navigazione
-L'applicazione SHALL organizzare la navigazione in gruppi con un'etichetta:
+L'applicazione SHALL organizzare la navigazione in gruppi con un'etichetta, senza gruppi di una sola voce:
 - **Sfoglia**: Libreria, Sequenza;
-- **Organizza**: Cataloghi, Persone, Tag;
-- **AI**: AI;
-- **Importa ed esporta**: Importa, Esporta, Varianti RAW (Fujifilm X-T5).
+- **Organizza**: Cataloghi, Persone, Tag, Analisi AI (il modulo AI);
+- **Importa ed esporta**: Importa, Esporta, Varianti RAW.
 
-In fondo alla navigazione SHALL stare **Attività** e **Impostazioni**.
+In fondo alla navigazione SHALL stare **Attività** e **Impostazioni**. La voce del modulo di revisione RAW SHALL chiamarsi "Varianti RAW"; la fotocamera supportata (Fujifilm X-T5) SHALL essere indicata nel sottotitolo della pagina.
 
-Modelli AI e Diagnostica SHALL essere sezioni di Impostazioni e non voci di primo livello. SHALL restare raggiungibili direttamente da Attività, dalla barra di stato, dagli avvisi e dalla palette dei comandi. Persone e identità SHALL essere gestite in un unico modulo Persone. Il modulo AI riguarda lo stato e il controllo delle analisi; le soglie e i modelli restano in Impostazioni.
+Modelli AI e Diagnostica SHALL essere sezioni di Impostazioni e non voci di primo livello. SHALL restare raggiungibili direttamente da Attività, dalla barra di stato, dagli avvisi, dalla palette dei comandi e dalla barra dei menu. Persone e identità SHALL essere gestite in un unico modulo Persone. Il modulo AI riguarda lo stato e il controllo delle analisi; le soglie e i modelli restano in Impostazioni.
 
-Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+9 nell'ordine dei gruppi). Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni, una sezione del modulo AI, un'attività o una sessione di revisione RAW, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
+Ogni voce di primo livello SHALL avere una scorciatoia (Ctrl+1…Ctrl+9 nell'ordine dei gruppi). L'ordine delle voci e le scorciatoie MUST NOT cambiare rispetto alla versione 0.5. Un modulo SHALL poter essere aperto su un elemento specifico, ad esempio una persona, un volto, una sezione di Impostazioni, una sezione del modulo AI, un'attività o una sessione di revisione RAW, da altri moduli. La navigazione SHALL essere estendibile con nuovi moduli.
 
 Un modulo salvato come attivo nelle preferenze che non è più una voce di primo livello SHALL aprire la sezione corrispondente.
 
@@ -49,7 +48,7 @@ Un modulo salvato come attivo nelle preferenze che non è più una voce di primo
 
 #### Scenario: Gruppi della navigazione
 - **WHEN** l'utente apre l'app
-- **THEN** la navigazione mostra i gruppi Sfoglia, Organizza, AI e Importa ed esporta con le loro voci, e in fondo Attività e Impostazioni
+- **THEN** la navigazione mostra i gruppi Sfoglia, Organizza e Importa ed esporta con le loro voci, e in fondo Attività e Impostazioni; nessun gruppo ha una sola voce
 
 #### Scenario: Scorciatoia di modulo
 - **WHEN** l'utente preme Ctrl+3
@@ -57,11 +56,15 @@ Un modulo salvato come attivo nelle preferenze che non è più una voce di primo
 
 #### Scenario: Scorciatoia del modulo AI
 - **WHEN** l'utente preme Ctrl+6
-- **THEN** si apre il modulo AI
+- **THEN** si apre il modulo Analisi AI
 
 #### Scenario: Scorciatoia della revisione RAW
 - **WHEN** l'utente preme Ctrl+9
-- **THEN** si apre il modulo Varianti RAW (Fujifilm X-T5) sull'ultima sessione aperta, oppure sulla scelta della cartella se non ce ne sono
+- **THEN** si apre il modulo Varianti RAW sull'ultima sessione aperta, oppure sulla scelta della cartella se non ce ne sono
+
+#### Scenario: Nome della voce RAW
+- **WHEN** la navigazione è larga 200 px
+- **THEN** la voce "Varianti RAW" sta su una riga, e la pagina indica nel sottotitolo che il modulo è per la Fujifilm X-T5
 
 #### Scenario: Identità nel modulo Persone
 - **WHEN** l'utente cerca nella navigazione il modulo Identità
@@ -201,7 +204,7 @@ L'interfaccia SHALL usare:
 - tre temi, "Come il sistema" (predefinito), scuro e chiaro;
 - contrasto del testo di almeno 4,5:1, e di almeno 3:1 per bordi dei controlli, icone e indicatore del focus;
 - un solo colore d'accento;
-- una scala tipografica fissa e una scala di spaziature, raggi ed elevazioni definita come token;
+- una scala tipografica fissa di quattro corpi (12, 14, 16 e 20 px), con un solo stile per le intestazioni di sezione, e una scala di spaziature, raggi ed elevazioni definita come token;
 - un unico insieme di icone.
 
 Le animazioni SHALL durare al massimo 200 ms e SHALL essere ridotte quando il sistema chiede movimento ridotto. Ogni pagina di modulo SHALL avere un'intestazione con titolo uguale al nome della voce di navigazione.
@@ -217,6 +220,10 @@ Le animazioni SHALL durare al massimo 200 ms e SHALL essere ridotte quando il si
 #### Scenario: Titolo coerente
 - **WHEN** l'utente apre la voce di navigazione "Importa"
 - **THEN** la pagina ha come titolo "Importa"
+
+#### Scenario: Scala tipografica
+- **WHEN** si misurano i corpi del testo visibili in un qualsiasi modulo
+- **THEN** compaiono solo 12, 14, 16 e 20 px, e tutte le intestazioni di sezione hanno lo stesso corpo e lo stesso peso
 
 ### Requirement: Primo avvio guidato
 Al primo avvio l'app SHALL guidare l'utente in tre passi:
@@ -246,7 +253,8 @@ Le impostazioni SHALL essere organizzate in sezioni, con una sotto-navigazione e
 - **Modelli AI e sistema**: verifica del sistema, modelli, profilo risorse e limite RAM, provider di esecuzione;
 - **Applicazioni esterne**;
 - **Diagnostica**: livello di log, errori, log, pacchetto diagnostico;
-- **Avanzate**: valori numerici delle soglie, eliminazione dei dati dei volti.
+- **Avanzate**: valori numerici delle soglie, cache delle anteprime di Varianti RAW, eliminazione dei dati dei volti;
+- **Informazioni**: versione, build, sistema, autori, licenze.
 
 Ogni impostazione SHALL esistere in un solo punto.
 
@@ -273,6 +281,10 @@ Le soglie SHALL essere presentate come sensibilità, su una scala da "Più risul
 #### Scenario: Nessun duplicato
 - **WHEN** l'utente cerca il provider di esecuzione
 - **THEN** lo trova solo in "Modelli AI e sistema"
+
+#### Scenario: Cache delle anteprime RAW
+- **WHEN** l'utente cerca "cache" nelle impostazioni
+- **THEN** trova la cache delle anteprime di Varianti RAW in "Avanzate" e non in "Generale"
 
 ### Requirement: Localizzazione
 Tutti i testi dell'interfaccia SHALL provenire da risorse traducibili; la prima versione SHALL essere disponibile in italiano e in inglese.
@@ -372,11 +384,11 @@ L'app SHALL poter mostrare contenuti in pannelli flottanti non modali sopra l'in
 - **THEN** il pannello si chiude e il focus torna al comando che lo aveva aperto
 
 ### Requirement: Revisione delle persone
-Il modulo Persone SHALL presentare un elenco diviso nelle sezioni "Da rivedere", "Persone" e "Ignorati" con conteggi e ricerca, i volti dell'elemento scelto in una griglia con selezione multipla, e una scheda con "Chi è?", unione e ignora. L'elenco e la griglia SHALL restare fluidi con 100.000 volti, caricando i dati a pagine, e SHALL aggiornarsi quando cambiano i dati dei volti senza ricaricamenti periodici. Tutte le azioni SHALL essere disponibili da tastiera.
+Il modulo Persone SHALL mostrare "Da rivedere", "Persone" e "Ignorati" come schede con conteggio su una riga nell'intestazione della pagina. Sotto ci sono un elenco con ricerca e un menu "Ordina e filtra", i volti dell'elemento aperto con selezione multipla, e una scheda con "Chi è?", unione e ignora. Elenco e griglia SHALL restare fluidi con 100.000 volti, caricando a pagine, e aggiornarsi senza ricaricamenti periodici. Tutte le azioni SHALL essere disponibili da tastiera.
 
 #### Scenario: Revisione da tastiera
 - **WHEN** l'utente scorre "Da rivedere" con le frecce, preme N, scrive un nome e conferma
-- **THEN** il gruppo diventa una persona con quel nome e il focus passa al gruppo successivo da rivedere
+- **THEN** il gruppo diventa una persona con quel nome e il focus passa al gruppo mostrato subito sotto nell'elenco
 
 #### Scenario: Libreria grande
 - **WHEN** la libreria contiene 100.000 volti in 3.000 gruppi
@@ -385,6 +397,10 @@ Il modulo Persone SHALL presentare un elenco diviso nelle sezioni "Da rivedere",
 #### Scenario: Aggiornamento dopo l'analisi
 - **WHEN** termina un'analisi dei volti mentre il modulo Persone è aperto
 - **THEN** elenco e conteggi si aggiornano senza perdere la selezione e la posizione di scorrimento
+
+#### Scenario: Elenco subito visibile
+- **WHEN** l'utente apre "Da rivedere" in una finestra alta 900 px
+- **THEN** sopra il primo gruppo dell'elenco ci sono solo il campo di ricerca e il menu "Ordina e filtra"
 
 ### Requirement: Preferenze conservate tra installazioni
 Installare una nuova versione sopra una esistente, oppure disinstallare e reinstallare, SHALL conservare impostazioni, libreria, identità, set di tag e preferenze dell'interfaccia (tema, lingua, modulo attivo, pannelli laterali, ordinamento e dimensione delle miniature, posizione dei pannelli flottanti), anche quando la disinstallazione elimina i dati del profilo dell'interfaccia. I dati SHALL essere rimossi solo cancellando a mano la cartella dell'app.
@@ -455,11 +471,12 @@ Il visualizzatore delle foto SHALL offrire:
 - **THEN** il visualizzatore mostra la quarta foto della vista, le assegna il tag del tasto 2 e, alla chiusura con Esc, la griglia ha il focus sulla quarta foto
 
 ### Requirement: Navigazione da tastiera nella griglia
-Le griglie di Libreria, cataloghi, Sequenza e Persone SHALL essere navigabili con:
-- frecce, Home/Fine e Pagina su/giù per spostare il focus;
+Le griglie di Libreria, cataloghi, Sequenza e Persone, e gli elenchi selezionabili, SHALL essere navigabili come descritto nei requisiti "Selezione da tastiera" e "Comandi di selezione da tastiera" del modello di selezione comune:
+- frecce, Home/Fine e Pagina su/giù per spostare il focus e selezionare l'elemento raggiunto;
 - Maiusc con una freccia per estendere la selezione;
-- Ctrl+Spazio per aggiungere o togliere la foto con il focus dalla selezione;
-- Ctrl+A per selezionare tutte le foto della vista.
+- Ctrl con una freccia per spostare solo il focus;
+- Ctrl+Spazio per aggiungere o togliere l'elemento con il focus;
+- Ctrl+A per selezionare tutti gli elementi della vista.
 
 La miniatura con il focus SHALL essere sempre visibile e distinta da quelle selezionate.
 
@@ -470,6 +487,14 @@ La miniatura con il focus SHALL essere sempre visibile e distinta da quelle sele
 #### Scenario: Seleziona tutto
 - **WHEN** la vista ha un filtro con 8.000 foto e l'utente preme Ctrl+A
 - **THEN** sono selezionate tutte le 8.000 foto del filtro, senza caricarle tutte nell'interfaccia
+
+#### Scenario: Frecce come in un gestore di file
+- **WHEN** in Libreria è selezionata una foto e l'utente preme la freccia giù
+- **THEN** è selezionata solo la foto sotto, che ha il focus, e la barra delle azioni mostra "1 selezionata"
+
+#### Scenario: Spostare il focus senza selezionare
+- **WHEN** in Libreria sono selezionate tre foto e l'utente preme Ctrl+→
+- **THEN** il focus passa alla foto successiva e le tre foto restano le sole selezionate
 
 ### Requirement: Contesto della vista in Libreria
 La Libreria SHALL mostrare in un'unica barra:
@@ -488,3 +513,51 @@ I filtri, compreso "Solo foto con simili", SHALL stare nel pannello Filtri e SHA
 #### Scenario: Filtro delle foto simili
 - **WHEN** l'utente attiva "Solo foto con simili" nel pannello Filtri
 - **THEN** nella barra compare il chip "Con foto simili" che lo rimuove con un clic
+
+### Requirement: Scorrimento e barra di stato
+Solo l'area del modulo SHALL scorrere: barra superiore, navigazione e barra di stato MUST restare ferme in ogni modulo e durante i caricamenti. La barra di stato SHALL stare sempre in fondo alla finestra, su una sola riga. Ciò che non entra SHALL essere abbreviato o mostrato nel modulo, mai mandato a capo.
+
+#### Scenario: Pagina lunga
+- **WHEN** l'utente scorre fino in fondo la pagina Esporta
+- **THEN** scorre solo il contenuto della pagina; barra superiore, navigazione e barra di stato restano ferme e la finestra non mostra una propria barra di scorrimento
+
+#### Scenario: Barra di stato durante un caricamento
+- **WHEN** l'utente apre Attività mentre l'elenco è ancora in caricamento
+- **THEN** la barra di stato resta in fondo alla finestra, su una riga
+
+#### Scenario: Barra di stato in Sequenza
+- **WHEN** l'utente apre Sequenza a 1440 px di larghezza
+- **THEN** la barra di stato occupa una sola riga, e le scorciatoie del modulo sono nel foglio delle scorciatoie e nei menu, non nella barra di stato
+
+### Requirement: Intestazione di pagina
+L'intestazione di ogni modulo SHALL avere la stessa posizione, altezza e struttura: titolo ed eventuale sottotitolo a sinistra, eventuali schede del modulo accanto al titolo, comandi della pagina a destra. Ogni pannello richiudibile SHALL avere un solo comando per richiuderlo, con la stessa forma e posizione in tutti i moduli.
+
+#### Scenario: Titolo nello stesso punto
+- **WHEN** l'utente passa da Importa a Cataloghi e poi ad Attività
+- **THEN** il titolo della pagina resta nella stessa posizione e con lo stesso corpo nei tre moduli
+
+#### Scenario: Comando principale della pagina
+- **WHEN** l'utente apre Cataloghi
+- **THEN** "Nuovo catalogo" sta a destra nell'intestazione della pagina, come i comandi delle intestazioni degli altri moduli
+
+### Requirement: Apertura e selezione in Persone
+In Persone un clic semplice su una voce dell'elenco SHALL selezionare solo quella voce e aprirla. Ctrl+clic e Maiusc+clic SHALL aggiungere o estendere la selezione, come in un gestore di file. Le azioni in blocco SHALL comparire in una barra in fondo all'elenco solo con due o più voci selezionate. MUST NOT esserci pulsanti "Seleziona tutto" o "Deseleziona" sempre visibili: Ctrl+A, Esc e il menu Modifica agiscono sul riquadro che ha il focus.
+
+#### Scenario: Clic semplice
+- **WHEN** l'utente fa clic su un gruppo dell'elenco
+- **THEN** quel gruppo è l'unico selezionato e si apre; non compare la barra delle azioni in blocco
+
+#### Scenario: Selezione di più gruppi
+- **WHEN** l'utente fa Ctrl+clic su tre gruppi di "Da rivedere"
+- **THEN** in fondo all'elenco compare la barra "3 gruppi selezionati" con "Unisci a…", "Ignora" e "Deseleziona"
+
+### Requirement: Ordine di avanzamento in Persone
+L'avanzamento automatico dopo aver dato un nome o unito un gruppo, e le frecce su e giù, SHALL seguire l'ordine in cui l'elenco è mostrato, sezioni comprese.
+
+#### Scenario: Ordine dopo i suggeriti
+- **WHEN** l'elenco mostra due gruppi suggeriti seguiti da "Altri gruppi" e l'utente dà un nome al primo suggerito
+- **THEN** si apre il secondo suggerito, cioè il gruppo mostrato subito sotto, anche se ha meno foto dei gruppi in "Altri gruppi"
+
+#### Scenario: Freccia giù alla fine dei suggeriti
+- **WHEN** è aperto l'ultimo gruppo suggerito e l'utente preme la freccia giù
+- **THEN** si apre il primo gruppo di "Altri gruppi"
