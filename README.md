@@ -23,6 +23,20 @@ Piano e requisiti: `openspec/changes/photo-catalog-foundation/`.
 | 1–9, 0 | in Libreria e Sequenza, aggiunge il tag del set attivo alle foto selezionate (0 toglie i tag del set) |
 | Maiusc+1…9, Invio, 1–5, 0, Spazio | in Varianti RAW, sceglie la variante migliore e dà le stelle (vedi la sezione dedicata) |
 
+**Selezione** (come in un gestore di file, uguale in Libreria, cataloghi, Sequenza, Persone e Cataloghi):
+
+| Gesto | Effetto |
+|---|---|
+| Clic | seleziona solo quell'elemento |
+| Ctrl+clic, Maiusc+clic, Ctrl+Maiusc+clic | aggiunge o toglie, seleziona l'intervallo dall'ancora, aggiunge l'intervallo |
+| Clic su uno spazio vuoto, Esc | deseleziona |
+| Frecce, Home/Fine, Pag↑/Pag↓ | spostano il focus e selezionano l'elemento raggiunto |
+| Maiusc+frecce | estendono la selezione; Ctrl+frecce spostano solo il focus, Ctrl+Spazio aggiunge o toglie l'elemento con il focus |
+| Ctrl+A, Ctrl+Maiusc+I | seleziona tutto (anche gli elementi non ancora caricati), inverte la selezione |
+| Clic destro | su un elemento selezionato agisce su tutta la selezione; su uno non selezionato seleziona solo quello |
+
+Con più raccolte nella stessa schermata (in Persone: elenco dei gruppi e volti) le scorciatoie agiscono sul riquadro dell'ultimo clic, segnato da un bordo superiore.
+
 **Impostazioni.** Sezioni Generale, Libreria e importazione, Riconoscimento AI, Modelli AI e sistema, Applicazioni esterne, Diagnostica e Avanzate, con una ricerca che porta al campo. Le preferenze si salvano appena modificate ("Salvato" accanto al campo). Soglie, tassonomia e percorso dei dati cambiano i risultati della libreria: restano in sospeso nella barra **Ripristina / Applica**, con l'anteprima dell'effetto. La sensibilità si regola su una scala "Più risultati ↔ Più precisi"; i valori numerici sono in Avanzate.
 
 ## Prerequisiti

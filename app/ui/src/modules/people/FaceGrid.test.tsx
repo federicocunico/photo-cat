@@ -10,6 +10,7 @@ import { rectangleSelect } from "../../store/library";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 import { runUndo, useUndo } from "../../store/undo";
+import { runSelectionContract } from "../../test/selectionContract";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -92,7 +93,7 @@ describe("FaceGrid selezione e azioni", () => {
   it("Maiusc+clic ripetuti non spostano l'ancora", async () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });
     const pressed = (id: number) =>
-      screen.getByTestId(`face-${id}`).getAttribute("aria-pressed") === "true";
+      screen.getByTestId(`face-${id}`).getAttribute("aria-selected") === "true";
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-3"), { shiftKey: true });
     expect([1, 2, 3].map(pressed)).toEqual([true, true, true]);
@@ -131,19 +132,19 @@ describe("FaceGrid selezione e azioni", () => {
 
     const f1 = await screen.findByTestId("face-1");
     fireEvent.click(f1);
-    expect(f1).toHaveAttribute("aria-pressed", "true");
+    expect(f1).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/1 selezionat/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
-    expect(screen.getByTestId("face-1")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("face-3")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("face-1")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("face-3")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/2 selezionat/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-3"), { shiftKey: true });
-    expect(screen.getByTestId("face-1")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("face-2")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("face-3")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("face-1")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("face-2")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("face-3")).toHaveAttribute("aria-selected", "true");
 
     const move = screen.getByLabelText(/Riassegna a/i) as HTMLSelectElement;
     await waitFor(() =>
@@ -390,4 +391,24 @@ describe("FaceGrid «Riassegna a…»", () => {
       expect(useUndo.getState().last?.label).toMatch(/Volto riassegnato a «Carla»/),
     );
   });
+});
+
+// Contratto di selezione comune (unified-selection) sulla griglia dei volti.
+runSelectionContract({
+  name: "griglia dei volti di Persone",
+  layout: "grid",
+  mount: async () => {
+    commandsMock.groupFaces.mockResolvedValue({
+      items: Array.from({ length: 8 }, (_, i) => face({ id: i + 1 })),
+      next: null,
+      total: 8,
+      goodCount: 8,
+      discardedCount: 0,
+    } as never);
+    commandsMock.faceSelection.mockResolvedValue({ count: 8, maxId: 8 } as never);
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 8 }) });
+    await screen.findByTestId("face-8");
+  },
+  container: () => screen.getByTestId("face-grid-scroll"),
+  items: () => within(screen.getByTestId("face-grid-scroll")).getAllByRole("option"),
 });

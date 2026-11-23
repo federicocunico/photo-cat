@@ -121,12 +121,14 @@ describe("FaceGrid: dal volto alla foto", () => {
     });
     await waitFor(() => expect(screen.queryByTestId("viewer")).toBeNull());
     expect(screen.getByTestId("face-grid-scroll").scrollTop).toBe(40);
-    expect(screen.getByTestId("face-2").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("face-2").getAttribute("aria-selected")).toBe("true");
   });
 
-  it("Invio su un volto apre il visore", async () => {
+  it("Invio sul volto con il focus apre il visore", async () => {
     renderGrid();
-    fireEvent.keyDown(await screen.findByTestId("face-1"), { key: "Enter" });
+    // Il focus della tastiera resta sulla griglia; il volto attivo è quello dell'ultimo clic.
+    fireEvent.click(await screen.findByTestId("face-1"));
+    fireEvent.keyDown(screen.getByTestId("face-grid-scroll"), { key: "Enter" });
     expect(await screen.findByTestId("viewer")).toBeTruthy();
   });
 });

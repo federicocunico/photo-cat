@@ -1,63 +1,130 @@
-// Scorciatoie di selezione centralizzate (design D1): Ctrl/Cmd+A, Ctrl/Cmd+Maiusc+I ed Esc
-// vengono registrate una sola volta nella shell e inoltrate alla griglia attiva. Il registro
-// dei comandi le ignora nei campi di testo e con un dialogo aperto (gli unici a ricevere
-// anche lì i tasti sono i comandi con `inInputs`, qui nessuno).
-import { useEffect, useRef } from "react";
+// Scorciatoie di selezione centralizzate (design D1 di ui-ux-overhaul, D4 di unified-selection):
+// Ctrl/Cmd+A, Ctrl/Cmd+Maiusc+I ed Esc sono registrate una sola volta nella shell e inoltrate al
+// **riquadro attivo**, cioè la raccolta in cui l'utente ha fatto l'ultimo clic o ha portato il
+// focus. Il registro dei comandi le ignora nei campi di testo e con un dialogo aperto.
+import { useEffect, useRef, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useCommands } from "./registry";
 
-/** Cosa una griglia espone alle scorciatoie. */
-export interface ActiveGrid {
+/** Cosa una raccolta espone alle scorciatoie e ai menu. */
+export interface ActivePane {
+  /** Nome della raccolta per i menu e i lettori di schermo, es. "Volti". */
+  label?: string;
   selectAll: () => unknown;
   invert: () => unknown;
   clear: () => unknown;
-  /** Elementi selezionati ora: Esc passa alla griglia solo se c'è qualcosa da togliere. */
+  /** Elementi selezionati ora: Esc passa alla raccolta solo se c'è qualcosa da togliere. */
   count: () => number;
-  /**
-   * Per una vista secondaria montata accanto alla griglia principale (l'elenco delle persone
-   * accanto ai volti): la vista è attiva **solo** mentre questa funzione è vera, cioè quando
-   * l'utente ci sta lavorando. Le griglie senza `hasFocus` (Libreria, Sequenza, volti) restano
-   * le uniche candidate quando nessuna vista secondaria ha il focus, nell'ordine di sempre:
-   * così l'ordine in cui le viste si registrano non decide più chi riceve Ctrl+A.
-   */
-  hasFocus?: () => boolean;
 }
 
-type Entry = ActiveGrid & { focusOnly: boolean };
+type Entry = {
+  pane: () => ActivePane;
+  element: () => HTMLElement | null;
+  /** Ultima interazione (clic o focus) dentro il riquadro; 0 se mai. */
+  touched: number;
+  /** Ordine di registrazione, per scegliere quando nessuno è stato toccato. */
+  mounted: number;
+};
 
-const active: Entry[] = [];
+const entries: Entry[] = [];
+let tick = 0;
+
+function pick(): Entry | undefined {
+  let best: Entry | undefined;
+  for (const e of entries) {
+    if (!best) best = e;
+    else if (e.touched !== best.touched ? e.touched > best.touched : e.mounted > best.mounted)
+      best = e;
+  }
+  return best;
+}
+
+/** Aggiorna `data-active-pane`: serve solo quando i riquadri visibili sono più di uno. */
+function mark() {
+  const active = pick();
+  const many = entries.filter((e) => e.element()).length > 1;
+  for (const e of entries) {
+    const el = e.element();
+    if (!el) continue;
+    if (many && e === active) el.setAttribute("data-active-pane", "");
+    else el.removeAttribute("data-active-pane");
+  }
+}
+
+/** Il riquadro attivo: l'ultimo toccato, altrimenti l'ultimo montato. */
+export function activePane(): ActivePane | undefined {
+  return pick()?.pane();
+}
 
 /**
- * La griglia attiva: una vista secondaria con il focus, altrimenti l'ultima griglia principale
- * registrata (montata più di recente).
+ * Porta il focus della tastiera sulla raccolta del riquadro attivo (l'elemento con
+ * `role="listbox"` o `role="grid"` focalizzabile, o il riquadro stesso) e la restituisce.
  */
-export function activeGrid(): ActiveGrid | undefined {
-  for (let i = active.length - 1; i >= 0; i--) {
-    const e = active[i]!;
-    if (e.focusOnly && e.hasFocus?.()) return e;
-  }
-  for (let i = active.length - 1; i >= 0; i--) if (!active[i]!.focusOnly) return active[i];
-  return undefined;
+export function focusActivePane(): HTMLElement | null {
+  const el = pick()?.element();
+  if (!el) return null;
+  const sel = '[role="listbox"][tabindex], [role="grid"][tabindex]';
+  const target = el.matches(sel) ? el : el.querySelector<HTMLElement>(sel);
+  target?.focus();
+  return target ?? null;
 }
 
-/** Rende `grid` la griglia attiva finché il componente è montato. */
-export function useActiveGrid(grid: ActiveGrid, enabled = true) {
-  const latest = useRef(grid);
-  latest.current = grid;
+/**
+ * Un solo ascoltatore globale, in fase di cattura: il riquadro diventa attivo prima che il clic
+ * arrivi agli elementi, e vale anche per elementi montati dopo la registrazione (es. dopo un
+ * caricamento).
+ */
+let listening = false;
+function onInteract(e: Event) {
+  const target = e.target;
+  if (!(target instanceof Node)) return;
+  // Il riquadro più interno che contiene il bersaglio (riquadri annidati: vince il più vicino).
+  let hit: Entry | undefined;
+  for (const entry of entries) {
+    const el = entry.element();
+    if (el?.contains(target) && (!hit || hit.element()?.contains(el))) hit = entry;
+  }
+  if (!hit || hit.touched === tick) return;
+  hit.touched = ++tick;
+  mark();
+}
+function listen() {
+  if (listening || typeof document === "undefined") return;
+  listening = true;
+  for (const type of ["pointerdown", "mousedown", "click", "focusin"])
+    document.addEventListener(type, onInteract, true);
+}
+
+/**
+ * Registra una raccolta come riquadro finché il componente è montato. Con `ref`, un clic o il
+ * focus dentro l'elemento la rendono il riquadro attivo; senza, la raccolta è attiva solo se è
+ * l'ultima montata e nessun altro riquadro è stato toccato.
+ */
+export function useActivePane(
+  pane: ActivePane,
+  ref?: RefObject<HTMLElement | null>,
+  enabled = true,
+) {
+  const latest = useRef(pane);
+  latest.current = pane;
+  const refRef = useRef(ref);
+  refRef.current = ref;
   useEffect(() => {
     if (!enabled) return;
     const entry: Entry = {
-      selectAll: () => latest.current.selectAll(),
-      invert: () => latest.current.invert(),
-      clear: () => latest.current.clear(),
-      count: () => latest.current.count(),
-      hasFocus: () => latest.current.hasFocus?.() ?? false,
-      focusOnly: typeof latest.current.hasFocus === "function",
+      pane: () => latest.current,
+      element: () => refRef.current?.current ?? null,
+      touched: 0,
+      mounted: ++tick,
     };
-    active.push(entry);
+    entries.push(entry);
+    listen();
+    mark();
     return () => {
-      const i = active.indexOf(entry);
-      if (i >= 0) active.splice(i, 1);
+      entry.element()?.removeAttribute("data-active-pane");
+      const i = entries.indexOf(entry);
+      if (i >= 0) entries.splice(i, 1);
+      mark();
     };
   }, [enabled]);
 }
@@ -79,16 +146,16 @@ export function useGridShortcuts() {
       label: t("selection.selectAll"),
       group: "selection",
       shortcut: { key: "a", mod: true },
-      when: () => activeGrid() != null && !overlayOpen(),
-      run: () => activeGrid()?.selectAll(),
+      when: () => activePane() != null && !overlayOpen(),
+      run: () => activePane()?.selectAll(),
     },
     {
       id: "selection.invert",
       label: t("selection.invert"),
       group: "selection",
       shortcut: { key: "i", mod: true, shift: true },
-      when: () => activeGrid() != null && !overlayOpen(),
-      run: () => activeGrid()?.invert(),
+      when: () => activePane() != null && !overlayOpen(),
+      run: () => activePane()?.invert(),
     },
     {
       id: "selection.clearActive",
@@ -96,8 +163,8 @@ export function useGridShortcuts() {
       group: "selection",
       shortcut: { key: "Escape" },
       // Un menu, un selettore o il visore aperto si chiude prima con il suo Esc.
-      when: () => (activeGrid()?.count() ?? 0) > 0 && !overlayOpen(),
-      run: () => activeGrid()?.clear(),
+      when: () => (activePane()?.count() ?? 0) > 0 && !overlayOpen(),
+      run: () => activePane()?.clear(),
     },
   ]);
 }

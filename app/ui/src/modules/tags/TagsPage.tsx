@@ -17,6 +17,7 @@ import { activeSet, errorText, refreshTags, useTagOverview } from "./data";
 import { ModulePage } from "../../components/shell/ModulePage";
 import { Icon } from "../../components/icons";
 import { Button, ConfirmDialog, InlineAlert, InlineEdit } from "../../components/ui";
+import { useTypeAhead } from "../../lib/selection/useTypeAhead";
 import "./tags.css";
 
 export function Swatch({ color, size = 14 }: { color: string; size?: number }) {
@@ -672,6 +673,19 @@ export function TagsPage() {
     () => (o?.tags ?? []).filter((x) => x.name.toLowerCase().includes(filter.trim().toLowerCase())),
     [o, filter],
   );
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const typeAhead = useTypeAhead(
+    shown.map((x) => x.name),
+    (i) => {
+      const name = shown[i]?.name;
+      if (!name) return;
+      setTagName(name);
+      const pill = Array.from(
+        pillsRef.current?.querySelectorAll<HTMLElement>("[data-tag-name]") ?? [],
+      ).find((el) => el.dataset.tagName === name);
+      pill?.focus();
+    },
+  );
   const deleteSet = async (set: TagSetView) => {
     try {
       await commands.deleteTagSet(set.id);
@@ -726,7 +740,15 @@ export function TagsPage() {
                     onChange={(e) => setFilter(e.target.value)}
                   />
                 </div>
-                <div className="tags-pills">
+                <div
+                  ref={pillsRef}
+                  className="tags-pills"
+                  // Ricerca per iniziale (unified-selection): digitando dalla pillola con il focus
+                  // si apre il primo tag con quelle iniziali.
+                  onKeyDown={(e) => {
+                    typeAhead(e);
+                  }}
+                >
                   {shown.map((x) => {
                     const inSet = current?.tags.some(
                       (s) => s.name.toLowerCase() === x.name.toLowerCase(),
@@ -739,6 +761,7 @@ export function TagsPage() {
                         className="pill"
                         aria-pressed={sel}
                         data-in-set={inSet || undefined}
+                        data-tag-name={x.name}
                         onClick={() => setTagName(x.name)}
                       >
                         <Swatch color={x.color} size={10} />

@@ -253,3 +253,10 @@ select.field {
   align-items: center;
   margin: 16px 0;
 }
+
+/* Riquadro attivo (unified-selection, D4): con più raccolte nella stessa schermata, quella che
+   riceve Ctrl+A, Esc e il menu Modifica ha un bordo superiore spesso, oltre all'anello di focus
+   dell'elemento. Due segnali: forma e colore. */
+[data-active-pane] {
+  box-shadow: inset 0 2px 0 var(--pc-accent);
+}

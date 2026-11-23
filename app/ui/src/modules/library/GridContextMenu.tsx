@@ -22,6 +22,7 @@ import { useCatalogAction } from "./useCatalogAction";
 import { Icon } from "../../components/icons";
 import { ManualDateDialog } from "./ManualDateDialog";
 import type { BulkAction, ColorTrait } from "../../bindings";
+import { fmtInt } from "../../lib/format";
 
 const COLOR_TRAITS: Array<ColorTrait | null> = ["bw", "color", "faded", "sepia", null];
 
@@ -191,7 +192,7 @@ export function GridContextMenu({
         style={{ left: x, top: y, display: naming || dating ? "none" : undefined }}
       >
         <div className="muted grid-menu-hint">
-          {t("externalApps.actsOn", { count: ids.length })}
+          {t("externalApps.actsOn", { count, n: fmtInt(count) })}
         </div>
         <BusyButton
           type="button"

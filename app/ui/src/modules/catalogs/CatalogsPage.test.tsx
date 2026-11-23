@@ -9,6 +9,7 @@ import { A11Y_KNOWN } from "../../test/a11yKnown";
 import { useLibrary } from "../../store/library";
 import { useLayout } from "../../store/layout";
 import { useToast } from "../../store/toasts";
+import { runSelectionContract } from "../../test/selectionContract";
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 beforeEach(() => {
@@ -219,4 +220,106 @@ it("cataloghi di sistema: senza Modifica ed Elimina, con «Metti da parte i dupl
   // I cataloghi dell'utente restano modificabili.
   const user = screen.getByRole("region", { name: "Vacanze" });
   expect(within(user).getByRole("button", { name: /Elimina/ })).toBeInTheDocument();
+});
+
+// --- Selezione dei cataloghi (unified-selection) ----------------------------------------------
+
+const EIGHT = [
+  "Viaggio Toscana",
+  "Matrimonio",
+  "Recenti",
+  "Amici",
+  "Lavoro",
+  "Mare",
+  "Neve",
+  "Zoo",
+];
+const list = () => screen.getByRole("listbox", { name: "Cataloghi" });
+
+runSelectionContract({
+  name: "pagina Cataloghi",
+  layout: "grid",
+  mount: async () => {
+    commandsMock.listCatalogs.mockResolvedValue(
+      EIGHT.map((name, i) => summary(i + 1, name, "manual", 3)),
+    );
+    renderPage();
+    await screen.findByRole("option", { name: "Zoo" });
+  },
+  container: list,
+  items: () => within(list()).getAllByRole("option"),
+});
+
+it("Tre cataloghi eliminati: Ctrl+clic, Canc e conferma", async () => {
+  commandsMock.listCatalogs.mockResolvedValue(
+    EIGHT.slice(0, 4).map((name, i) => summary(i + 1, name, "manual", 3)),
+  );
+  commandsMock.deleteCatalogs.mockResolvedValue({ deleted: 3, skipped: [] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("option", { name: "Viaggio Toscana" }));
+  fireEvent.click(screen.getByRole("option", { name: "Matrimonio" }), { ctrlKey: true });
+  fireEvent.click(screen.getByRole("option", { name: "Amici" }), { ctrlKey: true });
+  fireEvent.keyDown(list(), { key: "Delete" });
+  const dialog = await screen.findByRole("alertdialog");
+  expect(dialog).toHaveTextContent("Eliminare 3 cataloghi?");
+  expect(dialog).toHaveTextContent("«Viaggio Toscana», «Matrimonio», «Amici»");
+  expect(dialog).toHaveTextContent("Le foto restano in libreria");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Elimina 3 cataloghi" }));
+  await waitFor(() => expect(commandsMock.deleteCatalogs).toHaveBeenCalledWith([1, 2, 4], true));
+  await waitFor(() =>
+    expect(useToast.getState().notices.map((n) => n.message)).toContain("3 cataloghi eliminati"),
+  );
+});
+
+it("Selezione con un catalogo di sistema: il Cestino è escluso e lo si dice", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    {
+      catalog: {
+        id: 90,
+        name: "Cestino",
+        kind: "manual",
+        rules: null,
+        createdAt: 0,
+        system: "trash",
+      },
+      items: 0,
+      excluded: 0,
+    } as never,
+    summary(3, "Recenti", "smart", 12),
+    summary(4, "Panorami", "smart", 5),
+  ]);
+  commandsMock.deleteCatalogs.mockResolvedValue({ deleted: 2, skipped: [90] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("option", { name: "Cestino" }));
+  fireEvent.click(screen.getByRole("option", { name: "Panorami" }), { shiftKey: true });
+  fireEvent.click(screen.getByRole("button", { name: "Elimina 3 cataloghi…" }));
+  const dialog = await screen.findByRole("alertdialog");
+  expect(dialog).toHaveTextContent("Eliminare 2 cataloghi?");
+  expect(dialog).toHaveTextContent("«Cestino» è un catalogo di sistema e non verrà eliminato.");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Elimina 2 cataloghi" }));
+  await waitFor(() => expect(commandsMock.deleteCatalogs).toHaveBeenCalledWith([90, 3, 4], true));
+  await waitFor(() =>
+    expect(useToast.getState().notices.map((n) => n.message)).toContain("2 cataloghi eliminati"),
+  );
+});
+
+it("Ricerca per iniziale: digitando «vi» si seleziona «Viaggio Toscana»", async () => {
+  commandsMock.listCatalogs.mockResolvedValue([
+    summary(1, "Matrimonio", "manual", 3),
+    summary(2, "Vacanze", "manual", 3),
+    summary(3, "Viaggio Toscana", "manual", 3),
+  ]);
+  renderPage();
+  await screen.findByRole("option", { name: "Viaggio Toscana" });
+  fireEvent.keyDown(list(), { key: "v" });
+  expect(screen.getByRole("option", { name: "Vacanze" })).toHaveAttribute("aria-selected", "true");
+  fireEvent.keyDown(list(), { key: "i" });
+  expect(screen.getByRole("option", { name: "Viaggio Toscana" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(list()).toHaveAttribute("aria-activedescendant", "cat-opt-3");
+  // Invio apre il catalogo con il focus.
+  fireEvent.keyDown(list(), { key: "Enter" });
+  expect(useLibrary.getState().filter.catalogId).toBe(3);
 });

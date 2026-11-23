@@ -126,7 +126,7 @@ describe("ordinamento dei volti per data", () => {
     pick("captured_desc");
     await waitFor(() => expect(lastSort()).toBe("captured_desc"));
     await screen.findByText("2021 · 2 volti");
-    expect(screen.getByTestId("face-2")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("face-2")).toHaveAttribute("aria-selected", "true");
   });
 });
 

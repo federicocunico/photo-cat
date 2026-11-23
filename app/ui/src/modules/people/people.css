@@ -581,3 +581,13 @@
 .people-photo-max {
   width: 5rem;
 }
+
+/* Griglia dei volti come listbox (unified-selection): il focus della tastiera resta sul
+   contenitore e il volto con il focus ha un anello distinto dalla selezione. */
+.people-grid-scroll:focus-visible {
+  outline: none;
+}
+.people-grid-scroll:focus-visible [data-cursor] {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 2px;
+}

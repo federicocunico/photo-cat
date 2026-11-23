@@ -194,3 +194,53 @@ fn trash_impact_counts_manual_catalogs_for_ids_and_filters() {
     })
     .unwrap();
 }
+
+/// Eliminazione di più cataloghi (unified-selection): un'unica operazione, le foto restano in
+/// libreria, i cataloghi di sistema vengono saltati; un id inesistente annulla tutto.
+#[test]
+fn delete_many_skips_system_catalogs_and_keeps_photos() {
+    use pc_store::model::CatalogKind;
+    let tmp = tempfile::tempdir().unwrap();
+    let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+    let (a, b, smart, trash, photo) = db
+        .write(|c| {
+            let photo = media(c, "a.jpg", None);
+            let a = repo::catalog::create(c, "Viaggio Toscana", CatalogKind::Manual, None)?;
+            let b = repo::catalog::create(c, "Matrimonio", CatalogKind::Manual, None)?;
+            let smart = repo::catalog::create(
+                c,
+                "Recenti",
+                CatalogKind::Smart,
+                Some(&serde_json::json!({"op": "and", "rules": []})),
+            )?;
+            repo::catalog::add_items(c, a, &[photo])?;
+            Ok((
+                a,
+                b,
+                smart,
+                repo::catalog::system_id(c, SYSTEM_TRASH)?,
+                photo,
+            ))
+        })
+        .unwrap();
+
+    // Un id inesistente: nessun catalogo eliminato.
+    assert!(db
+        .write(move |c| repo::catalog::delete_many(c, &[a, 999_999]))
+        .is_err());
+    assert!(db.read(move |c| repo::catalog::get(c, a)).is_ok());
+
+    let out = db
+        .write(move |c| repo::catalog::delete_many(c, &[a, b, trash, smart, a]))
+        .unwrap();
+    assert_eq!(out.deleted, vec![a, b, smart]);
+    assert_eq!(out.skipped, vec![trash]);
+    db.read(move |c| {
+        assert!(repo::catalog::get(c, a).is_err());
+        assert!(repo::catalog::get(c, trash).is_ok(), "il Cestino resta");
+        assert_eq!(repo::media::count(c)?, 1, "la foto resta in libreria");
+        assert!(repo::media::get(c, photo).is_ok());
+        Ok(())
+    })
+    .unwrap();
+}

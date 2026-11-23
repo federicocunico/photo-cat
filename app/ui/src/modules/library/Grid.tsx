@@ -19,7 +19,6 @@ import { commands, isTauri, type GridItem, type Target } from "../../lib/ipc";
 import { fmtDate, fmtDateTime, fmtInt } from "../../lib/format";
 import { latestOnly, retryUnlessSuperseded, useLibraryCount } from "../../lib/latest";
 import {
-  clickSelect,
   emptyFilter,
   idsSelection,
   rectangleSelect,
@@ -34,7 +33,9 @@ import {
 } from "../../store/library";
 import { useGridPages, windowAction } from "./gridPages";
 import { byBase, displayTotal, locate, toBase, type Expansion } from "./similarView";
-import { useActiveGrid } from "../../commands/gridShortcuts";
+import { useActivePane } from "../../commands/gridShortcuts";
+import { handleSelectionKey } from "../../lib/selection/useSelectionKeys";
+import { selectForContextMenu } from "../../lib/selection/model";
 import { useLibrarySelection } from "./useLibrarySelection";
 import { useCatalogAction } from "./useCatalogAction";
 import { thumbUrl } from "./thumbUrl";
@@ -261,6 +262,8 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const drag = useRef<{ x: number; y: number; initial: Selection } | null>(null);
+  /** Il trascinamento ha disegnato un rettangolo: il clic che lo chiude non svuota. */
+  const dragged = useRef(false);
   const tagInfo = useTagOverview().data;
   const tagColor = (name: string) => colorOf(tagInfo, name);
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; target: Target } | null>(
@@ -318,12 +321,16 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
   };
   const order = useMemo(() => items.map((i) => i.id), [items]);
   const grid = useLibrarySelection(order);
-  useActiveGrid({
-    selectAll: grid.selectAll,
-    invert: grid.invert,
-    clear: grid.clear,
-    count: () => grid.count,
-  });
+  useActivePane(
+    {
+      label: t("modules.library"),
+      selectAll: grid.selectAll,
+      invert: grid.invert,
+      clear: grid.clear,
+      count: () => grid.count,
+    },
+    scrollRef,
+  );
   const toggleGroup = (it: GridItem, base: number) => {
     const group = it.similarGroup;
     if (group == null) return;
@@ -449,58 +456,34 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     viewFilter,
     sort,
   ]);
-  const moveCursor = (to: number, extend: boolean) => {
+  /** Porta il focus della tastiera su una posizione: la rende visibile e la mostra nell'ispettore. */
+  const moveCursor = (to: number) => {
     const n = Math.max(0, Math.min(total - 1, to));
     setCursor(n);
     virt.scrollToIndex(Math.floor(n / cols), { align: "auto" });
     const it = at_(n).item;
-    if (!it) return;
-    if (extend) {
-      const anchor = useLibrary.getState().anchor ?? cursorItem?.id ?? it.id;
-      setRangeAnchor(anchor);
-      setSelection(clickSelect(order, [], anchor, it.id, { ctrl: false, shift: true }), it.id);
-    } else {
-      useLibrary.setState({ focused: it.id, anchor: it.id });
-    }
+    if (it) useLibrary.setState({ focused: it.id });
   };
   const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
-    const page = Math.max(1, Math.floor(e.currentTarget.clientHeight / rowHeight)) * cols;
+    // Modello di selezione comune (unified-selection): frecce che selezionano, Maiusc che estende,
+    // Ctrl che sposta solo il focus, Ctrl+Spazio, Ctrl+A, Ctrl+Maiusc+I ed Esc.
+    const handled = handleSelectionKey(e, {
+      layout: "grid",
+      columns: cols,
+      pageSize: Math.max(1, Math.floor(e.currentTarget.clientHeight / rowHeight)) * cols,
+      count: total,
+      cursor: total > 0 ? cursor : -1,
+      idAt: (n) => at_(n).item?.id,
+      moveTo: moveCursor,
+      select: grid.click,
+      ensureAnchor: grid.ensureAnchor,
+      selectAll: () => void grid.selectAll(),
+      invert: () => void grid.invert(),
+      clear: grid.count > 0 ? grid.clear : undefined,
+    });
+    if (handled) return true;
     const mod = e.ctrlKey || e.metaKey;
-    const moves: Record<string, number> = {
-      ArrowLeft: cursor - 1,
-      ArrowRight: cursor + 1,
-      ArrowUp: cursor - cols,
-      ArrowDown: cursor + cols,
-      PageUp: cursor - page,
-      PageDown: cursor + page,
-      Home: 0,
-      End: total - 1,
-    };
-    if (e.key in moves && !e.altKey && !mod) {
-      e.preventDefault();
-      moveCursor(moves[e.key], e.shiftKey);
-      return true;
-    }
-    if (mod && e.key === " " && cursorItem) {
-      // Ctrl+Spazio: aggiunge o toglie dalla selezione l'elemento con il focus.
-      e.preventDefault();
-      const id = cursorItem.id;
-      if (selection.mode === "filter")
-        replaceSelection(selSet(selection, [id], !selHas(selection, id)), id);
-      else
-        setSelection(
-          clickSelect(order, explicit ?? [], null, id, { ctrl: true, shift: false }),
-          id,
-        );
-      setRangeAnchor(id);
-      return true;
-    }
-    if (mod && (e.key === "a" || e.key === "A") && !e.shiftKey) {
-      e.preventDefault();
-      void grid.selectAll();
-      return true;
-    }
     const restoreView = filter.excludedFrom != null;
     if (
       !mod &&
@@ -527,16 +510,19 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
     grid.click(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   };
   // Clic destro: sulla selezione agisce su tutta, altrimenti seleziona solo la miniatura.
+  // Clic destro (modello comune): su una foto selezionata agisce su tutta la selezione, altrimenti
+  // seleziona solo quella foto.
   const onMenu = (id: number) => (x: number, y: number) => {
-    if (selHas(selection, id)) {
-      // "Apri con" lavora sugli elementi caricati; le azioni bulk sull'intera selezione.
-      const ids = explicit ?? order.filter((i) => selHas(selection, i));
-      setMenu({ x, y, ids, target: selTarget(selection) });
-    } else {
+    const next = selectForContextMenu(selection, id);
+    if (next !== selection) {
       setSelection([id], id);
       setRangeAnchor(id);
       setMenu({ x, y, ids: [id], target: { kind: "ids", ids: [id] } });
+      return;
     }
+    // "Apri con" lavora sugli elementi caricati; le azioni bulk sull'intera selezione.
+    const ids = explicit ?? order.filter((i) => selHas(selection, i));
+    setMenu({ x, y, ids, target: selTarget(selection) });
   };
 
   if (isTauri() && (pages.isPending || (pages.isError && !pages.data))) {
@@ -656,6 +642,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           h: Math.abs(y - d.y),
         };
         setBox(b);
+        dragged.current = true;
         const inside = rectangleSelect(
           order,
           b,
@@ -667,6 +654,17 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
       onPointerUp={() => {
         drag.current = null;
         setBox(null);
+      }}
+      onClick={(e) => {
+        // Il clic che chiude un rettangolo non svuota ciò che il rettangolo ha appena scelto.
+        if (dragged.current) {
+          dragged.current = false;
+          return;
+        }
+        // Clic su uno spazio vuoto (non su una miniatura o un pulsante): svuota la selezione.
+        if ((e.target as HTMLElement).closest('button, [role="option"]')) return;
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+        if (grid.count > 0) grid.clear();
       }}
       onPointerCancel={() => {
         drag.current = null;
@@ -788,7 +786,7 @@ export function LibraryGrid({ initialWidth }: { initialWidth?: number }) {
           onIndex={(n) => {
             setViewerAt(n);
             // La griglia segue: alla chiusura il focus è sulla stessa foto.
-            moveCursor(n, false);
+            moveCursor(n);
           }}
           onClose={() => setViewerAt(null)}
           onKey={(key) => {

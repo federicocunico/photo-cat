@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../i18n";
-import { useActiveGrid, useGridShortcuts, type ActiveGrid } from "./gridShortcuts";
+import { useRef } from "react";
+import { useActivePane, useGridShortcuts, type ActivePane } from "./gridShortcuts";
 import { useCommandStore } from "./registry";
 
 afterEach(() => {
@@ -9,9 +10,9 @@ afterEach(() => {
   useCommandStore.setState({ commands: [] });
 });
 
-function Host({ grid }: { grid: ActiveGrid }) {
+function Host({ grid }: { grid: ActivePane }) {
   useGridShortcuts();
-  useActiveGrid(grid);
+  useActivePane(grid);
   return (
     <>
       <input aria-label="Cerca" />
@@ -20,7 +21,7 @@ function Host({ grid }: { grid: ActiveGrid }) {
   );
 }
 
-const mk = (count = 3): ActiveGrid => ({
+const mk = (count = 3): ActivePane => ({
   selectAll: vi.fn(),
   invert: vi.fn(),
   clear: vi.fn(),
@@ -96,52 +97,96 @@ describe("scorciatoie di selezione della shell", () => {
     panel.remove();
   });
 
-  it("una vista secondaria (con hasFocus) è attiva solo con il focus, in qualunque ordine", () => {
-    let focused = false;
-    const main = mk();
-    const side: ActiveGrid = { ...mk(), hasFocus: () => focused };
-    function Pair({ sideFirst }: { sideFirst: boolean }) {
+  it("il riquadro attivo è quello dell'ultimo clic o focus, in qualunque ordine di montaggio", () => {
+    const list = mk();
+    const faces = mk();
+    function Pane({ grid, name }: { grid: ActivePane; name: string }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useActivePane(grid, ref);
+      return (
+        <div ref={ref} data-testid={name}>
+          <button type="button">{name}</button>
+        </div>
+      );
+    }
+    function Pair({ listFirst }: { listFirst: boolean }) {
       useGridShortcuts();
-      return sideFirst ? (
+      return listFirst ? (
         <>
-          <Reg grid={side} />
-          <Reg grid={main} />
+          <Pane grid={list} name="elenco" />
+          <Pane grid={faces} name="volti" />
         </>
       ) : (
         <>
-          <Reg grid={main} />
-          <Reg grid={side} />
+          <Pane grid={faces} name="volti" />
+          <Pane grid={list} name="elenco" />
         </>
       );
     }
-    function Reg({ grid }: { grid: ActiveGrid }) {
-      useActiveGrid(grid);
-      return null;
-    }
-    for (const sideFirst of [true, false]) {
-      const { unmount } = render(<Pair sideFirst={sideFirst} />);
-      focused = false;
+    for (const listFirst of [true, false]) {
+      const { unmount, getByTestId, getByText } = render(<Pair listFirst={listFirst} />);
+      // Senza interazioni vale l'ultimo montato.
       fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-      expect(main.selectAll).toHaveBeenCalledTimes(1);
-      expect(side.selectAll).not.toHaveBeenCalled();
-      focused = true;
+      expect((listFirst ? faces : list).selectAll).toHaveBeenCalledTimes(1);
+      fireEvent.mouseDown(getByText("elenco"));
       fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-      expect(side.selectAll).toHaveBeenCalledTimes(1);
-      expect(main.selectAll).toHaveBeenCalledTimes(1);
+      expect(list.selectAll).toHaveBeenCalledTimes(listFirst ? 1 : 2);
+      expect(getByTestId("elenco")).toHaveAttribute("data-active-pane");
+      expect(getByTestId("volti")).not.toHaveAttribute("data-active-pane");
+      getByText("volti").focus();
+      fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+      expect(faces.selectAll).toHaveBeenCalledTimes(listFirst ? 2 : 1);
+      expect(getByTestId("volti")).toHaveAttribute("data-active-pane");
+      expect(getByTestId("elenco")).not.toHaveAttribute("data-active-pane");
+      // Ogni riquadro conserva la propria selezione: il cambio di riquadro non svuota l'altro.
+      expect(list.clear).not.toHaveBeenCalled();
+      expect(faces.clear).not.toHaveBeenCalled();
       unmount();
       useCommandStore.setState({ commands: [] });
-      vi.mocked(main.selectAll).mockClear();
-      vi.mocked(side.selectAll).mockClear();
+      vi.mocked(list.selectAll).mockClear();
+      vi.mocked(faces.selectAll).mockClear();
     }
   });
 
-  it("una vista secondaria da sola senza focus non riceve le scorciatoie", () => {
-    const side: ActiveGrid = { ...mk(), hasFocus: () => false };
-    render(<Host grid={side} />);
+  it("un clic fuori dai riquadri (es. in un dialogo) non cambia il riquadro attivo", () => {
+    const list = mk();
+    const faces = mk();
+    function Pane({ grid, name }: { grid: ActivePane; name: string }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useActivePane(grid, ref);
+      return <div ref={ref}>{name}</div>;
+    }
+    function Pair() {
+      useGridShortcuts();
+      return (
+        <>
+          <Pane grid={list} name="elenco" />
+          <Pane grid={faces} name="volti" />
+        </>
+      );
+    }
+    const { getByText } = render(<Pair />);
+    fireEvent.mouseDown(getByText("elenco"));
+    const portal = document.createElement("div");
+    document.body.appendChild(portal);
+    fireEvent.mouseDown(portal);
+    portal.remove();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true });
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(side.selectAll).not.toHaveBeenCalled();
-    expect(side.clear).not.toHaveBeenCalled();
+    expect(list.selectAll).toHaveBeenCalledTimes(1);
+    expect(faces.selectAll).not.toHaveBeenCalled();
+  });
+
+  it("un solo riquadro non riceve l'indicatore", () => {
+    const grid = mk();
+    function One() {
+      const ref = useRef<HTMLDivElement>(null);
+      useGridShortcuts();
+      useActivePane(grid, ref);
+      return <div ref={ref} data-testid="solo" />;
+    }
+    const { getByTestId } = render(<One />);
+    fireEvent.mouseDown(getByTestId("solo"));
+    expect(getByTestId("solo")).not.toHaveAttribute("data-active-pane");
   });
 
   it("Esc non fa nulla senza selezione e senza griglia attiva", () => {

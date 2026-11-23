@@ -106,3 +106,29 @@
   background: var(--pc-accent-soft-bg);
   color: var(--pc-accent-soft-text);
 }
+
+/* Schede come voci di una listbox (unified-selection): la voce è il corpo della scheda, i
+   comandi stanno accanto; il focus della tastiera resta sull'elenco. */
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-3);
+}
+.cat-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-space-2);
+  cursor: pointer;
+  border-radius: var(--pc-radius-md, 8px);
+}
+.cat-card[data-selected] {
+  background: var(--pc-selection-bg);
+  border-color: var(--pc-selection-border);
+}
+.cat-grid:focus-visible {
+  outline: none;
+}
+.cat-grid:focus-visible [data-cursor] {
+  outline: 2px solid var(--pc-focus);
+  outline-offset: 4px;
+}

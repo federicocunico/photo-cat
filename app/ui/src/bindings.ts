@@ -158,6 +158,11 @@ export const commands = {
 	saveCatalog: (id: number | null, name: string, kind: CatalogKind, rules: Value | null) => __TAURI_INVOKE<number>("save_catalog", { id, name, kind, rules }),
 	deleteCatalog: (id: number, confirmed: boolean) => __TAURI_INVOKE<null>("delete_catalog", { id, confirmed }),
 	/**
+	 *  Elimina più cataloghi in un'unica operazione (unified-selection); i cataloghi di sistema
+	 *  vengono saltati e le foto restano in libreria.
+	 */
+	deleteCatalogs: (ids: number[], confirmed: boolean) => __TAURI_INVOKE<DeleteCatalogsResult>("delete_catalogs", { ids, confirmed }),
+	/**
 	 *  Mette da parte i duplicati nel catalogo di sistema "Duplicati" (issue #29);
 	 *  restituisce quante copie ha spostato. Annullabile con `undo_bulk`.
 	 */
@@ -843,6 +848,15 @@ export type Cursor = {
 export type DatePrecision = "day" | "month" | "year";
 
 export type DateSource = "exif_original" | "exif_create" | "file_system" | "manual";
+
+/**
+ *  Esito dell'eliminazione di più cataloghi: quanti sono stati eliminati e quali cataloghi di
+ *  sistema sono stati saltati.
+ */
+export type DeleteCatalogsResult = {
+	deleted: number,
+	skipped: number[],
+};
 
 /**  Un RAF che la fotocamera ha rifiutato o che non si è potuto leggere. */
 export type DevelopFailure = {

@@ -149,12 +149,12 @@ describe("FaceGrid Seleziona tutto", () => {
     await screen.findByText("400 selezionati");
     fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
     await screen.findByText("399 selezionati");
-    expect(screen.getByTestId("face-3").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Inverti selezione" }));
     await screen.findByText("1 selezionati");
-    expect(screen.getByTestId("face-3").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("face-1").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("face-1").getAttribute("aria-selected")).toBe("false");
   });
 
   it("Mostra nella cartella su «tutti» apre le foto di tutti i volti, anche non caricati", async () => {
@@ -188,6 +188,6 @@ describe("FaceGrid Seleziona tutto", () => {
     await screen.findByText("400 selezionati");
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText("400 selezionati")).toBeNull());
-    expect(screen.getByTestId("face-1").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("face-1").getAttribute("aria-selected")).toBe("false");
   });
 });

@@ -1,6 +1,6 @@
 import { Coachmark } from "../../components/guide/Coachmark";
 import { QueryView } from "../../components/feedback/QueryView";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Catalog, type CatalogSummary } from "../../lib/ipc";
@@ -13,17 +13,23 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  ContextMenu,
   EmptyState,
   FormField,
   InlineAlert,
   PageHeader,
   SegmentedControl,
+  type MenuItem,
 } from "../../components/ui";
 import { Icon } from "../../components/icons";
 import { useLabelName } from "../library/labelName";
 import { RuleEditor } from "./RuleEditor";
 import { newRule, summarize, type RuleNode } from "./rules";
 import { catalogLabel, collectDuplicates, startQualityCheck } from "./systemCatalogs";
+import { useSelection } from "../../lib/selection/useSelection";
+import { handleSelectionKey } from "../../lib/selection/useSelectionKeys";
+import { selectForContextMenu } from "../../lib/selection/model";
+import { useTypeAhead } from "../../lib/selection/useTypeAhead";
 import "./catalogs.css";
 
 const CATALOGS_KEY = ["catalogs"];
@@ -40,35 +46,151 @@ function openCatalog(id: number, excluded = false) {
   useLayout.getState().openModule({ module: "library" });
 }
 
+/** Id DOM della scheda: bersaglio di `aria-activedescendant` dell'elenco. */
+const catOptionId = (id: number) => `cat-opt-${id}`;
+
+/** Numero di colonne della griglia CSS (1 se non misurabile, es. nei test). */
+function gridColumns(el: HTMLElement | null): number {
+  const tpl = el ? getComputedStyle(el).gridTemplateColumns : "";
+  return Math.max(1, tpl ? tpl.split(" ").filter(Boolean).length : 1);
+}
+
 export function CatalogsPage() {
   const { t } = useTranslation();
   const tipAnchor = useRef<HTMLSpanElement>(null);
   const qc = useQueryClient();
   // `undefined`: editor chiuso; `null`: nuovo catalogo.
   const [editing, setEditing] = useState<Catalog | null | undefined>(undefined);
-  const [deleting, setDeleting] = useState<CatalogSummary | null>(null);
+  // Cataloghi da eliminare (uno o più), in attesa di conferma.
+  const [deleting, setDeleting] = useState<CatalogSummary[] | null>(null);
   const catalogs = useQuery({
     queryKey: CATALOGS_KEY,
     queryFn: commands.listCatalogs,
     enabled: isTauri(),
   });
-  const remove = async (s: CatalogSummary) => {
+  const list = useMemo(() => catalogs.data ?? [], [catalogs.data]);
+  const order = useMemo(() => list.map((s) => s.catalog.id), [list]);
+
+  // Selezione e tastiera (modello di selezione comune, unified-selection).
+  const sel = useSelection<null, number>({ filter: null, order });
+  const [cursorId, setCursorId] = useState<number | null>(null);
+  const cursor = cursorId == null ? -1 : order.indexOf(cursorId);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const selectedSummaries = () => list.filter((s) => sel.has(s.catalog.id));
+  const askDelete = (items: CatalogSummary[]) => {
+    if (items.length) setDeleting(items);
+  };
+  const remove = async (items: CatalogSummary[]) => {
     try {
-      await commands.deleteCatalog(s.catalog.id, true);
-      notify({ message: t("catalogs.deleted", { name: s.catalog.name }), tone: "ok" });
+      if (items.length === 1 && !items[0]!.catalog.system) {
+        const c = items[0]!.catalog;
+        await commands.deleteCatalog(c.id, true);
+        notify({ message: t("catalogs.deleted", { name: c.name }), tone: "ok" });
+      } else {
+        const out = await commands.deleteCatalogs(
+          items.map((s) => s.catalog.id),
+          true,
+        );
+        notify({ message: t("catalogs.deletedMany", { count: out.deleted }), tone: "ok" });
+      }
+      sel.clear();
       await qc.invalidateQueries({ queryKey: CATALOGS_KEY });
     } catch (e) {
       notifyError(e);
     }
   };
+  const typeAhead = useTypeAhead(
+    list.map((s) => catalogLabel(s.catalog, t)),
+    (i) => {
+      const id = order[i];
+      if (id == null) return;
+      setCursorId(id);
+      sel.click(id, { ctrl: false, shift: false });
+    },
+  );
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === "Enter" && !mod && !e.shiftKey && !e.altKey && cursorId != null) {
+      e.preventDefault();
+      openCatalog(cursorId);
+      return;
+    }
+    if (e.key === "Delete" && !mod && sel.count > 0) {
+      e.preventDefault();
+      askDelete(selectedSummaries());
+      return;
+    }
+    if (
+      handleSelectionKey(e, {
+        layout: "grid",
+        columns: gridColumns(gridRef.current),
+        pageSize: gridColumns(gridRef.current) * 3,
+        count: order.length,
+        cursor,
+        idAt: (i) => order[i],
+        moveTo: (i) => setCursorId(order[i] ?? null),
+        select: sel.click,
+        ensureAnchor: sel.ensureAnchor,
+        selectAll: () => void sel.selectAll(),
+        invert: () => void sel.invert(),
+        clear: sel.count > 0 ? sel.clear : undefined,
+      })
+    )
+      return;
+    typeAhead(e);
+  };
+  const menuItems = (): MenuItem[] => {
+    const items = selectedSummaries();
+    const one = items.length === 1 ? items[0]! : null;
+    const deletable = items.filter((s) => !s.catalog.system);
+    return [
+      ...(one
+        ? [
+            { label: t("catalogs.open"), onSelect: () => openCatalog(one.catalog.id) },
+            ...(!one.catalog.system
+              ? [{ label: t("catalogs.edit"), onSelect: () => setEditing(one.catalog) }]
+              : []),
+          ]
+        : []),
+      {
+        label:
+          items.length > 1
+            ? t("catalogs.deleteMany", { count: items.length })
+            : t("catalogs.delete"),
+        danger: true,
+        disabled: deletable.length === 0,
+        onSelect: () => askDelete(items),
+      },
+    ];
+  };
+  const skipped = (deleting ?? []).filter((s) => s.catalog.system);
+  const toDelete = (deleting ?? []).filter((s) => !s.catalog.system);
+  const names = (items: CatalogSummary[]) =>
+    items.map((s) => `«${catalogLabel(s.catalog, t)}»`).join(", ");
   return (
     <section className="cat-page">
       <PageHeader
         title={<span ref={tipAnchor}>{t("modules.catalogs")}</span>}
         actions={
-          <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={() => setEditing(null)}>
-            {t("catalogs.create")}
-          </Button>
+          <>
+            {sel.count > 1 && (
+              <Button
+                variant="danger"
+                icon={<Icon.Delete size={16} />}
+                onClick={() => askDelete(selectedSummaries())}
+              >
+                {t("catalogs.deleteMany", { count: sel.count })}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              icon={<Icon.Plus size={16} />}
+              onClick={() => setEditing(null)}
+            >
+              {t("catalogs.create")}
+            </Button>
+          </>
         }
       />
       <Coachmark tip="catalogs" anchor={tipAnchor} learnMore="catalogs" />
@@ -96,38 +218,111 @@ export function CatalogsPage() {
           )
         }
       >
-        {(list) => (
-          <div className="cat-grid">
-            {list.map((s) => (
-              <CatalogCard
-                key={s.catalog.id}
-                summary={s}
-                onEdit={() => setEditing(s.catalog)}
-                onDelete={() => setDeleting(s)}
-              />
-            ))}
-          </div>
+        {() => (
+          <ContextMenu label={t("catalogs.listLabel")} items={menuItems()}>
+            <div
+              ref={gridRef}
+              role="listbox"
+              aria-multiselectable="true"
+              aria-label={t("catalogs.listLabel")}
+              tabIndex={0}
+              aria-activedescendant={cursorId != null ? catOptionId(cursorId) : undefined}
+              onKeyDown={onKeyDown}
+              onClick={(e) => {
+                // Clic su uno spazio vuoto (non su una scheda o un pulsante): svuota la selezione.
+                if ((e.target as HTMLElement).closest('button, [role="option"]')) return;
+                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                if (sel.count > 0) sel.clear();
+              }}
+              onContextMenu={(e) => {
+                // Fuori da una scheda non c'è nulla su cui agire: niente menu.
+                if (!(e.target as HTMLElement).closest('[role="option"]')) e.preventDefault();
+              }}
+              className="cat-grid"
+            >
+              {list.map((s) => (
+                <CatalogCard
+                  key={s.catalog.id}
+                  summary={s}
+                  selected={sel.has(s.catalog.id)}
+                  cursor={s.catalog.id === cursorId}
+                  onClick={(e) => {
+                    setCursorId(s.catalog.id);
+                    sel.click(s.catalog.id, {
+                      ctrl: e.ctrlKey || e.metaKey,
+                      shift: e.shiftKey,
+                    });
+                  }}
+                  onContextMenu={() => {
+                    // Clic destro: su un catalogo non selezionato, selezione solo di quello.
+                    const id = s.catalog.id;
+                    if (selectForContextMenu(sel.selection, id) !== sel.selection)
+                      sel.setIds([id], id);
+                    setCursorId(id);
+                  }}
+                  onEdit={() => setEditing(s.catalog)}
+                  onDelete={() => askDelete([s])}
+                />
+              ))}
+            </div>
+          </ContextMenu>
         )}
       </QueryView>
       <ConfirmDialog
-        open={deleting != null}
+        open={deleting != null && toDelete.length > 0}
         onOpenChange={(open) => !open && setDeleting(null)}
-        title={t("catalogs.deleteTitle", { name: deleting?.catalog.name ?? "" })}
-        message={t("catalogs.deleteMessage", { count: deleting?.items ?? 0 })}
+        title={
+          deleting?.length === 1
+            ? t("catalogs.deleteTitle", { name: deleting[0]!.catalog.name })
+            : t("catalogs.deleteManyTitle", { count: toDelete.length })
+        }
+        message={
+          deleting?.length === 1
+            ? t("catalogs.deleteMessage", { count: deleting[0]!.items })
+            : [
+                t("catalogs.deleteManyMessage", { names: names(toDelete) }),
+                skipped.length
+                  ? t("catalogs.deleteManySkipped", {
+                      count: skipped.length,
+                      names: names(skipped),
+                    })
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")
+        }
         files="untouched"
-        confirmLabel={t("catalogs.delete")}
+        confirmLabel={
+          deleting?.length === 1
+            ? t("catalogs.delete")
+            : t("catalogs.deleteMany", { count: toDelete.length }).replace("…", "")
+        }
         onConfirm={() => deleting && remove(deleting)}
       />
+      {deleting != null && toDelete.length === 0 && (
+        <InlineAlert tone="warn" onDismiss={() => setDeleting(null)}>
+          {t("catalogs.deleteManyOnlySystem")}
+        </InlineAlert>
+      )}
     </section>
   );
 }
 
 function CatalogCard({
   summary: { catalog: c, items, excluded },
+  selected,
+  cursor,
+  onClick,
+  onContextMenu,
   onEdit,
   onDelete,
 }: {
   summary: CatalogSummary;
+  selected: boolean;
+  /** La scheda ha il focus della tastiera (distinto dalla selezione). */
+  cursor: boolean;
+  onClick: (e: MouseEvent) => void;
+  onContextMenu: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -136,30 +331,40 @@ function CatalogCard({
   const smart = c.kind === "smart";
   const label = catalogLabel(c, t);
   return (
-    <Card className="cat-card" aria-label={label}>
-      <div className="cat-card-head">
-        <h2>{label}</h2>
-        <Badge tone={smart ? "info" : "neutral"}>
-          {c.system
-            ? t("catalogs.system.badge")
-            : smart
-              ? t("catalogs.smart")
-              : t("catalogs.manual")}
-        </Badge>
+    <section className="ui-card cat-card" aria-label={label} data-selected={selected || undefined}>
+      {/* La voce selezionabile: solo testo, i comandi stanno accanto (nessun controllo annidato). */}
+      <div
+        role="option"
+        id={catOptionId(c.id)}
+        aria-selected={selected}
+        aria-label={label}
+        data-cursor={cursor || undefined}
+        onClick={onClick}
+        onDoubleClick={() => openCatalog(c.id)}
+        onContextMenu={onContextMenu}
+        className="cat-card-body"
+      >
+        <div className="cat-card-head">
+          <h2>{label}</h2>
+          <Badge tone={smart ? "info" : "neutral"}>
+            {c.system
+              ? t("catalogs.system.badge")
+              : smart
+                ? t("catalogs.smart")
+                : t("catalogs.manual")}
+          </Badge>
+        </div>
+        {c.system && <p className="muted">{t(`catalogs.system.help.${c.system}`)}</p>}
+        <p className="cat-card-meta">
+          <span>{t("catalogs.photos", { count: items, n: fmtInt(items) })}</span>
+        </p>
       </div>
-      {c.system && <p className="muted">{t(`catalogs.system.help.${c.system}`)}</p>}
-      <p className="cat-card-meta">
-        <span>{t("catalogs.photos", { count: items, n: fmtInt(items) })}</span>
-        {excluded > 0 && (
-          <>
-            <span aria-hidden="true">·</span>
-            <Button variant="ghost" size="sm" onClick={() => openCatalog(c.id, true)}>
-              {t("catalogs.excluded", { count: excluded, n: fmtInt(excluded) })}
-            </Button>
-          </>
-        )}
-      </p>
       <div className="cat-card-actions">
+        {excluded > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => openCatalog(c.id, true)}>
+            {t("catalogs.excluded", { count: excluded, n: fmtInt(excluded) })}
+          </Button>
+        )}
         <Button onClick={() => openCatalog(c.id)}>{t("catalogs.open")}</Button>
         {c.system === "duplicates" && (
           <Button variant="ghost" onClick={() => collectDuplicates(qc, t)}>
@@ -183,7 +388,7 @@ function CatalogCard({
           </>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 

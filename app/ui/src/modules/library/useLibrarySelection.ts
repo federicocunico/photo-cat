@@ -1,5 +1,5 @@
 import { commands } from "../../lib/ipc";
-import { useGridSelection, type GridSelectionState } from "../../lib/useGridSelection";
+import { useSelection, type SelectionStore } from "../../lib/selection/useSelection";
 import { useLibrary } from "../../store/library";
 import { notifyError } from "../../store/toasts";
 
@@ -11,13 +11,13 @@ const libraryState = (selection: ReturnType<typeof useLibrary.getState>["selecti
     getAnchor: () => useLibrary.getState().anchor,
     setAnchor: (id) => useLibrary.getState().setAnchor(id),
     replace: (s, focused) => useLibrary.getState().replaceSelection(s, focused),
-  }) satisfies GridSelectionState<ReturnType<typeof useLibrary.getState>["filter"]>;
+  }) satisfies SelectionStore<ReturnType<typeof useLibrary.getState>["filter"]>;
 
-/** `useGridSelection` sulla Libreria; `order` serve a Maiusc+clic (assente: nessun intervallo). */
+/** `useSelection` sulla Libreria; `order` serve a Maiusc+clic (assente: nessun intervallo). */
 export function useLibrarySelection(order: number[] = []) {
   const filter = useLibrary((s) => s.filter);
   const selection = useLibrary((s) => s.selection);
-  return useGridSelection({
+  return useSelection({
     filter,
     order,
     fetchBase: () => commands.librarySelection(filter),

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import { useRef } from "react";
 import { usePeopleHotkeys, type PeopleHotkeyActions } from "./usePeopleHotkeys";
+import { useActivePane, type ActivePane } from "../../commands/gridShortcuts";
 
 function actions(): PeopleHotkeyActions {
   return {
-    navigateGroup: vi.fn(),
     toggleFocusedFace: vi.fn(),
     focusWhoIs: vi.fn(),
     focusMove: vi.fn(),
@@ -15,7 +16,45 @@ function actions(): PeopleHotkeyActions {
   };
 }
 
-function Harness({ a, dialog = false }: { a: PeopleHotkeyActions; dialog?: boolean }) {
+const pane = (): ActivePane => ({
+  selectAll: vi.fn(),
+  invert: vi.fn(),
+  clear: vi.fn(),
+  count: () => 0,
+});
+
+/** Un riquadro con una raccolta focalizzabile che registra i tasti ricevuti. */
+function Pane({ name, keys }: { name: string; keys: string[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useActivePane(pane(), ref);
+  return (
+    <div ref={ref}>
+      <div
+        role="listbox"
+        aria-label={name}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          keys.push(`${name}:${e.shiftKey ? "Maiusc+" : ""}${e.key}`);
+          e.preventDefault();
+        }}
+      >
+        <div role="option" aria-selected={false}>
+          {name}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Harness({
+  a,
+  dialog = false,
+  keys = [],
+}: {
+  a: PeopleHotkeyActions;
+  dialog?: boolean;
+  keys?: string[];
+}) {
   usePeopleHotkeys(a);
   return (
     <div>
@@ -27,6 +66,8 @@ function Harness({ a, dialog = false }: { a: PeopleHotkeyActions; dialog?: boole
       <select aria-label="Sposta in">
         <option>a</option>
       </select>
+      <Pane name="elenco" keys={keys} />
+      <Pane name="volti" keys={keys} />
       {dialog && (
         <div role="dialog" aria-modal="true">
           finestra
@@ -50,12 +91,25 @@ describe("usePeopleHotkeys", () => {
   });
 
   it("lascia le frecce al selettore", () => {
-    const a = actions();
-    const { getByLabelText } = render(<Harness a={a} />);
+    const keys: string[] = [];
+    const { getByLabelText } = render(<Harness a={actions()} keys={keys} />);
     fireEvent.keyDown(getByLabelText("Sposta in"), { key: "ArrowDown" });
-    expect(a.navigateGroup).not.toHaveBeenCalled();
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(a.navigateGroup).toHaveBeenCalledWith(1);
+    expect(keys).toEqual([]);
+  });
+
+  it("fuori da un elenco le frecce vanno al riquadro attivo, con i modificatori", () => {
+    const keys: string[] = [];
+    const { getByText, getByRole } = render(<Harness a={actions()} keys={keys} />);
+    // Ultimo clic sui volti: la freccia giù (con il focus su un pulsante) si muove tra i volti.
+    fireEvent.mouseDown(getByText("volti"));
+    getByText("Unisci").focus();
+    fireEvent.keyDown(getByText("Unisci"), { key: "ArrowDown" });
+    expect(keys).toEqual(["volti:ArrowDown"]);
+    expect(document.activeElement).toBe(getByRole("listbox", { name: "volti" }));
+    // Poi sull'elenco: Maiusc+su va all'elenco, non ai volti.
+    fireEvent.mouseDown(getByText("elenco"));
+    fireEvent.keyDown(document.body, { key: "ArrowUp", shiftKey: true });
+    expect(keys).toEqual(["volti:ArrowDown", "elenco:Maiusc+ArrowUp"]);
   });
 
   it("si sospende con una finestra modale aperta", () => {

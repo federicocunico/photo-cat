@@ -415,6 +415,8 @@ describe("Revisione da tastiera", () => {
         within(list).getByRole("option", { name: /Persona senza nome · 8 foto/i }),
       ).toHaveAttribute("aria-selected", "true");
     });
+    // Da tastiera il gruppo raggiunto si apre dopo una breve pausa (150 ms).
+    await screen.findByRole("combobox", { name: "Chi è?" });
 
     fireEvent.keyDown(window, { key: "n" });
     const who = await screen.findByRole("combobox", { name: "Chi è?" });
@@ -564,4 +566,39 @@ it("issue #23: le foto della persona si aprono in Libreria, tutte selezionate", 
   const lib = useLibrary.getState();
   expect(lib.filter.personIds).toEqual([1]);
   expect(lib.selection).toMatchObject({ mode: "filter", total: 168 });
+});
+
+it("con il focus sulla griglia dei volti la freccia giù si muove tra i volti, non tra i gruppi", async () => {
+  commandsMock.listGroups.mockResolvedValue({
+    items: [row({ id: 1, faces: 12, photos: 12 }), row({ id: 2, faces: 5, photos: 5 })],
+    next: null,
+    total: 2,
+  } as never);
+  commandsMock.groupFaces.mockResolvedValue({
+    items: Array.from({ length: 12 }, (_, i) => face({ id: 101 + i, personId: 1 })),
+    next: null,
+    total: 12,
+    goodCount: 12,
+    discardedCount: 0,
+  } as never);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PeopleModule />
+    </QueryClientProvider>,
+  );
+  const list = await screen.findByTestId("group-list-scroll");
+  fireEvent.click(await within(list).findByText(/Persona senza nome · 12 foto/i));
+  fireEvent.click(await screen.findByTestId("face-101"));
+  const grid = screen.getByTestId("face-grid-scroll");
+  grid.focus();
+  fireEvent.keyDown(grid, { key: "ArrowDown" });
+  // Un volto più in basso è selezionato; il gruppo aperto resta il primo.
+  expect(screen.getByTestId("face-101")).toHaveAttribute("aria-selected", "false");
+  expect(grid.getAttribute("aria-activedescendant")).not.toBe("face-opt-101");
+  expect(
+    within(list).getByRole("option", { name: /Persona senza nome · 12 foto/i }),
+  ).toHaveAttribute("aria-current", "true");
+  expect(
+    within(list).getByRole("option", { name: /Persona senza nome · 5 foto/i }),
+  ).not.toHaveAttribute("aria-current");
 });

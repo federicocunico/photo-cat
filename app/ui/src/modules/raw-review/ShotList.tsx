@@ -1,6 +1,6 @@
 // Elenco degli scatti della sessione (barra laterale): miniatura, nome, stelle e variante
 // scelta. È virtualizzato (160 scatti o più) e chiede le miniature solo per le righe visibili.
-// La selezione multipla usa `useGridSelection`: gli id sono le posizioni degli scatti
+// La selezione multipla usa `useSelection`: gli id sono le posizioni degli scatti
 // nell'elenco della sessione, che non cambia finché la sessione resta aperta.
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -14,11 +14,11 @@ import {
   type MouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useActiveGrid } from "../../commands/gridShortcuts";
+import { useActivePane } from "../../commands/gridShortcuts";
 import { Button } from "../../components/ui";
 import { commands } from "../../lib/ipc";
 import type { ReviewShotView, ShotDecision } from "../../lib/ipc";
-import { useGridSelection } from "../../lib/useGridSelection";
+import { useSelection } from "../../lib/selection/useSelection";
 import { selHas } from "../../store/library";
 import { notifyError } from "../../store/toasts";
 import { presetLabel } from "./presetLabel";
@@ -61,7 +61,7 @@ export function ShotList({
   const total = shots.length;
 
   const order = useMemo(() => shots.map((_, i) => i), [shots]);
-  const selection = useGridSelection<Scope>({
+  const selection = useSelection<Scope>({
     filter: { sessionId },
     order,
     // Gli scatti sono già in memoria: la base dell'insieme completo si calcola qui.
@@ -72,13 +72,14 @@ export function ShotList({
   // Seleziona tutto, Inverti ed Esc passano dalla shell alla lista che ha il fuoco.
   const gridRef = useRef(selection);
   gridRef.current = selection;
-  useActiveGrid(
+  useActivePane(
     {
       selectAll: () => gridRef.current.selectAll(),
       invert: () => gridRef.current.invert(),
       clear: () => gridRef.current.clear(),
       count: () => gridRef.current.count,
     },
+    undefined,
     focused,
   );
 

@@ -104,3 +104,23 @@ it("da tastiera: freccia destra apre il sottomenu e il focus va alla ricerca", a
   await user.keyboard("{ArrowDown}{Enter}");
   expect(onAdd).toHaveBeenCalledWith({ kind: "ids", ids }, 20, 3, "Vacanze");
 });
+
+it("la testata del menu dice su quante foto agisce, anche con una selezione per filtro", () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <GridContextMenu
+        x={0}
+        y={0}
+        ids={ids}
+        target={{ kind: "filter", filter: {} as never, maxId: 9000, except: [] }}
+        count={18000}
+        onOpen={vi.fn()}
+        onPlace={vi.fn()}
+        onAddToCatalog={onAdd}
+        onClose={onClose}
+      />
+    </QueryClientProvider>,
+  );
+  // 20 foto caricate, ma il menu agisce sulle 18.000 selezionate.
+  expect(screen.getByRole("menu")).toHaveTextContent(/8\.000 foto/);
+});

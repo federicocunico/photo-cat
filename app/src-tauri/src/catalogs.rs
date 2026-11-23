@@ -53,6 +53,40 @@ pub async fn delete_catalog(state: State<'_, AppState>, id: i64, confirmed: bool
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
 }
+/// Esito dell'eliminazione di più cataloghi: quanti sono stati eliminati e quali cataloghi di
+/// sistema sono stati saltati.
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteCatalogsResult {
+    pub deleted: u32,
+    pub skipped: Vec<i64>,
+}
+
+/// Elimina più cataloghi in un'unica operazione (unified-selection); i cataloghi di sistema
+/// vengono saltati e le foto restano in libreria.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_catalogs(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    confirmed: bool,
+) -> AppResult<DeleteCatalogsResult> {
+    if !confirmed {
+        return Err(AppError::invalid_input("conferma richiesta"));
+    }
+    let db = state.store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db.write(move |c| repo::catalog::delete_many(c, &ids))
+            .map(|r| DeleteCatalogsResult {
+                deleted: r.deleted.len() as u32,
+                skipped: r.skipped,
+            })
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+}
+
 /// Mette da parte i duplicati nel catalogo di sistema "Duplicati" (issue #29);
 /// restituisce quante copie ha spostato. Annullabile con `undo_bulk`.
 #[tauri::command]
