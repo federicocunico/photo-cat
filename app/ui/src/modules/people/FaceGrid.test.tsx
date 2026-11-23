@@ -133,7 +133,7 @@ describe("FaceGrid selezione e azioni", () => {
     const f1 = await screen.findByTestId("face-1");
     fireEvent.click(f1);
     expect(f1).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/1 selezionat/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 selezionato$/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
     expect(screen.getByTestId("face-1")).toHaveAttribute("aria-selected", "true");

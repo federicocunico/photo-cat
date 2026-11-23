@@ -52,7 +52,8 @@ function useStepDetection(enabled: boolean) {
     if (sources.data?.length) complete("import");
     if (models.data && summarizeModels(models.data).kind === "ready") complete("models");
     if ((sections.data?.people ?? 0) > 0) complete("person");
-    if (catalogs.data?.length) complete("catalog");
+    // I cataloghi di sistema (Cestino, Duplicati, Qualità insufficiente) non contano.
+    if (catalogs.data?.some((c) => c.catalog.system == null)) complete("catalog");
   }, [sources.data, models.data, sections.data, catalogs.data, complete]);
 }
 

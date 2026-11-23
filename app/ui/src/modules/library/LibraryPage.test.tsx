@@ -915,7 +915,7 @@ it("rivede le escluse smart, mostra tutte e reinserisce senza conferma", async (
       jobs: { 799: { id: 799, state: "completed", phases: [], failed: 0 } as never },
     }),
   );
-  expect((await screen.findByText(/foto reinserite/)).closest('[role="status"]')).not.toBeNull();
+  expect((await screen.findByText(/1 foto reinserita/)).closest('[role="status"]')).not.toBeNull();
   // Il percorso riporta al catalogo.
   fireEvent.click(
     within(screen.getByRole("navigation", { name: "Percorso" })).getByRole("button", {
@@ -949,7 +949,7 @@ it("Canc fuori dal catalogo non fa nulla; dentro esclude una sola volta con Annu
     }),
   );
   expect(
-    (await screen.findByText(/file non sono stati toccati/)).closest('[role="status"]'),
+    (await screen.findByText(/Il file non è stato toccato/)).closest('[role="status"]'),
   ).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Annulla operazione" }));
   await waitFor(() => expect(commandsMock.undoBulk).toHaveBeenCalledTimes(1));
@@ -1349,6 +1349,10 @@ describe("trascinamento sui cataloghi e barra laterale dei cataloghi", () => {
     expect(at("Nuovo catalogo")).toBeLessThan(at("Cestino"));
     expect(at("Cestino")).toBeLessThan(at("Duplicati"));
     expect(within(section).getByRole("separator")).toBeTruthy();
+    // F9: la riga d'azione non ha conteggio né stato premuto.
+    const add = within(section).getByRole("button", { name: /Nuovo catalogo/ });
+    expect(add).toHaveTextContent(/^Nuovo catalogo$/);
+    expect(add).not.toHaveAttribute("aria-pressed");
   });
 
   it("creazione sul posto: Invio crea, Esc annulla", async () => {

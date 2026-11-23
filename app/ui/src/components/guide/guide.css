@@ -43,8 +43,10 @@
 }
 
 .first-steps {
+  position: relative;
   margin: var(--pc-space-3) var(--pc-space-4) 0;
-  padding: var(--pc-space-2) var(--pc-space-3);
+  /* Spazio a destra per il comando di chiusura, sempre in alto a destra. */
+  padding: var(--pc-space-2) calc(var(--pc-space-3) + 32px) var(--pc-space-2) var(--pc-space-3);
   border: 1px solid var(--pc-border);
   border-radius: var(--pc-radius-md);
   background: var(--pc-panel);
@@ -80,7 +82,9 @@
   color: var(--pc-ok);
 }
 .first-steps-hide {
-  margin-left: auto;
+  position: absolute;
+  top: var(--pc-space-1);
+  right: var(--pc-space-1);
 }
 
 .onboarding {

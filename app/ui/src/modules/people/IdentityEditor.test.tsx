@@ -111,9 +111,9 @@ it("lists identities with group filter, link state and store location", async ()
   await openPeopleSection();
   const table = screen.getByRole("listbox", { name: "Identità" });
   expect(within(table).getByText("Giulia Bianchi")).toBeInTheDocument();
-  expect(within(table).getByText("412 foto")).toBeInTheDocument();
-  expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
-  expect(within(table).getByText(/nessuno/)).toBeInTheDocument();
+  expect(within(table).getByText(/412 foto$/)).toBeInTheDocument();
+  expect(within(table).getByText(/nessuna foto in questa libreria$/)).toBeInTheDocument();
+  expect(table).not.toHaveTextContent(/nessuno|non collegata/);
   expect(screen.getByRole("note")).toHaveTextContent("app.db");
   fireEvent.click(screen.getByRole("button", { name: "Lavoro (1)" }));
   expect(within(table).queryByText("Giulia Bianchi")).toBeNull();
@@ -192,7 +192,7 @@ it("shows identities without photos in the library as editable", async () => {
   await openPeopleSection();
   const table = screen.getByRole("listbox", { name: "Identità" });
   expect(within(table).getByText("Elena Conti")).toBeInTheDocument();
-  expect(within(table).getByText("nessuna foto in questa libreria")).toBeInTheDocument();
+  expect(within(table).getByText(/nessuna foto in questa libreria$/)).toBeInTheDocument();
   fireEvent.click(within(table).getByText("Elena Conti"));
   expect(await screen.findByLabelText("Nome visualizzato")).toHaveValue("Elena Conti");
   expect(screen.getByRole("button", { name: "Salva" })).toBeInTheDocument();

@@ -99,6 +99,11 @@ export const en: Messages = {
       photo_quality: "Checking photo quality",
       other: "Activity",
     },
+    done: "{{title}} completed",
+    doneMasculine: "{{title}} completed",
+    doneFemininePlural: "{{title}} completed",
+    doneCount_one: "{{title}} completed: {{count}} photo",
+    doneCount_other: "{{title}} completed: {{count}} photos",
     overall: "Overall",
     pause: "Pause",
     resume: "Resume",
@@ -167,6 +172,17 @@ export const en: Messages = {
       esportazione_raw: "Export to a catalog",
       sviluppo: "Developing variants",
       sviluppo_raw: "Developing from the camera",
+      geo: "Places",
+      luoghi: "Place coordinates",
+      clip: "Photo content",
+      persons: "Person detection",
+      faces: "Face recognition",
+      cluster: "Face grouping",
+      similar: "Similar photos",
+      qualita_volti: "Face quality",
+      esportazione: "Export",
+      organizzazione: "Organizing",
+      modifica: "Updating photos",
     },
     states: {
       queued: "Queued",
@@ -198,7 +214,8 @@ export const en: Messages = {
     recursive: "Include subfolders",
     watchNew: "Update automatically",
     watch: "Update automatically",
-    watchHint: "While photo-cat is open, photos added, moved or deleted in this folder are imported or updated automatically.",
+    watchHint:
+      "While photo-cat is open, photos added, moved or deleted in this folder are imported or updated automatically.",
     formats: "Included formats",
     ignore: "Ignore paths matching",
     ignoreHint:
@@ -539,10 +556,8 @@ export const en: Messages = {
     camera_disconnected: "Check the USB cable, turn the camera on and try again.",
     camera_busy: "Close X RAW Studio and the other Fujifilm programs, then try again.",
     camera_unresponsive: "Turn the camera off and on again, then restart the development.",
-    raw_camera_rejected:
-      "The file was skipped: develop this RAF with the camera it was shot with.",
-    camera_not_ready:
-      "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then try again.",
+    raw_camera_rejected: "The file was skipped: develop this RAF with the camera it was shot with.",
+    camera_not_ready: "Set USB RAW CONV./BACKUP RESTORE in the camera menu, then try again.",
     output_folder_rejected:
       "Choose a folder other than the RAF folder or one that contains it, not the root of a drive and not a system folder. The default “FujiView varianti” is always fine.",
   },

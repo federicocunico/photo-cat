@@ -4,6 +4,8 @@ import { useId, useRef, useState, type Ref } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type IdentitySuggestion } from "../../lib/ipc";
+import { notifyPeopleUndo } from "./peopleUndo";
+import { similarityLevel } from "./similarity";
 import "./people.css";
 
 const errorText = (e: unknown) => (e as { detail?: string }).detail ?? String(e);
@@ -45,9 +47,12 @@ export function WhoIs({
     ...items.map((s) => ({ kind: "link" as const, s })),
     ...(query && suggestions.isSuccess && !exact ? [{ kind: "create" as const }] : []),
   ];
-  const done = async (p: number) => {
+  // L'avviso dice che cosa è cambiato e offre "Annulla operazione" (il backend registra il nome
+  // di prima, o l'unione se la persona era già nella libreria).
+  const done = async (p: number, message: string) => {
     setText("");
     setOpen(false);
+    notifyPeopleUndo(qc, message);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["people"] }),
       qc.invalidateQueries({ queryKey: ["people-groups"] }),
@@ -58,13 +63,13 @@ export function WhoIs({
     onLinked(p);
   };
   const locked = useRef(false);
-  const run = async (fn: () => Promise<number>) => {
+  const run = async (fn: () => Promise<number>, message: string) => {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
     setError("");
     try {
-      await done(await fn());
+      await done(await fn(), message);
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -75,18 +80,25 @@ export function WhoIs({
   const choose = (i: number) => {
     const o = options[i];
     if (!o) return;
-    if (o.kind === "link") void run(() => commands.linkPersonIdentity(person, o.s.uid));
+    if (o.kind === "link")
+      void run(
+        () => commands.linkPersonIdentity(person, o.s.uid),
+        t("people.namedDone", { name: o.s.name }),
+      );
     else
-      void run(async () => {
-        const uid = await commands.saveIdentity(null, {
-          name: query,
-          shortName: null,
-          group: null,
-          threshold: null,
-          aliases: [],
-        });
-        return commands.linkPersonIdentity(person, uid);
-      });
+      void run(
+        async () => {
+          const uid = await commands.saveIdentity(null, {
+            name: query,
+            shortName: null,
+            group: null,
+            threshold: null,
+            aliases: [],
+          });
+          return commands.linkPersonIdentity(person, uid);
+        },
+        t("people.namedDone", { name: query }),
+      );
   };
   return (
     <div className="people-stack people-stack--gap-sm people-stack--rel">
@@ -124,7 +136,9 @@ export function WhoIs({
           <BusyButton
             className="btn"
             disabled={busy}
-            onClick={async () => await run(() => commands.linkPersonIdentity(person, null))}
+            onClick={async () =>
+              await run(() => commands.linkPersonIdentity(person, null), t("people.unnamedDone"))
+            }
           >
             {t("identities.unlink")}
           </BusyButton>
@@ -159,9 +173,11 @@ export function WhoIs({
               {o.kind === "link" ? (
                 <>
                   <span>{o.s.name}</span>
-                  <span className="muted mono people-muted-sm">
-                    {o.s.score !== null ? o.s.score.toFixed(2) : ""}
-                  </span>
+                  {o.s.score !== null && (
+                    <span className="muted people-muted-sm">
+                      {t(`people.similarity.${similarityLevel(o.s.score)}`)}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span>{t("identities.createNamed", { name: query })}</span>

@@ -5,6 +5,7 @@ import "../../i18n";
 import type { GroupRow } from "../../lib/ipc";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { useLayout } from "../../store/layout";
+import { useToast } from "../../store/toasts";
 import { PeopleModule } from "./PeopleModule";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
@@ -86,7 +87,7 @@ it("suggests identities by name or alias, ordered by similarity", async () => {
     "option",
   );
   expect(options.map((o) => o.textContent)).toEqual([
-    "Giulia Bianchi0.81",
+    "Giulia Bianchisomiglianza alta",
     "Giuseppe Verdi",
     'Crea l\'identità "Giu"',
   ]);
@@ -122,4 +123,11 @@ it("creates the identity when none matches, then links it", async () => {
     }),
   );
   await waitFor(() => expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(12, "new"));
+  // E6: l'avviso dice che cosa è cambiato e si annulla.
+  await waitFor(() =>
+    expect(useToast.getState().notices.slice(-1)[0]).toMatchObject({
+      message: "Gruppo chiamato Marco Russo",
+      action: { label: "Annulla operazione" },
+    }),
+  );
 });

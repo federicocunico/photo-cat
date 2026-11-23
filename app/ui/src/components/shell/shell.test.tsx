@@ -38,7 +38,7 @@ it("Richiesta lenta: shows feedback after 300ms and clears it when IPC completes
   act(() => {
     vi.advanceTimersByTime(1);
   });
-  expect(screen.getByTestId("pending-ipc")).toHaveAttribute("title", "1 richieste in corso");
+  expect(screen.getByTestId("pending-ipc")).toHaveAttribute("title", "1 richiesta in corso");
   await act(async () => {
     finish();
     await request;

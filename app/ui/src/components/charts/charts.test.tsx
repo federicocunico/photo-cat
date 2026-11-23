@@ -92,7 +92,7 @@ describe("Histogram", () => {
     );
     expect(screen.getByTestId("histogram-threshold")).toHaveTextContent("Soglia 0,30");
     fireEvent.pointerEnter(screen.getByTestId("bin-5"));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("0.25–0.30: 6");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("0,25–0,30: 6");
   });
 
   it("selezione col trascinamento", () => {
@@ -127,10 +127,10 @@ describe("Histogram", () => {
     render(<Histogram bins={bins()} emptyText="v" ariaLabel="h" />);
     const svg = screen.getByTestId("histogram");
     fireEvent.focus(svg);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("0.00–0.05: 1");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("0,00–0,05: 1");
     fireEvent.keyDown(svg, { key: "ArrowRight" });
-    expect(screen.getByRole("tooltip")).toHaveTextContent("0.05–0.10: 2");
-    expect(screen.getByTestId("histogram-live")).toHaveTextContent("0.05–0.10: 2");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("0,05–0,10: 2");
+    expect(screen.getByTestId("histogram-live")).toHaveTextContent("0,05–0,10: 2");
     fireEvent.blur(svg);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });

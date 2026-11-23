@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Informazioni su photo-cat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#6AAEF5}a:hover{color:#C9DCF2}
+.app{width:1440px;height:900px;background:#141415;color:#E8E8EA;font-family:"Source Sans 3",system-ui,sans-serif;font-size:14px;line-height:1.45;display:flex;gap:40px;align-items:flex-start;justify-content:center;padding:60px 40px;box-sizing:border-box;overflow:hidden}
+.dlg{width:620px;flex:none;background:#232325;border:1px solid #3A3A3E;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden}
+.head{display:flex;gap:16px;align-items:center;padding:22px 24px 14px}
+.logo{width:52px;height:52px;border-radius:12px;background:#233449;display:grid;place-items:center;flex:none}
+.title{font-size:20px;font-weight:700}
+.muted{color:#A9A9AE}
+.x{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid #3A3A3E;background:none;color:#C9C9CE;display:grid;place-items:center;align-self:flex-start}
+.tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid #3A3A3E}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:#A9A9AE;font:inherit;padding:10px 8px;white-space:nowrap}
+.tab.on{color:#E8E8EA;border-bottom-color:#3B8EEA;font-weight:600}
+.pad{padding:18px 24px;display:flex;flex-direction:column;gap:16px}
+dl{margin:0;display:grid;grid-template-columns:150px minmax(0,1fr);row-gap:10px;column-gap:16px}
+dt{color:#A9A9AE}
+dd{margin:0}
+.path{display:flex;gap:10px;align-items:center}
+.path span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid #3A3A3E;background:#2C2C2F;color:#E8E8EA;font:inherit;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
+.btn.primary{background:#3B8EEA;border-color:#3B8EEA;color:#0B1726;font-weight:600}
+.foot{display:flex;gap:8px;padding:14px 24px;border-top:1px solid #3A3A3E;background:#202022}
+.sec{font-weight:700;font-size:14px;margin:0}
+.field{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid #77777F;border-radius:8px;color:#8E8E95;background:#1B1B1C}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-weight:600;color:#A9A9AE;font-size:13px;padding:6px 8px;border-bottom:1px solid #3A3A3E}
+td{padding:6px 8px;border-bottom:1px solid #2C2C2F;white-space:nowrap}
+tr.grp td{color:#A9A9AE;font-weight:600;font-size:13px;padding-top:12px}
+tr.on td{background:#1E3047}
+.lic{border:1px solid #3A3A3E;border-radius:10px;padding:12px;background:#1B1B1C;color:#C9C9CE;font-size:13px}
+</style>
+</helmet>
+<div class="app">
+  <section class="dlg" role="dialog" aria-label="Informazioni su photo-cat">
+    <div class="head">
+      <div class="logo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg></div>
+      <div><div class="title">photo-cat 0.5.1</div><div class="muted">Catalogo delle foto sul tuo computer, senza cloud.</div></div>
+      <button type="button" class="x" aria-label="Chiudi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="tabs" role="tablist"><button type="button" role="tab" class="tab on" aria-selected="true">Informazioni</button><button type="button" role="tab" class="tab" aria-selected="false">Licenze di terze parti</button></div>
+    <div class="pad">
+      <dl>
+        <dt>Versione</dt><dd>0.5.1</dd>
+        <dt>Build</dt><dd>8f858bf · 23 nov 2026 · release</dd>
+        <dt>Sistema</dt><dd>Windows 11 Pro, 64 bit</dd>
+        <dt>Motore della finestra</dt><dd>WebView2 157</dd>
+        <dt>Analisi AI</dt><dd>Scheda video (DirectML) · modelli pronti</dd>
+        <dt>Dati dell'app</dt><dd class="path"><span>C:\Users\…\AppData\Roaming\photocat\photo-cat\data</span><button type="button" class="btn">Apri</button></dd>
+      </dl>
+      <div style="border-top:1px solid #3A3A3E"></div>
+      <dl>
+        <dt>Sviluppato da</dt><dd>photo-cat contributors</dd>
+        <dt>Codice sorgente</dt><dd><a href="#">Repository del progetto</a></dd>
+        <dt>Licenza</dt><dd>MIT oppure Apache-2.0, a scelta</dd>
+      </dl>
+      <p class="muted" style="margin:0;font-size:13px">«Copia informazioni» mette negli appunti versione, build, sistema e acceleratore: da incollare in una segnalazione. Il percorso dei dati è incluso solo se lo scegli.</p>
+    </div>
+    <div class="foot"><button type="button" class="btn primary">Copia informazioni</button><button type="button" class="btn">Segnala un problema</button><button type="button" class="btn" style="margin-left:auto">Chiudi</button></div>
+  </section>
+  <section class="dlg" role="dialog" aria-label="Licenze di terze parti">
+    <div class="head">
+      <div class="logo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6AAEF5" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg></div>
+      <div><div class="title">photo-cat 0.5.1</div><div class="muted">Componenti di terze parti inclusi nell'app.</div></div>
+      <button type="button" class="x" aria-label="Chiudi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div class="tabs" role="tablist"><button type="button" role="tab" class="tab" aria-selected="false">Informazioni</button><button type="button" role="tab" class="tab on" aria-selected="true">Licenze di terze parti</button></div>
+    <div class="pad" style="gap:12px">
+      <label class="field"><input aria-label="Cerca un componente o una licenza" placeholder="Cerca un componente o una licenza" style="all:unset;flex:1"></label>
+      <table>
+        <thead><tr><th>Componente</th><th>Versione</th><th>Licenza</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="3">Modelli AI e dati</td></tr>
+          <tr><td>CLIP ViT-B/32 (conversione ONNX)</td><td>—</td><td>MIT</td></tr>
+          <tr><td>YuNet · SFace (OpenCV Zoo)</td><td>2023 · 2021</td><td>MIT · Apache-2.0</td></tr>
+          <tr><td>GeoNames cities15000</td><td>—</td><td>CC-BY 4.0</td></tr>
+          <tr class="grp"><td colspan="3">Librerie native</td></tr>
+          <tr><td>ONNX Runtime</td><td>1.24.4</td><td>MIT</td></tr>
+          <tr class="on"><td>libheif</td><td>1.23.7</td><td>LGPL-3.0</td></tr>
+          <tr><td>DirectML</td><td>1.15.4</td><td>Microsoft DirectML</td></tr>
+          <tr class="grp"><td colspan="3">Interfaccia e componenti Rust</td></tr>
+          <tr><td>[elenco generato alla build]</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <div class="lic"><b>libheif 1.23.7</b> · LGPL-3.0. Compilata con solo il decoder HEVC. Le sorgenti corrispondenti sono incluse nell'installazione, nella cartella «native-sources». <a href="#">Mostra il testo della licenza</a></div>
+    </div>
+    <div class="foot"><button type="button" class="btn">Apri la cartella delle licenze</button><button type="button" class="btn" style="margin-left:auto">Chiudi</button></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -137,8 +137,8 @@ describe("Unione persone", () => {
       }),
     );
 
-    // "Persone unite · Annulla operazione": l'avviso annulla tramite lo store `undo`.
-    const toast = await screen.findByText("Persone unite");
+    // "Gruppo unito a Giulia · Annulla operazione": l'avviso annulla tramite lo store `undo`.
+    const toast = await screen.findByText("Gruppo unito a Giulia");
     const notice = toast.closest('[role="status"]') as HTMLElement;
     fireEvent.click(within(notice).getByRole("button", { name: /^Annulla operazione$/i }));
     await waitFor(() => expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1));

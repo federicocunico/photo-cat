@@ -502,17 +502,35 @@ pub async fn link_person_identity(
     uid: Option<String>,
 ) -> AppResult<i64> {
     let (db, app) = (state.store.clone(), state.app_store.clone());
-    blocking(move || {
-        let target = uid.map(|u| app.with(|c| ids::get(c, &u))).transpose()?;
-        Ok(db.write(move |c| {
-            people::link_identity(
-                c,
-                person,
-                target.as_ref().map(|t| (t.uid.as_str(), t.name.as_str())),
-            )
-        })?)
-    })
-    .await
+    blocking(move || link(&db, &app, person, uid.as_deref())).await
+}
+
+/// Collegamento annullabile (ui-usability-audit, "Gruppo chiamato Gioia" con "Annulla
+/// operazione"): se l'identità ha già una persona nella libreria i due gruppi si uniscono con
+/// lo stesso annullamento di "Unisci a…", altrimenti si registra il nome di prima.
+pub fn link(db: &Store, app: &AppStore, person: i64, uid: Option<&str>) -> AppResult<i64> {
+    let target = uid.map(|u| app.with(|c| ids::get(c, u))).transpose()?;
+    Ok(db.write(move |c| {
+        let target = target.as_ref().map(|t| (t.uid.as_str(), t.name.as_str()));
+        if let Some((uid, _)) = target {
+            if let Some(other) = people::person_for_identity(c, uid)?.filter(|o| *o != person) {
+                crate::people::merge_with_undo(c, vec![person], other)?;
+                return Ok(other);
+            }
+        }
+        let before = people::person_snapshot(c, person)?;
+        let linked = people::link_identity(c, person, target)?;
+        pc_store::bulk::record_undo(
+            c,
+            if target.is_some() {
+                "Dai un nome"
+            } else {
+                "Togli il nome"
+            },
+            &pc_store::bulk::UndoAction::PersonLinked { before },
+        )?;
+        Ok(linked)
+    })?)
 }
 
 /// Proposte per "Chi è?": identità con nome o alias che contengono `query`,
@@ -795,6 +813,88 @@ mod tests {
         })
         .unwrap();
         uid
+    }
+
+    #[test]
+    fn dare_un_nome_si_annulla_anche_quando_unisce_due_gruppi() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let app = AppStore::open(&tmp.path().join("app.db")).unwrap();
+        let gioia = linked(&db, &app, "Gioia", 2, 1);
+        let marco = app
+            .with(|c| {
+                ids::create(
+                    c,
+                    &IdentityInput {
+                        name: "Marco".into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+        // Due gruppi senza nome con un volto ciascuno.
+        let groups: Vec<i64> = db
+            .write(|c| {
+                let mut out = Vec::new();
+                for i in 0..2 {
+                    let id = pc_store::repo::media::upsert(
+                        c,
+                        &NewMedia {
+                            path: format!("senza-nome-{i}.jpg"),
+                            name: format!("senza-nome-{i}.jpg"),
+                            ext: "jpg".into(),
+                            ..Default::default()
+                        },
+                    )?;
+                    people::save_faces(c, id, &[face(5 + i)], "sface", "det+sface", 0.363)?;
+                    let f = people::records(c, Some(id))?[0].id;
+                    let p = people::create_person(c, None)?;
+                    people::assign(c, &[f], p)?;
+                    out.push(p);
+                }
+                Ok(out)
+            })
+            .unwrap();
+        let name_of = |p: i64| {
+            db.read(move |c| {
+                Ok(
+                    c.query_row("SELECT name FROM person WHERE id=?1", [p], |r| {
+                        r.get::<_, Option<String>>(0)
+                    })?,
+                )
+            })
+            .unwrap()
+        };
+        let exists = |p: i64| {
+            db.read(move |c| {
+                Ok(
+                    c.query_row("SELECT count(*) FROM person WHERE id=?1", [p], |r| {
+                        r.get::<_, i64>(0)
+                    })? == 1,
+                )
+            })
+            .unwrap()
+        };
+
+        // Nome nuovo: il gruppo resta lo stesso, l'annullamento toglie il nome.
+        assert_eq!(link(&db, &app, groups[0], Some(&marco)).unwrap(), groups[0]);
+        assert_eq!(name_of(groups[0]).as_deref(), Some("Marco"));
+        db.write(pc_store::bulk::undo_last_people).unwrap();
+        assert_eq!(name_of(groups[0]), None);
+
+        // Persona già presente nella libreria: i gruppi si uniscono e l'annullamento li separa.
+        let g = gioia.clone();
+        let gioia_person = db
+            .read(move |c| Ok(people::person_for_identity(c, &g)?.unwrap()))
+            .unwrap();
+        assert_eq!(
+            link(&db, &app, groups[1], Some(&gioia)).unwrap(),
+            gioia_person
+        );
+        assert!(!exists(groups[1]));
+        db.write(pc_store::bulk::undo_last_people).unwrap();
+        assert!(exists(groups[1]));
+        assert_eq!(name_of(groups[1]), None);
     }
 
     fn linked_count(db: &Store, uid: &str) -> (i64, i64) {

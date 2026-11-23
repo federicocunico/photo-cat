@@ -39,6 +39,21 @@ it("Passo completato altrove: un catalogo creato da un'altra parte completa la v
   expect(useGuide.getState().done.catalog).toBe(true);
 });
 
+it("F3: i soli cataloghi di sistema non completano «Crea un catalogo»", async () => {
+  useGuide.setState({ done: {} });
+  const system = (id: number, system: string) => ({ catalog: { id, system }, items: 0 });
+  commandsMock.listCatalogs.mockResolvedValue([
+    system(1, "trash"),
+    system(2, "duplicates"),
+    system(3, "low_quality"),
+  ] as never);
+  renderIt();
+  await waitFor(() => expect(commandsMock.listCatalogs).toHaveBeenCalled());
+  await act(() => Promise.resolve());
+  expect(screen.getByRole("button", { name: "Crea un catalogo" })).toBeInTheDocument();
+  expect(useGuide.getState().done.catalog).toBeFalsy();
+});
+
 it("ogni voce porta al punto giusto", async () => {
   renderIt();
   fireEvent.click(await screen.findByRole("button", { name: "Scarica i modelli AI" }));

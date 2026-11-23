@@ -8,7 +8,7 @@ import {
   type IdentityInput,
   type IdentityRow,
 } from "../../lib/ipc";
-import { fmtDate } from "../../lib/format";
+import { fmtDate, fmtDec } from "../../lib/format";
 import { FaceCrop } from "./FaceCrop";
 import { OpenInPeople } from "./OpenInPeople";
 import { Icon } from "../../components/icons";
@@ -245,7 +245,7 @@ export function IdentityEditor({
         <label className="people-field-col">
           <span className="people-field-head">
             <span className="people-field-label">{t("identities.threshold")}</span>
-            <span className="mono">{draft.threshold.toFixed(2)}</span>
+            <span className="mono">{fmtDec(draft.threshold, 2)}</span>
           </span>
           <input
             type="range"

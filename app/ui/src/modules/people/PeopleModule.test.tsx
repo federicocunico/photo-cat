@@ -169,6 +169,42 @@ describe("PeopleModule", () => {
     await waitFor(() => expect(commandsMock.listIdentities).toHaveBeenCalled());
     expect(useLayout.getState().peopleSection).toBe("people");
   });
+
+  it("F2: la riga della persona mostra cerchia e foto, senza «non collegata»", async () => {
+    const person = (uid: string, name: string, group: string | null, photos: number) => ({
+      uid,
+      name,
+      shortName: name,
+      group,
+      aliases: [],
+      threshold: null,
+      person: photos > 0 ? 10 + photos : null,
+      photos,
+      faces: 0,
+      createdAt: 0,
+    });
+    commandsMock.listIdentities.mockResolvedValue({
+      identities: [
+        person("g", "Gioia", "Famiglia", 26),
+        person("m", "Marco", null, 12),
+        person("r", "Rita", null, 0),
+      ],
+      groups: ["Famiglia"],
+      storePath: "C:\\app.db",
+      defaultThreshold: 0.363,
+    } as never);
+    useLayout.setState({ peopleSection: "people" });
+    renderModule();
+    const list = await screen.findByTestId("group-list-scroll");
+    expect(await within(list).findByRole("option", { name: /Gioia/ })).toHaveTextContent(
+      /Famiglia · 26 foto$/,
+    );
+    expect(within(list).getByRole("option", { name: /Marco/ })).toHaveTextContent(/Marco12 foto$/);
+    expect(within(list).getByRole("option", { name: /Rita/ })).toHaveTextContent(
+      /nessuna foto in questa libreria$/,
+    );
+    expect(list).not.toHaveTextContent(/non collegata|nessuno/);
+  });
 });
 
 describe("Preferenza del modulo non più esistente", () => {
@@ -432,6 +468,53 @@ describe("Revisione da tastiera", () => {
         within(list).getByRole("option", { name: /Persona senza nome · 15 foto/i }),
       ).toHaveAttribute("aria-selected", "true");
     });
+  });
+
+  it("F1: dopo il nome si apre il gruppo mostrato sotto, non quello con più foto", async () => {
+    const hint = (uid: string) => ({
+      uid,
+      name: "Gioia",
+      shortName: "Gioia",
+      group: null,
+      score: 0.7,
+    });
+    // Il backend ordina per foto (41, 26, 24, 17); l'elenco mostra prima i suggeriti (26, 17).
+    commandsMock.listGroups.mockResolvedValue({
+      items: [
+        row({ id: 41, faces: 41, photos: 41 }),
+        row({ id: 26, faces: 26, photos: 26, nameHint: hint("g") }),
+        row({ id: 24, faces: 24, photos: 24 }),
+        row({ id: 17, faces: 17, photos: 17, nameHint: hint("g") }),
+      ],
+      next: null,
+      total: 4,
+    } as never);
+    commandsMock.suggestIdentities.mockResolvedValue([] as never);
+    commandsMock.saveIdentity.mockResolvedValue("uid-new" as never);
+    commandsMock.linkPersonIdentity.mockImplementation(async (person: number) => person);
+    renderModule();
+
+    const list = await screen.findByTestId("group-list-scroll");
+    const option = (photos: number) =>
+      within(list).getByRole("option", { name: new RegExp(`· ${photos} foto`) });
+    fireEvent.click(await within(list).findByRole("option", { name: /· 26 foto/ }));
+    await waitFor(() => expect(option(26)).toHaveAttribute("aria-current", "true"));
+
+    fireEvent.keyDown(window, { key: "n" });
+    const who = await screen.findByRole("combobox", { name: "Chi è?" });
+    fireEvent.change(who, { target: { value: "Marco" } });
+    await screen.findByRole("option", { name: /Marco/ });
+    fireEvent.keyDown(who, { key: "Enter" });
+    await waitFor(() =>
+      expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(26, "uid-new"),
+    );
+    await waitFor(() => expect(option(17)).toHaveAttribute("aria-current", "true"));
+
+    // Freccia giù dall'ultimo suggerito: il primo di "Altri gruppi" (41 foto).
+    const listbox = within(list).getByRole("listbox");
+    act(() => listbox.focus());
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    await waitFor(() => expect(option(41)).toHaveAttribute("aria-current", "true"));
   });
 
   it("non attiva le scorciatoie mentre si scrive in un campo", async () => {

@@ -179,7 +179,16 @@ export const GroupList = forwardRef<
   // Filtro "con al massimo N foto" (Da rivedere e Persone).
   const [maxPhotos, setMaxPhotos] = useState<number | null>(null);
   // Focus della tastiera nell'elenco (distinto dalla selezione e dall'elemento aperto).
-  const [groupCursor, setGroupCursor] = useState<number | null>(null);
+  // Il cursore dei gruppi vale finché non cambia il gruppo aperto: quando il modulo ne apre un
+  // altro (avanzamento dopo un nome, apertura da un altro modulo) il focus torna su quello aperto.
+  const openedGroupId = target?.kind === "group" ? target.id : null;
+  const [groupCursorState, setGroupCursorState] = useState<{
+    id: number;
+    opened: number | null;
+  } | null>(null);
+  const setGroupCursor = (id: number) => setGroupCursorState({ id, opened: openedGroupId });
+  const groupCursor =
+    groupCursorState && groupCursorState.opened === openedGroupId ? groupCursorState.id : null;
   const [idCursor, setIdCursor] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [dialog, setDialog] = useState<BulkDialog>(null);
@@ -267,19 +276,23 @@ export const GroupList = forwardRef<
     return out;
   }, [rows, section, counts.singles, counts.discarded, t]);
 
-  const order = useMemo(
+  // Gruppi nell'ordine mostrato (suggeriti, poi altri gruppi): lo seguono frecce e avanzamento.
+  const shownRows = useMemo(
     () =>
       virtItems
         .filter((i): i is Extract<VirtItem, { kind: "group" }> => i.kind === "group")
-        .map((i) => i.group.id),
+        .map((i) => i.group),
     [virtItems],
   );
+  const order = useMemo(() => shownRows.map((g) => g.id), [shownRows]);
 
-  const catalogKey = rows.map((r) => `${r.id}:${r.faces}:${r.photos}:${r.name ?? ""}`).join(",");
+  const catalogKey = shownRows
+    .map((r) => `${r.id}:${r.faces}:${r.photos}:${r.name ?? ""}`)
+    .join(",");
   useEffect(() => {
-    onCatalogChange?.(rows);
+    onCatalogChange?.(shownRows);
     // catalogKey evita di notificare a ogni render del padre con lo stesso elenco.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows segue catalogKey
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shownRows segue catalogKey
   }, [catalogKey, onCatalogChange]);
 
   const virt = useVirtualizer({
@@ -925,16 +938,15 @@ export const GroupList = forwardRef<
                             <span className="people-list-text">
                               <span className="people-list-name">{r.name}</span>
                               <span className="muted people-muted-sm">
-                                {r.group ?? t("identities.notLinkedShort")}
-                                {r.faces
-                                  ? ` · ${t("identities.refCount", { count: r.faces })}`
-                                  : ` · ${t("identities.noRefs")}`}
+                                {[
+                                  r.group,
+                                  r.person != null && r.photos > 0
+                                    ? t("people.photos", { count: r.photos })
+                                    : t("people.noPhotosInLibrary"),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </span>
-                            </span>
-                            <span className="mono muted people-muted-sm">
-                              {r.person != null && r.photos > 0
-                                ? t("people.photos", { count: r.photos })
-                                : t("people.noPhotosInLibrary")}
                             </span>
                           </div>
                         </div>

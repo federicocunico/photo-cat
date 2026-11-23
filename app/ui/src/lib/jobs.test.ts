@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "../i18n";
-import { FILE_WRITING_KINDS, jobTitle } from "./jobs";
+import { FILE_WRITING_KINDS, jobDoneMessage, jobTitle } from "./jobs";
 
 const t = i18n.getFixedT("it");
 const paths = (id: number) => (id === 4 ? "/media/foto" : undefined);
@@ -32,6 +32,36 @@ describe("titoli delle attività", () => {
     ["boh", {}, "Attività"],
   ])("%s %j", (kind, params, title) => {
     expect(jobTitle(t, kind, params, paths)).toBe(title);
+  });
+});
+
+describe("avviso di fine attività (E6)", () => {
+  const phase = (done: number) => ({ done }) as never;
+  it("dice che cosa è stato fatto, su che cosa e quante foto", () => {
+    const source = (id: number) => (id === 4 ? "D:\\Foto\\Halloween" : undefined);
+    expect(
+      jobDoneMessage(
+        t,
+        { kind: "import", phases: [phase(54), phase(54)] },
+        { sourceId: 4 },
+        source,
+      ),
+    ).toBe("Importazione di Halloween completata: 54 foto");
+    expect(
+      jobDoneMessage(
+        t,
+        { kind: "export", phases: [phase(1)] },
+        { destination: "/media/export/Gita" },
+      ),
+    ).toBe("Esportazione in Gita completata: 1 foto");
+  });
+  it("concorda il participio e non conta le foto delle attività di servizio", () => {
+    expect(jobDoneMessage(t, { kind: "retune", phases: [phase(300)] }, null)).toBe(
+      "Ricalcolo delle categorie completato",
+    );
+    expect(jobDoneMessage(t, { kind: "models", phases: [] }, null)).toBe(
+      "Verifica dei modelli AI completata",
+    );
   });
 });
 

@@ -152,7 +152,7 @@ describe("FaceGrid Seleziona tutto", () => {
     expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Inverti selezione" }));
-    await screen.findByText("1 selezionati");
+    await screen.findByText("1 selezionato");
     expect(screen.getByTestId("face-3").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("face-1").getAttribute("aria-selected")).toBe("false");
   });

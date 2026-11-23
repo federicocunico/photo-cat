@@ -2657,6 +2657,12 @@ pub fn unrecover_faces(c: &Connection, faces: &[i64]) -> StoreResult<()> {
     c.execute(&sql, rusqlite::params_from_iter(faces.iter()))?;
     refresh_centroids(c)
 }
+/// Annullamento di [`link_identity`]: nome e identità tornano quelli dell'istantanea.
+pub fn restore_link(c: &Connection, snap: &PersonSnapshot) -> StoreResult<()> {
+    restore_person_fields(c, snap)?;
+    refresh_centroids(c)?;
+    refresh_media(c, &person_media(c, snap.id)?)
+}
 fn refresh_media(c: &Connection, ids: &HashSet<i64>) -> StoreResult<()> {
     for id in ids {
         repo::fts::refresh(c, *id)?;
