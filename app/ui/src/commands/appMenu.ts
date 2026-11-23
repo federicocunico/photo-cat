@@ -1,6 +1,7 @@
 // Comandi globali della barra dei menu (application-menu, D6): quelli che non appartengono a un
 // modulo montato. Le voci dei moduli non montati aprono il modulo e poi l'azione; quelle che
 // richiedono una selezione restano visibili, disattivate, con il motivo.
+import { useUpdates } from "../store/updates";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -256,6 +257,14 @@ export function useAppMenuCommands() {
       group: "general",
       menu: { menu: "help", section: 1, order: 1 },
       run: () => copySystemInfo(t),
+    },
+    {
+      id: "help.checkUpdates",
+      label: t("menu.checkUpdates"),
+      group: "general",
+      keywords: "aggiornamento versione nuova release",
+      menu: { menu: "help", section: 2, order: -1 },
+      run: () => void useUpdates.getState().check(true),
     },
     {
       id: "help.about",

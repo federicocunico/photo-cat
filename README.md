@@ -115,6 +115,8 @@ La decodifica HEIC usa la libheif di sistema (vedi Prerequisiti). Il runtime ONN
 
 ## Aggiornare e tornare a una versione precedente
 
+**Aggiornamenti dall'app.** All'avvio (si disattiva in Impostazioni › Informazioni) e da Aiuto › "Controlla aggiornamenti…" photo-cat legge l'ultima release pubblicata su GitHub; la richiesta porta solo l'User-Agent "photo-cat/<versione>", nessun dato della libreria. Se c'è una versione più recente compare una notifica che si può chiudere, con "Novità" e "Aggiorna". Su Windows "Aggiorna" scarica l'installer in background nella cartella `updates` dei dati, con l'avanzamento nella notifica e nella barra superiore: il download riprende se la connessione cade, si può interrompere e si verifica con lo SHA-256 pubblicato nella release. A download finito il badge "Aggiornamento pronto" chiede se aggiornare ora: "Aggiorna ora" avvia l'installer e chiude photo-cat, "Più tardi" lo lascia per dopo. Su macOS e Linux "Aggiorna" apre la pagina della release. Al primo avvio della versione nuova l'installer scaricato viene eliminato.
+
 **Dove stanno i dati.** Libreria e preferenze sono nella cartella utente dell'app, separata dalla cartella del programma:
 
 | Contenuto | Windows | Linux | macOS |

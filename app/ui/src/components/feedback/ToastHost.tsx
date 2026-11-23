@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useToast, type Notice } from "../../store/toasts";
 import { Icon } from "../icons";
 import { BusyButton } from "./BusyButton";
+import { UpdateNotice } from "../updates/UpdateUi";
 
 /**
  * Un avviso: si chiude da solo dopo `duration`, ma il tempo si ferma finché il puntatore o
@@ -96,6 +97,8 @@ export function ToastHost() {
   }, []);
   return (
     <div ref={host} className="feedback-toasts" data-position={top ? "top" : "bottom"}>
+      {/* Nuova versione disponibile (app-updates): in cima alla pila degli avvisi. */}
+      <UpdateNotice />
       {notices.map((n) => (
         <ToastItem key={n.id} notice={n} onClose={() => dismiss(n.id)} />
       ))}

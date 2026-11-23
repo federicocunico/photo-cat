@@ -1,3 +1,4 @@
+import { UpdateBadge } from "../updates/UpdateUi";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../icons";
@@ -110,6 +111,7 @@ export function TopBar() {
       <GlobalSearch />
       <div className="topbar-end">
         <PendingIndicator />
+        <UpdateBadge />
         <JobPill />
       </div>
     </header>

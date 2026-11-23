@@ -21,6 +21,7 @@ import { Onboarding } from "./modules/onboarding/Onboarding";
 import { Placeholder } from "./modules/Placeholder";
 import { destinationFor, useLayout, type ModuleId } from "./store/layout";
 import { useLiveEvents, useTrimCaches } from "./store/live";
+import { useStartupUpdateCheck, useUpdateEvents } from "./store/updates";
 import { useImportRefresh } from "./modules/import/sourceActions";
 import { useDevelopedEvents } from "./modules/raw-review/useDevelopedEvents";
 import { ToastHost } from "./components/feedback/ToastHost";
@@ -73,6 +74,9 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
   }, [startup.onboarding]);
   useLiveEvents();
   useTrimCaches();
+  // Aggiornamenti dell'app: eventi del download e controllo all'avvio, dopo l'introduzione.
+  useUpdateEvents();
+  useStartupUpdateCheck(!onboarding && !intro);
   useImportRefresh();
   useDevelopedEvents();
   useEffect(() => startLongTaskReporter(), []);

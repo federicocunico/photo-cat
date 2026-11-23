@@ -14,6 +14,7 @@ import { ModelsPage } from "../models/ModelsPage";
 import { DiagnosticsPage } from "../diagnostics/DiagnosticsPage";
 import { AdvancedSection } from "./AdvancedSection";
 import { AboutPanel } from "../../components/about/AboutPanel";
+import { UpdateSettings } from "../../components/updates/UpdateSettings";
 import { AiSection } from "./AiSection";
 import { ApplyBar } from "./ApplyBar";
 import { ExternalAppsSection } from "./ExternalAppsSection";
@@ -63,6 +64,7 @@ const SEARCH: { id: string; section: SettingsSection; label: string }[] = [
   { id: "rawThresholds", section: "advanced", label: "settings.rawThresholds" },
   { id: "rawThresholds", section: "advanced", label: "settings.threshold" },
   { id: "purgeFaces", section: "advanced", label: "settings.purge" },
+  { id: "section", section: "about", label: "updates.checkOnStart" },
   { id: "section", section: "about", label: "about.version" },
   { id: "section", section: "about", label: "about.build" },
   { id: "section", section: "about", label: "about.tabLicenses" },
@@ -114,7 +116,12 @@ function SectionContent({ section }: { section: SettingsSection }) {
     case "advanced":
       return <AdvancedSection />;
     case "about":
-      return <AboutPanel />;
+      return (
+        <>
+          <UpdateSettings />
+          <AboutPanel />
+        </>
+      );
   }
 }
 

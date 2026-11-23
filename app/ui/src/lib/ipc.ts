@@ -14,6 +14,9 @@ import type {
   ModelStatus,
   RawReviewDeveloped,
   ResourceSnapshot,
+  UpdateFailed,
+  UpdateProgress,
+  UpdateReady,
 } from "../bindings";
 
 import { commands as generated } from "../bindings";
@@ -63,6 +66,10 @@ export const EVENTS = {
   rawReviewDeveloped: "raw-review://developed",
   /** Voce scelta nel menu nativo (macOS): id del comando del registro. */
   menuCommand: "menu://command",
+  /** Aggiornamenti dell'app: avanzamento, installer pronto, download non riuscito. */
+  updateProgress: "update://progress",
+  updateReady: "update://ready",
+  updateFailed: "update://failed",
 } as const;
 
 export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -84,6 +91,9 @@ export const events = {
   onTrimCaches: (cb: () => void) => on(EVENTS.trimCaches, cb),
   onFacesChanged: (cb: () => void) => on(EVENTS.facesChanged, cb),
   onMenuCommand: (cb: (id: string) => void) => on(EVENTS.menuCommand, cb),
+  onUpdateProgress: (cb: (p: UpdateProgress) => void) => on(EVENTS.updateProgress, cb),
+  onUpdateReady: (cb: (r: UpdateReady) => void) => on(EVENTS.updateReady, cb),
+  onUpdateFailed: (cb: (f: UpdateFailed) => void) => on(EVENTS.updateFailed, cb),
   onSourceWatchChanged: (cb: () => void) => on(EVENTS.sourceWatchChanged, cb),
   /** Stato della fotocamera cambiato (collegata, scollegata, occupata, pronta). */
   onRawReviewCameraStatus: (cb: (s: CameraStatus) => void) =>

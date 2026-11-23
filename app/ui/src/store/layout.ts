@@ -83,6 +83,8 @@ interface LayoutState {
   rightWidth: number;
   theme: ThemePref;
   language: Language;
+  /** Controllo delle nuove versioni all'avvio (Impostazioni › Informazioni). */
+  checkUpdatesOnStart: boolean;
   /** Filtro con cui aprire la Diagnostica (es. dal riepilogo di un job). */
   diagFilter: DiagFilter;
   /** Destinazione consumata da PeopleModule (non persistita). */
@@ -105,6 +107,7 @@ interface LayoutState {
   setLeftWidth: (w: number) => void;
   setRightWidth: (w: number) => void;
   setTheme: (t: ThemePref) => void;
+  setCheckUpdatesOnStart: (on: boolean) => void;
   setLanguage: (l: Language) => void;
   clearPeopleTarget: () => void;
   clearRawReviewTarget: () => void;
@@ -128,6 +131,7 @@ type PersistedLayout = {
   rightWidth?: number;
   theme?: ThemePref;
   language?: Language;
+  checkUpdatesOnStart?: boolean;
 };
 
 /**
@@ -145,6 +149,7 @@ export function migrateLayoutState(persisted: unknown): PersistedLayout {
     peopleSection: s.peopleSection ?? "review",
     settingsSection: s.settingsSection ?? "general",
     aiSection: s.aiSection ?? "overview",
+    checkUpdatesOnStart: s.checkUpdatesOnStart ?? true,
   };
 }
 
@@ -184,6 +189,7 @@ export const useLayout = create<LayoutState>()(
       rightWidth: 300,
       // Nuove installazioni: tema del sistema. Le preferenze salvate restano come sono.
       theme: "system",
+      checkUpdatesOnStart: true,
       language: "it",
       diagFilter: {},
       peopleTarget: null,
@@ -230,6 +236,7 @@ export const useLayout = create<LayoutState>()(
       setLeftWidth: (w) => set({ leftWidth: clamp(w, PANEL_LIMITS.left) }),
       setRightWidth: (w) => set({ rightWidth: clamp(w, PANEL_LIMITS.right) }),
       setTheme: (theme) => set({ theme }),
+      setCheckUpdatesOnStart: (checkUpdatesOnStart) => set({ checkUpdatesOnStart }),
       setLanguage: (language) => set({ language }),
       clearPeopleTarget: () => set({ peopleTarget: null }),
       clearRawReviewTarget: () => set({ rawReviewTarget: null }),
@@ -252,6 +259,7 @@ export const useLayout = create<LayoutState>()(
         rightWidth: s.rightWidth,
         theme: s.theme,
         language: s.language,
+        checkUpdatesOnStart: s.checkUpdatesOnStart,
       }),
     },
   ),

@@ -24,6 +24,9 @@ const ALLOWED_SYNC: &[&str] = &[
     "open_data_dir",
     // Menu nativo di macOS (ui-usability-audit): costruisce il menu, non legge il catalogo.
     "set_app_menu",
+    // Aggiornamenti (app-updates): flag di annullamento e pagina della release nel browser.
+    "cancel_update_download",
+    "open_release_page",
     "system_info",
     "set_execution_provider",
     "set_resource_profile",

@@ -3777,6 +3777,7 @@ dependencies = [
  "pc-organize",
  "pc-raw-review",
  "pc-store",
+ "reqwest 0.12.28",
  "rusqlite",
  "serde",
  "serde_json",
