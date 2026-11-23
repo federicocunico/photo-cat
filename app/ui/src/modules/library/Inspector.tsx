@@ -248,7 +248,7 @@ function CategoryRow({
             </>
           )}
         </InlineEdit>
-        {score != null && <span className="mono muted">{fmtDec(score, 2)}</span>}
+        {score != null && <span className="muted">{fmtDec(score, 2)}</span>}
       </div>
       {score != null && (
         <div className="bar" aria-hidden="true">

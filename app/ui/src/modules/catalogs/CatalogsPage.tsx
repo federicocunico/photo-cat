@@ -17,11 +17,11 @@ import {
   EmptyState,
   FormField,
   InlineAlert,
-  PageHeader,
   SegmentedControl,
   type MenuItem,
 } from "../../components/ui";
 import { Icon } from "../../components/icons";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { useLabelName } from "../library/labelName";
 import { RuleEditor } from "./RuleEditor";
 import { newRule, summarize, type RuleNode } from "./rules";
@@ -57,7 +57,6 @@ function gridColumns(el: HTMLElement | null): number {
 
 export function CatalogsPage() {
   const { t } = useTranslation();
-  const tipAnchor = useRef<HTMLSpanElement>(null);
   const qc = useQueryClient();
   // `undefined`: editor chiuso; `null`: nuovo catalogo.
   const [editing, setEditing] = useState<Catalog | null | undefined>(undefined);
@@ -169,31 +168,27 @@ export function CatalogsPage() {
   const names = (items: CatalogSummary[]) =>
     items.map((s) => `«${catalogLabel(s.catalog, t)}»`).join(", ");
   return (
-    <section className="cat-page">
-      <PageHeader
-        title={<span ref={tipAnchor}>{t("modules.catalogs")}</span>}
-        actions={
-          <>
-            {sel.count > 1 && (
-              <Button
-                variant="danger"
-                icon={<Icon.Delete size={16} />}
-                onClick={() => askDelete(selectedSummaries())}
-              >
-                {t("catalogs.deleteMany", { count: sel.count })}
-              </Button>
-            )}
+    <ModulePage
+      title={t("modules.catalogs")}
+      bodyClassName="cat-page"
+      actions={
+        <>
+          {sel.count > 1 && (
             <Button
-              variant="primary"
-              icon={<Icon.Plus size={16} />}
-              onClick={() => setEditing(null)}
+              variant="danger"
+              icon={<Icon.Delete size={16} />}
+              onClick={() => askDelete(selectedSummaries())}
             >
-              {t("catalogs.create")}
+              {t("catalogs.deleteMany", { count: sel.count })}
             </Button>
-          </>
-        }
-      />
-      <Coachmark tip="catalogs" anchor={tipAnchor} learnMore="catalogs" />
+          )}
+          <Button variant="primary" icon={<Icon.Plus size={16} />} onClick={() => setEditing(null)}>
+            {t("catalogs.create")}
+          </Button>
+        </>
+      }
+    >
+      <Coachmark tip="catalogs" learnMore="catalogs" />
       {editing !== undefined && (
         <CatalogEditor
           key={editing?.id ?? "new"}
@@ -304,7 +299,7 @@ export function CatalogsPage() {
           {t("catalogs.deleteManyOnlySystem")}
         </InlineAlert>
       )}
-    </section>
+    </ModulePage>
   );
 }
 

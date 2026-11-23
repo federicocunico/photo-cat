@@ -687,7 +687,7 @@ function Progress({
           <ul className="rx-errors" aria-label={t("rawExport.errorsTitle")}>
             {report.errors.map((e) => (
               <li key={e.sourcePath + e.name}>
-                <span className="mono">{e.name}</span>
+                <span>{e.name}</span>
                 <span className="muted"> — {errorReason(e)}</span>
               </li>
             ))}

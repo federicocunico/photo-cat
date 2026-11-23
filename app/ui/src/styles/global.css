@@ -11,6 +11,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* Scorre solo il corpo del modulo: barra superiore, navigazione e barra di stato restano ferme. */
+  overflow: hidden;
 }
 
 body {
@@ -47,13 +49,11 @@ a {
   color: var(--pc-text-secondary);
 }
 
+/* Unico stile delle intestazioni di sezione (scala tipografica 12/14/16/20). */
 .section-title {
   margin: 0 0 4px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--pc-text-secondary);
-  font-weight: 600;
+  font: var(--pc-weight-medium) var(--pc-font-lg) var(--pc-font-ui);
+  color: var(--pc-text);
 }
 
 /* Pulsanti */
@@ -188,7 +188,7 @@ select.field {
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .table th {
   text-align: left;

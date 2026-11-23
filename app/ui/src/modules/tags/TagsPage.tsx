@@ -71,7 +71,6 @@ function SetList({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -97,10 +96,8 @@ function SetList({
   });
   return (
     <section aria-label={t("tags.sets")} className="tags-sets">
-      <h2 ref={tipAnchor} className="section-title tags-sets-title">
-        {t("tags.sets")}
-      </h2>
-      <Coachmark tip="tags" anchor={tipAnchor} side="right" learnMore="tags" />
+      <h2 className="section-title tags-sets-title">{t("tags.sets")}</h2>
+      <Coachmark tip="tags" learnMore="tags" />
       {sets.map((s, i) => {
         const selected = s.id === current;
         const meta = s.isBase
@@ -371,7 +368,7 @@ function SetDetail({
                 {x.name}
               </BusyButton>
             </span>
-            <span role="cell" className="mono tags-small">
+            <span role="cell" className="tags-small">
               {fmtInt(count(x.name))}
             </span>
             <span role="cell" className="tags-row-actions">
@@ -697,7 +694,7 @@ export function TagsPage() {
     }
   };
   return (
-    <ModulePage title={t("modules.tags")}>
+    <ModulePage title={t("modules.tags")} scroll={false}>
       <QueryView query={overview} enabled={isTauri()} isEmpty={() => false}>
         {() => (
           <div className="tags-page">
@@ -766,7 +763,7 @@ export function TagsPage() {
                       >
                         <Swatch color={x.color} size={10} />
                         <span>{x.name}</span>
-                        <span className="muted mono tags-small">{fmtInt(x.count)}</span>
+                        <span className="muted tags-small">{fmtInt(x.count)}</span>
                       </BusyButton>
                     );
                   })}

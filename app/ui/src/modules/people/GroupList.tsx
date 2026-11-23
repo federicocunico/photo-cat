@@ -343,13 +343,9 @@ export const GroupList = forwardRef<
       aria-selected={section === id}
       className="btn people-tab"
       onClick={() => onSectionChange(id)}
-      style={{
-        background: section === id ? "var(--pc-raised)" : "transparent",
-        borderColor: section === id ? "var(--pc-border)" : "transparent",
-      }}
     >
       <b className="people-tab-label">{label}</b>
-      <span className="mono muted people-muted-sm">
+      <span className="muted people-muted-sm">
         {id === "review" ? t("people.groupsCount", { count }) : fmtInt(count)}
       </span>
     </button>
@@ -758,7 +754,6 @@ export const GroupList = forwardRef<
                 className="pill"
                 aria-pressed={groupFilter === null}
                 onClick={() => setGroupFilter(null)}
-                style={{ borderColor: groupFilter === null ? "var(--pc-accent)" : undefined }}
               >
                 {t("identities.allGroups", { count: everyone.length })}
               </button>
@@ -769,7 +764,6 @@ export const GroupList = forwardRef<
                   className="pill"
                   aria-pressed={groupFilter === g}
                   onClick={() => setGroupFilter(g)}
-                  style={{ borderColor: groupFilter === g ? "var(--pc-accent)" : undefined }}
                 >
                   {g} ({everyone.filter((r) => r.group === g).length})
                 </button>
@@ -801,11 +795,6 @@ export const GroupList = forwardRef<
                   className="chip people-sort-chip"
                   aria-pressed={sort === s}
                   onClick={() => setSort(s)}
-                  style={{
-                    border: sort === s ? "1px solid var(--pc-accent)" : "1px solid transparent",
-                    background: sort === s ? "var(--pc-accent-soft-bg)" : "var(--pc-raised)",
-                    color: sort === s ? "var(--pc-accent-soft-text)" : "var(--pc-text-soft)",
-                  }}
                 >
                   {t(`people.sort.${s}`)}
                 </button>
@@ -919,13 +908,6 @@ export const GroupList = forwardRef<
                               setIdCursor(r.uid);
                             }}
                             className="people-list-item people-list-item--id"
-                            style={{
-                              border:
-                                checked || current
-                                  ? "1px solid var(--pc-selection-border)"
-                                  : "1px solid transparent",
-                              background: checked ? "var(--pc-selection-bg)" : "transparent",
-                            }}
                           >
                             <span aria-hidden className="people-initials">
                               {r.name
@@ -1024,13 +1006,6 @@ export const GroupList = forwardRef<
                                     ? "people-list-item people-list-item--ignored"
                                     : "people-list-item people-list-item--group"
                                 }
-                                style={{
-                                  border:
-                                    checked || current
-                                      ? "1px solid var(--pc-selection-border)"
-                                      : "1px solid transparent",
-                                  background: checked ? "var(--pc-selection-bg)" : "transparent",
-                                }}
                               >
                                 <Cover group={item.group} />
                                 <span className="people-list-text">
@@ -1042,7 +1017,7 @@ export const GroupList = forwardRef<
                                   </span>
                                 </span>
                                 {section !== "ignored" && (
-                                  <span className="mono muted people-muted-sm">
+                                  <span className="muted people-muted-sm">
                                     {t("people.photos", { count: item.group.photos })}
                                   </span>
                                 )}
@@ -1074,16 +1049,6 @@ export const GroupList = forwardRef<
                               role="option"
                               aria-selected={target?.kind === "singles"}
                               className="people-list-item people-list-item--pair"
-                              style={{
-                                border:
-                                  target?.kind === "singles"
-                                    ? "1px solid var(--pc-selection-border)"
-                                    : "1px solid transparent",
-                                background:
-                                  target?.kind === "singles"
-                                    ? "var(--pc-selection-bg)"
-                                    : "transparent",
-                              }}
                             >
                               <span aria-hidden className="people-cover-ph" />
                               <span className="people-list-text">
@@ -1111,16 +1076,6 @@ export const GroupList = forwardRef<
                               role="option"
                               aria-selected={target?.kind === "discarded"}
                               className="people-list-item people-list-item--pair"
-                              style={{
-                                border:
-                                  target?.kind === "discarded"
-                                    ? "1px solid var(--pc-selection-border)"
-                                    : "1px solid transparent",
-                                background:
-                                  target?.kind === "discarded"
-                                    ? "var(--pc-selection-bg)"
-                                    : "transparent",
-                              }}
                             >
                               <span aria-hidden className="people-cover-ph" />
                               <span className="people-list-text">

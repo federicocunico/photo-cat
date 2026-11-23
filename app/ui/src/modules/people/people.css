@@ -306,6 +306,14 @@
   min-height: 0;
   text-align: left;
 }
+.people-tab {
+  background: transparent;
+  border-color: transparent;
+}
+.people-tab[aria-selected="true"] {
+  background: var(--pc-raised);
+  border-color: var(--pc-border);
+}
 .people-tab-label {
   font-weight: 600;
 }
@@ -333,6 +341,16 @@
   cursor: pointer;
   color: inherit;
   font: inherit;
+  border: 1px solid transparent;
+  background: transparent;
+}
+/* Stati dalle classi condivise: aperto (aria-current) e selezionato (aria-selected). */
+.people-list-item[aria-current="true"] {
+  border-color: var(--pc-selection-border);
+}
+.people-list-item[aria-selected="true"] {
+  border-color: var(--pc-selection-border);
+  background: var(--pc-selection-bg);
 }
 .people-list-item--id {
   grid-template-columns: 44px 1fr auto;
@@ -383,6 +401,26 @@
 }
 .people-sort-chip {
   cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--pc-raised);
+  color: var(--pc-text-soft);
+}
+.people-sort-chip[aria-pressed="true"],
+.people-wrap .pill[aria-pressed="true"] {
+  border-color: var(--pc-accent);
+}
+.people-sort-chip[aria-pressed="true"] {
+  background: var(--pc-accent-soft-bg);
+  color: var(--pc-accent-soft-text);
+}
+/* Interruttori di vista (tutti / scartati): quello attivo è in rilievo. */
+.people-toolbar .btn[aria-pressed="false"] {
+  background: transparent;
+  border-color: transparent;
+}
+.people-toolbar .btn[aria-pressed="true"] {
+  background: var(--pc-raised);
+  border-color: var(--pc-border);
 }
 
 /* FaceGrid */
@@ -401,11 +439,8 @@
   align-items: center;
   border-bottom: 1px solid var(--pc-border);
 }
-.people-chip-ok {
-  color: var(--pc-ok, inherit);
-}
-.people-chip-warn {
-  color: var(--pc-warn, inherit);
+.people-grid-counts {
+  white-space: nowrap;
 }
 .people-toolbar {
   padding: 8px 16px;
@@ -465,6 +500,7 @@
   gap: 10px;
 }
 .people-face-tile {
+  border: 2px solid var(--pc-raised);
   padding: 0;
   margin: 0;
   border-radius: var(--pc-radius-md);
@@ -479,7 +515,7 @@
   display: flex;
   justify-content: space-between;
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pc-text-soft);
 }
 .people-grid-foot {
@@ -590,4 +626,18 @@
 .people-grid-scroll:focus-visible [data-cursor] {
   outline: 2px solid var(--pc-focus);
   outline-offset: 2px;
+}
+
+.people-face-tile[aria-selected="true"] {
+  border-color: var(--pc-accent);
+}
+.people-face-tile[data-highlighted] {
+  border-color: var(--pc-warn);
+}
+.people-face-tile[data-discarded] {
+  opacity: 0.72;
+}
+
+.people-suggest-item[aria-selected="true"] {
+  background: var(--pc-selection-bg);
 }

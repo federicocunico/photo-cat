@@ -77,7 +77,7 @@
 }
 
 .models-hint {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .models-small {
@@ -103,8 +103,6 @@
   color: var(--pc-text-secondary);
   text-align: left;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
 }
 
 .models-thead th {

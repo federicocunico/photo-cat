@@ -235,7 +235,7 @@ export function DiagnosticsPage() {
       key: "time",
       header: t("diag.time"),
       width: "90px",
-      cell: (r) => <span className="mono diag-small">{fmtTime(r.ts)}</span>,
+      cell: (r) => <span className="diag-small">{fmtTime(r.ts)}</span>,
     },
     {
       key: "level",

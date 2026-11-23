@@ -63,7 +63,6 @@ const dynamic: Record<string, string[]> = {
     "people",
   ],
   "shell.ramState": ["pressure", "critical"],
-  "sequence.keys": ["assign", "remove", "session", "fullscreen"],
   "shell.models": ["ready", "missing", "update", "error"],
   "jobs.kinds": [
     "other",

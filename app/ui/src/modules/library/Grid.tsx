@@ -192,7 +192,7 @@ function Thumb({
           )}
           {selected && <span aria-hidden="true" className="thumb-check" />}
         </div>
-        <div className="mono thumb-caption" title={item.name}>
+        <div className="thumb-caption" title={item.name}>
           {item.name}
         </div>
       </div>

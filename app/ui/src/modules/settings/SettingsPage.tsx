@@ -1,3 +1,4 @@
+import { ModulePage } from "../../components/shell/ModulePage";
 // Impostazioni a sezioni (desktop-shell, design D9): sotto-navigazione, ricerca che porta
 // alla sezione ed evidenzia il campo, salvataggio immediato delle preferenze e barra
 // "Ripristina / Applica" per ciò che ricalcola i dati della libreria. Modelli AI e
@@ -8,7 +9,6 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, isTauri, type Settings } from "../../lib/ipc";
 import { useLayout, type SettingsSection } from "../../store/layout";
-import { PageHeader } from "../../components/ui";
 import { Icon } from "../../components/icons";
 import { ModelsPage } from "../models/ModelsPage";
 import { DiagnosticsPage } from "../diagnostics/DiagnosticsPage";
@@ -154,78 +154,75 @@ function SettingsLayout() {
   };
 
   return (
-    <div className="settings-page">
-      <PageHeader title={t("settings.title")} />
-      <div className="settings-body">
-        <aside className="settings-aside">
-          <label htmlFor={searchId} className="visually-hidden">
-            {t("settings.search")}
-          </label>
-          <div className="settings-search">
-            <Icon.Search size={16} aria-hidden="true" />
-            <input
-              id={searchId}
-              type="search"
-              className="field"
-              placeholder={t("settings.search")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && results[0]) go(results[0]);
-                if (e.key === "Escape") setQuery("");
-              }}
-            />
-          </div>
-          {query.trim() ? (
-            <div className="settings-results" aria-live="polite">
-              {results.length === 0 ? (
-                <p className="muted">{t("settings.noResults")}</p>
-              ) : (
-                <ul>
-                  {results.map((r) => (
-                    <li key={`${r.section}/${r.label}`}>
-                      <button type="button" className="settings-result" onClick={() => go(r)}>
-                        <span>{r.text}</span>
-                        <span className="muted">{t(`settings.sections.${r.section}`)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <nav aria-label={t("settings.sections.label")}>
-              <ul className="settings-nav">
-                {SECTIONS.map((s) => (
-                  <li key={s}>
-                    <button
-                      type="button"
-                      className="settings-nav-item"
-                      aria-current={s === section ? "page" : undefined}
-                      onClick={() => setSection(s)}
-                    >
-                      {t(`settings.sections.${s}`)}
+    <ModulePage title={t("settings.title")} bodyClassName="settings-body" scroll={false}>
+      <aside className="settings-aside">
+        <label htmlFor={searchId} className="visually-hidden">
+          {t("settings.search")}
+        </label>
+        <div className="settings-search">
+          <Icon.Search size={16} aria-hidden="true" />
+          <input
+            id={searchId}
+            type="search"
+            className="field"
+            placeholder={t("settings.search")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && results[0]) go(results[0]);
+              if (e.key === "Escape") setQuery("");
+            }}
+          />
+        </div>
+        {query.trim() ? (
+          <div className="settings-results" aria-live="polite">
+            {results.length === 0 ? (
+              <p className="muted">{t("settings.noResults")}</p>
+            ) : (
+              <ul>
+                {results.map((r) => (
+                  <li key={`${r.section}/${r.label}`}>
+                    <button type="button" className="settings-result" onClick={() => go(r)}>
+                      <span>{r.text}</span>
+                      <span className="muted">{t(`settings.sections.${r.section}`)}</span>
                     </button>
                   </li>
                 ))}
               </ul>
-            </nav>
-          )}
-        </aside>
-        <div className="settings-main">
-          <section className="settings-section" aria-labelledby="settings-section-title">
-            <h2
-              id="settings-section-title"
-              className={OWN_TITLE.includes(section) ? "visually-hidden" : undefined}
-            >
-              {t(`settings.sections.${section}`)}
-            </h2>
-            <SectionContent section={section} />
-          </section>
-          <ApplyBar />
-        </div>
+            )}
+          </div>
+        ) : (
+          <nav aria-label={t("settings.sections.label")}>
+            <ul className="settings-nav">
+              {SECTIONS.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    className="settings-nav-item"
+                    aria-current={s === section ? "page" : undefined}
+                    onClick={() => setSection(s)}
+                  >
+                    {t(`settings.sections.${s}`)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+      </aside>
+      <div className="settings-main">
+        <section className="settings-section" aria-labelledby="settings-section-title">
+          <h2
+            id="settings-section-title"
+            className={OWN_TITLE.includes(section) ? "visually-hidden" : undefined}
+          >
+            {t(`settings.sections.${section}`)}
+          </h2>
+          <SectionContent section={section} />
+        </section>
+        <ApplyBar />
       </div>
-    </div>
+    </ModulePage>
   );
 }
 

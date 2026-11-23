@@ -61,7 +61,7 @@ export function RenamePlaceDialog({
       className="rename-place"
     >
       <strong>{t("place.renameTitle")}</strong>
-      <span className="mono rename-place-from">{from}</span>
+      <span className="rename-place-from">{from}</span>
       <input
         className="field"
         aria-label={t("place.renameTo")}

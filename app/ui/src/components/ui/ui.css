@@ -29,29 +29,46 @@
 }
 
 /* Intestazione di pagina e schede */
+/* Intestazione di pagina: stessa posizione e altezza in ogni modulo (desktop-shell). */
 .ui-page-header {
+  flex: none;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--pc-space-4);
-  flex-wrap: wrap;
-  padding: var(--pc-space-4) var(--pc-space-5) var(--pc-space-3);
+  height: 56px;
+  padding: 0 var(--pc-space-5);
+  border-bottom: 1px solid var(--pc-border);
+}
+.ui-page-header-text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pc-space-3);
+  min-width: 0;
 }
 .ui-page-header h1 {
   margin: 0;
+  flex: none;
+  white-space: nowrap;
   font: var(--pc-weight-bold) var(--pc-font-xl) var(--pc-font-ui);
 }
 .ui-page-header p {
-  margin: var(--pc-space-1) 0 0;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-page-header-tabs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 .ui-page-header-actions {
   display: flex;
+  align-items: center;
   gap: var(--pc-space-2);
-  flex-wrap: wrap;
-}
-.ui-breadcrumb {
-  font-size: 12px;
-  margin-bottom: 2px;
+  margin-left: auto;
+  flex: none;
 }
 .ui-card {
   background: var(--pc-panel);
@@ -147,7 +164,7 @@
   height: 18px;
   padding: 0 6px;
   border-radius: var(--pc-radius-pill);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   background: var(--pc-accent-soft-bg);
   color: var(--pc-accent-soft-text);
@@ -173,7 +190,7 @@
   gap: 2px;
 }
 .ui-kbd {
-  font: 11px/16px var(--pc-font-mono);
+  font: 12px/16px var(--pc-font-mono);
   padding: 0 5px;
   border: 1px solid var(--pc-border-strong);
   border-bottom-width: 2px;
@@ -340,7 +357,7 @@
   flex: 1;
 }
 .ui-menu-shortcut {
-  font: 11px var(--pc-font-mono);
+  font: 12px var(--pc-font-mono);
   color: var(--pc-text-secondary);
 }
 .ui-menu-separator {
@@ -350,11 +367,9 @@
 }
 .ui-menu-label {
   padding: var(--pc-space-1) var(--pc-space-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pc-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 .ui-popover {
   z-index: var(--pc-z-popover);

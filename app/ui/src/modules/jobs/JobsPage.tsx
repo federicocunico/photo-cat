@@ -19,7 +19,8 @@ import { activeJobs, useLive } from "../../store/live";
 import { UpdateSummaryView } from "../import/manage";
 import { useImportUpdates } from "../import/sourceActions";
 import { FILE_WRITING_KINDS, jobObject, jobTitle, paramsOf } from "../../lib/jobs";
-import { Button, ConfirmDialog, EmptyState, InlineAlert, PageHeader } from "../../components/ui";
+import { Button, ConfirmDialog, EmptyState, InlineAlert } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { runUndo, useUndo } from "../../store/undo";
 import { notify } from "../../store/toasts";
 
@@ -73,10 +74,10 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           >
             <span style={{ width: `${pct ?? 0}%` }} />
           </div>
-          <span className="mono jobs-phase-pct">{pct == null ? "—" : `${Math.floor(pct)}%`}</span>
+          <span className="jobs-phase-pct">{pct == null ? "—" : `${Math.floor(pct)}%`}</span>
         </div>
       </td>
-      <td className="mono jobs-nowrap">
+      <td className="jobs-nowrap">
         {phaseCount(phase, isSource, t)}
         {!phase.totalKnown && !isSource && (
           <Icon.Spinner
@@ -89,7 +90,7 @@ export function PhaseRow({ phase, isSource }: { phase: PhaseSnapshot; isSource: 
           />
         )}
       </td>
-      <td className="mono jobs-soft">
+      <td className="jobs-soft">
         {phase.rate != null ? t("jobs.rate", { rate: fmtDec(phase.rate, 1) }) : "—"}
       </td>
       <td className="jobs-soft">
@@ -207,7 +208,7 @@ export function JobCard({
       <div>
         <div className="jobs-overall">
           <span>{t("jobs.overall")}</span>
-          <span className="mono" data-testid={`overall-${job.id}`}>
+          <span data-testid={`overall-${job.id}`}>
             {counting ? "—" : `${Math.floor(job.overallPercent ?? 0)}%`}
           </span>
         </div>
@@ -372,7 +373,7 @@ export function ResourcesPanel({ res }: { res: ResourceSnapshot | null }) {
       {governor.residents.map(([name, mb]) => (
         <div key={name} className="jobs-split">
           <span>{name}</span>
-          <span className="mono">{fmtInt(mb)} MB</span>
+          <span>{fmtInt(mb)} MB</span>
         </div>
       ))}
       {governor.aiPaused && <span className="jobs-warn">{t("jobs.aiPaused")}</span>}
@@ -449,51 +450,53 @@ export function JobsPage() {
     useLayout.setState({ jobFocus: null });
   }, [jobFocus, shown.length]);
   return (
-    <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
-      {() => (
-        <div className="jobs-page">
-          <div className="jobs-main">
-            <PageHeader
-              title={t("jobs.title")}
-              actions={
-                import.meta.env.DEV &&
-                isTauri() && (
-                  <BusyButton
-                    type="button"
-                    className="btn"
-                    onClick={() => commands.startDemoJob(3000, 400)}
-                  >
-                    {t("jobs.demo")}
-                  </BusyButton>
-                )
-              }
-            />
-            {shown.length === 0 && (
-              <EmptyState
-                icon={<Icon.Jobs size={28} />}
-                title={t("jobs.empty")}
-                action={
-                  <Button variant="primary" onClick={() => openModule({ module: "import" })}>
-                    {t("jobs.emptyAction")}
-                  </Button>
-                }
+    <ModulePage
+      title={t("jobs.title")}
+      bodyClassName="jobs-page"
+      actions={
+        import.meta.env.DEV &&
+        isTauri() && (
+          <BusyButton
+            type="button"
+            className="btn"
+            onClick={() => commands.startDemoJob(3000, 400)}
+          >
+            {t("jobs.demo")}
+          </BusyButton>
+        )
+      }
+    >
+      <QueryView query={history} enabled={isTauri()} isEmpty={() => false}>
+        {() => (
+          <>
+            <div className="jobs-main">
+              {shown.length === 0 && (
+                <EmptyState
+                  icon={<Icon.Jobs size={28} />}
+                  title={t("jobs.empty")}
+                  action={
+                    <Button variant="primary" onClick={() => openModule({ module: "import" })}>
+                      {t("jobs.emptyAction")}
+                    </Button>
+                  }
+                />
+              )}
+              {shown.map((j) => (
+                <JobCard key={j.id} job={j} {...names(j.id, j.kind)} />
+              ))}
+              <UndoableOperation />
+              <History
+                rows={history.data ?? []}
+                liveIds={new Set(shown.map((j) => j.id))}
+                names={names}
               />
-            )}
-            {shown.map((j) => (
-              <JobCard key={j.id} job={j} {...names(j.id, j.kind)} />
-            ))}
-            <UndoableOperation />
-            <History
-              rows={history.data ?? []}
-              liveIds={new Set(shown.map((j) => j.id))}
-              names={names}
-            />
-          </div>
-          <aside className="jobs-aside">
-            <ResourcesPanel res={resources} />
-          </aside>
-        </div>
-      )}
-    </QueryView>
+            </div>
+            <aside className="jobs-aside">
+              <ResourcesPanel res={resources} />
+            </aside>
+          </>
+        )}
+      </QueryView>
+    </ModulePage>
   );
 }

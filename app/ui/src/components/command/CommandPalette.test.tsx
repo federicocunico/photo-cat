@@ -70,7 +70,7 @@ describe("palette dei comandi", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("option", {
-        name: (n) => n.startsWith("Vai a Varianti RAW (Fujifilm X-T5)") && n.includes("Ctrl+9"),
+        name: (n) => n.startsWith("Vai a Varianti RAW") && n.includes("Ctrl+9"),
       }),
     ).toBeInTheDocument();
     await user.keyboard("{Enter}");

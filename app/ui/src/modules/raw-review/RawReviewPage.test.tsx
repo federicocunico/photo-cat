@@ -71,9 +71,7 @@ afterEach(cleanup);
 describe("Varianti RAW", () => {
   it("mostra il titolo, lo stato vuoto e le azioni di apertura", async () => {
     mount();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Varianti RAW (Fujifilm X-T5)" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Varianti RAW" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Nessuna cartella aperta" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apri cartella…" })).toBeInTheDocument();
     expect(

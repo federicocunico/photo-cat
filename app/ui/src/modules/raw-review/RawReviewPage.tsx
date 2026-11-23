@@ -11,9 +11,9 @@ import {
   EmptyState,
   IconButton,
   InlineAlert,
-  PageHeader,
   chooseFolder,
 } from "../../components/ui";
+import { ModulePage } from "../../components/shell/ModulePage";
 import { commands, type OpenedReview, type ShotDecision } from "../../lib/ipc";
 import { fmtDate } from "../../lib/format";
 import { useGuide } from "../../store/guide";
@@ -153,13 +153,14 @@ export function RawReviewPage() {
   );
 
   return (
-    <div className={`raw-review-page${opened ? " is-open" : ""}`}>
-      {/* Con una cartella aperta l'intestazione perde la descrizione: l'altezza va ai pannelli. */}
-      <PageHeader
-        title={t("modules.raw-review")}
-        description={opened ? undefined : t("rawReviewPage.subtitle")}
-        actions={actions}
-      />
+    // Con una cartella aperta il corpo non scorre: l'altezza va ai pannelli della revisione.
+    <ModulePage
+      title={t("modules.raw-review")}
+      subtitle={t("rawReviewPage.subtitle")}
+      actions={actions}
+      scroll={!opened}
+      bodyClassName={`raw-review-page${opened ? " is-open" : ""}`}
+    >
       {error && (
         <InlineAlert
           tone="danger"
@@ -217,7 +218,7 @@ export function RawReviewPage() {
           </Card>
         </div>
       )}
-    </div>
+    </ModulePage>
   );
 }
 

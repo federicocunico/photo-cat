@@ -38,7 +38,7 @@
   border-radius: 4px;
   background: var(--pc-panel);
   color: var(--pc-text);
-  font: var(--pc-weight-bold) 11px var(--pc-font-ui);
+  font: var(--pc-weight-bold) 12px var(--pc-font-ui);
   line-height: 1;
 }
 
@@ -152,7 +152,7 @@
   justify-content: space-between;
   gap: 6px;
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .seq-thumb-device {
@@ -271,7 +271,7 @@
 
 .seq-sources-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .seq-group-card {
@@ -400,7 +400,7 @@
 
 .seq-export-title {
   margin: 0;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 600;
 }
 

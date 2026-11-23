@@ -89,6 +89,16 @@ beforeEach(() => {
 });
 afterEach(checkedCleanup(A11Y_KNOWN.people));
 
+describe("FaceGrid intestazione (E4, P13)", () => {
+  it("conteggi come testo, senza chip; gli scartati solo se ci sono", async () => {
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, photos: 8 }) });
+    expect(
+      await screen.findByText("8 foto · 4 volti · 1 scartato per qualità"),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".people-grid-head .chip")).toBeNull();
+  });
+});
+
 describe("FaceGrid selezione e azioni", () => {
   it("Maiusc+clic ripetuti non spostano l'ancora", async () => {
     renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });

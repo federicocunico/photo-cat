@@ -141,12 +141,8 @@ export function ReadyApp({ startup }: { startup: StartupData }) {
           </>
         )}
         {module === "tags" && <TagsStatus />}
-        {module === "sequence" && (
-          <>
-            <SequenceStatus />
-            <ActiveSetStatus />
-          </>
-        )}
+        {/* Sequenza: le scorciatoie sono nel foglio e nei menu, il set attivo nella barra del modulo. */}
+        {module === "sequence" && <SequenceStatus />}
       </StatusBar>
     </AppShell>
   );

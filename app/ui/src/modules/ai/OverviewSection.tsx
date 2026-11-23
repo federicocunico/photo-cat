@@ -27,7 +27,7 @@ function JobLine({ job }: { job: JobSnapshot }) {
           {t(`jobs.phases.${phase.name}`, { defaultValue: phase.name })}
         </span>
       )}
-      <span className="mono">{pct}%</span>
+      <span>{pct}%</span>
     </li>
   );
 }
@@ -98,7 +98,7 @@ export function OverviewSection() {
       {resources ? (
         <dl className="ai-overview-resources">
           <dt>{t("aiOverview.memory")}</dt>
-          <dd className="mono">
+          <dd>
             {t("aiOverview.memoryValue", {
               used: mbToGb(resources.governor.inUseMb),
               budget: mbToGb(resources.governor.budgetMb),

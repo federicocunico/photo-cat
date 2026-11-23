@@ -166,9 +166,6 @@ export function WhoIs({
                 choose(i);
               }}
               className="people-suggest-item"
-              style={{
-                background: i === active ? "var(--pc-selection-bg)" : undefined,
-              }}
             >
               {o.kind === "link" ? (
                 <>

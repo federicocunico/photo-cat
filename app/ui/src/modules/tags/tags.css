@@ -120,7 +120,7 @@
   align-items: flex-start;
 }
 .tags-help {
-  font-size: 13px;
+  font-size: 14px;
 }
 .tags-table {
   border: 1px solid var(--pc-border);
@@ -142,8 +142,6 @@
   border-top: 0;
   background: var(--pc-panel);
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
 }
 .tags-key {
   width: 28px;
@@ -192,7 +190,7 @@
 }
 .tags-all-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 .tags-all-head .field {
@@ -287,7 +285,7 @@
 .tag-chip-compact {
   gap: 4px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: 12px;
   background: rgba(20, 20, 22, 0.85);
   color: #e8e8ea;
   border-top: 0;

@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useRef } from "react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import "../../i18n";
 import { checkedCleanup } from "../../test/a11y";
@@ -12,11 +11,10 @@ beforeEach(() => useGuide.getState().resetTips());
 afterEach(checkedCleanup(A11Y_KNOWN.none));
 
 function Module({ tip }: { tip: TipId }) {
-  const anchor = useRef<HTMLHeadingElement>(null);
   return (
-    <div>
-      <h2 ref={anchor}>{tip}</h2>
-      <Coachmark tip={tip} anchor={anchor} learnMore="tags" />
+    <div data-testid={`module-${tip}`}>
+      <h2>{tip}</h2>
+      <Coachmark tip={tip} learnMore="tags" />
     </div>
   );
 }
@@ -34,6 +32,14 @@ it("Primo ingresso in Tag: il suggerimento si chiude con Ho capito e non ricompa
   view.unmount();
   render(<Module tip="tags" />);
   expect(screen.queryByText(TAG_TIP)).toBeNull();
+});
+
+it("S9: è una nota in linea nel modulo, non un popover sopra i comandi", () => {
+  render(<Module tip="tags" />);
+  const note = screen.getByRole("note", { name: TAG_TIP });
+  // Nel flusso del modulo che lo ospita, non in un portale sopra la pagina.
+  expect(screen.getByTestId("module-tags")).toContainElement(note);
+  expect(note.closest("[data-radix-popper-content-wrapper]")).toBeNull();
 });
 
 it("al massimo un suggerimento alla volta; il successivo compare quando il primo si chiude", () => {
@@ -70,4 +76,15 @@ it("Scopri di più apre la guida sulla sezione del modulo", () => {
     "data-current",
     "true",
   );
+});
+
+it("S9: lo stile della nota non la sovrappone mai al contenuto", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const css = fs.readFileSync(path.join(dir, "guide.css"), "utf8");
+  const rules = css.match(/\.ui-coachmark[^{]*\{[^}]*\}/g) ?? [];
+  expect(rules.length).toBeGreaterThan(0);
+  for (const rule of rules) expect(rule).not.toMatch(/position:\s*(absolute|fixed)/);
 });

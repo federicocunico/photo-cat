@@ -127,11 +127,11 @@ describe("moduli di navigazione", () => {
       catalogs: "Cataloghi",
       tags: "Tag",
       people: "Persone",
-      ai: "AI",
+      ai: "Analisi AI",
       import: "Importa",
       jobs: "Attività",
       organize: "Esporta",
-      "raw-review": "Varianti RAW (Fujifilm X-T5)",
+      "raw-review": "Varianti RAW",
       settings: "Impostazioni",
     };
     // Le voci dei moduli più il comando che riduce la navigazione.

@@ -1,14 +1,14 @@
 // Barra unica della Libreria (desktop-shell, "Contesto della vista in Libreria"):
-// percorso, conteggio, filtri attivi, menu Ordina e Vista, interruttore dell'ispettore.
+// percorso, conteggio, filtri attivi, menu Ordina e Vista. L'Inspector si chiude dal comando
+// nella sua colonna o con Ctrl+I (un solo comando per pannello).
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/icons";
-import { Button, IconButton, Menu, Popover } from "../../components/ui";
+import { Button, Menu, Popover } from "../../components/ui";
 import "./library.css";
 import { commands, isTauri, type SortKey } from "../../lib/ipc";
 import { fmtInt } from "../../lib/format";
 import { useLibraryCount } from "../../lib/latest";
-import { useLayout } from "../../store/layout";
 import { useLibrary } from "../../store/library";
 import { activeChips } from "./chips";
 import { useLabelName } from "./labelName";
@@ -16,8 +16,6 @@ import { catalogLabel } from "../catalogs/systemCatalogs";
 import { SelectMenu } from "./SelectionBar";
 
 const SORTS: SortKey[] = ["captured_desc", "captured_asc", "name_asc", "size_desc", "added_desc"];
-
-const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "") ? "⌘" : "Ctrl";
 
 /** Percorso: Tutte le foto › catalogo › Escluse. */
 function Breadcrumb() {
@@ -145,7 +143,13 @@ function Chips() {
   });
   const person = (id: number) => people.data?.find((p) => p.id === id)?.name ?? undefined;
   // Il catalogo aperto è già nel percorso: niente chip doppio.
-  const chips = activeChips({ ...filter, catalogId: null }, t as never, names.label, person, names.group);
+  const chips = activeChips(
+    { ...filter, catalogId: null },
+    t as never,
+    names.label,
+    person,
+    names.group,
+  );
   if (chips.length === 0) return null;
   return (
     <div className="lib-chips">
@@ -238,23 +242,6 @@ function ViewMenu() {
   );
 }
 
-function InspectorToggle() {
-  const { t } = useTranslation();
-  const open = useLayout((s) => s.rightOpen);
-  const toggle = useLayout((s) => s.toggleRight);
-  const label = t(open ? "shell.collapseRight" : "shell.expandRight");
-  return (
-    <IconButton
-      label={label}
-      shortcut={`${MOD}+I`}
-      aria-pressed={open}
-      aria-keyshortcuts="Control+I"
-      onClick={toggle}
-      icon={<Icon.PanelRight size={18} />}
-    />
-  );
-}
-
 export function LibraryHeader() {
   return (
     <div className="lib-header">
@@ -266,7 +253,6 @@ export function LibraryHeader() {
         <SelectMenu />
         <SortMenu />
         <ViewMenu />
-        <InspectorToggle />
       </div>
     </div>
   );

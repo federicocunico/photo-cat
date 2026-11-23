@@ -87,7 +87,7 @@
 }
 .jobs-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
 }
 .jobs-status {
   display: flex;
@@ -124,8 +124,6 @@
   color: var(--pc-text-secondary);
   text-align: left;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
 }
 .jobs-table-head > th {
   padding: var(--pc-space-2);
@@ -179,7 +177,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px var(--pc-space-3);
-  font-size: 13px;
+  font-size: 14px;
 }
 .section-title.jobs-res-models {
   margin-top: var(--pc-space-1);
@@ -202,11 +200,10 @@
 }
 
 /* Pagina */
+/* Corpo del modulo (ModulePage): colonna principale e risorse affiancate. */
 .jobs-page {
-  flex: 1;
-  overflow: auto;
-  padding: var(--pc-space-5) var(--pc-space-6);
-  display: flex;
+  padding: var(--pc-space-4) var(--pc-space-5) var(--pc-space-5);
+  flex-direction: row;
   flex-wrap: wrap;
   gap: var(--pc-space-5);
   align-content: flex-start;
@@ -227,6 +224,6 @@
 }
 
 .jobs-current {
-  font-size: 0.85em;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }

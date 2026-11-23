@@ -194,7 +194,6 @@ export const modules = {
       apply_one: "Applica ({{count}} gruppo)",
       apply_other: "Applica ({{count}} gruppi)",
       export: "Esporta sequenza…",
-      back: "Torna alla sequenza",
       suggestion_one:
         "{{device}}: {{count}} scatto dichiara {{current}} ma il GPS delle altre foto negli stessi istanti è in {{offset}}. L'istante resta, cambia solo l'ora locale mostrata e usata nei nomi.",
       suggestion_other:
@@ -205,14 +204,6 @@ export const modules = {
       status: "{{total}} foto · {{devices}} dispositivi · {{sessions}} sessioni",
       selected_one: "{{count}} selezionata",
       selected_other: "{{count}} selezionate",
-      keysLabel: "Scorciatoie",
-      keys: {
-        assign: "tag",
-        remove: "togli tag",
-        session: "sessione",
-        fullscreen: "schermo intero",
-        space: "Spazio",
-      },
     },
     seqExport: {
       title: "Esporta sequenza",
@@ -482,7 +473,6 @@ export const modules = {
       apply_one: "Apply ({{count}} group)",
       apply_other: "Apply ({{count}} groups)",
       export: "Export sequence…",
-      back: "Back to the sequence",
       suggestion_one:
         "{{device}}: {{count}} shot declares {{current}} but the GPS of other photos at the same instants is in {{offset}}. The instant stays, only the local time shown and used in names changes.",
       suggestion_other:
@@ -493,14 +483,6 @@ export const modules = {
       status: "{{total}} photos · {{devices}} devices · {{sessions}} sessions",
       selected_one: "{{count}} selected",
       selected_other: "{{count}} selected",
-      keysLabel: "Shortcuts",
-      keys: {
-        assign: "tag",
-        remove: "remove tag",
-        session: "session",
-        fullscreen: "full screen",
-        space: "Space",
-      },
     },
     seqExport: {
       title: "Export sequence",

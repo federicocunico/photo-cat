@@ -358,7 +358,7 @@ export function PeopleModule() {
   }, [peopleTarget, clearPeopleTarget, setPeopleSection]);
 
   return (
-    <ModulePage title={t("modules.people")}>
+    <ModulePage title={t("modules.people")} scroll={false}>
       <section aria-label={t("people.title")} className="people-workspace">
         {arrival && (
           <div role="status" data-testid="people-arrival" className="people-arrival">

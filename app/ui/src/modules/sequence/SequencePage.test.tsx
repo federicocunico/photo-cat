@@ -8,12 +8,18 @@ import type { SequenceItem, SequenceOverview } from "../../bindings";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { parseShift, shiftText, useSequence } from "../../store/sequence";
 import { idsSelection, selCount, selHas, selIds, useLibrary } from "../../store/library";
-import { SequencePage } from "./SequencePage";
+import { SequencePage, SequenceStatus } from "./SequencePage";
 import { sequenceTarget } from "./sequenceTarget";
 import { useGridShortcuts } from "../../commands/gridShortcuts";
 import { checkedCleanup } from "../../test/a11y";
 import { A11Y_KNOWN } from "../../test/a11yKnown";
 import { runSelectionContract } from "../../test/selectionContract";
+
+it("F6: la barra di stato di Sequenza non ospita scorciatoie né il set attivo", () => {
+  const { container } = render(<SequenceStatus />);
+  expect(container.querySelector("kbd")).toBeNull();
+  expect(container).not.toHaveTextContent(/Scorciatoie|togli tag|Set attivo/);
+});
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (k: string) => `http://thumb.localhost/${k}`,

@@ -245,7 +245,7 @@ export function IdentityEditor({
         <label className="people-field-col">
           <span className="people-field-head">
             <span className="people-field-label">{t("identities.threshold")}</span>
-            <span className="mono">{fmtDec(draft.threshold, 2)}</span>
+            <span>{fmtDec(draft.threshold, 2)}</span>
           </span>
           <input
             type="range"

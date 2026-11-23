@@ -1,8 +1,8 @@
+import { ModulePage } from "../../components/shell/ModulePage";
 // Modulo AI (ai-workspace D8): sotto-navigazione a sezioni come in Impostazioni. La
 // sezione attiva sta in `layout` (si ricorda tra le aperture); `openModule({ module: "ai",
 // section })` apre una sezione precisa.
 import { useTranslation } from "react-i18next";
-import { PageHeader } from "../../components/ui";
 import { useLayout, type AiSection } from "../../store/layout";
 import { AI_SECTIONS } from "./aiSections";
 import { CleanupSection } from "./CleanupSection";
@@ -37,31 +37,28 @@ export function AiPage() {
   // Una sezione non mostrata ricade su Panoramica.
   const section = AI_SECTIONS.includes(stored) ? stored : "overview";
   return (
-    <div className="ai-page">
-      <PageHeader title={t("modules.ai")} />
-      <div className="ai-body">
-        <aside className="ai-aside">
-          <nav aria-label={t("ai.sections.label")}>
-            <ul className="ai-nav">
-              {AI_SECTIONS.map((s) => (
-                <li key={s}>
-                  <button
-                    type="button"
-                    className="ai-nav-item"
-                    aria-current={s === section ? "page" : undefined}
-                    onClick={() => setSection(s)}
-                  >
-                    {t(`ai.sections.${s}`)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
-        <div className="ai-main">
-          <SectionContent section={section} />
-        </div>
+    <ModulePage title={t("modules.ai")} bodyClassName="ai-body" scroll={false}>
+      <aside className="ai-aside">
+        <nav aria-label={t("ai.sections.label")}>
+          <ul className="ai-nav">
+            {AI_SECTIONS.map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  className="ai-nav-item"
+                  aria-current={s === section ? "page" : undefined}
+                  onClick={() => setSection(s)}
+                >
+                  {t(`ai.sections.${s}`)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+      <div className="ai-main">
+        <SectionContent section={section} />
       </div>
-    </div>
+    </ModulePage>
   );
 }

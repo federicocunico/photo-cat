@@ -95,7 +95,6 @@ export const FaceGrid = forwardRef<
   { target, group, singlesCount = 0, highlight = null, onSelectedFacesChange },
   ref,
 ) {
-  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [discardedOnly, setDiscardedOnly] = useState(false);
@@ -623,22 +622,22 @@ export const FaceGrid = forwardRef<
   return (
     <div className="people-grid">
       <div className="people-grid-head">
-        <h2 ref={tipAnchor} className="people-title">
-          {title}
-        </h2>
-        <Coachmark tip="people" anchor={tipAnchor} learnMore="people" />
+        <h2 className="people-title">{title}</h2>
         {target.kind === "group" && (
-          <>
-            <span className="chip mono">{t("people.photos", { count: photos })}</span>
-            <span className="chip people-chip-ok">
-              {t("people.goodQuality", { count: goodCount })}
-            </span>
-            <span className="chip people-chip-warn">
-              {t("people.discardedQuality", { count: discardedCount })}
-            </span>
-          </>
+          // Conteggi come testo: i chip colorati sono solo per gli stati, mai per uno zero.
+          <span className="muted people-grid-counts">
+            {[
+              t("people.photos", { count: photos }),
+              t("people.facesCount", { count: goodCount + discardedCount }),
+              discardedCount > 0 ? t("people.discardedQuality", { count: discardedCount }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         )}
       </div>
+      {/* Sotto l'intestazione e sopra la barra dei volti: non copre comandi. */}
+      <Coachmark tip="people" learnMore="people" />
 
       <div role="toolbar" aria-label={t("people.facesToolbar")} className="people-toolbar">
         {busy ? (
@@ -773,10 +772,6 @@ export const FaceGrid = forwardRef<
           className="btn"
           aria-pressed={!discardedOnly}
           onClick={() => setDiscardedOnly(false)}
-          style={{
-            background: !discardedOnly ? "var(--pc-raised)" : "transparent",
-            borderColor: !discardedOnly ? "var(--pc-border)" : "transparent",
-          }}
         >
           {t("people.showAll")}
         </button>
@@ -786,10 +781,6 @@ export const FaceGrid = forwardRef<
           aria-pressed={discardedOnly}
           onClick={() => setDiscardedOnly(true)}
           disabled={target.kind !== "group"}
-          style={{
-            background: discardedOnly ? "var(--pc-raised)" : "transparent",
-            borderColor: discardedOnly ? "var(--pc-border)" : "transparent",
-          }}
         >
           {t("people.showDiscarded")}
         </button>
@@ -1098,26 +1089,15 @@ export const FaceGrid = forwardRef<
                               title={tip}
                               onClick={onFaceClick(face.id)}
                               className="people-face-tile"
-                              style={{
-                                width: cell,
-                                border: `2px solid ${
-                                  lit
-                                    ? "var(--pc-warn)"
-                                    : isSel
-                                      ? "var(--pc-accent)"
-                                      : "var(--pc-raised)"
-                                }`,
-                                opacity: face.discardReason ? 0.72 : 1,
-                              }}
+                              data-discarded={face.discardReason ? true : undefined}
+                              style={{ width: cell }}
                             >
                               <FaceCrop face={face} size={cell - 4} />
                               {tip && <span className="visually-hidden">{tip}</span>}
                               <span className="people-face-meta">
-                                <span className="mono">
-                                  {face.year != null ? String(face.year) : ""}
-                                </span>
+                                <span>{face.year != null ? String(face.year) : ""}</span>
                                 {face.qualityScore != null && (
-                                  <span className="mono">{fmtDec(face.qualityScore, 2)}</span>
+                                  <span>{fmtDec(face.qualityScore, 2)}</span>
                                 )}
                               </span>
                             </div>
@@ -1141,7 +1121,7 @@ export const FaceGrid = forwardRef<
               t(sort === "captured_asc" ? "people.faceSortDateAsc" : "people.faceSortDateDesc")
             : t("people.facesSortHint")}
         </span>
-        <span className="mono">
+        <span>
           {fmtInt(items.length)}
           {meta?.total ? ` / ${fmtInt(meta.total)}` : ""}
         </span>

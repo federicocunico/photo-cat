@@ -1353,6 +1353,10 @@ describe("trascinamento sui cataloghi e barra laterale dei cataloghi", () => {
     const add = within(section).getByRole("button", { name: /Nuovo catalogo/ });
     expect(add).toHaveTextContent(/^Nuovo catalogo$/);
     expect(add).not.toHaveAttribute("aria-pressed");
+    // S7: l'Inspector ha un solo comando, nella sua colonna (niente doppione nella barra).
+    expect(screen.getAllByRole("button", { name: /^(Comprimi|Espandi) ispettore$/ })).toHaveLength(
+      1,
+    );
   });
 
   it("creazione sul posto: Invio crea, Esc annulla", async () => {

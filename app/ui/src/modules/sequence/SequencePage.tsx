@@ -44,7 +44,7 @@ import { activeSet, colorOf, useTagOverview } from "../tags/data";
 import { TagChip } from "../tags/TagChip";
 import { hotkeyAction, useTagHotkeys } from "../tags/useTagHotkeys";
 import { OpenInPeople } from "../people/OpenInPeople";
-import { InlineAlert, Kbd } from "../../components/ui";
+import { InlineAlert } from "../../components/ui";
 import { QueryView } from "../../components/feedback/QueryView";
 import { Skeleton } from "../../components/feedback/Skeleton";
 import "./sequence.css";
@@ -354,7 +354,7 @@ function Card({
           )}
         </div>
         <div aria-hidden="true" className="seq-thumb-strip" style={{ background: color }} />
-        <div className="mono seq-thumb-meta">
+        <div className="seq-thumb-meta">
           <span title={item.presumed ? t("sequence.presumed") : undefined}>
             {timeOf(item.local)}
             {item.presumed ? "*" : ""}
@@ -705,7 +705,6 @@ type Staged = { tz: string | null; offset: number | null; shift: number; shiftTe
 
 function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   const { t } = useTranslation();
-  const tipAnchor = useRef<HTMLHeadingElement>(null);
   const qc = useQueryClient();
   const selected = useSequence((s) => s.selected);
   const setView = useSequence((s) => s.setView);
@@ -774,10 +773,8 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
   };
   return (
     <aside aria-label={t("sequence.sources")} className="seq-sources">
-      <h2 ref={tipAnchor} className="seq-sources-title">
-        {t("sequence.sources")}
-      </h2>
-      <Coachmark tip="sequence" anchor={tipAnchor} side="right" learnMore="sequence" />
+      <h2 className="seq-sources-title">{t("sequence.sources")}</h2>
+      <Coachmark tip="sequence" learnMore="sequence" />
       <span className="muted seq-small-lh">{t("sequence.sourcesHelp")}</span>
       {groups.map((g, i) => {
         const c = current(g);
@@ -802,10 +799,7 @@ function SourcesPanel({ groups }: { groups: SourceGroupView[] }) {
               <strong className="seq-group-name">
                 {name}
                 {g.declaredOffsetMin != null && (
-                  <span className="muted mono seq-declared">
-                    {" "}
-                    {offsetText(g.declaredOffsetMin)}
-                  </span>
+                  <span className="muted seq-declared"> {offsetText(g.declaredOffsetMin)}</span>
                 )}
               </strong>
               <span className="muted">{t("sequence.photos", { count: g.count })}</span>
@@ -1006,7 +1000,7 @@ export function SequencePage() {
   };
   if (view === "export") return <SequenceExport />;
   return (
-    <ModulePage title={t("modules.sequence")}>
+    <ModulePage title={t("modules.sequence")} scroll={false}>
       <div className="seq-layout">
         <section className="seq-main">
           <Toolbar gap={o?.gapMin ?? 120} grid={grid} />
@@ -1093,7 +1087,7 @@ export function SequencePage() {
                     name: it.name,
                     src: thumbUrl(it.thumb),
                     details: (
-                      <span className="mono">
+                      <span>
                         {[fmtDateTime(localDate(it.local)), it.device].filter(Boolean).join(" · ")}
                       </span>
                     ),
@@ -1143,20 +1137,6 @@ export function SequenceStatus() {
       </span>
       <span aria-live="polite" aria-atomic="true">
         {t("sequence.selected", { count: selected })}
-      </span>
-      <span className="status-keys" aria-label={t("sequence.keysLabel")}>
-        {(
-          [
-            [["1–9"], "keys.assign"],
-            [["0"], "keys.remove"],
-            [["A"], "keys.session"],
-            [[t("sequence.keys.space")], "keys.fullscreen"],
-          ] as const
-        ).map(([keys, label]) => (
-          <span key={label}>
-            <Kbd keys={[...keys]} /> {t(`sequence.${label}`)}
-          </span>
-        ))}
       </span>
     </>
   );

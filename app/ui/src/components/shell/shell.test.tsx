@@ -85,6 +85,16 @@ describe("layout a pannelli", () => {
     expect(screen.getByTestId("right-panel")).toBeInTheDocument();
   });
 
+  it("S7: un solo comando per pannello, con la stessa icona da aperto e da chiuso", () => {
+    render(<Panels left={<div>sx</div>} center={<div>centro</div>} right={<div>dx</div>} />);
+    expect(screen.getAllByRole("button", { name: "Comprimi ispettore" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Comprimi pannello sinistro" })).toHaveLength(1);
+    const close = screen.getByRole("button", { name: "Comprimi ispettore" });
+    const icon = close.innerHTML;
+    fireEvent.click(close);
+    expect(screen.getByRole("button", { name: "Espandi ispettore" }).innerHTML).toBe(icon);
+  });
+
   it("Ctrl+I mostra e nasconde l'ispettore, ma non mentre si scrive", () => {
     render(
       <Panels left={<div>sx</div>} center={<input aria-label="campo" />} right={<div>dx</div>} />,
@@ -267,24 +277,40 @@ describe("navigazione dei moduli", () => {
     useLayout.setState({ navCompact: false });
   });
 
-  it("Gruppi della navigazione: Sfoglia, Organizza, AI, Importa ed esporta (con Varianti RAW), poi Attività e Impostazioni", () => {
+  it("Gruppi della navigazione: Sfoglia, Organizza (con Analisi AI), Importa ed esporta, poi Attività e Impostazioni", () => {
     renderNav();
     const group = (name: string) =>
       within(screen.getByRole("group", { name }))
         .getAllByRole("button")
         .map((b) => b.textContent);
     expect(group("Sfoglia")).toEqual(["Libreria", "Sequenza"]);
-    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag"]);
-    expect(group("AI")).toEqual(["AI"]);
-    expect(group("Importa ed esporta")).toEqual([
-      "Importa",
-      "Esporta",
-      "Varianti RAW (Fujifilm X-T5)",
-    ]);
+    expect(group("Organizza")).toEqual(["Cataloghi", "Persone", "Tag", "Analisi AI"]);
+    // Nessun gruppo di una sola voce (D9).
+    expect(screen.queryByRole("group", { name: "AI" })).toBeNull();
+    expect(group("Importa ed esporta")).toEqual(["Importa", "Esporta", "Varianti RAW"]);
     const nav = screen.getByRole("navigation", { name: "Moduli" });
     const all = within(nav).getAllByRole("button");
     expect(all[all.length - 3]).toHaveTextContent("Attività");
     expect(all[all.length - 2]).toHaveTextContent("Impostazioni");
+  });
+
+  it("D9: Ctrl+1…9 aprono gli stessi moduli della versione 0.5", () => {
+    renderNav();
+    const expected = [
+      "library",
+      "sequence",
+      "catalogs",
+      "people",
+      "tags",
+      "ai",
+      "import",
+      "organize",
+      "raw-review",
+    ];
+    expected.forEach((module, i) => {
+      fireEvent.keyDown(window, { key: String(i + 1), ctrlKey: true });
+      expect(useLayout.getState().module).toBe(module);
+    });
   });
 
   it("Scorciatoia di modulo: Ctrl+3 apre Cataloghi, ma non mentre si scrive", () => {
@@ -317,7 +343,7 @@ describe("navigazione dei moduli", () => {
     expect(useLayout.getState().module).toBe("organize");
     fireEvent.keyDown(window, { key: "9", ctrlKey: true });
     expect(useLayout.getState().module).toBe("raw-review");
-    expect(screen.getByRole("button", { name: "Varianti RAW (Fujifilm X-T5)" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Varianti RAW" })).toHaveAttribute(
       "aria-keyshortcuts",
       "Control+9",
     );
