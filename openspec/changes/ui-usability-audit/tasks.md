@@ -22,8 +22,8 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 - [x] 3.1 Token tipografici 12/14/16/20 e stile unico `.section-title` (D10); riportare 11, 13, 17 e 18 px ai token in tutti i CSS; verificare con un nuovo test di stile che fallisce su `font-size` fuori scala e su `text-transform: uppercase` (E1, E3)
 - [x] 3.2 Monospazio solo per percorsi e codici: togliere la classe `mono` da conteggi, date, nomi di file e segnaposto, con un elenco consentito nel test di stile; verificare che il test passi e che in Persone, Libreria e Attività i conteggi usino il carattere del testo (E2)
 - [x] 3.3 Chip colorati solo per stati, mai per uno zero: in `FaceGrid`, Importa ("Errori 0") e Attività; verificare con i test dei componenti (E4, P13)
-- [ ] 3.4 `ModulePage` con `subtitle`, `tabs` e `actions`; adottarla in Cataloghi, Attività, Libreria e Varianti RAW; verificare con un test che il titolo di ogni modulo stia nello stesso contenitore e con la misura del titolo (x, y) uguale in tutti i moduli, usando lo script di inventario dell'audit (S6)
-- [ ] 3.5 Un solo contenitore scorrevole per modulo, con `html/body` senza scorrimento; verificare con un test di layout su Esporta e, sull'app reale, che la finestra non abbia barra di scorrimento propria (F5, S4)
+- [x] 3.4 `ModulePage` con `subtitle`, `tabs` e `actions`; adottarla in Cataloghi, Attività, Libreria e Varianti RAW; verificare con un test che il titolo di ogni modulo stia nello stesso contenitore e con la misura del titolo (x, y) uguale in tutti i moduli, usando lo script di inventario dell'audit (S6)
+- [x] 3.5 Un solo contenitore scorrevole per modulo, con `html/body` senza scorrimento; verificare con un test di layout su Esporta e, sull'app reale, che la finestra non abbia barra di scorrimento propria (F5, S4)
 - [x] 3.6 Barra di stato su una riga, che resta in fondo anche durante i caricamenti; Sequenza non vi aggiunge scorciatoie né set attivo; verificare con i test di `StatusBar` e di Sequenza (F6, S5)
 - [x] 3.7 Navigazione: gruppo `ai` unito in coda a `organize`, etichetta "Analisi AI", voce "Varianti RAW" con la fotocamera nel sottotitolo, etichette dei gruppi senza maiuscolo; verificare con un test che Ctrl+1…9 aprano gli stessi moduli di prima (D9, S3)
 - [x] 3.8 Un solo comando per richiudere ogni pannello, nell'intestazione della colonna; togliere i doppioni "<" e ">" in Libreria; verificare con i test di `Panels` e `LibraryHeader` (S7)
@@ -74,9 +74,9 @@ Ogni gruppo si integra da solo, con i propri test verdi (`npm --prefix app/ui te
 
 ## 8. Verifica d'insieme
 
-- [ ] 8.1 Ripetere le misure dell'audit con lo script di inventario sull'app di prova: titoli nella stessa posizione, corpi solo 12/14/16/20, nessun maiuscolo, nessun pulsante d'azione disattivato in Persone senza selezione; riportare i valori in `audit.md` §2 come "dopo"
+- [x] 8.1 Ripetere le misure dell'audit con lo script di inventario sull'app di prova: titoli nella stessa posizione, corpi solo 12/14/16/20, nessun maiuscolo, nessun pulsante d'azione disattivato in Persone senza selezione; riportare i valori in `audit.md` §2 come "dopo"
 - [ ] 8.2 `make test` in locale e `make test-linux` in Docker, con le correzioni necessarie
-- [ ] 8.3 Build NSIS locale (`npm --prefix app/ui run tauri -- build --ci --bundles nsis`) e verifica che `licenses/third-party.json` sia nell'installer
+- [x] 8.3 Build NSIS locale (`npm --prefix app/ui run tauri -- build --ci --bundles nsis`) e verifica che `licenses/third-party.json` sia nell'installer
 - [ ] 8.4 Prova sull'app reale (per l'utente): primo avvio, revisione di Persone da tastiera, Sposta in e Unisci a, barra dei menu con Alt e F10, Informazioni e Copia informazioni, tema chiaro e scuro, finestra a 1024 px
 
 ## Workflow follow-up

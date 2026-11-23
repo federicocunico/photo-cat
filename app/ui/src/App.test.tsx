@@ -7,6 +7,10 @@ import { useLayout } from "./store/layout";
 import { MODULES } from "./modules/registry";
 import { App } from "./App";
 
+// Il primo render carica i moduli dell'app: sotto il carico della suite completa supera i 5 s
+// predefiniti (le attese qui arrivano a 10 s).
+vi.setConfig({ testTimeout: 20000 });
+
 it("Primo avvio: does not render Library before startup and onboarding decisions", async () => {
   commandsMock.bootStatus.mockResolvedValue({
     phase: "migration",

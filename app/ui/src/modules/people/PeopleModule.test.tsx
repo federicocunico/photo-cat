@@ -151,7 +151,9 @@ describe("PeopleModule", () => {
 
     await waitFor(() => expect(commandsMock.listGroups).toHaveBeenCalled());
     expect(commandsMock.listGroups.mock.calls[0][0]).toBe("review");
-    expect(await screen.findByText(/Persona senza nome · 168 foto/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: /Persona senza nome\s*168 foto/i }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/168 foto/).length).toBeGreaterThan(0);
     expect(screen.getByText(/412 volti non raggruppati/i)).toBeInTheDocument();
   });
@@ -444,11 +446,11 @@ describe("Revisione da tastiera", () => {
     );
 
     const list = await screen.findByTestId("group-list-scroll");
-    await within(list).findByText(/Persona senza nome · 8 foto/i);
+    await within(list).findByRole("option", { name: /Persona senza nome\s*8 foto/i });
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() => {
       expect(
-        within(list).getByRole("option", { name: /Persona senza nome · 8 foto/i }),
+        within(list).getByRole("option", { name: /Persona senza nome\s*8 foto/i }),
       ).toHaveAttribute("aria-selected", "true");
     });
     // Da tastiera il gruppo raggiunto si apre dopo una breve pausa (150 ms).
@@ -465,7 +467,7 @@ describe("Revisione da tastiera", () => {
     await waitFor(() => expect(commandsMock.linkPersonIdentity).toHaveBeenCalledWith(1, "uid-new"));
     await waitFor(() => {
       expect(
-        within(list).getByRole("option", { name: /Persona senza nome · 15 foto/i }),
+        within(list).getByRole("option", { name: /Persona senza nome\s*15 foto/i }),
       ).toHaveAttribute("aria-selected", "true");
     });
   });
@@ -496,8 +498,8 @@ describe("Revisione da tastiera", () => {
 
     const list = await screen.findByTestId("group-list-scroll");
     const option = (photos: number) =>
-      within(list).getByRole("option", { name: new RegExp(`· ${photos} foto`) });
-    fireEvent.click(await within(list).findByRole("option", { name: /· 26 foto/ }));
+      within(list).getByRole("option", { name: new RegExp(`(^|\\D)${photos} foto ·`) });
+    fireEvent.click(await within(list).findByRole("option", { name: /26 foto ·/ }));
     await waitFor(() => expect(option(26)).toHaveAttribute("aria-current", "true"));
 
     fireEvent.keyDown(window, { key: "n" });
@@ -525,7 +527,7 @@ describe("Revisione da tastiera", () => {
     } as never);
     renderModule();
     const list = await screen.findByTestId("group-list-scroll");
-    await within(list).findByText(/Persona senza nome · 11 foto/i);
+    await within(list).findByRole("option", { name: /Persona senza nome\s*11 foto/i });
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() =>
       expect(list.querySelector('[data-group-id="1"]')).toHaveAttribute("aria-selected", "true"),
@@ -556,11 +558,11 @@ describe("Aggiornamento dopo l'analisi", () => {
     );
 
     const list = await screen.findByTestId("group-list-scroll");
-    await within(list).findByText(/Persona senza nome · 8 foto/i);
-    fireEvent.click(within(list).getByText(/Persona senza nome · 15 foto/i));
+    await within(list).findByRole("option", { name: /Persona senza nome\s*8 foto/i });
+    fireEvent.click(within(list).getByRole("option", { name: /Persona senza nome\s*15 foto/i }));
     await waitFor(() =>
       expect(
-        within(list).getByRole("option", { name: /Persona senza nome · 15 foto/i }),
+        within(list).getByRole("option", { name: /Persona senza nome\s*15 foto/i }),
       ).toHaveAttribute("aria-selected", "true"),
     );
 
@@ -590,7 +592,7 @@ describe("Aggiornamento dopo l'analisi", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["people-groups"] });
     await waitFor(() =>
       expect(
-        within(list).getByRole("option", { name: /Persona senza nome · 16 foto/i }),
+        within(list).getByRole("option", { name: /Persona senza nome\s*16 foto/i }),
       ).toHaveAttribute("aria-selected", "true"),
     );
     expect(list.scrollTop).toBe(120);
@@ -643,7 +645,7 @@ it("il titolo della pagina è quello della voce di navigazione", async () => {
 it("issue #23: le foto della persona si aprono in Libreria, tutte selezionate", async () => {
   commandsMock.librarySelection.mockResolvedValue({ count: 168, maxId: 900 });
   renderModule();
-  fireEvent.click(await screen.findByText(/Persona senza nome · 168 foto/i));
+  fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*168 foto/i }));
   fireEvent.click(await screen.findByRole("button", { name: /Mostra le 168 foto in Libreria/ }));
   await waitFor(() => expect(useLayout.getState().module).toBe("library"));
   const lib = useLibrary.getState();
@@ -670,7 +672,9 @@ it("con il focus sulla griglia dei volti la freccia giù si muove tra i volti, n
     </QueryClientProvider>,
   );
   const list = await screen.findByTestId("group-list-scroll");
-  fireEvent.click(await within(list).findByText(/Persona senza nome · 12 foto/i));
+  fireEvent.click(
+    await within(list).findByRole("option", { name: /Persona senza nome\s*12 foto/i }),
+  );
   fireEvent.click(await screen.findByTestId("face-101"));
   const grid = screen.getByTestId("face-grid-scroll");
   grid.focus();
@@ -679,9 +683,9 @@ it("con il focus sulla griglia dei volti la freccia giù si muove tra i volti, n
   expect(screen.getByTestId("face-101")).toHaveAttribute("aria-selected", "false");
   expect(grid.getAttribute("aria-activedescendant")).not.toBe("face-opt-101");
   expect(
-    within(list).getByRole("option", { name: /Persona senza nome · 12 foto/i }),
+    within(list).getByRole("option", { name: /Persona senza nome\s*12 foto/i }),
   ).toHaveAttribute("aria-current", "true");
   expect(
-    within(list).getByRole("option", { name: /Persona senza nome · 5 foto/i }),
+    within(list).getByRole("option", { name: /Persona senza nome\s*5 foto/i }),
   ).not.toHaveAttribute("aria-current");
 });

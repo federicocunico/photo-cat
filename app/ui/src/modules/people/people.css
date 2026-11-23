@@ -284,11 +284,12 @@
   flex-direction: column;
   min-height: 0;
 }
+/* Ricerca e "Ordina e filtra" su una riga, sopra il primo gruppo. */
 .people-list-head {
   padding: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: var(--pc-space-2);
   border-bottom: 1px solid var(--pc-border);
 }
 .people-stretch {
@@ -670,11 +671,6 @@
   gap: var(--pc-space-2);
 }
 /* Elenco: ricerca e "Ordina e filtra" su una riga; barra delle azioni in blocco in fondo. */
-.people-list-head {
-  display: flex;
-  align-items: center;
-  gap: var(--pc-space-2);
-}
 .people-list-search {
   flex: 1;
   min-width: 0;
@@ -706,7 +702,7 @@
   font-weight: 600;
 }
 
-/* Casella della riga: al passaggio del mouse, sempre visibile quando c'è una selezione. */
+/* Casella della riga: al passaggio del mouse, sempre visibile con due o più voci selezionate. */
 .people-check {
   flex: none;
   width: 16px;
@@ -722,8 +718,7 @@
   opacity: 0;
 }
 .people-list-item:hover .people-check,
-.people-virt[data-selecting] .people-check,
-.people-check[data-checked] {
+.people-virt[data-selecting] .people-check {
   opacity: 1;
 }
 .people-check[data-checked] {

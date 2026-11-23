@@ -105,8 +105,7 @@ function observeRect(el: HTMLElement | null, cb: (r: { width: number; height: nu
 type BulkDialog = { kind: "merge"; uids: string[] } | { kind: "assign"; ids: number[] } | null;
 
 function groupTitle(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
-  if (g.name) return g.name;
-  return t("people.unnamed", { count: g.photos });
+  return g.name ?? t("people.unnamedPlain");
 }
 
 function groupSub(g: GroupRow, t: (k: string, o?: Record<string, unknown>) => string) {
@@ -797,7 +796,7 @@ export const GroupList = forwardRef<
                     role="listbox"
                     aria-multiselectable
                     aria-label={t("identities.title")}
-                    data-selecting={selectedCount > 0 || undefined}
+                    data-selecting={selectedCount > 1 || undefined}
                     tabIndex={0}
                     aria-activedescendant={
                       idCursorIndex >= 0
@@ -888,7 +887,7 @@ export const GroupList = forwardRef<
                     role="listbox"
                     aria-label={t("people.listLabel")}
                     aria-multiselectable
-                    data-selecting={selectedCount > 0 || undefined}
+                    data-selecting={selectedCount > 1 || undefined}
                     tabIndex={0}
                     aria-activedescendant={
                       groupCursorId != null && groupCursorIndex >= 0
@@ -961,9 +960,7 @@ export const GroupList = forwardRef<
                                     {groupTitle(item.group, t)}
                                   </span>
                                   <span className="muted people-muted-sm people-list-sub">
-                                    {item.group.name && section !== "ignored"
-                                      ? `${t("people.photos", { count: item.group.photos })} · ${groupSub(item.group, t)}`
-                                      : groupSub(item.group, t)}
+                                    {`${t("people.photos", { count: item.group.photos })} · ${groupSub(item.group, t)}`}
                                   </span>
                                 </span>
                               </div>

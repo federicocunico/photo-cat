@@ -632,7 +632,7 @@ export const FaceGrid = forwardRef<
         : group?.name
           ? group.name
           : group
-            ? t("people.unnamed", { count: group.photos })
+            ? t("people.unnamedPlain")
             : t("people.facesLabel");
 
   // Valore: id del gruppo, oppure "i:<uid>" per un'identità senza volti qui.

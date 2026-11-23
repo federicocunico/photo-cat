@@ -92,7 +92,8 @@ const every: RuleNode = {
 
 it("nessun id interno di campi o confronti nel DOM dell'editor", async () => {
   const { editor } = renderEditor(every);
-  await screen.findByRole("option", { name: "Ritratto" });
+  // Unica attesa del test (tassonomia caricata): sotto il carico della suite completa 1 s non basta.
+  await screen.findByRole("option", { name: "Ritratto" }, { timeout: 5000 });
   const html = editor().outerHTML;
   // Né nel testo né negli attributi (valori delle opzioni compresi).
   expect(html).not.toMatch(JARGON);

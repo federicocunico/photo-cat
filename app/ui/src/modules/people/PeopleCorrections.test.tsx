@@ -112,7 +112,7 @@ describe("Unione persone", () => {
     });
 
     renderModule();
-    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
+    fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*58 foto/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Unisci a un altro gruppo…" }));
     // Il gruppo aperto non è tra le destinazioni; l'unione si annulla, quindi niente conferma.
     const giuliaOption = await screen.findByRole("option", { name: /^Giulia/ });
@@ -141,7 +141,7 @@ describe("Unione persone", () => {
       total: 1,
     } as never);
     renderModule();
-    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
+    fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*58 foto/i }));
     await screen.findByRole("button", { name: "Ignora questo gruppo" });
     fireEvent.keyDown(document.body, { key: "i" });
     await waitFor(() =>
@@ -221,7 +221,7 @@ describe("Domanda nella scheda", () => {
     } as never);
 
     renderModule();
-    fireEvent.click(await screen.findByText(/Persona senza nome · 35 foto/i));
+    fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*35 foto/i }));
     const question = await screen.findByRole("region", { name: "È la stessa persona?" });
     expect(question).toHaveTextContent(/Somiglianza (alta|media) con i 17 volti/);
 
@@ -247,7 +247,7 @@ describe("Domanda nella scheda", () => {
       total: 1,
     } as never);
     renderModule();
-    fireEvent.click(await screen.findByText(/Persona senza nome · 35 foto/i));
+    fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*35 foto/i }));
     const question = await screen.findByRole("region", { name: "È la stessa persona?" });
     fireEvent.click(within(question).getByRole("button", { name: "Sì" }));
     await waitFor(() =>
@@ -279,7 +279,9 @@ describe("Ripristino", () => {
     const tabs = await screen.findByRole("tablist");
     fireEvent.click(within(tabs).getByRole("tab", { name: /Ignorati/i }));
 
-    expect(await screen.findByText(/Persona senza nome · 140 foto/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: /Persona senza nome\s*140 foto/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/\+6 volti nuovi/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Ripristina$/i }));
@@ -308,7 +310,7 @@ describe("Correzioni su librerie grandi (issue #31, #28, #30)", () => {
       () => new Promise((r) => (finish = () => r(undefined as never))),
     );
     renderModule();
-    fireEvent.click(await screen.findByText(/Persona senza nome · 58 foto/i));
+    fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*58 foto/i }));
     fireEvent.click(await screen.findByTestId("face-1"));
     fireEvent.click(screen.getByTestId("face-2"), { ctrlKey: true });
     const bar = screen.getByRole("toolbar", { name: "Azioni sui volti" });
@@ -356,8 +358,8 @@ describe("Somiglianze in parole (P9)", () => {
       total: 1,
     } as never);
     renderModule();
-    expect(await screen.findByText("forse Giulia · somiglianza alta")).toBeInTheDocument();
-    fireEvent.click(screen.getByText(/Persona senza nome · 35 foto/i));
+    expect(await screen.findByText("35 foto · forse Giulia · somiglianza alta")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: /Persona senza nome\s*35 foto/i }));
     const question = await screen.findByRole("region", { name: "È Giulia?" });
     expect(question).toHaveTextContent("Somiglianza media con i 17 volti di Giulia");
     await screen.findByTestId("face-1");

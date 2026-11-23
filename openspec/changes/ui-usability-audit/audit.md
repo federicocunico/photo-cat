@@ -62,6 +62,31 @@ Intestazioni di sezione trovate: 11/600 maiuscolo, 14/700, 16/600, 16/700, 17/70
 
 In Persone, aprendo un gruppo, la sola barra dei volti aggiunge 11 comandi, di cui 5 disattivati finché non si seleziona un volto. L'intestazione dell'elenco occupa **411 px su 779** della colonna (53%) prima del primo gruppo.
 
+### Dopo (task 8.1, 23/11/2026)
+
+Stesso script d'inventario, sulla build release della change e su una copia del catalogo di prova isolato (186 foto da `D:\Foto`), a 1440×900 px. Con la barra dei menu la finestra parte 18 px più in alto, quindi il titolo sta a y = 65 invece di 67.
+
+| Modulo | Comandi | Pulsanti | Disattivati | Corpi di testo | Testi in monospazio | Maiuscolo | Titolo pagina (x, y) |
+|---|---:|---:|---:|---|---:|---|---|
+| Libreria | 48 | 21 | 0 | 12, 14, 16, 20 | 0 | — | 224, 65 |
+| Sequenza | 32 | 9 | 3 | 12, 14, 16, 20 | 6 (tasti 1–6) | — | 224, 65 |
+| Cataloghi | 12 | 9 | 0 | 12, 14, 16, 20 | 0 | — | 224, 65 |
+| Persone (nessun gruppo aperto) | 15 | 8 | **0** | 12, 14, 20 | 0 | — | 224, 65 |
+| Tag | 30 | 26 | 1 | 12, 14, 16, 20 | 6 (tasti 1–6) | — | 224, 65 |
+| Analisi AI | 35 | 35 | 0 | 12, 14, 16, 20 | 0 | — | 224, 65 |
+| Importa | 24 | 12 | 1 | 12, 14, 16, 20 | 2 (percorsi) | — | 224, 65 |
+| Esporta | 34 | 7 | 1 | 12, 14, 16, 20 | 0 | — | 224, 65 (la finestra non scorre) |
+| Attività | 5 | 5 | 0 | 12, 14, 16, 20 | 0 | — | 224, 65 |
+| Impostazioni | 19 | 16 | 0 | 12, 14, 20 | 1 (percorso) | — | 224, 65 |
+
+- Il titolo è nello stesso punto in tutti i moduli. I corpi di testo sono solo 12, 14, 16 e 20. Non c'è testo in maiuscolo. Il monospazio resta solo per tasti e percorsi.
+- `html` e `body` hanno `overflow: hidden` e il documento è alto quanto la finestra (900 px), anche in Esporta.
+- I pulsanti disattivati confermano qualcosa che non c'è ancora:
+  - Sequenza, nel pannello "Dispositivi e orari": "Allinea le due foto selezionate", "Annulla modifiche" e "Applica (0 gruppi)", finché non si selezionano due foto o non si cambia un orario;
+  - Tag, Importa ed Esporta: "Aggiungi" accanto a un campo ancora vuoto.
+- Persone con un gruppo aperto ha 40 comandi, 15 pulsanti e nessun pulsante disattivato. La barra dei volti compare solo con dei volti selezionati.
+- Il primo gruppo dell'elenco sta a **91 px su 757** dall'alto della colonna (12%). Sopra ci sono solo la ricerca e "Ordina e filtra".
+
 ---
 
 ## 3. Persone

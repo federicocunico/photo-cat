@@ -75,7 +75,7 @@ async function openUnnamed() {
       <PeopleModule />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByText(/Persona senza nome · 3 foto/i));
+  fireEvent.click(await screen.findByRole("option", { name: /Persona senza nome\s*3 foto/i }));
   return screen.findByRole("combobox", { name: "Chi è?" });
 }
 
