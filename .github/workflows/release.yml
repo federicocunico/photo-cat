@@ -60,7 +60,7 @@ jobs:
           # Fine riga LF: il file resta verificabile con `sha256sum -c` anche fuori da Windows.
           [IO.File]::WriteAllText("$PWD/dist/$($exe.Name).sha256", "$hash  $($exe.Name)`n")
           Get-Content "dist/$($exe.Name).sha256"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: dist/*
@@ -86,7 +86,7 @@ jobs:
       - name: Pacchetti .deb e .tar.gz
         if: steps.reuse.outputs.reused != 'true'
         run: scripts/package-linux.sh
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets-linux
           path: target/release/dist/*
@@ -99,7 +99,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-assets*
           merge-multiple: true
