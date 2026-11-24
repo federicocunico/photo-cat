@@ -13,5 +13,5 @@ D = `design.md`. Build con `CARGO_BUILD_JOBS` ≤ 4 e `CARGO_PROFILE_DEV_DEBUG=0
 
 ## 3. Verifica
 
-- [ ] 3.1 `make test` in locale, `make test-linux` in Docker e build NSIS locale
+- [x] 3.1 `make test` in locale, `make test-linux` in Docker e build NSIS locale
 - [ ] 3.2 Prova sull'app reale (per l'utente): scegliere la copertina di una persona dal clic destro e vederla nell'elenco e nella scheda
