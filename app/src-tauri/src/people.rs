@@ -31,7 +31,7 @@ pub enum Correction {
     AssignIdentity { identity: String, faces: Vec<i64> },
 }
 
-fn face_match(state: &AppState) -> people::FaceMatch {
+pub(crate) fn face_match(state: &AppState) -> people::FaceMatch {
     let cfg = state.config.read();
     pc_ai::analyze::face_match_with_size(&cfg.ai.thresholds, cfg.ai.face_min_size_px)
 }

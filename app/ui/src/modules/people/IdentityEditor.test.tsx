@@ -29,6 +29,7 @@ const row = (p: Partial<IdentityRow> & { uid: string; name: string }): IdentityR
   createdAt: Date.UTC(2026, 2, 12),
   person: null,
   photos: 0,
+  cover: null,
   ...p,
 });
 

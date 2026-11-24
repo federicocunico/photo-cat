@@ -454,6 +454,19 @@ export const FaceGrid = forwardRef<
               explicit,
             ),
         },
+        // Un solo volto: diventa l'immagine del gruppo o della persona (elenco, scheda, selettore).
+        ...(count === 1 && first
+          ? [
+              {
+                label: t("people.useAsCover"),
+                onSelect: () =>
+                  void correct(
+                    [{ action: "set_cover", group: groupId, face: first.id }],
+                    t("people.coverDone"),
+                  ),
+              },
+            ]
+          : []),
       );
     if (discardedOnly)
       out.push({

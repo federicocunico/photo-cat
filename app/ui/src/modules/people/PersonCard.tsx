@@ -132,6 +132,10 @@ export const PersonCard = forwardRef<
   const row =
     identity ??
     (group?.identityUid ? (everyone.find((r) => r.uid === group.identityUid) ?? null) : null);
+  // Copertina della persona dall'elenco aggiornato (dopo "Usa come copertina" si ricarica);
+  // per i gruppi senza nome quella del gruppo.
+  const cover =
+    (row && everyone.find((r) => r.uid === row.uid)?.cover) ?? row?.cover ?? group?.cover ?? null;
 
   const refresh = () => refreshPeople(qc);
 
@@ -202,7 +206,7 @@ export const PersonCard = forwardRef<
             all={everyone}
             groups={idGroups}
             defaultThreshold={def}
-            cover={group?.cover ?? null}
+            cover={creating ? null : cover}
             onSaved={(uid) => {
               onCreatingChange(false);
               onIdentitySaved(uid);

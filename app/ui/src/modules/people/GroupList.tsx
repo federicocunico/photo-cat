@@ -861,14 +861,19 @@ export const GroupList = forwardRef<
                                 setIdCursor(r.uid);
                               }}
                             />
-                            <span aria-hidden className="people-initials">
-                              {r.name
-                                .split(/\s+/)
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .map((w) => w[0]?.toUpperCase())
-                                .join("")}
-                            </span>
+                            {/* Volto di copertina; le iniziali solo senza volti in questa libreria. */}
+                            {r.cover ? (
+                              <Cover cover={r.cover} />
+                            ) : (
+                              <span aria-hidden className="people-initials">
+                                {r.name
+                                  .split(/\s+/)
+                                  .filter(Boolean)
+                                  .slice(0, 2)
+                                  .map((w) => w[0]?.toUpperCase())
+                                  .join("")}
+                              </span>
+                            )}
                             <span className="people-list-text">
                               <span className="people-list-name" title={r.name}>
                                 {r.name}
