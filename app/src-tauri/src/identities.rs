@@ -21,6 +21,9 @@ pub struct IdentityRow {
     pub person: Option<i64>,
     /// Foto della persona collegata nella libreria aperta.
     pub photos: i64,
+    /// Volto di copertina della persona collegata (scelto o il migliore); `None` senza volti
+    /// nella libreria aperta. Lo riempie solo `list_identities`.
+    pub cover: Option<people::FaceView>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -128,6 +131,7 @@ pub fn view(
             .map(|i| IdentityRow {
                 person: persons.get(&i.uid).copied(),
                 photos: photos.get(&i.uid).copied().unwrap_or(0),
+                cover: None,
                 identity: i,
             })
             .filter(|r| max_photos.is_none_or(|m| r.photos <= i64::from(m)))
@@ -151,7 +155,26 @@ pub async fn list_identities(
     max_photos: Option<u32>,
 ) -> AppResult<IdentitiesView> {
     let (db, app) = (state.store.clone(), state.app_store.clone());
-    blocking(move || view(&db, &app, query.as_deref(), max_photos)).await
+    let m = crate::people::face_match(&state);
+    blocking(move || {
+        let mut v = view(&db, &app, query.as_deref(), max_photos)?;
+        with_covers(&db, &mut v.identities, &m)?;
+        Ok(v)
+    })
+    .await
+}
+
+/// Copertine delle persone collegate (una query indicizzata per riga), per l'elenco di Persone.
+pub fn with_covers(db: &Store, rows: &mut [IdentityRow], m: &people::FaceMatch) -> AppResult<()> {
+    db.read(|c| {
+        for r in rows.iter_mut() {
+            if let Some(person) = r.person {
+                r.cover = people::person_cover(c, person, m)?;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(())
 }
 
 /// Uid di tutte le identità dell'elenco filtrato (stessi criteri di `list_identities`), per
@@ -818,6 +841,55 @@ mod tests {
         })
         .unwrap();
         uid
+    }
+
+    #[test]
+    fn le_persone_hanno_la_copertina_scelta_o_la_migliore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Store::open(&tmp.path().join("c.db"), Default::default()).unwrap();
+        let app = AppStore::open(&tmp.path().join("app.db")).unwrap();
+        let gioia = linked(&db, &app, "Gioia", 3, 1);
+        let loose = app
+            .with(|c| {
+                ids::create(
+                    c,
+                    &IdentityInput {
+                        name: "Senza volti".into(),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+        let m = people::default_face_match();
+        let cover_of = |uid: &str| {
+            let mut v = view(&db, &app, None, None).unwrap();
+            with_covers(&db, &mut v.identities, &m).unwrap();
+            let r = v
+                .identities
+                .into_iter()
+                .find(|r| r.identity.uid == uid)
+                .unwrap();
+            (r.person, r.cover.map(|f| f.id))
+        };
+
+        // Senza scelta: il volto migliore, come per i gruppi.
+        let (person, auto) = cover_of(&gioia);
+        let person = person.unwrap();
+        let faces = db.read(|c| people::views(c, Some(person))).unwrap();
+        assert_eq!(auto, Some(faces[0].id));
+        // Copertina scelta.
+        let chosen = faces[2].id;
+        db.write(move |c| people::set_cover(c, person, chosen))
+            .unwrap();
+        assert_eq!(cover_of(&gioia).1, Some(chosen));
+        // Persona senza volti nella libreria: niente copertina (l'elenco mostra le iniziali).
+        assert_eq!(cover_of(&loose), (None, None));
+        // "Seleziona tutto" usa `view` da sola: le copertine non si calcolano.
+        assert!(view(&db, &app, None, None)
+            .unwrap()
+            .identities
+            .iter()
+            .all(|r| r.cover.is_none()));
     }
 
     #[test]

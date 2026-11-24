@@ -1511,6 +1511,11 @@ export type IdentityRow = {
 	person: number | null,
 	/**  Foto della persona collegata nella libreria aperta. */
 	photos: number,
+	/**
+	 *  Volto di copertina della persona collegata (scelto o il migliore); `None` senza volti
+	 *  nella libreria aperta. Lo riempie solo `list_identities`.
+	 */
+	cover: FaceView | null,
 } & Identity;
 
 export type IdentitySuggestion = {

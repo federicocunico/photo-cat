@@ -287,18 +287,18 @@ describe("FaceGrid selezione e azioni", () => {
   it("il clic su un volto lo seleziona anche con la cattura del puntatore di WebView2", async () => {
     // In Chromium (WebView2), con la cattura del puntatore il click va all'elemento che cattura,
     // non al volto sotto il puntatore. jsdom non lo fa: qui si riproduce a mano.
-    let captured: Element | null = null;
+    // `mock.contexts` registra l'elemento su cui si è chiamata la cattura.
     const capture = vi
       .spyOn(HTMLElement.prototype, "setPointerCapture")
-      .mockImplementation(function (this: HTMLElement) {
-        captured = this;
-      });
+      .mockImplementation(() => {});
     // jsdom non ha PointerEvent: un MouseEvent con il tipo giusto porta `button`.
     const pointer = (type: string, el: Element, init: { ctrlKey?: boolean } = {}) =>
       fireEvent(el, new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...init }));
     const press = (el: Element, init: { ctrlKey?: boolean } = {}) => {
-      captured = null;
+      const before = capture.mock.calls.length;
       pointer("pointerdown", el, init);
+      const n = capture.mock.calls.length;
+      const captured = n > before ? (capture.mock.contexts[n - 1] as Element) : null;
       const to = captured ?? el;
       pointer("pointerup", to, init);
       fireEvent.click(to, init);
@@ -317,6 +317,30 @@ describe("FaceGrid selezione e azioni", () => {
     } finally {
       capture.mockRestore();
     }
+  });
+
+  it("«Usa come copertina» dal menu contestuale di un volto, con annullamento", async () => {
+    commandsMock.undoPeople.mockResolvedValue(true as never);
+    renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });
+    fireEvent.contextMenu(await screen.findByTestId("face-2"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Usa come copertina" }));
+    await waitFor(() =>
+      expect(commandsMock.correctPerson).toHaveBeenCalledWith({
+        action: "set_cover",
+        group: 1,
+        face: 2,
+      }),
+    );
+    await waitFor(() => expect(useUndo.getState().last?.label).toBe("Copertina impostata"));
+    await runUndo();
+    expect(commandsMock.undoPeople).toHaveBeenCalledTimes(1);
+
+    // Con più volti come destinazione del menu la voce non c'è.
+    fireEvent.click(screen.getByTestId("face-1"));
+    fireEvent.click(screen.getByTestId("face-3"), { ctrlKey: true });
+    fireEvent.contextMenu(screen.getByTestId("face-3"));
+    await screen.findByRole("menuitem", { name: /Rimuovi/ });
+    expect(screen.queryByRole("menuitem", { name: "Usa come copertina" })).toBeNull();
   });
 
   it("rettangolo di selezione indipendente dai nodi virtualizzati", () => {

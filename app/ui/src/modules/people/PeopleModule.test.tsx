@@ -172,6 +172,63 @@ describe("PeopleModule", () => {
     expect(useLayout.getState().peopleSection).toBe("people");
   });
 
+  it("la persona compare con il suo volto di copertina; le iniziali solo senza volti", async () => {
+    const base = {
+      group: null,
+      aliases: [],
+      threshold: null,
+      faces: 0,
+      createdAt: 0,
+    };
+    commandsMock.listIdentities.mockResolvedValue({
+      identities: [
+        {
+          ...base,
+          uid: "g",
+          name: "Gioia",
+          shortName: "Gioia",
+          person: 10,
+          photos: 26,
+          cover: face({ id: 44, personId: 10 }),
+        },
+        {
+          ...base,
+          uid: "r",
+          name: "Rita Rossi",
+          shortName: "Rita",
+          person: null,
+          photos: 0,
+          cover: null,
+        },
+      ],
+      groups: [],
+      storePath: "C:\\app.db",
+      defaultThreshold: 0.363,
+    } as never);
+    useLayout.setState({ peopleSection: "people" });
+    renderModule();
+    const list = await screen.findByTestId("group-list-scroll");
+    const gioia = await within(list).findByRole("option", { name: /Gioia/ });
+    expect(gioia.querySelector(".people-cover img")).toHaveAttribute(
+      "src",
+      expect.stringMatching(/\/44$/),
+    );
+    expect(gioia.querySelector(".people-initials")).toBeNull();
+    const rita = within(list).getByRole("option", { name: /Rita/ });
+    expect(rita.querySelector(".people-initials")).toHaveTextContent("RR");
+    expect(rita.querySelector(".people-cover")).toBeNull();
+
+    // La scheda della persona mostra lo stesso volto.
+    fireEvent.click(gioia);
+    const card = screen.getByRole("complementary", { name: "Scheda" });
+    await waitFor(() =>
+      expect(card.querySelector(".people-cover img")).toHaveAttribute(
+        "src",
+        expect.stringMatching(/\/44$/),
+      ),
+    );
+  });
+
   it("F2: la riga della persona mostra cerchia e foto, senza «non collegata»", async () => {
     const person = (uid: string, name: string, group: string | null, photos: number) => ({
       uid,

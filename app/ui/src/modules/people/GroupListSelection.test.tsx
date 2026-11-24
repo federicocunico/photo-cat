@@ -150,6 +150,7 @@ const identity = (uid: string): IdentityRow => ({
   createdAt: 0,
   person: null,
   photos: 0,
+  cover: null,
 });
 function PeopleHost() {
   const [target, setTarget] = useState<GroupListTarget>(null);

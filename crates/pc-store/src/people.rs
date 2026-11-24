@@ -2493,6 +2493,20 @@ pub fn clear_cover(c: &Connection, group: i64) -> StoreResult<()> {
     Ok(())
 }
 
+/// Volto di copertina di una persona, con la stessa regola dei gruppi: quello scelto o, senza
+/// scelta, il migliore. `None` per una persona senza volti (o inesistente).
+pub fn person_cover(c: &Connection, person: i64, m: &FaceMatch) -> StoreResult<Option<FaceView>> {
+    let chosen: Option<i64> = c
+        .query_row(
+            "SELECT cover_face_id FROM person WHERE id=?1",
+            [person],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    cover_face(c, person, chosen, m)
+}
+
 /// Copertina attuale del gruppo (`None` = automatica).
 pub fn cover_face_id(c: &Connection, group: i64) -> StoreResult<Option<i64>> {
     c.query_row(

@@ -48,6 +48,7 @@ function identity(uid: string, name: string, extra: Partial<IdentityRow> = {}): 
     createdAt: 0,
     person: null,
     photos: 0,
+    cover: null,
     ...extra,
   };
 }
