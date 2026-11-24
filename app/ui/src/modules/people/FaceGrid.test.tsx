@@ -284,6 +284,41 @@ describe("FaceGrid selezione e azioni", () => {
     expect(discarded).toHaveAttribute("title", expect.stringMatching(/troppo piccolo.*28/i));
   });
 
+  it("il clic su un volto lo seleziona anche con la cattura del puntatore di WebView2", async () => {
+    // In Chromium (WebView2), con la cattura del puntatore il click va all'elemento che cattura,
+    // non al volto sotto il puntatore. jsdom non lo fa: qui si riproduce a mano.
+    let captured: Element | null = null;
+    const capture = vi
+      .spyOn(HTMLElement.prototype, "setPointerCapture")
+      .mockImplementation(function (this: HTMLElement) {
+        captured = this;
+      });
+    // jsdom non ha PointerEvent: un MouseEvent con il tipo giusto porta `button`.
+    const pointer = (type: string, el: Element, init: { ctrlKey?: boolean } = {}) =>
+      fireEvent(el, new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...init }));
+    const press = (el: Element, init: { ctrlKey?: boolean } = {}) => {
+      captured = null;
+      pointer("pointerdown", el, init);
+      const to = captured ?? el;
+      pointer("pointerup", to, init);
+      fireEvent.click(to, init);
+    };
+    try {
+      renderGrid({ target: { kind: "group", id: 1 }, group: group({ id: 1, faces: 3 }) });
+      const f1 = await screen.findByTestId("face-1");
+      press(f1);
+      expect(f1).toHaveAttribute("aria-selected", "true");
+      press(screen.getByTestId("face-2"), { ctrlKey: true });
+      expect(screen.getByTestId("face-2")).toHaveAttribute("aria-selected", "true");
+      expect(f1).toHaveAttribute("aria-selected", "true");
+      // Il rettangolo parte ancora dallo spazio vuoto della griglia.
+      pointer("pointerdown", screen.getByTestId("face-grid-scroll"));
+      expect(capture).toHaveBeenCalledTimes(1);
+    } finally {
+      capture.mockRestore();
+    }
+  });
+
   it("rettangolo di selezione indipendente dai nodi virtualizzati", () => {
     const ids = Array.from({ length: 100_000 }, (_, i) => i + 1);
     expect(

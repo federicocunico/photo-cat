@@ -845,7 +845,12 @@ export const FaceGrid = forwardRef<
           aria-label={t("people.facesGrid")}
           className="people-grid-scroll"
           onPointerDown={(e) => {
-            if (e.button !== 0 || ((e.target as HTMLElement).closest("button") && !e.altKey))
+            // Il rettangolo parte dallo spazio vuoto (o con Alt). Da un volto no: la cattura del
+            // puntatore sposterebbe il click sulla griglia e il volto non verrebbe selezionato.
+            if (
+              e.button !== 0 ||
+              ((e.target as HTMLElement).closest('button, [role="option"]') && !e.altKey)
+            )
               return;
             const r = e.currentTarget.getBoundingClientRect();
             drag.current = {
