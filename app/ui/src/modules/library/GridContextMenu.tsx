@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import {
   commands,
   isTauri,
+  type MediaDetail,
   type OpenTarget,
   type PlaceInput,
   type PlaceSuggestion,
@@ -21,6 +22,7 @@ import { openReprocessFor } from "../ai/reprocess/openReprocess";
 import { useCatalogAction } from "./useCatalogAction";
 import { Icon } from "../../components/icons";
 import { ManualDateDialog } from "./ManualDateDialog";
+import { commonManualDate } from "./manualDate";
 import type { BulkAction, ColorTrait } from "../../bindings";
 import { fmtInt } from "../../lib/format";
 
@@ -89,6 +91,12 @@ export function GridContextMenu({
     ...manual.map((c) => ({ value: String(c.id), label: c.name })),
     { value: NEW, label: t("selection.newCatalogMenu") },
   ];
+  // Data manuale comune dai dettagli già in cache (Inspector): il dialogo della data parte
+  // da quella; senza dettagli parte vuoto (bulk-date-inspector D3).
+  const commonDate =
+    target.kind === "ids"
+      ? commonManualDate(target.ids.map((id) => qc.getQueryData<MediaDetail>(["media-detail", id])))
+      : null;
   const [placing, setPlacing] = useState(false);
   const [place, setPlace] = useState("");
   const [picked, setPicked] = useState<PlaceSuggestion | null>(null);
@@ -493,6 +501,7 @@ export function GridContextMenu({
       <ManualDateDialog
         open={dating}
         count={count}
+        common={commonDate}
         onOpenChange={(o) => {
           setDating(o);
           if (!o) onClose();

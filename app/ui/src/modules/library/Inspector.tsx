@@ -30,6 +30,7 @@ import { OpenInPeople } from "../people/OpenInPeople";
 import { useCatalogAction } from "./useCatalogAction";
 import { useBulkJob } from "./bulkJob";
 import { CapturedRow, ColorTraitRow, RatingRow } from "./InspectorQuality";
+import { manualDateOf } from "./manualDate";
 
 /** Oltre questo numero di foto non si caricano i dettagli per i valori comuni. */
 const COMMON_LIMIT = 200;
@@ -476,11 +477,25 @@ function MultiInspector() {
       )
     : [];
   const groups = useGroups(loaded.flatMap((d) => d.labels));
+  // Data comune: stessa data manuale (periodo e precisione) o stessa data del file mostrata.
+  const dateKey = (d: MediaDetail) => {
+    const m = manualDateOf(d.dates);
+    return m ? `m:${m.precision}:${m.value}` : `f:${fmtCaptured(d.dates?.capturedAt) ?? ""}`;
+  };
+  const sameDate = known && common(loaded.map(dateKey)) !== undefined;
+  const dates = sameDate ? (loaded[0]!.dates ?? null) : undefined;
   return (
     <>
       <h2 className="inspector-name">{t("library.inspector.multiple", { count })}</h2>
       <Section id="data" title={t("library.inspector.sections.data")}>
         <Grid2>
+          <CapturedRow
+            apply={edit.apply}
+            dates={dates}
+            captured={dates ? fmtCaptured(dates.capturedAt) : null}
+            count={count}
+            restorable={!known || loaded.some((d) => manualDateOf(d.dates) != null)}
+          />
           <RatingRow
             apply={edit.apply}
             rating={known ? common(loaded.map((d) => d.rating)) : undefined}

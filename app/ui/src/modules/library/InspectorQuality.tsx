@@ -6,6 +6,7 @@ import { Button, InlineEdit, SegmentedControl } from "../../components/ui";
 import type { BulkAction, ColorTrait, DatePrecision, MediaDates } from "../../lib/ipc";
 import { fmtPeriod } from "../../lib/format";
 import i18n from "../../i18n";
+import { initialDateState, manualDateOf, type ManualDate } from "./manualDate";
 
 const COLOR_TRAITS: ColorTrait[] = ["bw", "color", "faded", "sepia"];
 
@@ -99,14 +100,6 @@ export function ColorTraitRow({
   );
 }
 
-const SLICE: Record<DatePrecision, number> = { year: 4, month: 7, day: 10 };
-
-/** Data impostata a mano come "AAAA", "AAAA-MM" o "AAAA-MM-GG". */
-function manualPeriod(dates: MediaDates | null | undefined): string | null {
-  if (!dates?.manualAt || !dates.manualPrecision) return null;
-  return dates.manualAt.slice(0, SLICE[dates.manualPrecision]);
-}
-
 function monthName(m: number) {
   const loc = i18n.language === "en" ? "en-GB" : "it-IT";
   return new Intl.DateTimeFormat(loc, { month: "long", timeZone: "UTC" }).format(
@@ -122,25 +115,31 @@ function validDay(y: number, m: number, d: number) {
 
 /** Editor della data con precisione giorno/mese/anno. */
 function DateEditor({
-  initial,
-  precision: initialPrecision,
+  common,
+  count,
   apply,
   close,
 }: {
-  initial: string | null;
-  precision: DatePrecision | null;
+  /** Data manuale comune (o della sola foto). */
+  common: ManualDate | null;
+  /** Foto su cui agisce: con più foto e senza data comune i campi partono vuoti. */
+  count: number;
   apply: Apply;
   close: () => void;
 }) {
   const { t } = useTranslation();
-  const [y0, m0, d0] = (initial ?? "").split("-");
-  const [precision, setPrecision] = useState<DatePrecision>(initialPrecision ?? "day");
-  const [year, setYear] = useState(y0 ?? "");
-  const [month, setMonth] = useState(m0 ?? "01");
-  const [day, setDay] = useState(d0 ?? "01");
+  const [initial] = useState(() =>
+    initialDateState(count, common, { precision: "day", year: "", month: "01", day: "01" }),
+  );
+  const [precision, setPrecision] = useState<DatePrecision>(initial.precision);
+  const [year, setYear] = useState(initial.year);
+  const [month, setMonth] = useState(initial.month);
+  const [day, setDay] = useState(initial.day);
+  const validMonth = /^\d{2}$/.test(month) && +month >= 1 && +month <= 12;
   const valid =
     /^\d{4}$/.test(year) &&
     Number(year) >= 1 &&
+    (precision === "year" || validMonth) &&
     (precision !== "day" || validDay(+year, +month, +day));
   const value =
     precision === "year"
@@ -179,6 +178,11 @@ function DateEditor({
             value={month}
             onChange={(e) => setMonth(e.target.value)}
           >
+            {month === "" && (
+              <option value="" disabled>
+                —
+              </option>
+            )}
             {Array.from({ length: 12 }, (_, i) => (
               <option key={i} value={pad(i + 1)}>
                 {monthName(i + 1)}
@@ -216,36 +220,44 @@ function DateEditor({
   );
 }
 
-/** "Data di scatto" con la fonte e il ripristino della data del file. */
+/**
+ * "Data di scatto" con il ripristino della data del file. Con più foto (`count > 1`)
+ * mostra la data comune o "Valori diversi" e agisce su tutta la selezione.
+ */
 export function CapturedRow({
   apply,
   dates,
   captured,
+  count = 1,
+  restorable,
 }: {
   apply: Apply;
-  dates: MediaDates | null;
+  /** `undefined`: date diverse tra le foto selezionate (o non note). */
+  dates: MediaDates | null | undefined;
   /** Data del file già formattata. */
   captured: string | null;
+  /** Foto su cui agisce la riga. */
+  count?: number;
+  /** "Ripristina data del file" disponibile; di norma se c'è una data manuale. */
+  restorable?: boolean;
 }) {
   const { t } = useTranslation();
-  const manual = manualPeriod(dates);
+  const manual = manualDateOf(dates);
   const label = t("library.inspector.captured");
-  const shown = manual
-    ? t("library.inspector.manualDate", { period: fmtPeriod(manual) })
-    : captured;
+  const shown =
+    dates === undefined
+      ? t("common.mixed")
+      : manual
+        ? t("library.inspector.manualDate", { period: fmtPeriod(manual.value) })
+        : captured;
   return (
     <>
       <span className="muted">{label}</span>
       <InlineEdit label={label} value={shown}>
         {(close) => (
           <>
-            <DateEditor
-              initial={manual}
-              precision={dates?.manualPrecision ?? null}
-              apply={apply}
-              close={close}
-            />
-            {manual && (
+            <DateEditor common={manual} count={count} apply={apply} close={close} />
+            {(restorable ?? manual != null) && (
               <Button
                 size="sm"
                 onClick={async () => {

@@ -4,8 +4,12 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { DatePrecision } from "../../bindings";
 import { Button, Dialog, FormField, SegmentedControl } from "../../components/ui";
+import { initialDateState, type ManualDate } from "./manualDate";
 
 const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+
+/** Campo numerico: "06" diventa "6", un campo vuoto resta vuoto. */
+const asInput = (s: string) => (s.trim() ? String(Number(s)) : "");
 
 /** Valore "AAAA", "AAAA-MM" o "AAAA-MM-GG", o `null` se la data non esiste. */
 export function manualDateValue(
@@ -34,20 +38,39 @@ export function ManualDateDialog({
   open,
   onOpenChange,
   count,
+  common = null,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   count: number;
+  /** Data manuale comune alle foto, se nota: il dialogo parte da quella. */
+  common?: ManualDate | null;
   onConfirm: (value: string, precision: DatePrecision) => void;
 }) {
   const { t } = useTranslation();
-  const now = new Date();
-  const [precision, setPrecision] = useState<DatePrecision>("day");
-  const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [day, setDay] = useState(String(now.getDate()));
+  // Con più foto e senza data comune i campi partono vuoti (bulk-date-inspector D3).
+  const [initial] = useState(() => {
+    const now = new Date();
+    return initialDateState(count, common, {
+      precision: "day",
+      year: String(now.getFullYear()),
+      month: String(now.getMonth() + 1),
+      day: String(now.getDate()),
+    });
+  });
+  const [precision, setPrecision] = useState<DatePrecision>(initial.precision);
+  const [year, setYear] = useState(asInput(initial.year));
+  const [month, setMonth] = useState(asInput(initial.month));
+  const [day, setDay] = useState(asInput(initial.day));
   const value = manualDateValue(precision, Number(year), Number(month), Number(day));
+  // "Data non valida" solo dopo che l'utente ha scritto qualcosa nei campi richiesti.
+  const required = [
+    year,
+    ...(precision !== "year" ? [month] : []),
+    ...(precision === "day" ? [day] : []),
+  ];
+  const typed = required.some((f) => f.trim() !== "");
   const submit = () => {
     if (!value) return;
     onConfirm(value, precision);
@@ -120,7 +143,7 @@ export function ManualDateDialog({
             />
           </FormField>
         )}
-        {!value && <span className="muted">{t("selection.dateInvalid")}</span>}
+        {!value && typed && <span className="muted">{t("selection.dateInvalid")}</span>}
       </form>
     </Dialog>
   );

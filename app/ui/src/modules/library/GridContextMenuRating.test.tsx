@@ -6,6 +6,8 @@ import "../../i18n";
 import { commandsMock, ipcMockModule } from "../../test/ipcMock";
 import { checkedCleanup } from "../../test/a11y";
 import { GridContextMenu } from "./GridContextMenu";
+import { emptyFilter } from "../../store/library";
+import type { Target } from "../../lib/ipc";
 
 vi.mock("../../lib/ipc", () => ipcMockModule(true));
 afterEach(checkedCleanup());
@@ -20,14 +22,18 @@ beforeEach(() => {
   commandsMock.listCatalogs.mockResolvedValue([] as never);
 });
 
-function renderMenu() {
+function renderMenu(
+  menuIds: number[] = ids,
+  qc = new QueryClient(),
+  menuTarget: Target = { kind: "ids", ids: menuIds },
+) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={qc}>
       <GridContextMenu
         x={0}
         y={0}
-        ids={ids}
-        target={target}
+        ids={menuIds}
+        target={menuTarget}
         onOpen={vi.fn()}
         onPlace={vi.fn()}
         onAddToCatalog={vi.fn()}
@@ -83,6 +89,77 @@ it("Imposta data di scatto: dialogo con precisione mese", async () => {
     { action: "set_manual_date", value: "1999-07", precision: "month" },
     3,
   );
+});
+
+const openDateDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole("menuitem", { name: /Imposta data di scatto/ }));
+  return screen.findByRole("button", { name: "Imposta" });
+};
+
+it("Data completa dal menu contestuale: 60 foto, parte su giorno con i campi vuoti", async () => {
+  const user = userEvent.setup();
+  const many = Array.from({ length: 60 }, (_, i) => i + 1);
+  renderMenu(many);
+  const set = await openDateDialog(user);
+  expect(screen.getByRole("radio", { name: "Giorno" })).toBeChecked();
+  expect(screen.getByLabelText("Anno")).toHaveValue(null);
+  expect(screen.getByLabelText("Mese", { selector: "input" })).toHaveValue(null);
+  expect(screen.getByLabelText("Giorno", { selector: "input" })).toHaveValue(null);
+  // Campi vuoti: nessun errore, "Imposta" disattivato.
+  expect(set).toBeDisabled();
+  expect(screen.queryByText("Data non valida")).toBeNull();
+  await user.type(screen.getByLabelText("Giorno", { selector: "input" }), "3");
+  await user.type(screen.getByLabelText("Mese", { selector: "input" }), "3");
+  await user.type(screen.getByLabelText("Anno"), "1987");
+  await user.click(set);
+  expect(onBulk).toHaveBeenCalledWith(
+    { kind: "ids", ids: many },
+    { action: "set_manual_date", value: "1987-03-03", precision: "day" },
+    60,
+  );
+});
+
+it("Una sola foto: il dialogo parte dalla data di oggi, come prima", async () => {
+  const user = userEvent.setup();
+  renderMenu([1]);
+  const set = await openDateDialog(user);
+  const now = new Date();
+  expect(screen.getByRole("radio", { name: "Giorno" })).toBeChecked();
+  expect(screen.getByLabelText("Anno")).toHaveValue(now.getFullYear());
+  expect(screen.getByLabelText("Giorno", { selector: "input" })).toHaveValue(now.getDate());
+  expect(set).toBeEnabled();
+});
+
+it("Data manuale comune già nota: il dialogo parte da giugno 1984", async () => {
+  const user = userEvent.setup();
+  const qc = new QueryClient();
+  for (const id of ids)
+    qc.setQueryData(["media-detail", id], {
+      dates: {
+        capturedAt: null,
+        capturedSource: "manual",
+        modifiedAt: null,
+        manualAt: "1984-06-01 00:00:00",
+        manualPrecision: "month",
+      },
+    });
+  renderMenu(ids, qc);
+  await openDateDialog(user);
+  expect(screen.getByRole("radio", { name: "Mese" })).toBeChecked();
+  expect(screen.getByLabelText("Anno")).toHaveValue(1984);
+  expect(screen.getByLabelText("Mese", { selector: "input" })).toHaveValue(6);
+});
+
+it("Selezione per filtro: il dialogo parte vuoto", async () => {
+  const user = userEvent.setup();
+  renderMenu([1, 2], new QueryClient(), {
+    kind: "filter",
+    filter: emptyFilter(),
+    maxId: 500,
+    except: [],
+  });
+  await openDateDialog(user);
+  expect(screen.getByLabelText("Anno")).toHaveValue(null);
 });
 
 it("Ripristina data del file", async () => {
